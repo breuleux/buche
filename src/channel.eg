@@ -34,9 +34,9 @@ class LogChannel < EventEmitter:
       {sub-channel, sub-m} = @parse-sub-channel(m)
       if sub-channel:
          ch = @get-sub-channel(sub-channel, sub-m, sub-m.channel-type or .log)
-         if sub-m.type !== .open:
+         if sub-m.command !== .open:
             ch.dispatch(sub-m)
-      else:
+      elif m.command is .log:
          element =
             match m.format:
                .html ->
@@ -50,6 +50,8 @@ class LogChannel < EventEmitter:
                else ->
                   div % m.contents
          @area.append-child(dom(element))
+      else:
+         console.error('log channel does not know command {m.command}.')
 
 channel-constructors = {
    log = LogChannel
