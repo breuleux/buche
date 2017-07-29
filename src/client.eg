@@ -1,0 +1,26 @@
+
+require:
+   events -> EventEmitter
+   electron -> ipc-renderer
+   /browser -> document
+   .source ->
+      StreamSource
+   .dispatch ->
+      RootDispatcher
+
+stdin-buffer = new EventEmitter()
+ipc-renderer.on(.data) with {event, data} ->
+   stdin-buffer.emit(.data, data)
+ipc-renderer.on(.end) with {event, data} ->
+   stdin-buffer.emit(.end)
+ipc-renderer.send(.ready)
+
+main() where main() =
+   mount-content = document.get-element-by-id("mount-content")
+   stream =
+      StreamSource with
+         stdin-buffer
+         with write(x) =
+            ipc-renderer.send(.data, x)
+   dispatcher = RootDispatcher(stream, mount-content)
+   dispatcher.run()

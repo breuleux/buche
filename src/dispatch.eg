@@ -1,0 +1,27 @@
+
+require:
+   .channel -> channel-constructors
+   events -> EventEmitter
+
+provide:
+   RootDispatcher
+
+
+class RootDispatcher < EventEmitter:
+
+   constructor(@source, @target) =
+      @set-max-listeners(Infinity)
+      @root = null
+      @focus = null
+
+   dispatch(message) =
+      if @root is null:
+         if message.type is .open and message.channel == '/':
+            @root = channel-constructors[message.channel-type](message, @target)
+            return
+         @root = channel-constructors.log(message, @target)
+
+      @root.dispatch(message & {channel = message.channel})
+
+   run() =
+      @source.read(m -> @dispatch(m))

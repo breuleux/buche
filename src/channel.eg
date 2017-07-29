@@ -1,0 +1,57 @@
+
+require:
+   node-uuid as uuid
+   events -> EventEmitter
+   /dom
+
+provide:
+   channel-constructors
+
+class LogChannel < EventEmitter:
+   label-editable = true
+
+   constructor(message, @target) =
+      @path = message.channel
+      @area = dom(div.log-area %)
+      @target.append-child(@area)
+      @sub-channels = {=}
+
+   get-sub-channel(name, message, type = .log) =
+      if @sub-channels[name] as sch:
+         sch
+      else:
+         expr-value @sub-channels[name] =
+            channel-constructors[type](message, @area)
+
+   parse-sub-channel(m) =
+      if m.channel is '/':
+         return {false, m}
+      {_, sub-channel, *rest} = m.channel.split('/')
+      sub-m = m & {channel = '/' + rest.join('/')}
+      return {sub-channel, sub-m}
+
+   dispatch(m) =
+      {sub-channel, sub-m} = @parse-sub-channel(m)
+      if sub-channel:
+         ch = @get-sub-channel(sub-channel, sub-m, sub-m.channel-type or .log)
+         if sub-m.type !== .open:
+            ch.dispatch(sub-m)
+      else:
+         element =
+            match m.format:
+               .html ->
+                  div[raw] % m.contents
+               .markdown ->
+                  require: marked
+                  div[raw] % marked.inline-lexer(m.contents, {})
+               .quaint ->
+                  require: quaint
+                  div[raw] % quaint.toHTML(m.contents)
+               else ->
+                  div % m.contents
+         @area.append-child(dom(element))
+
+channel-constructors = {
+   log = LogChannel
+   error = LogChannel
+}

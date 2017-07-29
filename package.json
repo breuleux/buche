@@ -1,0 +1,39 @@
+{
+  "name": "buche",
+  "description": "A logger of sorts",
+  "version": "0.0.0",
+  "format": "cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/breuleux/buche"
+  },
+  "keywords": [],
+  "author": "Olivier Breuleux",
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "dependencies": {
+    "commander": "^2.9.0",
+    "earlgrey-runtime": "^0.1.0",
+    "electron": "^1.4.15",
+    "lodash": "^4.17.4",
+    "marked": "^0.3.6",
+    "node-sass": "^4.5.0",
+    "node-uuid": "^1.4.7",
+    "open": "0.0.5",
+    "quaint": "^0.1.1"
+  },
+  "devDependencies": {
+    "earlgrey": "^0.1.0",
+    "mocha": "^3.2.0",
+    "earl-mocha": "^0.1.0"
+  },
+  "bin": {
+    "buche": "bin/buche"
+  },
+  "scripts": {
+    "refresh": "earl compile -5vso lib/ src/",
+    "compile": "earl compile -5rvso lib/ src/",
+    "prepublish": "npm run compile",
+    "test": "mocha"
+  }
+}
