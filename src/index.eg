@@ -17,14 +17,15 @@ create-window() =
    options =
       chain commander:
         @version(version)
+        @option('--dev', 'Open developer console.')
         @option('-c, --cmd [command]', 'Command to execute.')
-        @option('--into [file]', 'File to log the command\'s stdout to.')
+        @option('--tee [file]', 'File to log the command\'s stdout to.')
         @parse(process.argv)
 
    cmd =
       if options.cmd:
-         if options.into:
-            '{options.cmd} | tee {options.into}'
+         if options.tee:
+            '{options.cmd} | tee {options.tee}'
          else:
             options.cmd
       else:
@@ -39,7 +40,8 @@ create-window() =
    }
 
    w.loadURL('file://{__dirname}/../html/index.html')
-   w.web-contents.open-dev-tools(mode = .bottom)
+   if options.dev:
+      w.web-contents.open-dev-tools(mode = .bottom)
    w.on(.closed) with {} ->
       main-window = null
 
