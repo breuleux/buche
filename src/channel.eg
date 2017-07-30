@@ -11,7 +11,6 @@ class LogChannel < EventEmitter:
    label-editable = true
 
    constructor(message, @target) =
-      @path = message.channel
       @area = dom(div.log-area %)
       @target.append-child(@area)
       @sub-channels = {=}
@@ -24,16 +23,16 @@ class LogChannel < EventEmitter:
             channel-constructors[type](message, @area)
 
    parse-sub-channel(m) =
-      if m.channel is '/':
+      if m.path is '/':
          return {false, m}
-      {_, sub-channel, *rest} = m.channel.split('/')
-      sub-m = m & {channel = '/' + rest.join('/')}
-      return {sub-channel, sub-m}
+      {_, sub-path, *rest} = m.path.split('/')
+      sub-m = m & {path = '/' + rest.join('/')}
+      return {sub-path, sub-m}
 
    dispatch(m) =
-      {sub-channel, sub-m} = @parse-sub-channel(m)
-      if sub-channel:
-         ch = @get-sub-channel(sub-channel, sub-m, sub-m.channel-type or .log)
+      {sub-path, sub-m} = @parse-sub-channel(m)
+      if sub-path:
+         ch = @get-sub-channel(sub-path, sub-m, sub-m.type or .log)
          if sub-m.command !== .open:
             ch.dispatch(sub-m)
       elif m.command is .log:
@@ -50,6 +49,9 @@ class LogChannel < EventEmitter:
                else ->
                   div % m.contents
          @area.append-child(dom(element))
+      elif m.command is .clear:
+         while @area.first-child:
+            @area.remove-child(@area.first-child)
       else:
          console.error('log channel does not know command {m.command}.')
 

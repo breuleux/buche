@@ -16,12 +16,12 @@ class RootDispatcher < EventEmitter:
 
    dispatch(message) =
       if @root is null:
-         if message.command is .open and message.channel == '/':
-            @root = channel-constructors[message.channel-type](message, @target)
+         if message.command is .open and message.path == '/':
+            @root = channel-constructors[message.type](message, @target)
             return
          @root = channel-constructors.log(message, @target)
 
-      @root.dispatch(message & {channel = message.channel})
+      @root.dispatch(message)
 
    run() =
       @source.read(m -> @dispatch(m))
