@@ -7,32 +7,40 @@ require:
 provide:
    channel-constructors
 
-class LogChannel < EventEmitter:
-   label-editable = true
 
-   constructor(message, @target) =
-      @area = dom(div.log-area %)
-      @target.append-child(@area)
-      @sub-channels = {=}
+class SubChannels:
 
-   get-sub-channel(name, message, type = .log) =
-      if @sub-channels[name] as sch:
-         sch
-      else:
-         expr-value @sub-channels[name] =
-            channel-constructors[type](message, @area)
+   constructor(@default-type, @install) =
+      @channels = {=}
 
-   parse-sub-channel(m) =
+   parse(m) =
       if m.path is '/':
          return {false, m}
       {_, sub-path, *rest} = m.path.split('/')
       sub-m = m & {path = '/' + rest.join('/')}
       return {sub-path, sub-m}
 
+   get(name, message) =
+      if @channels[name] as sch:
+         sch
+      else:
+         type = message.type or @default-type
+         expr-value @channels[name] =
+            channel-constructors[type](message, @install)
+
+
+class LogChannel < EventEmitter:
+
+   constructor(message, install) =
+      @area = dom(div.log-area %)
+      install(@area)
+      @sub-channels = SubChannels(.log) with elem ->
+         @area.append-child(elem)
+
    dispatch(m) =
-      {sub-path, sub-m} = @parse-sub-channel(m)
+      {sub-path, sub-m} = @sub-channels.parse(m)
       if sub-path:
-         ch = @get-sub-channel(sub-path, sub-m, sub-m.type or .log)
+         ch = @sub-channels.get(sub-path, sub-m)
          if sub-m.command !== .open:
             ch.dispatch(sub-m)
       elif m.command is .log:

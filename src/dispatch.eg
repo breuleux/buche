@@ -17,9 +17,11 @@ class RootDispatcher < EventEmitter:
    dispatch(message) =
       if @root is null:
          if message.command is .open and message.path == '/':
-            @root = channel-constructors[message.type](message, @target)
+            @root = channel-constructors[message.type](message) with
+               elem -> @target.append-child(elem)
             return
-         @root = channel-constructors.log(message, @target)
+         @root = channel-constructors.log(message) with
+            elem -> @target.append-child(elem)
 
       @root.dispatch(message)
 
