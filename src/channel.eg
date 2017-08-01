@@ -43,8 +43,10 @@ class SubChannels:
 class TabsChannel < EventEmitter:
 
    constructor(message, install) =
+      @anchor = message.anchor or 'top'
+      anchor-tag = '.tabs-{@anchor}'
       @area = dom with
-         div.tabs-area %
+         div.tabs-area[^anchor-tag] %
             div.tabs-select.hide %
             div.tabs-panes %
       @area-select = @area.child-nodes[0]
