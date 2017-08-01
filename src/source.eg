@@ -56,7 +56,6 @@ class StreamSource:
       ;;    @in-callback(null)
 
    process-line(line) =
-      print line
       result =
          try:
             JSON.parse(line)
@@ -66,7 +65,6 @@ class StreamSource:
              format = 'pre'
              contents = line
              raw = true}
-      print result
       @in-callback(result)
 
    send(message) =

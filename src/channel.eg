@@ -26,23 +26,88 @@ class SubChannels:
       else:
          type = message.type or @default-type
          expr-value @channels[name] =
-            channel-constructors[type](message, @install)
+            channel-constructors[type](message) with
+               data -> @install(data & {= name})
+
+   dispatch(m) =
+      {sub-path, sub-m} = @parse(m)
+      if sub-path:
+         ch = @get(sub-path, sub-m)
+         if sub-m.command !== .open:
+            ch.dispatch(sub-m)
+         true
+      else:
+         false
+
+
+class TabsChannel < EventEmitter:
+
+   constructor(message, install) =
+      @area = dom with
+         div.tabs-area %
+            div.tabs-select.hide %
+            div.tabs-panes %
+      @area-select = @area.child-nodes[0]
+      @area-panes = @area.child-nodes[1]
+      @active = null
+      @nchannels = 0
+      install with {
+         channel = (@)
+         element = @area
+         message = message
+      }
+      @sub-channels = SubChannels(.tabs) with data ->
+         data.tab = @make-tab(data)
+         data.holder = dom(div % data.element)
+         @area-select.append-child(data.tab)
+         @area-panes.append-child(data.holder)
+         if not @active:
+            @select(data)
+         @nchannels += 1
+         if @nchannels > 1:
+            @area-select.class-list.remove(.hide)
+
+   make-tab(data) =
+      dom with
+         div.tab %
+            data.name
+            onclick() =
+               print '{data.name}'
+               @select(data)
+
+   select(data) =
+      if @active:
+         @active.tab.class-list.remove(.active)
+         @active.holder.class-list.remove(.active)
+      data.tab.class-list.add(.active)
+      data.holder.class-list.add(.active)
+      @active = data
+
+   dispatch(m) =
+      m2 =
+         if m.path is '/':
+            m & {path = '/_', type = m.type or .log}
+         else:
+            m
+      @sub-channels.dispatch(m2)
 
 
 class LogChannel < EventEmitter:
 
    constructor(message, install) =
       @area = dom(div.log-area %)
-      install(@area)
-      @sub-channels = SubChannels(.log) with elem ->
-         @area.append-child(elem)
+      install with {
+         channel = (@)
+         element = @area
+         message = message
+      }
+      @sub-channels = SubChannels(.log) with data ->
+         @area.append-child(data.element)
 
    dispatch(m) =
-      {sub-path, sub-m} = @sub-channels.parse(m)
-      if sub-path:
-         ch = @sub-channels.get(sub-path, sub-m)
-         if sub-m.command !== .open:
-            ch.dispatch(sub-m)
+      success = @sub-channels.dispatch(m)
+      if success:
+         pass
       elif m.command is .log:
          element =
             match m.format:
@@ -65,7 +130,9 @@ class LogChannel < EventEmitter:
       else:
          console.error('log channel does not know command {m.command}.')
 
+
 channel-constructors = {
+   tabs = TabsChannel
    log = LogChannel
    error = LogChannel
 }
