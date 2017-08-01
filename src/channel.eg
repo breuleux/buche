@@ -38,6 +38,8 @@ class LogChannel < EventEmitter:
       elif m.command is .log:
          element =
             match m.format:
+               .pre ->
+                  div.raw-line % m.contents
                .html ->
                   div[raw] % m.contents
                .markdown ->

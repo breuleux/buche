@@ -54,28 +54,29 @@ create-window() =
    w.web-contents.on('new-window', handle-redirect)
 
    ipc-main.on(.ready) with ->
-      var origin = null
+      var origins = {}
       if cmd:
          print 'Using command: {cmd}'
          proc = spawn(cmd, {}) with {
             shell = true
-            stdio = {.pipe, .pipe, process.stderr}
+            stdio = {.pipe, .pipe, .pipe} ;; process.stderr}
          }
          proc.on(.error) with err ->
             print 'Failed to start process.'
             print err
-         origin = proc.stdout
+         origins = {proc.stdout, proc.stderr}
          ipc-main.on(.data) with {_, data} ->
             proc.stdin.write(data)
       else:
-         origin = process.stdin
+         origins = {process.stdin}
          ipc-main.on(.data) with {_, data} ->
             console.error('Cannot receive data!')
-      origin.set-encoding(.utf8)
-      origin.on(.data) with data ->
-         w.web-contents.send(.data, data)
-      origin.on(.end) with -> ->
-         w.web-contents.send(.end)
+      origins each origin ->
+         origin.set-encoding(.utf8)
+         origin.on(.data) with data ->
+            w.web-contents.send(.data, data)
+         origin.on(.end) with -> ->
+            w.web-contents.send(.end)
 
 app.on('ready', create-window)
 

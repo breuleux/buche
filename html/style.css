@@ -44,7 +44,6 @@ html, body, #app {
   overflow: auto; }
 
 .log-area .log-area {
-  /* width: 100% */
   height: auto;
   max-height: 500px;
   background: #f8f8f8;
@@ -74,3 +73,10 @@ html, body, #app {
 .tab-label.selected, .tab-label.selected:hover {
   background-color: purple;
   color: white; }
+
+.raw-line {
+  font-family: monospace;
+  white-space: pre;
+  padding: 0px;
+  margin: 0px;
+  line-height: 1; }

@@ -6,6 +6,35 @@ provide:
    StreamSource
 
 
+;; class StreamSource:
+
+;;    constructor(@in-stream, @out-stream) =
+;;       @ee = new EventEmitter()
+;;       @current-chunk = ""
+;;       @in-stream.set-encoding??(.utf8)
+
+;;    read(@in-callback) =
+;;       @in-stream.on(.data) with chunks ->
+;;          if chunks:
+;;             ;; TODO: better regular expression
+;;             chunks.split(R"(?=\{)|(\})") each chunk when chunk ->
+;;                @process-chunk(chunk)
+;;       ;; @in-stream.on(.end) with ->
+;;       ;;    @in-callback(null)
+
+;;    process-chunk(chunk) =
+;;       @current-chunk += chunk
+;;       try:
+;;          result = JSON.parse(@current-chunk)
+;;          @current-chunk = ""
+;;          @in-callback(result)
+;;       catch SyntaxError? e:
+;;          pass
+
+;;    send(message) =
+;;       @out-stream.write(JSON.stringify(message))
+
+
 class StreamSource:
 
    constructor(@in-stream, @out-stream) =
@@ -14,22 +43,31 @@ class StreamSource:
       @in-stream.set-encoding??(.utf8)
 
    read(@in-callback) =
-      @in-stream.on(.data) with chunks ->
-         if chunks:
-            ;; TODO: better regular expression
-            chunks.split(R"(?=\{)|(\})") each chunk when chunk ->
-               @process-chunk(chunk)
+      @in-stream.on(.data) with data ->
+         if data:
+            {*lines, last} = data.split(R"\n")
+            if lines.length > 0:
+               lines[0] = @current-chunk + lines[0]
+               @current-chunk = ""
+               lines each line ->
+                  @process-line(line)
+            @current-chunk += last
       ;; @in-stream.on(.end) with ->
       ;;    @in-callback(null)
 
-   process-chunk(chunk) =
-      @current-chunk += chunk
-      try:
-         result = JSON.parse(@current-chunk)
-         @current-chunk = ""
-         @in-callback(result)
-      catch SyntaxError? e:
-         pass
+   process-line(line) =
+      print line
+      result =
+         try:
+            JSON.parse(line)
+         catch SyntaxError? e:
+            {command = .log
+             path = '/'
+             format = 'pre'
+             contents = line
+             raw = true}
+      print result
+      @in-callback(result)
 
    send(message) =
       @out-stream.write(JSON.stringify(message))
