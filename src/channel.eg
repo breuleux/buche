@@ -3,6 +3,7 @@ require:
    node-uuid as uuid
    events -> EventEmitter
    /dom
+   jquery as jq
 
 provide:
    channel-constructors
@@ -74,7 +75,6 @@ class TabsChannel < EventEmitter:
          div.tab %
             data.name
             onclick() =
-               print '{data.name}'
                @select(data)
 
    select(data) =
@@ -129,6 +129,8 @@ class LogChannel < EventEmitter:
       elif m.command is .clear:
          while @area.first-child:
             @area.remove-child(@area.first-child)
+      elif m.command is .reprocess:
+         jq(m.selector)'each'(new Function{m.body})
       else:
          console.error('log channel does not know command {m.command}.')
 
