@@ -105,14 +105,16 @@ html, body, #app {
   height: auto;
   background: #aaf;
   display: flex;
-  flex-direction: row; }
+  flex-direction: row;
+  overflow: auto; }
 
 .tabs-left > .tabs-select {
   width: auto;
   height: 100%;
   background: #88f;
   display: flex;
-  flex-direction: column; }
+  flex-direction: column;
+  overflow: auto; }
 
 .tabs-panes {
   flex: 1;
