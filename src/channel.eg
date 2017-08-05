@@ -11,7 +11,7 @@ provide:
 
 class SubChannels:
 
-   constructor(@default-type, @install) =
+   constructor(@config, @install) =
       @channels = {=}
 
    parse(m) =
@@ -25,9 +25,9 @@ class SubChannels:
       if @channels[name] as sch:
          sch
       else:
-         type = message.type or @default-type
+         type = message.type or @config.type
          expr-value @channels[name] =
-            channel-constructors[type](message) with
+            channel-constructors[type](message & @config) with
                data -> @install(data & {= name})
 
    dispatch(m) =
@@ -59,16 +59,21 @@ class TabsChannel < EventEmitter:
          element = @area
          message = message
       }
-      @sub-channels = SubChannels(.tabs) with data ->
-         data.tab = @make-tab(data)
-         data.holder = dom(div % data.element)
-         @area-select.append-child(data.tab)
-         @area-panes.append-child(data.holder)
-         if not @active:
-            @select(data)
-         @nchannels += 1
-         if @nchannels > 1:
-            @area-select.class-list.remove(.hide)
+      @sub-channels = SubChannels(cfg, install) where
+         cfg = {
+            type = .tabs
+            anchor = @anchor
+         }
+         install(data) =
+            data.tab = @make-tab(data)
+            data.holder = dom(div % data.element)
+            @area-select.append-child(data.tab)
+            @area-panes.append-child(data.holder)
+            if not @active:
+               @select(data)
+            @nchannels += 1
+            if @nchannels > 1 or data.name != '_':
+               @area-select.class-list.remove(.hide)
 
    make-tab(data) =
       dom with
@@ -103,8 +108,12 @@ class LogChannel < EventEmitter:
          element = @area
          message = message
       }
-      @sub-channels = SubChannels(.log) with data ->
-         @area.append-child(data.element)
+      @sub-channels = SubChannels(cfg, install) where
+         cfg = {
+            type = .log
+         }
+         install(data) =
+            @area.append-child(data.element)
 
    dispatch(m) =
       success = @sub-channels.dispatch(m)
