@@ -21,13 +21,12 @@ html, body, #app {
   margin: 0px;
   padding: 0px; }
 
-#app {
-  /* display: grid */
-  /* grid-template-columns: $tabs-width 1fr */
-  /* grid-template-rows: auto */
-  background: red;
-  /* overflow: auto */ }
-
+/* #app */
+/* display: grid */
+/* grid-template-columns: $tabs-width 1fr */
+/* grid-template-rows: auto
+  background: red */
+/* overflow: auto */
 #mount-content {
   width: 100vw;
   height: 100vh;
@@ -35,13 +34,26 @@ html, body, #app {
   /* max-height: 100vh */
   /* overflow: auto */ }
 
+.log-area-stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%; }
+
+.log-input {
+  background: #eee;
+  padding: 5px;
+  font-size: 14px;
+  border: none;
+  outline: none; }
+
 .log-area {
   width: 100%;
   /* height: 100vh */
   height: 100%;
   background: white;
-  border-left: 5px solid #aa1493;
-  padding-left: 20px;
+  margin-left: 5px;
+  /* border-left: 5px solid #aa1493 */
   overflow: auto; }
 
 .log-area .log-area {
@@ -49,6 +61,28 @@ html, body, #app {
   max-height: 500px;
   background: #f8f8f8;
   margin-bottom: 5px; }
+
+.log-area > * {
+  padding-left: 20px;
+  margin-left: 5px; }
+
+.log-area > .echo {
+  border-left: 15px solid green;
+  margin-left: 0px;
+  padding-left: 15px;
+  background-color: #eee; }
+
+.log-area > .log {
+  padding-left: 20px; }
+
+.log-area > .result {
+  border-left: 5px solid blue; }
+
+.log-area > .error {
+  border-left: 5px solid red; }
+
+.log-area > .warning {
+  border-left: 5px solid orange; }
 
 .tab-labels {
   height: 100vh;

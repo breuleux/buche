@@ -137,7 +137,8 @@ class LogChannel < EventEmitter:
                   div[raw] % quaint.toHTML(m.contents)
                else ->
                   div % m.contents
-         @area.append-child(dom(element))
+         kind = '.{m.kind or "log"}'
+         @area.append-child(dom(div[^kind] % element))
       elif m.command is .clear:
          while @area.first-child:
             @area.remove-child(@area.first-child)
