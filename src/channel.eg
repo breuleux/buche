@@ -5,6 +5,9 @@ require:
    /dom
    jquery as jq
 
+globals:
+   Bokeh
+
 provide:
    channel-constructors
 
@@ -34,7 +37,7 @@ class SubChannels:
       {sub-path, sub-m} = @parse(m)
       if sub-path:
          ch = @get(sub-path, sub-m)
-         if sub-m.command !== .open:
+         if sub-m.path !== '/' or sub-m.command !== .open:
             ch.dispatch(sub-m)
          true
       else:
@@ -144,8 +147,57 @@ class LogChannel < EventEmitter:
          console.error('log channel does not know command {m.command}.')
 
 
+class PlotChannel < EventEmitter:
+
+   constructor(message, install) =
+      @area = dom(div.plot-area %)
+      install with {
+         channel = (@)
+         element = @area
+         message = message
+      }
+      @source = new Bokeh.ColumnDataSource with {
+         data = {x = {}, y = {}}
+      }
+      @xrange = new Bokeh.DataRange1d()
+      @yrange = new Bokeh.DataRange1d()
+
+      @plot = new Bokeh.Plot with {
+         title = message.title or message.path
+         x_range = @xrange
+         y_range = @yrange
+         plot_width = 400
+         plot_height = 400
+         background_fill_color = "#F2F2F7"
+      }
+
+      @xaxis = new Bokeh.LinearAxis with {axis_line_color = null}
+      @yaxis = new Bokeh.LinearAxis with {axis_line_color = null}
+      @plot.add_layout(@xaxis, "below");
+      @plot.add_layout(@yaxis, "left");
+
+      @line = new Bokeh.Line with {
+         x = {field = "x"}
+         y = {field = "y"}
+         line_color = "#666699"
+         line_width = 2
+      }
+      @plot.add_glyph(@line, @source)
+
+      @doc = new Bokeh.Document()
+      @doc.add_root(@plot)
+
+      Bokeh.embed.add_document_standalone(@doc, @area)
+
+   dispatch(m) =
+      @source.data.x.push with m.x
+      @source.data.y.push with m.y
+      @source.change.emit()
+
+
 channel-constructors = {
-   tabs = TabsChannel
-   log = LogChannel
    error = LogChannel
+   log = LogChannel
+   plot = PlotChannel
+   tabs = TabsChannel
 }
