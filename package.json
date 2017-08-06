@@ -12,16 +12,16 @@
   "license": "MIT",
   "main": "./lib/index.js",
   "dependencies": {
+    "bokehjs": "^0.12.6",
     "commander": "^2.9.0",
     "earlgrey-runtime": "^0.1.0",
     "electron": "^1.4.15",
-    "jquery": "^3.2.1",
-    "lodash": "^4.17.4",
+    "jquery": "^2.2.4",
     "marked": "^0.3.6",
     "node-sass": "^4.5.0",
-    "node-uuid": "^1.4.7",
     "open": "0.0.5",
-    "quaint": "^0.1.1"
+    "quaint": "^0.1.1",
+    "tslib": "^1.7.1"
   },
   "devDependencies": {
     "earlgrey": "^0.1.0",

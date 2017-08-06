@@ -1,12 +1,10 @@
 
 require:
-   node-uuid as uuid
    events -> EventEmitter
    /dom
    jquery as jq
+   bokehjs as Bokeh
 
-globals:
-   Bokeh
 
 provide:
    channel-constructors
@@ -166,50 +164,96 @@ class LogChannel < EventEmitter:
 
 class PlotChannel < EventEmitter:
 
-   constructor(message, install) =
+   constructor(@master, message, install) =
+      @sources = {=}
+      @master.register('_', @)
+      @color-rotation = {'blue', 'red', 'green', 'purple'}
       @area = dom(div.plot-area %)
       install with {
          channel = (@)
          element = @area
          message = message
       }
-      @source = new Bokeh.ColumnDataSource with {
-         data = {x = {}, y = {}}
-      }
-      @xrange = new Bokeh.DataRange1d()
-      @yrange = new Bokeh.DataRange1d()
 
-      @plot = new Bokeh.Plot with {
-         title = message.title or message.path
-         x_range = @xrange
-         y_range = @yrange
-         plot_width = 400
-         plot_height = 400
-         background_fill_color = "#F2F2F7"
+      tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
+
+      @plot = Bokeh.Plotting.figure with {
+         title = 'Woo!'
+         tools = tools
       }
 
-      @xaxis = new Bokeh.LinearAxis with {axis_line_color = null}
-      @yaxis = new Bokeh.LinearAxis with {axis_line_color = null}
-      @plot.add_layout(@xaxis, "below");
-      @plot.add_layout(@yaxis, "left");
-
-      @line = new Bokeh.Line with {
-         x = {field = "x"}
-         y = {field = "y"}
-         line_color = "#666699"
+      ;; This plot is a workaround to force the axes to show properly
+      ;; even though we have no data yet.
+      dummy-source = new Bokeh.ColumnDataSource with {
+         data = {x = {0}, y = {0}}
+      }
+      l = @plot.line({field = "x"}, {field = "y"}) with {
+         source = dummy-source
+         line_color = .white
          line_width = 2
       }
-      @plot.add_glyph(@line, @source)
+      @plot._legend.click_policy = message.legend-click or 'hide'
+      @plot._legend.location = message.legend-location or 'top_right'
 
-      @doc = new Bokeh.Document()
-      @doc.add_root(@plot)
+      Bokeh.Plotting.show(@plot, @area)
 
-      Bokeh.embed.add_document_standalone(@doc, @area)
+   new-color() =
+      color = @color-rotation.shift()
+      @color-rotation.push(color)
+      color
+
+   add-line(opt) =
+      source = new Bokeh.ColumnDataSource with {
+         data = {
+            x = if{opt.x, {opt.x}, {}}
+            y = if{opt.x, {opt.y}, {}}
+         }
+      }
+      ;; max-source = new Bokeh.ColumnDataSource with {
+      ;;    data = {
+      ;;       x = if{opt.x, {opt.x}, {}}
+      ;;       y = if{opt.x, {opt.y}, {}}
+      ;;    }
+      ;; }
+      color = opt.line-color or @new-color()
+      @plot.line({field = "x"}, {field = "y"}) with {
+         source = source
+         line_color = color
+         line_width = opt.line-width or 2
+         legend = opt.legend or opt.path
+      }
+      ;; @plot.circle({field = "x"}, {field = "y"}) with {
+      ;;    source = max-source
+      ;;    size = 10
+      ;;    color = color
+      ;;    legend = opt.legend or opt.path
+      ;; }
+      ;; @sources[opt.path] = {main = source, max = max-source}
+      @sources[opt.path] = {main = source}
 
    dispatch(m) =
-      @source.data.x.push with m.x
-      @source.data.y.push with m.y
-      @source.change.emit()
+      src-name = m.path[1...]
+      match m.command:
+         .open ->
+            @add-line with m & {
+               path = src-name
+            }
+         .point ->
+            if @sources[src-name] as things:
+               {main => src} = things
+
+               src.data.x.push with m.x
+               src.data.y.push with m.y
+               src.change.emit()
+
+               ;; if max.data.y < m.y:
+               ;;    max.data.x[0] = m.x
+               ;;    max.data.y[0] = m.y
+               ;;    max.change.emit()
+            else:
+               @add-line({path = src-name, x = m.x, y = m.y})
+         other ->
+            throw Error('Unknown command: {other}')
 
 
 channel-constructors = {
