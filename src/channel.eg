@@ -14,7 +14,7 @@ provide:
 
 class SubChannels:
 
-   constructor(@config, @install) =
+   constructor(@master, @config, @install) =
       @channels = {=}
 
    parse(m) =
@@ -30,7 +30,7 @@ class SubChannels:
       else:
          type = message.type or @config.type
          expr-value @channels[name] =
-            channel-constructors[type](message & @config) with
+            channel-constructors[type](@master, @config & message) with
                data -> @install(data & {= name})
 
    dispatch(m) =
@@ -46,7 +46,8 @@ class SubChannels:
 
 class TabsChannel < EventEmitter:
 
-   constructor(message, install) =
+   constructor(@master, message, install) =
+      @master.register('_', @)
       @anchor = message.anchor or 'top'
       anchor-tag = '.tabs-{@anchor}'
       @area = dom with
@@ -62,7 +63,7 @@ class TabsChannel < EventEmitter:
          element = @area
          message = message
       }
-      @sub-channels = SubChannels(cfg, install) where
+      @sub-channels = SubChannels(@master, cfg, install) where
          cfg = {
             type = .tabs
             anchor = @anchor
@@ -104,14 +105,29 @@ class TabsChannel < EventEmitter:
 
 class LogChannel < EventEmitter:
 
-   constructor(message, install) =
+   constructor(@master, message, install) =
+      @master.register('_', @)
       @area = dom(div.log-area %)
+      @input = dom with
+         input.log-input %
+            onkeydown(e) =
+               if e.key == 'Enter':
+                  @emit(.command) with {
+                     type = .input
+                     contents = e.target.value
+                  }
+                  e.target.value = ""
+      @all =
+         if message.has-input:
+            dom(div.log-area-stack % {@area, @input})
+         else:
+            @area
       install with {
          channel = (@)
-         element = @area
+         element = @all
          message = message
       }
-      @sub-channels = SubChannels(cfg, install) where
+      @sub-channels = SubChannels(@master, cfg, install) where
          cfg = {
             type = .log
          }

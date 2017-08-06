@@ -13,17 +13,23 @@ class RootDispatcher < EventEmitter:
       @set-max-listeners(Infinity)
       @root = null
       @focus = null
+      @all-channels = {=}
 
    dispatch(message) =
       if @root is null:
          if message.command is .open and message.path == '/':
-            @root = channel-constructors[message.type](message) with
+            @root = channel-constructors[message.type](@, message) with
                data -> @target.append-child(data.element)
             return
-         @root = channel-constructors.tabs(message) with
+         @root = channel-constructors.tabs(@, message) with
             data -> @target.append-child(data.element)
 
       @root.dispatch(message)
+
+   register(path, channel) =
+      @all-channels[path] = channel
+      channel.on(.command) with cmd ->
+         @source.send(cmd & {= path})
 
    run() =
       @source.read(m -> @dispatch(m))
