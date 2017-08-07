@@ -104,8 +104,15 @@ class TabsChannel < EventEmitter:
 class LogChannel < EventEmitter:
 
    constructor(@master, message, install) =
+      @scrolled-down = true
       @master.register('_', @)
-      @area = dom(div.log-area %)
+      @area = dom with
+         div.log-area %
+            onscroll(e) =
+               a = @jqarea
+               @scrolled-down =
+                  a[0].scroll-height - a.scroll-top() == a.outer-height()
+      @jqarea = jq(@area)
       @input = dom with
          input.log-input %
             onkeydown(e) =
@@ -145,7 +152,10 @@ class LogChannel < EventEmitter:
                   div[raw] % m.contents
                .markdown ->
                   require: marked
-                  div[raw] % marked.inline-lexer(m.contents, {})
+                  if m.inline:
+                     div[raw] % marked.inline-lexer(m.contents, {})
+                  else:
+                     div[raw] % marked(m.contents, {})
                .quaint ->
                   require: quaint
                   div[raw] % quaint.toHTML(m.contents)
@@ -153,6 +163,10 @@ class LogChannel < EventEmitter:
                   div % m.contents
          kind = '.{m.kind or "log"}'
          @area.append-child(dom(div[^kind] % element))
+         if @scrolled-down:
+            set-timeout(f, 0) where f{} =
+               @jqarea.scroll-top(@area.scroll-height)
+
       elif m.command is .clear:
          while @area.first-child:
             @area.remove-child(@area.first-child)
