@@ -126,7 +126,7 @@ class LogChannel < EventEmitter:
          if message.has-input:
             dom(div.log-area-stack % {@area, @input})
          else:
-            @area
+            dom(div.log-area-stack % @area)
       install with {
          channel = (@)
          element = @all
