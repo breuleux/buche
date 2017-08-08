@@ -192,7 +192,7 @@ class PlotChannel < EventEmitter:
       tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
 
       @plot = Bokeh.Plotting.figure with {
-         title = 'Woo!'
+         title = message.title or null
          tools = tools
       }
 
