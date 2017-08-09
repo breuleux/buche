@@ -114,8 +114,6 @@ class LogChannel < EventEmitter:
                }
                e.target.value = ""
             input = message.has-input
-            b % .a
-            b % .b
 
       install with {
          channel = (@)
