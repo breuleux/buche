@@ -1,0 +1,34 @@
+
+require:
+   /dom
+   .util -> css
+
+
+provide:
+   install-components
+
+
+globals:
+   HTMLElement
+   custom-elements
+
+
+jsclass Custom < HTMLElement:
+   constructor() =
+      super()
+      @shadow = @attach-shadow with {mode = .open}
+      @shadow.append-child(dom(css(@css())))
+      Array! tpl = @template()
+      tpl each t ->
+         @shadow.append-child(dom(t))
+
+   template() =
+      div %
+
+   css() =
+      {=}
+
+
+install-components() =
+   pass
+

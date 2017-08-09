@@ -14,6 +14,7 @@
   "dependencies": {
     "bokehjs": "^0.12.6",
     "commander": "^2.9.0",
+    "decamelize": "^1.2.0",
     "earlgrey-runtime": "^0.1.0",
     "electron": "^1.4.15",
     "jquery": "^2.2.4",
@@ -23,16 +24,16 @@
     "tslib": "^1.7.1"
   },
   "devDependencies": {
-    "earlgrey": "^0.1.0",
-    "mocha": "^3.2.0",
-    "earl-mocha": "^0.1.0"
+    "earl-mocha": "^0.1.0",
+    "earlgrey": "^0.1.1",
+    "mocha": "^3.2.0"
   },
   "bin": {
     "buche": "bin/buche"
   },
   "scripts": {
-    "refresh": "earl compile -5vso lib/ src/",
-    "compile": "earl compile -5rvso lib/ src/",
+    "refresh": "earl compile -vso lib/ src/",
+    "compile": "earl compile -rvso lib/ src/",
     "prepublish": "npm run compile",
     "test": "mocha"
   }

@@ -7,6 +7,8 @@ require:
       StreamSource
    .dispatch ->
       RootDispatcher
+   .components ->
+      install-components
 
 stdin-buffer = new EventEmitter()
 ipc-renderer.on(.data) with {event, data} ->
@@ -16,6 +18,7 @@ ipc-renderer.on(.end) with {event, data} ->
 ipc-renderer.send(.ready)
 
 main() where main() =
+   install-components()
    mount-content = document.get-element-by-id("mount-content")
    stream =
       StreamSource with
