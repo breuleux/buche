@@ -1,0 +1,22 @@
+
+require:
+   decamelize
+
+provide:
+   css
+
+
+convert(sheet) =
+   object with items(sheet) each {sel, style} ->
+      {sel} with object with items(style) each {prop, value} ->
+         {decamelize(prop, "-"), value}
+
+css(sheet) =
+   style[raw] %
+      ___.join("\n") with
+         items(sheet) each {sel, style} ->
+            props = ___.join("\n  ") with
+               items(style) each {prop, value} ->
+                  '{decamelize(prop, "-")}: {value};'
+            '{sel} \{\n  {props}\n\}'
+
