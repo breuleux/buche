@@ -2,6 +2,7 @@
 require:
    /dom
    .util -> css
+   jquery as jq
 
 
 provide:
@@ -9,18 +10,23 @@ provide:
 
 
 globals:
+   document
    HTMLElement
    custom-elements
 
 
 jsclass Custom < HTMLElement:
-   constructor() =
-      super()
+
+   attached-callback() =
       @shadow = @attach-shadow with {mode = .open}
       @shadow.append-child(dom(css(@css())))
+      @setup()
       Array! tpl = @template()
       tpl each t ->
          @shadow.append-child(dom(t))
+
+   setup() =
+      pass
 
    template() =
       div %
@@ -29,6 +35,97 @@ jsclass Custom < HTMLElement:
       {=}
 
 
+jsclass ChannelLog < Custom:
+
+   setup() =
+      @is-setup = true
+      @scrolled-down = true
+      @has-input = @get-attribute('input')
+
+   template() =
+      @scrolled-down = true
+      @area = dom with
+         div.log-area %
+            onscroll(e) =
+               a = @jqarea
+               @scrolled-down =
+                  a[0].scroll-height - a.scroll-top() == a.outer-height()
+            @child-nodes each x -> x
+      @jqarea = jq(@area)
+      @input = dom with
+         input.log-input %
+            onkeydown(e) =
+               if e.key == 'Enter':
+                  @onsubmit(e)
+      if @has-input:
+         {@area, @input}
+      else:
+         @area
+
+   css() = {
+      ":host" = {
+         display = .flex
+         flex-direction = .column
+         height = "100%"
+      }
+
+      ".log-area" = {
+         flex = 1
+         overflow = .auto
+         margin-left = '5px'
+      }
+
+      ".log-input" = {
+         background = '#eee'
+         padding = '5px'
+         font-size = '14px'
+         border = 'none'
+         outline = 'none'
+      }
+
+      ".log-area > *" = {
+         padding-left = '20px'
+         margin-left = '5px'
+      }
+
+      ".log-area > .echo" = {
+         border-left = '15px solid green'
+         margin-left = '0px'
+         padding-left = '15px'
+         background-color = '#eee'
+      }
+
+      ".log-area > .log" = {
+         padding-left = '20px'
+      }
+
+      ".log-area > .result" = {
+         border-left = '5px solid blue'
+      }
+
+      ".log-area > .error" = {
+         border-left = '5px solid red'
+      }
+
+      ".log-area > .warning" = {
+         border-left = '5px solid orange'
+      }
+   }
+
+   add(child, kind = .log) =
+      wrapped-child = dom(div[^'.{kind}'] % child)
+      if @area:
+         @area.append-child(wrapped-child)
+         if @scrolled-down:
+            set-timeout(f, 0) where f() =
+               @jqarea.scroll-top(@area.scroll-height)
+      else:
+         super.append-child(wrapped-child)
+
+   append-child(child) =
+      @add(child)
+
+
 install-components() =
-   pass
+   document.register-element('channel-log', ChannelLog)
 

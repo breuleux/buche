@@ -104,32 +104,22 @@ class TabsChannel < EventEmitter:
 class LogChannel < EventEmitter:
 
    constructor(@master, message, install) =
-      @scrolled-down = true
       @master.register('_', @)
       @area = dom with
-         div.log-area %
-            onscroll(e) =
-               a = @jqarea
-               @scrolled-down =
-                  a[0].scroll-height - a.scroll-top() == a.outer-height()
-      @jqarea = jq(@area)
-      @input = dom with
-         input.log-input %
-            onkeydown(e) =
-               if e.key == 'Enter':
-                  @emit(.command) with {
-                     type = .input
-                     contents = e.target.value
-                  }
-                  e.target.value = ""
-      @all =
-         if message.has-input:
-            dom(div.log-area-stack % {@area, @input})
-         else:
-            dom(div.log-area-stack % @area)
+         channel-log %
+            onsubmit(e) =
+               @emit(.command) with {
+                  type = .input
+                  contents = e.target.value
+               }
+               e.target.value = ""
+            input = message.has-input
+            b % .a
+            b % .b
+
       install with {
          channel = (@)
-         element = @all
+         element = @area
          message = message
       }
       @sub-channels = SubChannels(@master, cfg, install) where
@@ -161,11 +151,7 @@ class LogChannel < EventEmitter:
                   div[raw] % quaint.toHTML(m.contents)
                else ->
                   div % m.contents
-         kind = '.{m.kind or "log"}'
-         @area.append-child(dom(div[^kind] % element))
-         if @scrolled-down:
-            set-timeout(f, 0) where f{} =
-               @jqarea.scroll-top(@area.scroll-height)
+         @area.add(element, m.kind or .log)
 
       elif m.command is .clear:
          while @area.first-child:
