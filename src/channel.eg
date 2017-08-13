@@ -4,134 +4,92 @@ require:
    /dom
    jquery as jq
    bokehjs as Bokeh
+   .util -> join
 
 
 provide:
    channel-constructors
 
 
-class SubChannels:
-
-   constructor(@master, @config, @install) =
-      @channels = {=}
-
-   parse(m) =
-      if m.path is '/':
-         return {false, m}
-      {_, sub-path, *rest} = m.path.split('/')
-      sub-m = m & {path = '/' + rest.join('/')}
-      return {sub-path, sub-m}
-
-   get(name, message) =
-      if @channels[name] as sch:
-         sch
-      else:
-         type = message.type or @config.type
-         expr-value @channels[name] =
-            channel-constructors[type](@master, @config & message) with
-               data -> @install(data & {= name})
-
-   dispatch(m) =
-      {sub-path, sub-m} = @parse(m)
-      if sub-path:
-         ch = @get(sub-path, sub-m)
-         if sub-m.path !== '/' or sub-m.command !== .open:
-            ch.dispatch(sub-m)
-         true
-      else:
-         false
+jsclass UnrecognizedCommandError < Error:
+   constructor(m, @channel) =
+      super('Unrecognized command: {m.command}')
+      @command = m.command
+      @message-object = m
 
 
-class TabsChannel < EventEmitter:
+jsclass Channel < EventEmitter:
+   constructor(@master, @options) =
+      super()
+      @path = @options.path
+      @element = dom with @make-element()
+      @setup()
 
-   constructor(@master, message, install) =
-      @master.register('_', @)
-      @anchor = message.anchor or 'top'
-      anchor-tag = '.tabs-{@anchor}'
-      @area = dom with
-         div.tabs-area[^anchor-tag] %
-            div.tabs-select.hide %
-            div.tabs-panes %
-      @area-select = @area.child-nodes[0]
-      @area-panes = @area.child-nodes[1]
-      @active = null
-      @nchannels = 0
-      install with {
-         channel = (@)
-         element = @area
-         message = message
-      }
-      @sub-channels = SubChannels(@master, cfg, install) where
-         cfg = {
-            type = .tabs
-            anchor = @anchor
-         }
-         install(data) =
-            data.tab = @make-tab(data)
-            data.holder = dom(div % data.element)
-            @area-select.append-child(data.tab)
-            @area-panes.append-child(data.holder)
-            if not @active:
-               @select(data)
-            @nchannels += 1
-            if @nchannels > 1 or data.name != '_':
-               @area-select.class-list.remove(.hide)
+   setup() =
+      pass
 
-   make-tab(data) =
-      dom with
-         div.tab %
-            data.name
-            onclick() =
-               @select(data)
+   make-element() =
+      div %
 
-   select(data) =
-      if @active:
-         @active.tab.class-list.remove(.active)
-         @active.holder.class-list.remove(.active)
-      data.tab.class-list.add(.active)
-      data.holder.class-list.add(.active)
-      @active = data
+   intercepted-commands() =
+      {}
 
-   dispatch(m) =
-      m2 =
-         if m.path is '/':
-            m & {path = '/_', type = m.type or .log}
-         else:
-            m
-      @sub-channels.dispatch(m2)
+   intercepts(message) =
+      false
 
-
-class LogChannel < EventEmitter:
-
-   constructor(@master, message, install) =
-      @master.register('_', @)
-      @area = dom with
-         channel-log %
-            onsubmit(e) =
-               @emit(.command) with {
-                  type = .input
-                  contents = e.target.value
-               }
-               e.target.value = ""
-            input = message.has-input
-
-      install with {
-         channel = (@)
-         element = @area
-         message = message
-      }
-      @sub-channels = SubChannels(@master, cfg, install) where
-         cfg = {
-            type = .log
-         }
-         install(data) =
-            @area.append-child(data.element)
-
-   dispatch(m) =
-      success = @sub-channels.dispatch(m)
-      if success:
+   dispatch(m and {command => match}) =
+      .resource ->
          pass
-      elif m.command is .log:
+         ;; @area.append-child()
+
+      .reprocess ->
+         jq(m.selector)['each'](new Function{m.body})
+
+      else ->
+         throw new UnrecognizedCommandError(m, @)
+
+   add-channel(sub-channel) =
+      @element.append-child(sub-channel.element)
+
+   fill-sub-channel-options(options) =
+      {type = .log} & options
+
+
+jsclass TabsChannel < Channel:
+
+   make-element() =
+      channel-tabs %
+         anchor = @options.anchor or .top
+
+   dispatch(m) =
+      @master.dispatch(m & {path = join(m.path, '_')})
+
+   add-channel(ch, options) =
+      @element.add(options.name, ch.element)
+
+   fill-sub-channel-options(options) =
+      if options.name == '_':
+         ;; TabsChannel redirects its messages to tab _, which we
+         ;; force to be a LogChannel
+         options & {type = .log}
+      else:
+         {type = .tabs, anchor = @options.anchor} & options
+
+
+jsclass LogChannel < Channel:
+
+   make-element() =
+      channel-log %
+         onsubmit(e) =
+            @emit(.command) with {
+               type = .input
+               contents = e.target.value
+            }
+            e.target.value = ""
+         input = @options.has-input
+
+   dispatch(m and {command => match}) =
+      .log ->
          element =
             match m.format:
                .pre ->
@@ -149,34 +107,24 @@ class LogChannel < EventEmitter:
                   div[raw] % quaint.toHTML(m.contents)
                else ->
                   div % m.contents
-         @area.add(element, m.kind or .log)
+         @element.add(element, m.kind or .log)
 
-      elif m.command is .clear:
-         while @area.first-child:
-            @area.remove-child(@area.first-child)
-      elif m.command is .reprocess:
-         jq(m.selector)'each'(new Function{m.body})
-      else:
-         console.error('log channel does not know command {m.command}.')
+      .clear ->
+         @element.clear()
+
+      else ->
+         super.dispatch(m)
 
 
-class PlotChannel < EventEmitter:
-
-   constructor(@master, message, install) =
+jsclass PlotChannel < Channel:
+   setup() =
       @sources = {=}
-      @master.register('_', @)
       @color-rotation = {'blue', 'red', 'green', 'purple'}
-      @area = dom(div.plot-area %)
-      install with {
-         channel = (@)
-         element = @area
-         message = message
-      }
 
       tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
 
       @plot = Bokeh.Plotting.figure with {
-         title = message.title or null
+         title = @options.title or null
          tools = tools
       }
 
@@ -190,8 +138,8 @@ class PlotChannel < EventEmitter:
          line_color = .white
          line_width = 2
       }
-      @plot._legend.click_policy = message.legend-click or 'hide'
-      @plot._legend.location = message.legend-location or 'top_right'
+      @plot._legend.click_policy = @options.legend-click or 'hide'
+      @plot._legend.location = @options.legend-location or 'top_right'
 
       Bokeh.Plotting.show(@plot, @area)
 
@@ -199,6 +147,36 @@ class PlotChannel < EventEmitter:
       color = @color-rotation.shift()
       @color-rotation.push(color)
       color
+
+   make-element() =
+      div.plot-area %
+
+   dispatch(m and {command => match}) =
+      .open ->
+         @add-line(m)
+
+      .point ->
+         if @sources[m.sub-path or ""] as things:
+            {main => src} = things
+
+            src.data.x.push with m.x
+            src.data.y.push with m.y
+            src.change.emit()
+
+            ;; if max.data.y < m.y:
+            ;;    max.data.x[0] = m.x
+            ;;    max.data.y[0] = m.y
+            ;;    max.change.emit()
+         else:
+            @add-line({x = m.x, y = m.y})
+      else ->
+         super.dispatch(m)
+
+   add-channel(sub-channel) =
+      throw Error("Plot cannot have sub-channels.")
+
+   fill-sub-channel-options(options) =
+      null
 
    add-line(opt) =
       source = new Bokeh.ColumnDataSource with {
@@ -228,34 +206,107 @@ class PlotChannel < EventEmitter:
       ;; }
       ;; @sources[opt.path] = {main = source, max = max-source}
       @sources[opt.path] = {main = source}
+   
 
-   dispatch(m) =
-      src-name = m.path[1...]
-      match m.command:
-         .open ->
-            @add-line with m & {
-               path = src-name
-            }
-         .point ->
-            if @sources[src-name] as things:
-               {main => src} = things
 
-               src.data.x.push with m.x
-               src.data.y.push with m.y
-               src.change.emit()
+;; class PlotChannel < EventEmitter:
 
-               ;; if max.data.y < m.y:
-               ;;    max.data.x[0] = m.x
-               ;;    max.data.y[0] = m.y
-               ;;    max.change.emit()
-            else:
-               @add-line({path = src-name, x = m.x, y = m.y})
-         other ->
-            throw Error('Unknown command: {other}')
+;;    constructor(@master, message, install) =
+;;       @sources = {=}
+;;       @master.register('_', @)
+;;       @color-rotation = {'blue', 'red', 'green', 'purple'}
+;;       @area = dom(div.plot-area %)
+;;       install with {
+;;          channel = (@)
+;;          element = @area
+;;          message = message
+;;       }
+
+;;       tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
+
+;;       @plot = Bokeh.Plotting.figure with {
+;;          title = message.title or null
+;;          tools = tools
+;;       }
+
+;;       ;; This plot is a workaround to force the axes to show properly
+;;       ;; even though we have no data yet.
+;;       dummy-source = new Bokeh.ColumnDataSource with {
+;;          data = {x = {0}, y = {0}}
+;;       }
+;;       l = @plot.line({field = "x"}, {field = "y"}) with {
+;;          source = dummy-source
+;;          line_color = .white
+;;          line_width = 2
+;;       }
+;;       @plot._legend.click_policy = message.legend-click or 'hide'
+;;       @plot._legend.location = message.legend-location or 'top_right'
+
+;;       Bokeh.Plotting.show(@plot, @area)
+
+
+
+;;    new-color() =
+;;       color = @color-rotation.shift()
+;;       @color-rotation.push(color)
+;;       color
+
+;;    add-line(opt) =
+;;       source = new Bokeh.ColumnDataSource with {
+;;          data = {
+;;             x = if{opt.x, {opt.x}, {}}
+;;             y = if{opt.x, {opt.y}, {}}
+;;          }
+;;       }
+;;       ;; max-source = new Bokeh.ColumnDataSource with {
+;;       ;;    data = {
+;;       ;;       x = if{opt.x, {opt.x}, {}}
+;;       ;;       y = if{opt.x, {opt.y}, {}}
+;;       ;;    }
+;;       ;; }
+;;       color = opt.line-color or @new-color()
+;;       @plot.line({field = "x"}, {field = "y"}) with {
+;;          source = source
+;;          line_color = color
+;;          line_width = opt.line-width or 2
+;;          legend = opt.legend or opt.path
+;;       }
+;;       ;; @plot.circle({field = "x"}, {field = "y"}) with {
+;;       ;;    source = max-source
+;;       ;;    size = 10
+;;       ;;    color = color
+;;       ;;    legend = opt.legend or opt.path
+;;       ;; }
+;;       ;; @sources[opt.path] = {main = source, max = max-source}
+;;       @sources[opt.path] = {main = source}
+
+;;    dispatch(m) =
+;;       src-name = m.path[1...]
+;;       match m.command:
+;;          .open ->
+;;             @add-line with m & {
+;;                path = src-name
+;;             }
+;;          .point ->
+;;             if @sources[src-name] as things:
+;;                {main => src} = things
+
+;;                src.data.x.push with m.x
+;;                src.data.y.push with m.y
+;;                src.change.emit()
+
+;;                ;; if max.data.y < m.y:
+;;                ;;    max.data.x[0] = m.x
+;;                ;;    max.data.y[0] = m.y
+;;                ;;    max.change.emit()
+;;             else:
+;;                @add-line({path = src-name, x = m.x, y = m.y})
+;;          other ->
+;;             throw Error('Unknown command: {other}')
 
 
 channel-constructors = {
-   error = LogChannel
+   ;; error = LogChannel
    log = LogChannel
    plot = PlotChannel
    tabs = TabsChannel

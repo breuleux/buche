@@ -19,8 +19,8 @@ jsclass Custom < HTMLElement:
 
    attached-callback() =
       @shadow = @attach-shadow with {mode = .open}
-      @shadow.append-child(dom(css(@css())))
       @setup()
+      @shadow.append-child(dom(css(@css())))
       Array! tpl = @template()
       tpl each t ->
          @shadow.append-child(dom(t))
@@ -35,12 +35,122 @@ jsclass Custom < HTMLElement:
       {=}
 
 
+jsclass ChannelTabs < Custom:
+   setup() =
+      @anchor = @get-attribute('anchor') or 'top'
+      @active = null
+      @nchannels = 0
+
+   template() =
+      anchor-tag = '.tabs-{@anchor}'
+      @element-select = dom with div.tabs-select.hide %
+      @element-panes = dom with div.tabs-panes %
+      div.tabs-area[^anchor-tag] %
+         @element-select
+         @element-panes
+
+   make-tab(spec) =
+      dom with
+         div.tab %
+            spec.tab-elem
+            onclick() =
+               @select(spec)
+
+   add(tab-elem, pane-elem) =
+      spec = {= tab-elem, = pane-elem}
+      spec.tab = @make-tab(spec)
+      spec.holder = dom(div % pane-elem)
+      @element-select.append-child(spec.tab)
+      @element-panes.append-child(spec.holder)
+      if not @active:
+         @select(spec)
+      @nchannels += 1
+      if @nchannels > 1 or tab-elem != '_':
+         @element-select.class-list.remove(.hide)
+
+   select(spec) =
+      if @active:
+         @active.tab.class-list.remove(.active)
+         @active.holder.class-list.remove(.active)
+      spec.tab.class-list.add(.active)
+      spec.holder.class-list.add(.active)
+      @active = spec
+
+   css() = {
+      ".tabs-area" = {
+         width = "100%"
+         height = "100%"
+         display = "flex"
+         flex-direction = "column"
+      }
+      ".tabs-area.tabs-top" = {
+        flex-direction = "column"
+      }
+
+      ".tabs-area.tabs-left" = {
+        flex-direction = "row"
+      }
+
+      ".tabs-top > .tabs-select.hide" = {
+        display = "none"
+      }
+
+      ".tabs-left > .tabs-select.hide" = {
+        display = "none"
+      }
+
+      ".tabs-top > .tabs-select" = {
+        width = "100%"
+        height = "auto"
+        background = "#aaf"
+        display = "flex"
+        flex-direction = "row"
+        overflow = "auto"
+      }
+
+      ".tabs-left > .tabs-select" = {
+        width = "auto"
+        height = "100%"
+        background = "#88f"
+        display = "flex"
+        flex-direction = "column"
+        overflow = "auto"
+      }
+
+      ".tabs-panes" = {
+        flex = "1"
+        overflow = "auto"
+      }
+
+      ".tab" = {
+        cursor = "pointer"
+        padding-left = "5px"
+        padding-right = "5px"
+        padding-top = "2px"
+        padding-bottom = "2px"
+      }
+
+      ".tabs-panes > *" = {
+        display = "none"
+        height = "100%"
+      }
+
+      ".tabs-panes > .active" = {
+        display = "block"
+      }
+
+      ".tab.active" = {
+        background = "white"
+      }
+   }
+
+
 jsclass ChannelLog < Custom:
 
    setup() =
       @is-setup = true
       @scrolled-down = true
-      @has-input = @get-attribute('input')
+      @has-input = @get-attribute('input') == "true"
 
    template() =
       @scrolled-down = true
@@ -128,4 +238,5 @@ jsclass ChannelLog < Custom:
 
 install-components() =
    document.register-element('channel-log', ChannelLog)
+   document.register-element('channel-tabs', ChannelTabs)
 

@@ -7,29 +7,127 @@ provide:
    RootDispatcher
 
 
+gen hierarchy(path) =
+   parts = path.split('/')
+   last = parts.pop()
+   2..parts.length each i ->
+      yield parts.join('/')
+      parts.pop()
+   yield "/"
+
+
+split-end(path) =
+   parts = path.split('/')
+   last = parts.pop()
+   {parts.join('/') or '/', last or null}
+
+
+redirect(path, new-path, m) =
+   (({original-path = path} & m) & {path = new-path}) &
+      if path.starts-with(new-path):
+         {sub-path = path[new-path.length...]}
+      else:
+         {=}
+
+
 class RootDispatcher < EventEmitter:
 
    constructor(@source, @target) =
       @set-max-listeners(Infinity)
-      @root = null
-      @focus = null
-      @all-channels = {=}
+      @channels = {=}
+      @intercepts = {=}
+
+   find-channel(path) =
+      ch = @channels[path]
+      if not ch:
+         {p, c} = split-end(path)
+         @open(p, c, {path = path})
+      else:
+         ch
+
+   open(parent-path, name, base-options) =
+      options = base-options & {
+         parent-path = parent-path
+         name = name
+      }
+      if parent-path == '/' and not name:
+         expr-value @channels['/'] =
+            @construct(null, .tabs, options)
+      else:
+         parent = @find-channel(parent-path)
+         new-options = parent.fill-sub-channel-options(options)
+         expr-value @channels[options.path] =
+            if new-options is null:
+               #redirect{options.path, parent-path}
+            else:
+               @construct(parent, new-options.type, new-options)
+
+   construct(parent-channel, type, options) =
+      cls = channel-constructors[type]
+      ch = new cls(@, options)
+      if parent-channel is null:
+         @target.append-child(ch.element)
+      else:
+         parent-channel.add-channel(ch, options)
+      ch
 
    dispatch(message) =
-      if @root is null:
-         if message.command is .open and message.path == '/':
-            @root = channel-constructors[message.type](@, message) with
-               data -> @target.append-child(data.element)
-            return
-         @root = channel-constructors.tabs(@, message) with
-            data -> @target.append-child(data.element)
-
-      @root.dispatch(message)
+      path = message.path
+      if not path:
+         @dispatch with {
+            command = .log
+            path = '/buche-errors'
+            contents = 'Message lacks path: {JSON.stringify(message)}'
+         }
+      if @intercepts[message.command]:
+         hierarchy(path) each p ->
+            if @channels[p] as ch:
+               if ch.intercepts(message):
+                  return ch.dispatch(message)
+      if message.command is .open:
+         {p, c} = split-end(path)
+         match @open(p, c, message):
+            #redirect{path, new-path} ->
+               m = redirect(path, new-path, message)
+               @dispatch(m)
+            else ->
+               pass
+      else:
+         @find-channel(path).dispatch(message)
 
    register(path, channel) =
-      @all-channels[path] = channel
+      @channels[path] = channel
       channel.on(.command) with cmd ->
          @source.send(cmd & {= path})
 
    run() =
       @source.read(m -> @dispatch(m))
+
+
+
+
+
+   ;; constructor(@source, @target) =
+   ;;    @set-max-listeners(Infinity)
+   ;;    @root = null
+   ;;    @focus = null
+   ;;    @channels = {=}
+
+   ;; dispatch(message) =
+   ;;    if @root is null:
+   ;;       if message.command is .open and message.path == '/':
+   ;;          @root = channel-constructors[message.type](@, message) with
+   ;;             data -> @target.append-child(data.element)
+   ;;          return
+   ;;       @root = channel-constructors.tabs(@, message) with
+   ;;          data -> @target.append-child(data.element)
+
+   ;;    @root.dispatch(message)
+
+   ;; register(path, channel) =
+   ;;    @channels[path] = channel
+   ;;    channel.on(.command) with cmd ->
+   ;;       @source.send(cmd & {= path})
+
+   ;; run() =
+   ;;    @source.read(m -> @dispatch(m))

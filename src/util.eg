@@ -3,8 +3,10 @@ require:
    decamelize
 
 provide:
-   css
+   css, join
 
+join(*parts) =
+   parts.join("/").replace(R.g"//+", "/")
 
 convert(sheet) =
    object with items(sheet) each {sel, style} ->
