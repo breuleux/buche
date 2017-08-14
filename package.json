@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "earl-mocha": "^0.1.0",
-    "earlgrey": "^0.1.1",
+    "earlgrey": "^0.1.2",
     "mocha": "^3.2.0"
   },
   "bin": {

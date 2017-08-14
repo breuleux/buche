@@ -18,11 +18,41 @@ jsclass UnrecognizedCommandError < Error:
       @message-object = m
 
 
+make-resources(m and {type => match}) =
+   .direct ->
+      node = dom with div[raw] % m.contents
+      node.child-nodes
+   .script ->
+      {dom(___)} with
+         if m.source:
+            then:
+               script %
+                  src = m.source
+            else:
+               script[raw] %
+                  m.contents
+   .style ->
+      {dom(___)} with
+         if m.source:
+            then:
+               link %
+                  type = 'text/css'
+                  href = m.source
+            else:
+               style[raw] %
+                  m.contents
+   else ->
+      throw new Error('Unrecognized resource type: {m.type}')
+   
+
+
 jsclass Channel < EventEmitter:
    constructor(@master, @options) =
       super()
       @path = @options.path
       @element = dom with @make-element()
+      @sub-channels = {}
+      @resources = {}
       @setup()
 
    setup() =
@@ -39,8 +69,8 @@ jsclass Channel < EventEmitter:
 
    dispatch(m and {command => match}) =
       .resource ->
-         pass
-         ;; @area.append-child()
+         make-resources(m) each res ->
+            @add-resource(res)
 
       .reprocess ->
          jq(m.selector)['each'](new Function{m.body})
@@ -48,11 +78,20 @@ jsclass Channel < EventEmitter:
       else ->
          throw new UnrecognizedCommandError(m, @)
 
+   add-resource(res) =
+      @resources.push(res)
+      @element.append-child(res)
+      @sub-channels each ch ->
+         ch.add-resource(res.clone-node(true))
+
+   register-channel(sub-channel) =
+      @sub-channels.push(sub-channel)
+      @resources each res ->
+         sub-channel.add-resource(res.clone-node(true))
+
    add-channel(sub-channel) =
       @element.append-child(sub-channel.element)
-
-   ;; fill-sub-channel-options(options) =
-   ;;    {type = .log} & options
+      @register-channel(sub-channel)
 
    default-channel-options() =
       {type = .log}
@@ -87,18 +126,14 @@ jsclass TabsChannel < Channel:
          anchor = @options.anchor or .top
 
    dispatch(m) =
-      @master.dispatch(m & {path = join(m.path, '_')})
+      if m.command in {.resource, .reprocess}:
+         super.dispatch(m)
+      else:
+         @master.dispatch(m & {path = join(m.path, '_')})
 
    add-channel(ch, options) =
       @element.add(options.name, ch.element)
-
-   ;; fill-sub-channel-options(options) =
-   ;;    if options.name == '_':
-   ;;       ;; TabsChannel redirects its messages to tab _, which we
-   ;;       ;; force to be a LogChannel
-   ;;       options & {type = .log}
-   ;;    else:
-   ;;       {type = .tabs, anchor = @options.anchor} & options
+      @register-channel(ch)
 
    force-channel-options(options) =
       if options.name == '_':
@@ -239,103 +274,6 @@ jsclass PlotChannel < Channel:
       ;; @sources[opt.path] = {main = source, max = max-source}
       @sources[opt.name] = {main = source}
    
-
-
-;; class PlotChannel < EventEmitter:
-
-;;    constructor(@master, message, install) =
-;;       @sources = {=}
-;;       @master.register('_', @)
-;;       @color-rotation = {'blue', 'red', 'green', 'purple'}
-;;       @area = dom(div.plot-area %)
-;;       install with {
-;;          channel = (@)
-;;          element = @area
-;;          message = message
-;;       }
-
-;;       tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
-
-;;       @plot = Bokeh.Plotting.figure with {
-;;          title = message.title or null
-;;          tools = tools
-;;       }
-
-;;       ;; This plot is a workaround to force the axes to show properly
-;;       ;; even though we have no data yet.
-;;       dummy-source = new Bokeh.ColumnDataSource with {
-;;          data = {x = {0}, y = {0}}
-;;       }
-;;       l = @plot.line({field = "x"}, {field = "y"}) with {
-;;          source = dummy-source
-;;          line_color = .white
-;;          line_width = 2
-;;       }
-;;       @plot._legend.click_policy = message.legend-click or 'hide'
-;;       @plot._legend.location = message.legend-location or 'top_right'
-
-;;       Bokeh.Plotting.show(@plot, @area)
-
-
-
-;;    new-color() =
-;;       color = @color-rotation.shift()
-;;       @color-rotation.push(color)
-;;       color
-
-;;    add-line(opt) =
-;;       source = new Bokeh.ColumnDataSource with {
-;;          data = {
-;;             x = if{opt.x, {opt.x}, {}}
-;;             y = if{opt.x, {opt.y}, {}}
-;;          }
-;;       }
-;;       ;; max-source = new Bokeh.ColumnDataSource with {
-;;       ;;    data = {
-;;       ;;       x = if{opt.x, {opt.x}, {}}
-;;       ;;       y = if{opt.x, {opt.y}, {}}
-;;       ;;    }
-;;       ;; }
-;;       color = opt.line-color or @new-color()
-;;       @plot.line({field = "x"}, {field = "y"}) with {
-;;          source = source
-;;          line_color = color
-;;          line_width = opt.line-width or 2
-;;          legend = opt.legend or opt.path
-;;       }
-;;       ;; @plot.circle({field = "x"}, {field = "y"}) with {
-;;       ;;    source = max-source
-;;       ;;    size = 10
-;;       ;;    color = color
-;;       ;;    legend = opt.legend or opt.path
-;;       ;; }
-;;       ;; @sources[opt.path] = {main = source, max = max-source}
-;;       @sources[opt.path] = {main = source}
-
-;;    dispatch(m) =
-;;       src-name = m.path[1...]
-;;       match m.command:
-;;          .open ->
-;;             @add-line with m & {
-;;                path = src-name
-;;             }
-;;          .point ->
-;;             if @sources[src-name] as things:
-;;                {main => src} = things
-
-;;                src.data.x.push with m.x
-;;                src.data.y.push with m.y
-;;                src.change.emit()
-
-;;                ;; if max.data.y < m.y:
-;;                ;;    max.data.x[0] = m.x
-;;                ;;    max.data.y[0] = m.y
-;;                ;;    max.change.emit()
-;;             else:
-;;                @add-line({path = src-name, x = m.x, y = m.y})
-;;          other ->
-;;             throw Error('Unknown command: {other}')
-
 
 channel-constructors = {
    ;; error = LogChannel
