@@ -22,14 +22,6 @@ split-end(path) =
    {parts.join('/') or '/', last or null}
 
 
-redirect(path, new-path, m) =
-   (({original-path = path} & m) & {path = new-path}) &
-      if path.starts-with(new-path):
-         {sub-path = path[new-path.length...]}
-      else:
-         {=}
-
-
 class RootDispatcher < EventEmitter:
 
    constructor(@source, @target) =
@@ -51,16 +43,18 @@ class RootDispatcher < EventEmitter:
          name = name
       }
       if parent-path == '/' and not name:
-         expr-value @channels['/'] =
-            @construct(null, .tabs, options)
+         ;; expr-value @channels['/'] =
+         ;;    @construct(null, .tabs, options)
+         @construct(null, .tabs, options)
       else:
          parent = @find-channel(parent-path)
-         new-options = parent.fill-sub-channel-options(options)
-         expr-value @channels[options.path] =
-            if new-options is null:
-               #redirect{options.path, parent-path}
-            else:
-               @construct(parent, new-options.type, new-options)
+         parent.open-channel(options)
+         ;; new-options = parent.fill-sub-channel-options(options)
+         ;; expr-value @channels[options.path] =
+         ;;    if new-options is null:
+         ;;       #redirect{options.path, parent-path}
+         ;;    else:
+         ;;       @construct(parent, new-options.type, new-options)
 
    construct(parent-channel, type, options) =
       cls = channel-constructors[type]
@@ -69,7 +63,7 @@ class RootDispatcher < EventEmitter:
          @target.append-child(ch.element)
       else:
          parent-channel.add-channel(ch, options)
-      ch
+      expr-value @channels[options.path] = ch
 
    dispatch(message) =
       path = message.path
@@ -86,12 +80,13 @@ class RootDispatcher < EventEmitter:
                   return ch.dispatch(message)
       if message.command is .open:
          {p, c} = split-end(path)
-         match @open(p, c, message):
-            #redirect{path, new-path} ->
-               m = redirect(path, new-path, message)
-               @dispatch(m)
-            else ->
-               pass
+         @open(p, c, message)
+         ;; match @open(p, c, message):
+         ;;    #redirect{path, new-path} ->
+         ;;       m = redirect(path, new-path, message)
+         ;;       @dispatch(m)
+         ;;    else ->
+         ;;       pass
       else:
          @find-channel(path).dispatch(message)
 

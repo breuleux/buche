@@ -51,8 +51,33 @@ jsclass Channel < EventEmitter:
    add-channel(sub-channel) =
       @element.append-child(sub-channel.element)
 
-   fill-sub-channel-options(options) =
-      {type = .log} & options
+   ;; fill-sub-channel-options(options) =
+   ;;    {type = .log} & options
+
+   default-channel-options() =
+      {type = .log}
+
+   force-channel-options() =
+      {=}
+
+   open-channel(var options) =
+      options = @default-channel-options(options) & options
+      options = options & @force-channel-options(options)
+      @master.construct(@, options.type, options)
+
+
+redirect(path, new-path, m) =
+   (({original-path = path} & m) & {path = new-path}) &
+      if path.starts-with(new-path):
+         {sub-path = path[(new-path.length + 1)...]}
+      else:
+         {=}
+
+
+jsclass RedirectChannel < Channel:
+   dispatch(m) =
+      @master.dispatch with
+         redirect(@path, @options.redirect-path, m)
 
 
 jsclass TabsChannel < Channel:
@@ -67,13 +92,22 @@ jsclass TabsChannel < Channel:
    add-channel(ch, options) =
       @element.add(options.name, ch.element)
 
-   fill-sub-channel-options(options) =
+   ;; fill-sub-channel-options(options) =
+   ;;    if options.name == '_':
+   ;;       ;; TabsChannel redirects its messages to tab _, which we
+   ;;       ;; force to be a LogChannel
+   ;;       options & {type = .log}
+   ;;    else:
+   ;;       {type = .tabs, anchor = @options.anchor} & options
+
+   force-channel-options(options) =
       if options.name == '_':
-         ;; TabsChannel redirects its messages to tab _, which we
-         ;; force to be a LogChannel
-         options & {type = .log}
+         {type = .log}
       else:
-         {type = .tabs, anchor = @options.anchor} & options
+         {=}
+
+   default-channel-options() =
+      {type = .tabs, anchor = @options.anchor}
 
 
 jsclass LogChannel < Channel:
@@ -141,7 +175,7 @@ jsclass PlotChannel < Channel:
       @plot._legend.click_policy = @options.legend-click or 'hide'
       @plot._legend.location = @options.legend-location or 'top_right'
 
-      Bokeh.Plotting.show(@plot, @area)
+      Bokeh.Plotting.show(@plot, @element)
 
    new-color() =
       color = @color-rotation.shift()
@@ -152,11 +186,8 @@ jsclass PlotChannel < Channel:
       div.plot-area %
 
    dispatch(m and {command => match}) =
-      .open ->
-         @add-line(m)
-
       .point ->
-         if @sources[m.sub-path or ""] as things:
+         if @sources[m.sub-path or m.name or ""] as things:
             {main => src} = things
 
             src.data.x.push with m.x
@@ -168,15 +199,16 @@ jsclass PlotChannel < Channel:
             ;;    max.data.y[0] = m.y
             ;;    max.change.emit()
          else:
-            @add-line({x = m.x, y = m.y})
+            @add-line({name = m.sub-path, x = m.x, y = m.y})
       else ->
          super.dispatch(m)
 
    add-channel(sub-channel) =
-      throw Error("Plot cannot have sub-channels.")
+      pass
 
-   fill-sub-channel-options(options) =
-      null
+   open-channel(options) =
+      @add-line({name = options.sub-path} & options)
+      @master.construct(@, .redirect, options & {redirect-path = @path})
 
    add-line(opt) =
       source = new Bokeh.ColumnDataSource with {
@@ -196,7 +228,7 @@ jsclass PlotChannel < Channel:
          source = source
          line_color = color
          line_width = opt.line-width or 2
-         legend = opt.legend or opt.path
+         legend = opt.legend or opt.name or "--"
       }
       ;; @plot.circle({field = "x"}, {field = "y"}) with {
       ;;    source = max-source
@@ -205,7 +237,7 @@ jsclass PlotChannel < Channel:
       ;;    legend = opt.legend or opt.path
       ;; }
       ;; @sources[opt.path] = {main = source, max = max-source}
-      @sources[opt.path] = {main = source}
+      @sources[opt.name] = {main = source}
    
 
 
@@ -310,4 +342,5 @@ channel-constructors = {
    log = LogChannel
    plot = PlotChannel
    tabs = TabsChannel
+   redirect = RedirectChannel
 }
