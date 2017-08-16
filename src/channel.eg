@@ -43,7 +43,6 @@ make-resources(m and {type => match}) =
                   m.contents
    else ->
       throw new Error('Unrecognized resource type: {m.type}')
-   
 
 
 jsclass Channel < EventEmitter:
@@ -51,6 +50,8 @@ jsclass Channel < EventEmitter:
       super()
       @path = @options.path
       @element = dom with @make-element()
+      @element.master = @master
+      @element.channel = [@]
       @sub-channels = {}
       @resources = {}
       @setup()
@@ -104,6 +105,9 @@ jsclass Channel < EventEmitter:
       options = options & @force-channel-options(options)
       @master.construct(@, options.type, options)
 
+   write(message) =
+      @master.send(message & {path = @send-path or @path})
+
 
 redirect(path, new-path, m) =
    (({original-path = path} & m) & {path = new-path}) &
@@ -132,6 +136,8 @@ jsclass TabsChannel < Channel:
          @master.dispatch(m & {path = join(m.path, '_')})
 
    add-channel(ch, options) =
+      if options.name is '_':
+         ch.send-path = @path
       @element.add(options.name, ch.element)
       @register-channel(ch)
 
@@ -150,8 +156,8 @@ jsclass LogChannel < Channel:
    make-element() =
       channel-log %
          onsubmit(e) =
-            @emit(.command) with {
-               type = .input
+            @write with {
+               command = .input
                contents = e.target.value
             }
             e.target.value = ""

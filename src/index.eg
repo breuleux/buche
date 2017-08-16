@@ -71,6 +71,7 @@ create-window() =
          origins = {process.stdin}
          ipc-main.on(.data) with {_, data} ->
             console.error('Cannot receive data!')
+            console.error(JSON.stringify(data))
       origins each origin ->
          origin.set-encoding(.utf8)
          origin.on(.data) with data ->

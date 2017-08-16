@@ -6,11 +6,14 @@ require:
 
 
 provide:
+   Custom
+   CustomNoShadow
    install-components
 
 
 globals:
    document
+   Text
    HTMLElement
    custom-elements
 
@@ -18,17 +21,43 @@ globals:
 jsclass Custom < HTMLElement:
 
    attached-callback() =
-      @shadow = @attach-shadow with {mode = .open}
-      @setup()
-      @shadow.append-child(dom(css(@css())))
-      Array! tpl = @template()
-      tpl each t ->
-         @shadow.append-child(dom(t))
+      if not @shadow:
+         @shadow = @attach-shadow with {mode = .open}
+         @setup()
+         @shadow.append-child(dom(css(@css())))
+         Array! tpl = @template()
+         tpl each t ->
+            @shadow.append-child(dom(t))
 
    setup() =
       pass
 
    template() =
+      div %
+
+   css() =
+      {=}
+
+
+jsclass CustomNoShadow < HTMLElement:
+
+   attached-callback() =
+      if not @has-setup:
+         @has-setup = true
+         @setup()
+         children = @child-nodes each
+            Text? t -> t.text-content
+            x -> x
+         jq(@).empty()
+         Array! tpl = @template(children)
+         tpl each t ->
+            super.append-child(dom(t))
+         super.append-child(dom(css(@css())))
+
+   setup() =
+      pass
+
+   template(_) =
       div %
 
    css() =
@@ -196,6 +225,14 @@ jsclass ChannelLog < Custom:
       ".log-area > *" = {
          padding-left = '20px'
          margin-left = '5px'
+      }
+
+      ".log-area > * > *" = {
+         display = "inline-block"
+      }
+
+      "style" = {
+         display = "none !IMPORTANT"
       }
 
       ".log-area > .echo" = {
