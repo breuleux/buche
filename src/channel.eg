@@ -182,7 +182,11 @@ jsclass LogChannel < Channel:
                   div[raw] % quaint.toHTML(m.contents)
                else ->
                   div % m.contents
-         @element.add(element, m.kind or .log)
+         if m.location is 'overlay':
+            @element.overlay-area.innerHTML = ""
+            @element.overlay-area.append-child(dom(element))
+         else:
+            @element.add(element, m.kind or .log)
 
       .clear ->
          @element.clear()

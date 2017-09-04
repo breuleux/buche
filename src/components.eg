@@ -8,6 +8,7 @@ require:
 provide:
    Custom
    CustomNoShadow
+   TabData
    install-components
 
 
@@ -64,10 +65,28 @@ jsclass CustomNoShadow < HTMLElement:
       {=}
 
 
+class TabData:
+   constructor(@tabbed-view) =
+      pass
+
+   activate() =
+      @tab.class-list.add(.active)
+      @pane.class-list.add(.active)
+      @active = true
+      @tabbed-view.active.push(@)
+
+   deactivate() =
+      @tab.class-list.remove(.active)
+      @pane.class-list.remove(.active)
+      @active = false
+      @tabbed-view.active =
+         @tabbed-view.active each a when a !== [@] -> a
+
+
 jsclass ChannelTabs < Custom:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
-      @active = null
+      @active = {}
       @nchannels = 0
 
    template() =
@@ -82,28 +101,31 @@ jsclass ChannelTabs < Custom:
       dom with
          div.tab %
             spec.tab-elem
-            onclick() =
-               @select(spec)
+            onclick(e) =
+               @select(spec, e.shift-key)
 
    add(tab-elem, pane-elem) =
-      spec = {= tab-elem, = pane-elem}
+      spec = TabData(@)  ;; {= tab-elem, = pane-elem}
+      spec.tab-elem = tab-elem
+      spec.pane-elem = pane-elem
       spec.tab = @make-tab(spec)
-      spec.holder = dom(div % pane-elem)
+      spec.pane = dom(div % pane-elem)
       @element-select.append-child(spec.tab)
-      @element-panes.append-child(spec.holder)
-      if not @active:
+      @element-panes.append-child(spec.pane)
+      if @active.length == 0:
          @select(spec)
       @nchannels += 1
       if @nchannels > 1 or tab-elem != '_':
          @element-select.class-list.remove(.hide)
 
-   select(spec) =
-      if @active:
-         @active.tab.class-list.remove(.active)
-         @active.holder.class-list.remove(.active)
-      spec.tab.class-list.add(.active)
-      spec.holder.class-list.add(.active)
-      @active = spec
+   select(spec, add-to-active = false) =
+      if @active.length > 0 and not add-to-active:
+         {* @active} each a ->
+            a.deactivate()
+      if add-to-active and spec.active:
+         spec.deactivate()
+      else:
+         spec.activate()
 
    css() = {
       ".tabs-area" = {
@@ -147,8 +169,19 @@ jsclass ChannelTabs < Custom:
       }
 
       ".tabs-panes" = {
+        display = .flex
+        flex-direction =
+           if @anchor in {.left, .right}:
+              then: .column
+              else: .row
         flex = "1"
         overflow = "auto"
+        background =
+           if @anchor in {.left, .right}:
+              then: '#88f'
+              else: '#aaf'
+        ;; margin = '0px'
+        padding = '1px'
       }
 
       ".tab" = {
@@ -157,11 +190,28 @@ jsclass ChannelTabs < Custom:
         padding-right = "5px"
         padding-top = "2px"
         padding-bottom = "2px"
+        user-select = "none"
       }
 
+      ;; ".tabs-panes > *" = {
+      ;;   flex = '1'
+      ;;   display = "none"
+      ;;   height = "100%"
+      ;;   border-style = 'solid'
+      ;;   border-color = 'black'
+      ;;   border-width = '0px'
+      ;;   border-width =
+      ;;      if @anchor in {.left, .right}:
+      ;;         then: '0px 0px 1px 0px'
+      ;;         else: '0px 1px 0px 0px'
+      ;; }
+
       ".tabs-panes > *" = {
+        flex = '1'
         display = "none"
         height = "100%"
+        ;; margin = '1px'
+        background = 'white'
       }
 
       ".tabs-panes > .active" = {
@@ -190,6 +240,8 @@ jsclass ChannelLog < Custom:
                @scrolled-down =
                   a[0].scroll-height - a.scroll-top() == a.outer-height()
             @child-nodes each x -> x
+      @overlay-area = dom with
+         div.overlay-area %
       @jqarea = jq(@area)
       @input = dom with
          input.log-input %
@@ -197,21 +249,34 @@ jsclass ChannelLog < Custom:
                if e.key == 'Enter':
                   @onsubmit(e)
       if @has-input:
-         {@area, @input}
+         {@overlay-area, @area, @input}
       else:
-         @area
+         {@overlay-area, @area}
 
    css() = {
       ":host" = {
          display = .flex
          flex-direction = .column
          height = "100%"
+         position = 'relative'
       }
 
       ".log-area" = {
          flex = 1
          overflow = .auto
          margin-left = '5px'
+      }
+
+      ".overlay-area" = {
+         position = 'absolute'
+         right = '0px'
+         top = '0px'
+         background = '#eee'
+         padding = '5px'
+      }
+
+      ".overlay-area:empty" = {
+         display = 'none'
       }
 
       ".log-input" = {

@@ -3,6 +3,7 @@ require:
    .components ->
       Custom
       CustomNoShadow
+      TabData
    /dom
    fs
    "highlight.js" as hljs
@@ -66,23 +67,6 @@ jsclass ReplObject < CustomNoShadow:
 ;;       }
 ;;    }
 
-
-class TabData:
-   constructor(@tabbed-view) =
-      pass
-
-   activate() =
-      @tab.class-list.add(.active)
-      @pane.class-list.add(.active)
-      @active = true
-      @tabbed-view.active.push(@)
-
-   deactivate() =
-      @tab.class-list.remove(.active)
-      @pane.class-list.remove(.active)
-      @active = false
-      @tabbed-view.active =
-         @tabbed-view.active each a when a !== [@] -> a
 
 
 jsclass TabbedView < CustomNoShadow:
