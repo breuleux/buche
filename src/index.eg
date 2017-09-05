@@ -20,6 +20,7 @@ create-window() =
         @option('--dev', 'Open developer console.')
         @option('-c, --cmd [command]', 'Command to execute.')
         @option('--tee [file]', 'File to log the command\'s stdout to.')
+        @option('--inspect', 'Print stdout and stdin.')
         @parse(process.argv)
 
    cmd =
@@ -28,6 +29,9 @@ create-window() =
             '{options.cmd} | tee {options.tee}'
          else:
             options.cmd
+      elif options.tee:
+         print '--tee only works with -c option for now.'
+         process.exit(1)
       else:
          null
 
@@ -66,6 +70,8 @@ create-window() =
             print err
          origins = {proc.stdout, proc.stderr}
          ipc-main.on(.data) with {_, data} ->
+            if options.inspect:
+               print '<- {data}'
             proc.stdin.write(data + '\n')
       else:
          origins = {process.stdin}
@@ -75,6 +81,9 @@ create-window() =
       origins each origin ->
          origin.set-encoding(.utf8)
          origin.on(.data) with data ->
+            if options.inspect:
+               data.split('\n') each line when line ->
+                  print '-> {line}'
             w.web-contents.send(.data, data)
          origin.on(.end) with -> ->
             w.web-contents.send(.end)
