@@ -200,7 +200,7 @@ jsclass PlotChannel < Channel:
       @sources = {=}
       @color-rotation = {'blue', 'red', 'green', 'purple'}
 
-      tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save";
+      tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save"
 
       @plot = Bokeh.Plotting.figure with {
          title = @options.title or null
@@ -228,7 +228,16 @@ jsclass PlotChannel < Channel:
       color
 
    make-element() =
-      div.plot-area %
+      div %
+         link %
+            rel = .stylesheet
+            href = '../html/bokeh-0.12.6.min.css'
+            type = 'text/css'
+         link %
+            rel = .stylesheet
+            href = '../html/bokeh-widgets-0.12.6.min.css'
+            type = 'text/css'
+         div.plot-area %
 
    dispatch(m and {command => match}) =
       .point ->
