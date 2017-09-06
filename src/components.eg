@@ -363,6 +363,14 @@ jsclass ChannelLog < Custom:
       ".log-area > .warning" = {
          border-left = '5px solid orange'
       }
+
+      ".raw-line" = {
+         font-family = 'monospace'
+         white-space = 'pre'
+         padding = '0px'
+         margin = '0px'
+         line-height = '1'
+      }
    }
 
    add(child, kind = .log) =
