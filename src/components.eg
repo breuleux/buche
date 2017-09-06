@@ -93,9 +93,14 @@ jsclass ChannelTabs < Custom:
       anchor-tag = '.tabs-{@anchor}'
       @element-select = dom with div.tabs-select.hide %
       @element-panes = dom with div.tabs-panes %
-      div.tabs-area[^anchor-tag] %
-         @element-select
-         @element-panes
+      if @anchor is .left or @anchor is .top:
+         div.tabs-area[^anchor-tag] %
+            @element-select
+            @element-panes
+      else:
+         div.tabs-area[^anchor-tag] %
+            @element-panes
+            @element-select
 
    make-tab(spec) =
       dom with
@@ -127,46 +132,81 @@ jsclass ChannelTabs < Custom:
       else:
          spec.activate()
 
-   css() = {
+   css() =
+      tab-loc =
+         if @anchor is 'left' or @anchor is 'right': {
+            ".tabs-area " = {
+               flex-direction = .row
+            }
+            ".tabs-select" = {
+              width = "auto"
+              height = "100%"
+              background = "#88f"
+              display = "flex"
+              flex-direction = "column"
+              overflow = "auto"
+            }
+         }
+         else: {
+            ".tabs-area " = {
+               flex-direction = .column
+            }
+            ".tabs-select" = {
+              width = "100%"
+              height = "auto"
+              background = "#aaf"
+              display = "flex"
+              flex-direction = "row"
+              overflow = "auto"
+            }
+         }
+
+      @basic-css() & tab-loc
+
+   basic-css() = {
       ".tabs-area" = {
          width = "100%"
          height = "100%"
          display = "flex"
          flex-direction = "column"
       }
-      ".tabs-area.tabs-top" = {
-        flex-direction = "column"
-      }
+      ;; ".tabs-area.tabs-top" = {
+      ;;   flex-direction = "column"
+      ;; }
 
-      ".tabs-area.tabs-left" = {
-        flex-direction = "row"
-      }
+      ;; ".tabs-area.tabs-left" = {
+      ;;   flex-direction = "row"
+      ;; }
 
-      ".tabs-top > .tabs-select.hide" = {
+      ;; ".tabs-top > .tabs-select.hide" = {
+      ;;   display = "none"
+      ;; }
+
+      ;; ".tabs-left > .tabs-select.hide" = {
+      ;;   display = "none"
+      ;; }
+
+      ".tabs-select.hide" = {
         display = "none"
       }
 
-      ".tabs-left > .tabs-select.hide" = {
-        display = "none"
-      }
+      ;; ".tabs-top > .tabs-select" = {
+      ;;   width = "100%"
+      ;;   height = "auto"
+      ;;   background = "#aaf"
+      ;;   display = "flex"
+      ;;   flex-direction = "row"
+      ;;   overflow = "auto"
+      ;; }
 
-      ".tabs-top > .tabs-select" = {
-        width = "100%"
-        height = "auto"
-        background = "#aaf"
-        display = "flex"
-        flex-direction = "row"
-        overflow = "auto"
-      }
-
-      ".tabs-left > .tabs-select" = {
-        width = "auto"
-        height = "100%"
-        background = "#88f"
-        display = "flex"
-        flex-direction = "column"
-        overflow = "auto"
-      }
+      ;; ".tabs-left > .tabs-select" = {
+      ;;   width = "auto"
+      ;;   height = "100%"
+      ;;   background = "#88f"
+      ;;   display = "flex"
+      ;;   flex-direction = "column"
+      ;;   overflow = "auto"
+      ;; }
 
       ".tabs-panes" = {
         display = .flex
