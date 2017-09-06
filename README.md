@@ -23,8 +23,12 @@ cd buche/examples
 buche --inspect -c 'python -u demo.py'
 ```
 
-Each example in the `examples/` directory starts with a comment. That comment explains what the example is for and gives the shell command you should run to execute the example (notice for example that the `-u` flag should be used when running Python script in order to force Python to flush the output buffer on each print.)
+Each example in the `examples/` directory starts with a comment. That comment explains what the example is for and gives the shell command you should run to execute the example (notice for example that the `-u` flag should be used when running a Python script in order to force Python to flush the output buffer on each print.)
 
 To reproduce an example or translate it in a different language, all you need to do is print out the same thing, and react the same way to any commands that come in on stdin.
 
 Feel free to contribute more examples, especially in programming languages that are not yet featured, and ideally without dependencies.
+
+## Stability
+
+There is no stable release of Buche at the moment and the interface and commands may still change. Some capabilities may be removed in order to enhance security, such as the ability to inject scripts with full permissions in the output stream. Suggestions are welcome.
