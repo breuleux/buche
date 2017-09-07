@@ -2,7 +2,7 @@
 require:
    /dom
    ..components ->
-      Custom, TabData
+      CustomShadow, TabData
    ..channel -> Channel
    ..util -> join
 
@@ -35,7 +35,7 @@ jsclass TabsChannel < Channel:
       {type = .tabs, anchor = @options.anchor}
 
 
-jsclass TabsChannelElement < Custom:
+jsclass TabsChannelElement < CustomShadow:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
       @active = {}

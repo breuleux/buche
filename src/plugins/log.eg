@@ -3,7 +3,7 @@ require:
    /dom
    jquery as jq
    ..channel -> Channel
-   ..components -> Custom
+   ..components -> CustomShadow
 
 
 jsclass LogChannel < Channel:
@@ -50,7 +50,7 @@ jsclass LogChannel < Channel:
          super.dispatch(m)
 
 
-jsclass LogChannelElement < Custom:
+jsclass LogChannelElement < CustomShadow:
 
    setup() =
       @is-setup = true

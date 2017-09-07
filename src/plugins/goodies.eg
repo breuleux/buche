@@ -4,14 +4,14 @@ require:
    "highlight.js" as hljs
    fs
    ..components ->
-      CustomNoShadow, TabData
+      Custom, TabData
 
 
 globals:
    Text
 
 
-jsclass ReplObject < CustomNoShadow:
+jsclass ReplObject < Custom:
    setup() =
       @onclick(e) =
          e.stop-propagation()
@@ -35,7 +35,7 @@ jsclass ReplObject < CustomNoShadow:
       children
 
 
-jsclass TabbedView < CustomNoShadow:
+jsclass TabbedView < Custom:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
       @active = {}
@@ -87,7 +87,6 @@ jsclass TabbedView < CustomNoShadow:
 
       if @active.length == 0:
          datas[0]??.activate()
-
 
       div.tabbed-view-holder[^anchor-tag] %
          rest
@@ -163,7 +162,7 @@ jsclass TabbedView < CustomNoShadow:
    }
 
 
-jsclass CodeSnippet < CustomNoShadow:
+jsclass CodeSnippet < Custom:
    setup() =
       try:
          @contents = fs.read-file-sync(@get-attribute('src'), .utf8)

@@ -7,7 +7,7 @@ require:
 
 provide:
    Custom
-   CustomNoShadow
+   CustomShadow
    TabData
 
 
@@ -17,27 +17,6 @@ globals:
 
 
 jsclass Custom < HTMLElement:
-
-   attached-callback() =
-      if not @shadow:
-         @shadow = @attach-shadow with {mode = .open}
-         @setup()
-         @shadow.append-child(dom(css(@css())))
-         Array! tpl = @template()
-         tpl each t ->
-            @shadow.append-child(dom(t))
-
-   setup() =
-      pass
-
-   template() =
-      div %
-
-   css() =
-      {=}
-
-
-jsclass CustomNoShadow < HTMLElement:
 
    attached-callback() =
       if not @has-setup:
@@ -56,6 +35,27 @@ jsclass CustomNoShadow < HTMLElement:
       pass
 
    template(_) =
+      div %
+
+   css() =
+      {=}
+
+
+jsclass CustomShadow < HTMLElement:
+
+   attached-callback() =
+      if not @shadow:
+         @shadow = @attach-shadow with {mode = .open}
+         @setup()
+         @shadow.append-child(dom(css(@css())))
+         Array! tpl = @template()
+         tpl each t ->
+            @shadow.append-child(dom(t))
+
+   setup() =
+      pass
+
+   template() =
       div %
 
    css() =
