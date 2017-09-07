@@ -5,22 +5,29 @@ require:
    .plugins/tabs
    .plugins/redirect
    .plugins/plot
+   .plugins/goodies
 
 provide:
    RootDispatcher
-   
+
+globals:
+   document
+
 
 channel-constructors = {=}
 
 
 load-plugin(p) =
    channel-constructors &: (p.channels or {=})
+   items(p.components or {=}) each {name, cls} ->
+      document.register-element(name, cls)
 
 
 load-plugin(log)
 load-plugin(tabs)
 load-plugin(redirect)
 load-plugin(plot)
+load-plugin(goodies)
 
 
 gen hierarchy(path) =

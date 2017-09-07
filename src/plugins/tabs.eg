@@ -1,5 +1,8 @@
 
 require:
+   /dom
+   ..components ->
+      Custom, TabData
    ..channel -> Channel
    ..util -> join
 
@@ -32,6 +35,154 @@ jsclass TabsChannel < Channel:
       {type = .tabs, anchor = @options.anchor}
 
 
+jsclass TabsChannelElement < Custom:
+   setup() =
+      @anchor = @get-attribute('anchor') or 'top'
+      @active = {}
+      @nchannels = 0
+
+   template() =
+      anchor-tag = '.tabs-{@anchor}'
+      @element-select = dom with div.tabs-select.hide %
+      @element-panes = dom with div.tabs-panes %
+      if @anchor is .left or @anchor is .top:
+         div.tabs-area[^anchor-tag] %
+            @element-select
+            @element-panes
+      else:
+         div.tabs-area[^anchor-tag] %
+            @element-panes
+            @element-select
+
+   make-tab(spec) =
+      dom with
+         div.tab %
+            spec.tab-elem
+            onclick(e) =
+               @select(spec, e.shift-key)
+
+   add(tab-elem, pane-elem) =
+      spec = TabData(@)
+      spec.tab-elem = tab-elem
+      spec.pane-elem = pane-elem
+      spec.tab = @make-tab(spec)
+      spec.pane = dom(div % pane-elem)
+      @element-select.append-child(spec.tab)
+      @element-panes.append-child(spec.pane)
+      if @active.length == 0:
+         @select(spec)
+      @nchannels += 1
+      if @nchannels > 1 or tab-elem != '_':
+         @element-select.class-list.remove(.hide)
+
+   select(spec, add-to-active = false) =
+      if @active.length > 0 and not add-to-active:
+         {* @active} each a ->
+            a.deactivate()
+      if add-to-active and spec.active:
+         spec.deactivate()
+      else:
+         spec.activate()
+
+   css() =
+      tab-loc =
+         if @anchor is 'left' or @anchor is 'right': {
+            ".tabs-area " = {
+               flex-direction = .row
+            }
+            ".tabs-select" = {
+              width = "auto"
+              height = "100%"
+              background = "#88f"
+              display = "flex"
+              flex-direction = "column"
+              overflow = "auto"
+            }
+         }
+         else: {
+            ".tabs-area " = {
+               flex-direction = .column
+            }
+            ".tabs-select" = {
+              width = "100%"
+              height = "auto"
+              background = "#aaf"
+              display = "flex"
+              flex-direction = "row"
+              overflow = "auto"
+            }
+         }
+
+      @basic-css() & tab-loc
+
+   basic-css() = {
+      ".tabs-area" = {
+         width = "100%"
+         height = "100%"
+         display = "flex"
+         flex-direction = "column"
+      }
+
+      ".tabs-select.hide" = {
+        display = "none"
+      }
+
+      ".tabs-panes" = {
+        display = .flex
+        flex-direction =
+           if @anchor in {.left, .right}:
+              then: .column
+              else: .row
+        flex = "1"
+        overflow = "auto"
+        background =
+           if @anchor in {.left, .right}:
+              then: '#88f'
+              else: '#aaf'
+        ;; margin = '0px'
+        padding = '1px'
+      }
+
+      ".tab" = {
+        cursor = "pointer"
+        padding-left = "5px"
+        padding-right = "5px"
+        padding-top = "2px"
+        padding-bottom = "2px"
+        user-select = "none"
+      }
+
+      ;; ".tabs-panes > *" = {
+      ;;   flex = '1'
+      ;;   display = "none"
+      ;;   height = "100%"
+      ;;   border-style = 'solid'
+      ;;   border-color = 'black'
+      ;;   border-width = '0px'
+      ;;   border-width =
+      ;;      if @anchor in {.left, .right}:
+      ;;         then: '0px 0px 1px 0px'
+      ;;         else: '0px 1px 0px 0px'
+      ;; }
+
+      ".tabs-panes > *" = {
+        flex = '1'
+        display = "none"
+        height = "100%"
+        ;; margin = '1px'
+        background = 'white'
+      }
+
+      ".tabs-panes > .active" = {
+        display = "block"
+      }
+
+      ".tab.active" = {
+        background = "white"
+      }
+   }
+
+
 provide:
    {tabs = TabsChannel} as channels
-   {=} as components
+   {"channel-tabs" = TabsChannelElement} as components

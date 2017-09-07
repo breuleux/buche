@@ -1,20 +1,15 @@
 
 require:
-   .components ->
-      Custom
-      CustomNoShadow
-      TabData
    /dom
-   fs
    "highlight.js" as hljs
+   fs
+   ..components ->
+      CustomNoShadow, TabData
+
 
 globals:
-   document
    Text
 
-provide:
-   install-components
-   
 
 jsclass ReplObject < CustomNoShadow:
    setup() =
@@ -38,35 +33,6 @@ jsclass ReplObject < CustomNoShadow:
 
    template(children) =
       children
-
-
-;; jsclass ReplNumber < ReplObj:
-;;    css() = {
-;;       "*" = {
-;;          color = .blue
-;;          font-weight = .bold
-;;       }
-;;    }
-
-
-;; jsclass ReplString < ReplObj:
-;;    css() = {
-;;       "*" = {
-;;          color = "#666"
-;;          white-space = "pre"
-;;       }
-
-;;       "*:before" = {
-;;          content = '"“"'
-;;          color = "#888"
-;;       }
-
-;;       "*:after" = {
-;;          content = '"”"'
-;;          color = "#888"
-;;       }
-;;    }
-
 
 
 jsclass TabbedView < CustomNoShadow:
@@ -293,10 +259,8 @@ jsclass CodeSnippet < CustomNoShadow:
    }
 
 
-
-install-components() =
-   ;; document.register-element('repl-number', ReplNumber)
-   ;; document.register-element('repl-string', ReplString)
-   document.register-element('repl-object', ReplObject)
-   document.register-element('tabbed-view', TabbedView)
-   document.register-element('code-snippet', CodeSnippet)
+provide:
+   {=} as channels
+   {"repl-object" = ReplObject
+    "tabbed-view" = TabbedView
+    "code-snippet" = CodeSnippet} as components
