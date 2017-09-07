@@ -3,12 +3,10 @@ require:
    events -> EventEmitter
    /dom
    jquery as jq
-   bokehjs as Bokeh
-   .util -> join
 
 
 provide:
-   channel-constructors
+   Channel
 
 
 jsclass UnrecognizedCommandError < Error:
@@ -37,6 +35,7 @@ make-resources(m and {type => match}) =
             then:
                link %
                   type = 'text/css'
+                  rel = 'stylesheet'
                   href = m.source
             else:
                style[raw] %
@@ -107,197 +106,3 @@ jsclass Channel < EventEmitter:
 
    write(message) =
       @master.send(message & {path = @send-path or @path})
-
-
-redirect(path, new-path, m) =
-   (({original-path = path} & m) & {path = new-path}) &
-      if path.starts-with(new-path):
-         {sub-path = path[(new-path.length + 1)...]}
-      else:
-         {=}
-
-
-jsclass RedirectChannel < Channel:
-   dispatch(m) =
-      @master.dispatch with
-         redirect(@path, @options.redirect-path, m)
-
-
-jsclass TabsChannel < Channel:
-
-   make-element() =
-      channel-tabs %
-         anchor = @options.anchor or .top
-
-   dispatch(m) =
-      if m.command in {.resource, .reprocess}:
-         super.dispatch(m)
-      else:
-         @master.dispatch(m & {path = join(m.path, '_')})
-
-   add-channel(ch, options) =
-      if options.name is '_':
-         ch.send-path = @path
-      @element.add(options.name, ch.element)
-      @register-channel(ch)
-
-   force-channel-options(options) =
-      if options.name == '_':
-         {type = .log}
-      else:
-         {=}
-
-   default-channel-options() =
-      {type = .tabs, anchor = @options.anchor}
-
-
-jsclass LogChannel < Channel:
-
-   make-element() =
-      channel-log %
-         onsubmit(e) =
-            @write with {
-               command = .input
-               contents = e.target.value
-            }
-            e.target.value = ""
-         input = @options.has-input
-
-   dispatch(m and {command => match}) =
-      .log ->
-         element =
-            match m.format:
-               .pre ->
-                  div.raw-line % m.contents
-               .html ->
-                  div[raw] % m.contents
-               .markdown ->
-                  require: marked
-                  if m.inline:
-                     div[raw] % marked.inline-lexer(m.contents, {})
-                  else:
-                     div[raw] % marked(m.contents, {})
-               .quaint ->
-                  require: quaint
-                  div[raw] % quaint.toHTML(m.contents)
-               else ->
-                  div % m.contents
-         if m.location is 'overlay':
-            @element.overlay-area.innerHTML = ""
-            @element.overlay-area.append-child(dom(element))
-         else:
-            @element.add(element, m.kind or .log)
-
-      .clear ->
-         @element.clear()
-
-      else ->
-         super.dispatch(m)
-
-
-jsclass PlotChannel < Channel:
-   setup() =
-      @sources = {=}
-      @color-rotation = {'blue', 'red', 'green', 'purple'}
-
-      tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save"
-
-      @plot = Bokeh.Plotting.figure with {
-         title = @options.title or null
-         tools = tools
-      }
-
-      ;; This plot is a workaround to force the axes to show properly
-      ;; even though we have no data yet.
-      dummy-source = new Bokeh.ColumnDataSource with {
-         data = {x = {0}, y = {0}}
-      }
-      l = @plot.line({field = "x"}, {field = "y"}) with {
-         source = dummy-source
-         line_color = .white
-         line_width = 2
-      }
-      @plot._legend.click_policy = @options.legend-click or 'hide'
-      @plot._legend.location = @options.legend-location or 'top_right'
-
-      Bokeh.Plotting.show(@plot, @element)
-
-   new-color() =
-      color = @color-rotation.shift()
-      @color-rotation.push(color)
-      color
-
-   make-element() =
-      div %
-         link %
-            rel = .stylesheet
-            href = '../html/bokeh-0.12.6.min.css'
-            type = 'text/css'
-         link %
-            rel = .stylesheet
-            href = '../html/bokeh-widgets-0.12.6.min.css'
-            type = 'text/css'
-         div.plot-area %
-
-   dispatch(m and {command => match}) =
-      .point ->
-         if @sources[m.sub-path or m.name or ""] as things:
-            {main => src} = things
-
-            src.data.x.push with m.x
-            src.data.y.push with m.y
-            src.change.emit()
-
-            ;; if max.data.y < m.y:
-            ;;    max.data.x[0] = m.x
-            ;;    max.data.y[0] = m.y
-            ;;    max.change.emit()
-         else:
-            @add-line({name = m.sub-path, x = m.x, y = m.y})
-      else ->
-         super.dispatch(m)
-
-   add-channel(sub-channel) =
-      pass
-
-   open-channel(options) =
-      @add-line({name = options.sub-path} & options)
-      @master.construct(@, .redirect, options & {redirect-path = @path})
-
-   add-line(opt) =
-      source = new Bokeh.ColumnDataSource with {
-         data = {
-            x = if{opt.x, {opt.x}, {}}
-            y = if{opt.x, {opt.y}, {}}
-         }
-      }
-      ;; max-source = new Bokeh.ColumnDataSource with {
-      ;;    data = {
-      ;;       x = if{opt.x, {opt.x}, {}}
-      ;;       y = if{opt.x, {opt.y}, {}}
-      ;;    }
-      ;; }
-      color = opt.line-color or @new-color()
-      @plot.line({field = "x"}, {field = "y"}) with {
-         source = source
-         line_color = color
-         line_width = opt.line-width or 2
-         legend = opt.legend or opt.name or "--"
-      }
-      ;; @plot.circle({field = "x"}, {field = "y"}) with {
-      ;;    source = max-source
-      ;;    size = 10
-      ;;    color = color
-      ;;    legend = opt.legend or opt.path
-      ;; }
-      ;; @sources[opt.path] = {main = source, max = max-source}
-      @sources[opt.name] = {main = source}
-   
-
-channel-constructors = {
-   ;; error = LogChannel
-   log = LogChannel
-   plot = PlotChannel
-   tabs = TabsChannel
-   redirect = RedirectChannel
-}

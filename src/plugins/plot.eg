@@ -1,0 +1,109 @@
+
+require:
+   bokehjs as Bokeh
+   ..channel -> Channel
+
+
+jsclass PlotChannel < Channel:
+   setup() =
+      @sources = {=}
+      @color-rotation = {'blue', 'red', 'green', 'purple'}
+
+      tools = "pan,crosshair,wheel_zoom,box_zoom,reset,resize,save"
+
+      @plot = Bokeh.Plotting.figure with {
+         title = @options.title or null
+         tools = tools
+      }
+
+      ;; This plot is a workaround to force the axes to show properly
+      ;; even though we have no data yet.
+      dummy-source = new Bokeh.ColumnDataSource with {
+         data = {x = {0}, y = {0}}
+      }
+      l = @plot.line({field = "x"}, {field = "y"}) with {
+         source = dummy-source
+         line_color = .white
+         line_width = 2
+      }
+      @plot._legend.click_policy = @options.legend-click or 'hide'
+      @plot._legend.location = @options.legend-location or 'top_right'
+
+      Bokeh.Plotting.show(@plot, @element)
+
+   new-color() =
+      color = @color-rotation.shift()
+      @color-rotation.push(color)
+      color
+
+   make-element() =
+      div %
+         link %
+            rel = .stylesheet
+            href = '../html/bokeh-0.12.6.min.css'
+            type = 'text/css'
+         link %
+            rel = .stylesheet
+            href = '../html/bokeh-widgets-0.12.6.min.css'
+            type = 'text/css'
+         div.plot-area %
+
+   dispatch(m and {command => match}) =
+      .point ->
+         if @sources[m.sub-path or m.name or ""] as things:
+            {main => src} = things
+
+            src.data.x.push with m.x
+            src.data.y.push with m.y
+            src.change.emit()
+
+            ;; if max.data.y < m.y:
+            ;;    max.data.x[0] = m.x
+            ;;    max.data.y[0] = m.y
+            ;;    max.change.emit()
+         else:
+            @add-line({name = m.sub-path, x = m.x, y = m.y})
+      else ->
+         super.dispatch(m)
+
+   add-channel(sub-channel) =
+      pass
+
+   open-channel(options) =
+      @add-line({name = options.sub-path} & options)
+      @master.construct(@, .redirect, options & {redirect-path = @path})
+
+   add-line(opt) =
+      source = new Bokeh.ColumnDataSource with {
+         data = {
+            x = if{opt.x, {opt.x}, {}}
+            y = if{opt.x, {opt.y}, {}}
+         }
+      }
+      ;; max-source = new Bokeh.ColumnDataSource with {
+      ;;    data = {
+      ;;       x = if{opt.x, {opt.x}, {}}
+      ;;       y = if{opt.x, {opt.y}, {}}
+      ;;    }
+      ;; }
+      color = opt.line-color or @new-color()
+      @plot.line({field = "x"}, {field = "y"}) with {
+         source = source
+         line_color = color
+         line_width = opt.line-width or 2
+         legend = opt.legend or opt.name or "--"
+      }
+      ;; @plot.circle({field = "x"}, {field = "y"}) with {
+      ;;    source = max-source
+      ;;    size = 10
+      ;;    color = color
+      ;;    legend = opt.legend or opt.path
+      ;; }
+      ;; @sources[opt.path] = {main = source, max = max-source}
+      @sources[opt.name] = {main = source}
+
+
+provide:
+   {plot = PlotChannel} as channels
+   {=} as components
+

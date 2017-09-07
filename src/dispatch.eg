@@ -1,10 +1,26 @@
 
 require:
-   .channel -> channel-constructors
    events -> EventEmitter
+   .plugins/log
+   .plugins/tabs
+   .plugins/redirect
+   .plugins/plot
 
 provide:
    RootDispatcher
+   
+
+channel-constructors = {=}
+
+
+load-plugin(p) =
+   channel-constructors &: (p.channels or {=})
+
+
+load-plugin(log)
+load-plugin(tabs)
+load-plugin(redirect)
+load-plugin(plot)
 
 
 gen hierarchy(path) =

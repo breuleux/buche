@@ -1,0 +1,37 @@
+
+require:
+   ..channel -> Channel
+   ..util -> join
+
+
+jsclass TabsChannel < Channel:
+
+   make-element() =
+      channel-tabs %
+         anchor = @options.anchor or .top
+
+   dispatch(m) =
+      if m.command in {.resource, .reprocess}:
+         super.dispatch(m)
+      else:
+         @master.dispatch(m & {path = join(m.path, '_')})
+
+   add-channel(ch, options) =
+      if options.name is '_':
+         ch.send-path = @path
+      @element.add(options.name, ch.element)
+      @register-channel(ch)
+
+   force-channel-options(options) =
+      if options.name == '_':
+         {type = .log}
+      else:
+         {=}
+
+   default-channel-options() =
+      {type = .tabs, anchor = @options.anchor}
+
+
+provide:
+   {tabs = TabsChannel} as channels
+   {=} as components

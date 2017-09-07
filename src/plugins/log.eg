@@ -1,0 +1,53 @@
+
+require:
+   ..channel -> Channel
+   /dom
+
+
+jsclass LogChannel < Channel:
+
+   make-element() =
+      channel-log %
+         onsubmit(e) =
+            @write with {
+               command = .input
+               contents = e.target.value
+            }
+            e.target.value = ""
+         input = @options.has-input
+
+   dispatch(m and {command => match}) =
+      .log ->
+         element =
+            match m.format:
+               .pre ->
+                  div.raw-line % m.contents
+               .html ->
+                  div[raw] % m.contents
+               .markdown ->
+                  require: marked
+                  if m.inline:
+                     div[raw] % marked.inline-lexer(m.contents, {})
+                  else:
+                     div[raw] % marked(m.contents, {})
+               .quaint ->
+                  require: quaint
+                  div[raw] % quaint.toHTML(m.contents)
+               else ->
+                  div % m.contents
+         if m.location is 'overlay':
+            @element.overlay-area.innerHTML = ""
+            @element.overlay-area.append-child(dom(element))
+         else:
+            @element.add(element, m.kind or .log)
+
+      .clear ->
+         @element.clear()
+
+      else ->
+         super.dispatch(m)
+
+
+provide:
+   {log = LogChannel} as channels
+   {=} as components
