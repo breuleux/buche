@@ -1,0 +1,33 @@
+
+require:
+   /dom
+
+
+provide: formats
+
+
+formats = {
+
+   pre(ch, m) =
+      dom with
+         div.raw-line % m.contents
+
+   html(ch, m) =
+      dom with
+         div[raw] % m.contents
+
+   markdown(ch, m) =
+      require: marked
+      dom with
+         if m.inline:
+            then: div[raw] % marked.inline-lexer(m.contents, {})
+            else: div[raw] % marked(m.contents, {})
+
+   quaint(ch, m) =
+      require: quaint
+      dom with div[raw] % quaint.toHTML(m.contents)
+
+   text(ch, m) =
+      dom with div % m.contents
+
+}

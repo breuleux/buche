@@ -4,6 +4,7 @@ require:
    jquery as jq
    buche-tools -> Channel
    ..components -> CustomShadow
+   ..format -> formats
 
 
 jsclass LogChannel < Channel:
@@ -21,23 +22,8 @@ jsclass LogChannel < Channel:
 
    dispatch(m and {command => match}) =
       .log ->
-         element =
-            match m.format:
-               .pre ->
-                  div.raw-line % m.contents
-               .html ->
-                  div[raw] % m.contents
-               .markdown ->
-                  require: marked
-                  if m.inline:
-                     div[raw] % marked.inline-lexer(m.contents, {})
-                  else:
-                     div[raw] % marked(m.contents, {})
-               .quaint ->
-                  require: quaint
-                  div[raw] % quaint.toHTML(m.contents)
-               else ->
-                  div % m.contents
+         formatter = formats[m.format or .text]
+         element = formatter(@, m)
          if m.location is 'overlay':
             @element.overlay-area.innerHTML = ""
             @element.overlay-area.append-child(dom(element))
