@@ -15,7 +15,7 @@ Buche takes commands from stdout and (when applicable) outputs commands on stdin
 
 The `--inspect` flag makes buche print out all the commands that are exchanged between it and your program, in the following format: `-> <command_to_buche>` and `<- <command_from_buche>`.
 
-Thus the best way to learn how to use buche is by example:
+## Examples
 
 ```bash
 git clone https://github.com/breuleux/buche

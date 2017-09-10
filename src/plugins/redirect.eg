@@ -1,6 +1,6 @@
 
 require:
-   ..channel -> Channel
+   buche-tools -> Channel
 
 
 redirect(path, new-path, m) =

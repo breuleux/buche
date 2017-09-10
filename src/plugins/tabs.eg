@@ -3,15 +3,16 @@ require:
    /dom
    ..components ->
       CustomShadow, TabData
-   ..channel -> Channel
+   buche-tools -> Channel
    ..util -> join
 
 
 jsclass TabsChannel < Channel:
 
    make-element() =
-      channel-tabs %
-         anchor = @options.anchor or .top
+      dom with
+         channel-tabs %
+            anchor = @options.anchor or .top
 
    dispatch(m) =
       if m.command in {.resource, .reprocess}:
@@ -41,7 +42,7 @@ jsclass TabsChannelElement < CustomShadow:
       @active = {}
       @nchannels = 0
 
-   template() =
+   eg-template() =
       anchor-tag = '.tabs-{@anchor}'
       @element-select = dom with div.tabs-select.hide %
       @element-panes = dom with div.tabs-panes %

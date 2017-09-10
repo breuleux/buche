@@ -2,21 +2,22 @@
 require:
    /dom
    jquery as jq
-   ..channel -> Channel
+   buche-tools -> Channel
    ..components -> CustomShadow
 
 
 jsclass LogChannel < Channel:
 
    make-element() =
-      channel-log %
-         onsubmit(e) =
-            @write with {
-               command = .input
-               contents = e.target.value
-            }
-            e.target.value = ""
-         input = @options.has-input
+      dom with
+         channel-log %
+            onsubmit(e) =
+               @write with {
+                  command = .input
+                  contents = e.target.value
+               }
+               e.target.value = ""
+            input = @options.has-input
 
    dispatch(m and {command => match}) =
       .log ->
@@ -57,7 +58,7 @@ jsclass LogChannelElement < CustomShadow:
       @scrolled-down = true
       @has-input = @get-attribute('input') == "true"
 
-   template() =
+   eg-template() =
       @scrolled-down = true
       @area = dom with
          div.log-area %

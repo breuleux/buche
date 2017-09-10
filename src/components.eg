@@ -3,6 +3,9 @@ require:
    /dom
    .util -> css
    jquery as jq
+   buche-tools ->
+      Custom as _Custom
+      CustomShadow as _CustomShadow
 
 
 provide:
@@ -16,50 +19,26 @@ globals:
    HTMLElement
 
 
-jsclass Custom < HTMLElement:
-
-   attached-callback() =
-      if not @has-setup:
-         @has-setup = true
-         @setup()
-         children = @child-nodes each
-            Text? t -> t.text-content
-            x -> x
-         jq(@).empty()
-         Array! tpl = @template(children)
-         tpl each t ->
-            super.append-child(dom(t))
-         super.append-child(dom(css(@css())))
-
-   setup() =
-      pass
-
-   template(_) =
-      div %
-
-   css() =
-      {=}
+jsclass Custom < _Custom:
+   template(var children) =
+      if not @eg-template:
+         return children
+      children = children each
+         Text? t -> t.text-content
+         x -> x
+      Array! res = @eg-template(children)
+      res each r -> dom(r)
 
 
-jsclass CustomShadow < HTMLElement:
-
-   attached-callback() =
-      if not @shadow:
-         @shadow = @attach-shadow with {mode = .open}
-         @setup()
-         @shadow.append-child(dom(css(@css())))
-         Array! tpl = @template()
-         tpl each t ->
-            @shadow.append-child(dom(t))
-
-   setup() =
-      pass
-
-   template() =
-      div %
-
-   css() =
-      {=}
+jsclass CustomShadow < _CustomShadow:
+   template(var children) =
+      if not @eg-template:
+         return children
+      children = children each
+         Text? t -> t.text-content
+         x -> x
+      Array! res = @eg-template(children)
+      res each r -> dom(r)
 
 
 class TabData:

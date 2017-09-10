@@ -1,7 +1,8 @@
 
 require:
+   /dom
    bokehjs as Bokeh
-   ..channel -> Channel
+   buche-tools -> Channel
 
 
 jsclass PlotChannel < Channel:
@@ -16,20 +17,13 @@ jsclass PlotChannel < Channel:
          tools = tools
       }
 
-      ;; This plot is a workaround to force the axes to show properly
-      ;; even though we have no data yet.
-      dummy-source = new Bokeh.ColumnDataSource with {
-         data = {x = {0}, y = {0}}
-      }
-      l = @plot.line({field = "x"}, {field = "y"}) with {
-         source = dummy-source
-         line_color = .white
-         line_width = 2
-      }
       @plot._legend.click_policy = @options.legend-click or 'hide'
       @plot._legend.location = @options.legend-location or 'top_right'
 
-      Bokeh.Plotting.show(@plot, @element)
+   show-plot() =
+      if not @shown:
+         @shown = true
+         Bokeh.Plotting.show(@plot, @element)
 
    new-color() =
       color = @color-rotation.shift()
@@ -37,32 +31,24 @@ jsclass PlotChannel < Channel:
       color
 
    make-element() =
-      div %
-         link %
-            rel = .stylesheet
-            href = '../html/bokeh-0.12.6.min.css'
-            type = 'text/css'
-         link %
-            rel = .stylesheet
-            href = '../html/bokeh-widgets-0.12.6.min.css'
-            type = 'text/css'
-         div.plot-area %
+      dom with
+         div %
+            link %
+               rel = .stylesheet
+               href = '../html/bokeh-0.12.6.min.css'
+               type = 'text/css'
+            link %
+               rel = .stylesheet
+               href = '../html/bokeh-widgets-0.12.6.min.css'
+               type = 'text/css'
+            div.plot-area %
 
    dispatch(m and {command => match}) =
       .point ->
-         if @sources[m.sub-path or m.name or ""] as things:
-            {main => src} = things
-
-            src.data.x.push with m.x
-            src.data.y.push with m.y
-            src.change.emit()
-
-            ;; if max.data.y < m.y:
-            ;;    max.data.x[0] = m.x
-            ;;    max.data.y[0] = m.y
-            ;;    max.change.emit()
+         if @sources[m.sub-path or m.name or ""] as {main => src}:
+            @add-point(src, m.x, m.y)
          else:
-            @add-line({name = m.sub-path, x = m.x, y = m.y})
+            @add-line(m & {name = m.sub-path})
       else ->
          super.dispatch(m)
 
@@ -73,11 +59,22 @@ jsclass PlotChannel < Channel:
       @add-line({name = options.sub-path} & options)
       @master.construct(@, .redirect, options & {redirect-path = @path})
 
+   add-point(src, x, y) =
+      src.data.x.push with x
+      src.data.y.push with y
+      @show-plot()
+      src.change.emit()
+
+      ;; if max.data.y < m.y:
+      ;;    max.data.x[0] = m.x
+      ;;    max.data.y[0] = m.y
+      ;;    max.change.emit()
+
    add-line(opt) =
       source = new Bokeh.ColumnDataSource with {
          data = {
-            x = if{opt.x, {opt.x}, {}}
-            y = if{opt.x, {opt.y}, {}}
+            x = {}
+            y = {}
          }
       }
       ;; max-source = new Bokeh.ColumnDataSource with {
@@ -101,6 +98,8 @@ jsclass PlotChannel < Channel:
       ;; }
       ;; @sources[opt.path] = {main = source, max = max-source}
       @sources[opt.name] = {main = source}
+      if opt.x:
+         @add-point(source, opt.x, opt.y)
 
 
 provide:

@@ -17,22 +17,13 @@ jsclass ReplObject < Custom:
          e.stop-propagation()
          ch = @get-channel()
          if ch:
-            ch.channel.write with {
+            ch.write with {
                command = .click
                shift = e.shift-key
                ctrl = e.ctrl-key
                alt = e.alt-key
                obj-id = @get-attribute('obj-id')
             }
-
-   get-channel() =
-      var curr = [@]
-      while curr and not curr.channel:
-         curr = curr.get-root-node().host
-      curr
-
-   template(children) =
-      children
 
 
 jsclass TabbedView < Custom:
@@ -49,7 +40,7 @@ jsclass TabbedView < Custom:
       else:
          spec.activate()
 
-   template(children) =
+   eg-template(children) =
       anchor-tag = '.tabs-{@anchor}'
       datas = {}
       tabs = {}
@@ -57,12 +48,7 @@ jsclass TabbedView < Custom:
 
       messages = {}
       rest = {}
-      ;; @child-nodes each match node ->
-      ;;    Text? and {text-content => match tc} ->
-      ;;       R"^[ \n]*$"? ->
-      ;;          pass
-      ;;       else ->
-      ;;          messages.push(tc)
+
       children each match node ->
          String? tc and match is tc ->
             R"^[ \n]*$"? ->
@@ -208,7 +194,7 @@ jsclass CodeSnippet < Custom:
             then: div.hljs-lineno-focus % '{i + 1}'
             else: div % '{i + 1}'
 
-   template(children) = {
+   eg-template(children) = {
       link %
          rel = 'stylesheet'
          type = 'text/css'
