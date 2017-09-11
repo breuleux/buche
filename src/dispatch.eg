@@ -5,6 +5,7 @@ require:
    .plugins/tabs
    .plugins/redirect
    .plugins/plot
+   .plugins/slides
    .plugins/goodies
 
 provide:
@@ -27,6 +28,7 @@ load-plugin(log)
 load-plugin(tabs)
 load-plugin(redirect)
 load-plugin(plot)
+load-plugin(slides)
 load-plugin(goodies)
 
 

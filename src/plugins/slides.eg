@@ -7,11 +7,11 @@ require:
    ..format -> formats
 
 
-jsclass LogChannel < Channel:
+jsclass SlidesChannel < Channel:
 
    make-element() =
       dom with
-         channel-log %
+         channel-slides %
             onsubmit(e) =
                @write with {
                   command = .input
@@ -33,21 +33,42 @@ jsclass LogChannel < Channel:
       @element.clear()
 
 
-jsclass LogChannelElement < CustomShadow:
+jsclass SlidesChannelElement < CustomShadow:
 
    setup() =
       @is-setup = true
-      @scrolled-down = true
       @has-input = @get-attribute('input') == "true"
 
    eg-template() =
-      @scrolled-down = true
+      @active = -1
+      @counter = dom with
+         span %
+            '? / ?'
+      @controls = dom with
+         div.slides-controls %
+            button %
+               "<<"
+               onclick(e) =
+                  @select(0)
+            button %
+               "<"
+               onclick(e) =
+                  nch = @area.child-nodes.length
+                  i = (@active + nch - 1) mod nch
+                  @select(i)
+            @counter
+            button %
+               ">"
+               onclick(e) =
+                  nch = @area.child-nodes.length
+                  i = (@active + 1) mod nch
+                  @select(i)
+            button %
+               ">>"
+               onclick(e) =
+                  @select(@area.child-nodes.length - 1)
       @area = dom with
-         div.log-area %
-            onscroll(e) =
-               a = @jqarea
-               @scrolled-down =
-                  a[0].scroll-height - a.scroll-top() == a.outer-height()
+         div.slides-area %
             @child-nodes each x -> x
       @overlay-area = dom with
          div.overlay-area %
@@ -58,9 +79,9 @@ jsclass LogChannelElement < CustomShadow:
                if e.key == 'Enter':
                   @onsubmit(e)
       if @has-input:
-         {@overlay-area, @area, @input}
+         {@overlay-area, @controls, @area, @input}
       else:
-         {@overlay-area, @area}
+         {@overlay-area, @controls, @area}
 
    css() = {
       ":host" = {
@@ -70,10 +91,23 @@ jsclass LogChannelElement < CustomShadow:
          position = 'relative'
       }
 
-      ".log-area" = {
+      ".slides-controls > *" = {
+         margin-left = '5px'
+         margin-right = '5px'
+      }
+
+      ".slides-area" = {
          flex = 1
          overflow = .auto
          margin-left = '5px'
+      }
+
+      ".slides-area > *" = {
+         display = 'none'
+      }
+
+      ".slides-area > .active" = {
+         display = 'block'
       }
 
       ".overlay-area" = {
@@ -97,40 +131,8 @@ jsclass LogChannelElement < CustomShadow:
          outline = 'none'
       }
 
-      ".log-area > *" = {
-         padding-left = '20px'
-         margin-left = '5px'
-      }
-
-      ".log-area > * > *" = {
-         display = "inline-block"
-      }
-
       "style,script" = {
          display = "none !IMPORTANT"
-      }
-
-      ".log-area > .echo" = {
-         border-left = '15px solid green'
-         margin-left = '0px'
-         padding-left = '15px'
-         background-color = '#eee'
-      }
-
-      ".log-area > .log" = {
-         padding-left = '20px'
-      }
-
-      ".log-area > .result" = {
-         border-left = '5px solid blue'
-      }
-
-      ".log-area > .error" = {
-         border-left = '5px solid red'
-      }
-
-      ".log-area > .warning" = {
-         border-left = '5px solid orange'
       }
 
       ".raw-line" = {
@@ -142,13 +144,25 @@ jsclass LogChannelElement < CustomShadow:
       }
    }
 
+   select(i) =
+      if @active >= 0:
+         @area.child-nodes[@active].class-list.remove('active')
+      @area.child-nodes[i].class-list.add('active')
+      @active = i
+      @update-counter()
+
+   update-counter() =
+      @counter.innerHTML = '{@active + 1} / {@area.child-nodes.length}'
+
    add(child, kind = .log) =
       wrapped-child = dom(div[^'.{kind}'] % child)
       if @area:
          @area.append-child(wrapped-child)
-         if @scrolled-down:
-            set-timeout(f, 0) where f() =
-               @jqarea.scroll-top(@area.scroll-height)
+         nchildren = @area.child-nodes.length
+         if @active == nchildren - 2:
+            @select(nchildren - 1)
+         else:
+            @update-counter()
       else:
          super.append-child(wrapped-child)
 
@@ -157,5 +171,6 @@ jsclass LogChannelElement < CustomShadow:
 
 
 provide:
-   {log = LogChannel} as channels
-   {"channel-log" = LogChannelElement} as components
+   {slides = SlidesChannel} as channels
+   {"channel-slides" = SlidesChannelElement} as components
+
