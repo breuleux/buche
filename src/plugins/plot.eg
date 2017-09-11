@@ -43,14 +43,11 @@ jsclass PlotChannel < Channel:
                type = 'text/css'
             div.plot-area %
 
-   dispatch(m and {command => match}) =
-      .point ->
-         if @sources[m.sub-path or m.name or ""] as {main => src}:
-            @add-point(src, m.x, m.y)
-         else:
-            @add-line(m & {name = m.sub-path})
-      else ->
-         super.dispatch(m)
+   dispatch_point(m) =
+      if @sources[m.sub-path or m.name or ""] as {main => src}:
+         @add-point(src, m.x, m.y)
+      else:
+         @add-line(m & {name = m.sub-path})
 
    add-channel(sub-channel) =
       pass

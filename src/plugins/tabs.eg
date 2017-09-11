@@ -14,11 +14,8 @@ jsclass TabsChannel < Channel:
          channel-tabs %
             anchor = @options.anchor or .top
 
-   dispatch(m) =
-      if m.command in {.resource, .reprocess}:
-         super.dispatch(m)
-      else:
-         @master.dispatch(m & {path = join(m.path, '_')})
+   missing_command(m) =
+      @master.dispatch(m & {path = join(m.path, '_')})
 
    add-channel(ch, options) =
       if options.name is '_':

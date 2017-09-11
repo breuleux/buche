@@ -20,21 +20,17 @@ jsclass LogChannel < Channel:
                e.target.value = ""
             input = @options.has-input
 
-   dispatch(m and {command => match}) =
-      .log ->
-         formatter = formats[m.format or .text]
-         element = formatter(@, m)
-         if m.location is 'overlay':
-            @element.overlay-area.innerHTML = ""
-            @element.overlay-area.append-child(dom(element))
-         else:
-            @element.add(element, m.kind or .log)
+   dispatch_log(m) =
+      formatter = formats[m.format or .text]
+      element = formatter(@, m)
+      if m.location is 'overlay':
+         @element.overlay-area.innerHTML = ""
+         @element.overlay-area.append-child(dom(element))
+      else:
+         @element.add(element, m.kind or .log)
 
-      .clear ->
-         @element.clear()
-
-      else ->
-         super.dispatch(m)
+   dispatch_clear(m) =
+      @element.clear()
 
 
 jsclass LogChannelElement < CustomShadow:
