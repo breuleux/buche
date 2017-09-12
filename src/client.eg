@@ -7,9 +7,15 @@ require:
       StreamSource
    .dispatch ->
       RootDispatcher
-   ;; .components ->
-   ;;    install-components
-   ;; .repl
+   buche-tools
+
+
+globals:
+   Buche
+
+
+Buche = buche-tools
+
 
 stdin-buffer = new EventEmitter()
 ipc-renderer.on(.data) with {event, data} ->
@@ -18,9 +24,8 @@ ipc-renderer.on(.end) with {event, data} ->
    stdin-buffer.emit(.end)
 ipc-renderer.send(.ready)
 
+
 main() where main() =
-   ;; install-components()
-   ;; repl.install-components()
    mount-content = document.get-element-by-id("mount-content")
    stream =
       StreamSource with
