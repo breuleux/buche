@@ -1,0 +1,25 @@
+
+provide:
+   channel-constructors
+   channel-elements
+   load-plugin
+   register-element
+
+
+globals:
+   document
+
+
+channel-constructors = {=}
+channel-elements = {=}
+
+
+load-plugin(p) =
+   channel-constructors &: (p.channels or {=})
+   items(p.components or {=}) each {name, cls} ->
+      document.register-element(name, cls)
+
+
+register-element(name, cls) =
+   channel-elements[name] = cls
+   document.register-element(name, cls)

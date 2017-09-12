@@ -1,0 +1,38 @@
+
+require:
+   /dom
+   fs
+   buche-tools -> Channel
+   ..components -> CustomShadow
+   ..format -> formats
+
+
+globals:
+   document
+
+
+jsclass TemplateChannel < Channel:
+
+   make-element() =
+      d = dom(div %)
+      shadow = d.attach-shadow(mode = .open)
+      contents = @options.contents or fs.read-file-sync(@options.src, .utf8)
+      shadow.innerHTML = contents
+      d.shadow = shadow
+      d
+
+   setup() =
+      @element.shadow.query-selector-all('channel') each chelem ->
+         attrs = object with chelem.attributes each attr ->
+            {attr.node-name, attr.node-value}
+         attrs.path = '{@path}/{attrs.path}'
+         ch = @master.construct(@, attrs.type, attrs)
+         chelem.parent-node.replace-child(ch.element, chelem)
+
+   add-channel(ch) =
+      pass
+
+
+provide:
+   {template = TemplateChannel} as channels
+   {=} as components

@@ -6,7 +6,10 @@ require:
    .plugins/redirect
    .plugins/plot
    .plugins/slides
+   .plugins/template
    .plugins/goodies
+   .registry ->
+      load-plugin, channel-constructors
 
 provide:
    RootDispatcher
@@ -15,20 +18,12 @@ globals:
    document
 
 
-channel-constructors = {=}
-
-
-load-plugin(p) =
-   channel-constructors &: (p.channels or {=})
-   items(p.components or {=}) each {name, cls} ->
-      document.register-element(name, cls)
-
-
 load-plugin(log)
 load-plugin(tabs)
 load-plugin(redirect)
 load-plugin(plot)
 load-plugin(slides)
+load-plugin(template)
 load-plugin(goodies)
 
 

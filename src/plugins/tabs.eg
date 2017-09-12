@@ -169,6 +169,7 @@ jsclass TabsChannelElement < CustomShadow:
         height = "100%"
         ;; margin = '1px'
         background = 'white'
+        overflow = .auto
       }
 
       ".tabs-panes > .active" = {
