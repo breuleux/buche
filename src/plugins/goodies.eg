@@ -150,8 +150,9 @@ jsclass TabbedView < Custom:
 
 jsclass CodeSnippet < Custom:
    setup() =
+      @filename = @get-attribute('src')
       try:
-         @contents = fs.read-file-sync(@get-attribute('src'), .utf8)
+         @contents = fs.read-file-sync(@filename, .utf8)
       catch e:
          @contents = match @child-nodes[0]:
             undefined? -> ""
@@ -199,15 +200,23 @@ jsclass CodeSnippet < Custom:
          rel = 'stylesheet'
          type = 'text/css'
          href = '../node_modules/highlight.js/styles/github.css'
-      div.hljs-box %
-         .hljs-linenos %
-            @line-numbers
-         @hl-excerpt
-         ;; .hljs[raw] %
-         ;;    @hl-excerpt
+      div %
+         code.filename %
+            @filename
+         div.hljs-box %
+            .hljs-linenos %
+               @line-numbers
+            @hl-excerpt
+            ;; .hljs[raw] %
+            ;;    @hl-excerpt
    }
 
    css() = {
+      "code.filename" = {
+         display = .block
+         background = '#e8e8e8'
+      }
+
       ".hljs-lineno-focus" = {
          background = '#ddd'
          color = .purple
