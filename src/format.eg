@@ -1,33 +1,45 @@
 
 require:
    /dom
+   .util -> BucheException
 
 
-provide: formats
+provide:
+   format, formats
 
 
 formats = {
 
-   pre(ch, m) =
+   pre(ch, text, options) =
       dom with
-         div.raw-line % m.contents
+         div.raw-line % text
 
-   html(ch, m) =
+   html(ch, text, options) =
       dom with
-         div[raw] % m.contents
+         div[raw] % text
 
-   markdown(ch, m) =
+   markdown(ch, text, options) =
       require: marked
       dom with
-         if m.inline:
-            then: div[raw] % marked.inline-lexer(m.contents, {})
-            else: div[raw] % marked(m.contents, {})
+         if options.inline:
+            then: div[raw] % marked.inline-lexer(text, {})
+            else: div[raw] % marked(text, {})
 
-   quaint(ch, m) =
+   quaint(ch, text, options) =
       require: quaint
-      dom with div[raw] % quaint.toHTML(m.contents)
+      dom with div[raw] % quaint.toHTML(text)
 
-   text(ch, m) =
-      dom with div % m.contents
+   text(ch, text, options) =
+      dom with div % text
 
 }
+
+
+format(ch, fmt, text, options, message) =
+   formatter = formats[fmt]
+   if not formatter:
+      m = message or options
+      fields = items(m) each {k, v} when v is fmt -> k
+      throw new BucheException(___, fields, message or options) with
+         'Unknown format: "{fmt}"'
+   return formatter(ch, text, options, message)

@@ -4,7 +4,10 @@ require:
    jquery as jq
    buche-tools -> Channel
    ..components -> CustomShadow
-   ..format -> formats
+   ..format ->
+      formats, format as fmt
+   ..util ->
+      BucheException
 
 
 jsclass LogChannel < Channel:
@@ -21,8 +24,11 @@ jsclass LogChannel < Channel:
             input = @options.has-input
 
    dispatch_log(m) =
-      formatter = formats[m.format or .text]
-      element = formatter(@, m)
+      content = m.content or m.contents
+      if content is undefined:
+         throw new BucheException(___, {.content}, m) with
+            '"log" command requires "content" field to be present.'
+      element = fmt(@, m.format or .text, m.content or m.contents, m)
       if m.location is 'overlay':
          @element.overlay-area.innerHTML = ""
          @element.overlay-area.append-child(dom(element))
