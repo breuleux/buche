@@ -140,6 +140,43 @@ jsclass LogChannelElement < CustomShadow:
          margin = '0px'
          line-height = '1'
       }
+
+      ".buche-error" = {
+         border = '1px solid #800'
+         border-radius = '10px'
+         display = .flex
+         flex-direction = .column
+         padding = '10px'
+         margin-top = '5px'
+         margin-bottom = '5px'
+      }
+      ".buche-error-reason::before" = {
+         content = "'ERROR: '"
+         font-weight = .bold
+      }
+      ".buche-error-path::before" = {
+         content = "'In channel: '"
+      }
+      ".buche-error-path" = {
+         color = "#aaa"
+      }
+      ".buche-error tabbed-view" = {
+         margin-top = '10px'
+      }
+      ".buche-error table" = {
+         border = '1px solid #888'
+         border-collapse = 'collapse'
+         margin = '2px'
+      }
+      ".buche-error tr:nth-child(odd)" = {
+         background = '#eee'
+      }
+      ".buche-error tr:nth-child(even)" = {
+         background = '#ddd'
+      }
+      ".buche-error tr.highlight" = {
+         background = '#fdd'
+      }
    }
 
    add(child, kind = .log) =

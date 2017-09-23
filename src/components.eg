@@ -1,7 +1,6 @@
 
 require:
    /dom
-   .util -> css
    jquery as jq
    buche-tools ->
       Custom as _Custom

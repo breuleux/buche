@@ -1,24 +1,48 @@
 
 require:
-   decamelize
+   /html
 
 provide:
-   css, join
+   join, BucheException
 
 join(*parts) =
    parts.join("/").replace(R.g"//+", "/")
 
-convert(sheet) =
-   object with items(sheet) each {sel, style} ->
-      {sel} with object with items(style) each {prop, value} ->
-         {decamelize(prop, "-"), value}
+jsclass BucheException < Error:
+   constructor(@reason, @fields, @message, @channel, @orig-error) =
+      super()
 
-css(sheet) =
-   style[raw] %
-      ___.join("\n") with
-         items(sheet) each {sel, style} ->
-            props = ___.join("\n  ") with
-               items(style) each {prop, value} ->
-                  '{decamelize(prop, "-")}: {value};'
-            '{sel} \{\n  {props}\n\}'
+   format() =
+      div.buche-error %
+         div.buche-error-reason %
+            @reason
+         div.buche-error-path %
+            @channel??.path or @message.path or '<MISSING>'
+         tabbed-view %
+            view %
+               tab % "Table"
+               pane %
+                  table %
+                     items(@message) each {k, v} ->
+                        tr %
+                           class = if{k in @fields, .highlight, ""}
+                           td % k
+                           td % v
+                     @fields each field when not @message[field] ->
+                        tr.highlight %
+                           td % field
+                           td % '<MISSING>'
+            view %
+               tab % "JSON"
+               pane % pre % JSON.stringify(@message, null, 2)
+            view %
+               tab % "Traceback"
+               pane % pre % @orig-error??.stack or @stack
 
+   create-message(path = '/buche-errors') = {
+      command = .log
+      kind = .error
+      = path
+      format = .html
+      contents = html(@format())
+   }

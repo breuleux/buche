@@ -10,6 +10,7 @@ require:
    .plugins/goodies
    .registry ->
       load-plugin, channel-constructors
+   .util -> BucheException
 
 provide:
    RootDispatcher
@@ -78,23 +79,30 @@ class RootDispatcher < EventEmitter:
       expr-value @channels[options.path] = ch
 
    dispatch(message) =
-      path = message.path
-      if not path:
-         @dispatch with {
-            command = .log
-            path = '/buche-errors'
-            contents = 'Message lacks path: {JSON.stringify(message)}'
-         }
-      if @intercepts[message.command]:
-         hierarchy(path) each p ->
-            if @channels[p] as ch:
-               if ch.intercepts(message):
-                  return ch.dispatch(message)
-      if message.command is .open:
-         {p, c} = split-end(path)
-         @open(p, c, message)
-      else:
-         @find-channel(path).dispatch(message)
+      {'path', 'command'} each field ->
+         if not message[field]:
+            err = new BucheException(___, {field}, message, {path = '/'}) with
+               'Missing field in message: "{field}"'
+            @dispatch(err.create-message('/buche-errors'))
+            return
+
+      try:
+         path = message.path
+         if @intercepts[message.command]:
+            hierarchy(path) each p ->
+               if @channels[p] as ch:
+                  if ch.intercepts(message):
+                     return ch.dispatch(message)
+         if message.command is .open:
+            {p, c} = split-end(path)
+            @open(p, c, message)
+         else:
+            @find-channel(path).dispatch(message)
+      catch BucheException? err:
+         @dispatch(err.create-message('/buche-errors'))
+      catch Error? e:
+         err = new BucheException(e.message, {}, message, null, e)
+         @dispatch(err.create-message('/buche-errors'))
 
    run() =
       @source.read(m -> @dispatch(m))
