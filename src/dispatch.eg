@@ -28,6 +28,9 @@ load-plugin(template)
 load-plugin(goodies)
 
 
+buche-error-channel = '/!buche-errors'
+
+
 gen hierarchy(path) =
    parts = path.split('/')
    last = parts.pop()
@@ -83,7 +86,7 @@ class RootDispatcher < EventEmitter:
          if not message[field]:
             err = new BucheException(___, {field}, message, {path = '/'}) with
                'Missing field in message: "{field}"'
-            @dispatch(err.create-message('/buche-errors'))
+            @dispatch(err.create-message(buche-error-channel))
             return
 
       try:
@@ -99,10 +102,10 @@ class RootDispatcher < EventEmitter:
          else:
             @find-channel(path).dispatch(message)
       catch BucheException? err:
-         @dispatch(err.create-message('/buche-errors'))
+         @dispatch(err.create-message(buche-error-channel))
       catch Error? e:
          err = new BucheException(e.message, {}, message, null, e)
-         @dispatch(err.create-message('/buche-errors'))
+         @dispatch(err.create-message(buche-error-channel))
 
    run() =
       @source.read(m -> @dispatch(m))

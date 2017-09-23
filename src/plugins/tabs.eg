@@ -5,6 +5,10 @@ require:
       CustomShadow, TabData
    buche-tools -> Channel
    ..util -> join
+   ..format -> format as fmt
+
+
+default-log-tab = '_'
 
 
 jsclass TabsChannel < Channel:
@@ -14,17 +18,27 @@ jsclass TabsChannel < Channel:
          channel-tabs %
             anchor = @options.anchor or .top
 
+   setup() =
+      @log-tab = @options.log-tab or default-log-tab
+
    missing_command(m) =
-      @master.dispatch(m & {path = join(m.path, '_')})
+      @master.dispatch(m & {path = join(m.path, @log-tab)})
 
    add-channel(ch, options) =
-      if options.name is '_':
+      if options.name is @log-tab:
          ch.send-path = @path
-      @element.add(options.name, ch.element)
+         if options.order is undefined:
+            options.order = 1000
+      elif options.name.starts-with('!') and options.order is undefined:
+         options.order = 10000
+      tab = fmt with
+         @, options.label-format or .text
+         options.label or options.name, options
+      @element.add(options.name, ch.element, tab, options.order or 100)
       @register-channel(ch)
 
    force-channel-options(options) =
-      if options.name == '_':
+      if options.name == @log-tab:
          {type = .log}
       else:
          {=}
@@ -38,6 +52,7 @@ jsclass TabsChannelElement < CustomShadow:
       @anchor = @get-attribute('anchor') or 'top'
       @active = {}
       @nchannels = 0
+      @specs = {}
 
    eg-template() =
       anchor-tag = '.tabs-{@anchor}'
@@ -59,18 +74,32 @@ jsclass TabsChannelElement < CustomShadow:
             onclick(e) =
                @select(spec, e.shift-key)
 
-   add(tab-elem, pane-elem) =
+   add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
       spec = TabData(@)
+      spec.tab-name = tab-name
       spec.tab-elem = tab-elem
       spec.pane-elem = pane-elem
+      spec.order = order
       spec.tab = @make-tab(spec)
       spec.pane = dom(div % pane-elem)
-      @element-select.append-child(spec.tab)
-      @element-panes.append-child(spec.pane)
+
+      var idx = 0
+      while @specs[idx] and @specs[idx].order <= order:
+         idx += 1
+
+      if idx == @specs.length:
+         @element-select.append-child(spec.tab)
+         @element-panes.append-child(spec.pane)
+      else:
+         prev = @specs[idx]
+         @element-select.insert-before(spec.tab, prev.tab)
+         @element-panes.insert-before(spec.pane, prev.pane)
+      @specs.splice(idx, 0, spec)
+
       if @active.length == 0:
          @select(spec)
       @nchannels += 1
-      if @nchannels > 1 or tab-elem != '_':
+      if @nchannels > 1 or tab-name != @channel.log-tab:
          @element-select.class-list.remove(.hide)
 
    select(spec, add-to-active = false) =

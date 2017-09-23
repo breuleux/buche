@@ -27,7 +27,7 @@ jsclass BucheException < Error:
                         tr %
                            class = if{k in @fields, .highlight, ""}
                            td % k
-                           td % v
+                           td % JSON.stringify(v)
                      @fields each field when not @message[field] ->
                         tr.highlight %
                            td % field
