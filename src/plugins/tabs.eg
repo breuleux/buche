@@ -167,7 +167,7 @@ jsclass TabsChannelElement < CustomShadow:
               then: '#88f'
               else: '#aaf'
         ;; margin = '0px'
-        padding = '1px'
+        ;; padding = '1px'
       }
 
       ".tab" = {
