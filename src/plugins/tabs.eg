@@ -17,6 +17,7 @@ jsclass TabsChannel < Channel:
       dom with
          channel-tabs %
             anchor = @options.anchor or .top
+            sticky = @options.sticky or false
 
    setup() =
       @log-tab = @options.log-tab or default-log-tab
@@ -50,6 +51,7 @@ jsclass TabsChannel < Channel:
 jsclass TabsChannelElement < CustomShadow:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
+      @sticky = @get-attribute('sticky') or 'false'
       @active = {}
       @nchannels = 0
       @specs = {}
@@ -72,7 +74,12 @@ jsclass TabsChannelElement < CustomShadow:
          div.tab %
             spec.tab-elem
             onclick(e) =
-               @select(spec, e.shift-key)
+               additive =
+                  if @sticky is 'false':
+                     e.shift-key
+                  else:
+                     not e.shift-key
+               @select(spec, additive)
 
    add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
       spec = TabData(@)
@@ -177,6 +184,10 @@ jsclass TabsChannelElement < CustomShadow:
         padding-top = "2px"
         padding-bottom = "2px"
         user-select = "none"
+        width =
+           if @anchor in {.left, .right}:
+              then: '100px'
+              else: 'auto'
       }
 
       ;; ".tabs-panes > *" = {
