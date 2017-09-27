@@ -4,7 +4,8 @@ require:
    jquery as jq
    buche-tools -> Channel
    ..components -> CustomShadow
-   ..format -> formats
+   ..format ->
+      format as fmt
 
 
 jsclass SlidesChannel < Channel:
@@ -21,8 +22,7 @@ jsclass SlidesChannel < Channel:
             input = @options.has-input
 
    dispatch_log(m) =
-      formatter = formats[m.format or .text]
-      element = formatter(@, m)
+      element = fmt(@, m.format or .text, m.content or m.contents, m)
       if m.location is 'overlay':
          @element.overlay-area.innerHTML = ""
          @element.overlay-area.append-child(dom(element))
