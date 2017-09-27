@@ -59,8 +59,11 @@ jsclass TabbedView < Custom:
             .VIEW ->
                data = TabData(@)
                {data.tab, data.pane} = node.child-nodes each x when not Text? x -> x
-               data.tab.onclick(e) =
-                  @select(data, e.shift-key)
+               sel(e) = @select(data, e.shift-key)
+               data.tab.query-selector-all('*') each child ->
+                  ;; Disable children's existing click events.
+                  child.onclick = sel
+               data.tab.onclick = sel
                datas.push(data)
                tabs.push(data.tab)
                panes.push(data.pane)
