@@ -3,46 +3,44 @@ require:
    /html
 
 provide:
-   join, BucheException
+   join
+   format-buche-exception
+   buche-exception-message
 
 join(*parts) =
    parts.join("/").replace(R.g"//+", "/")
 
-jsclass BucheException < Error:
-   constructor(@reason, @fields, @message, @channel, @orig-error) =
-      super()
+format-buche-exception(@) =
+   div.buche-error %
+      div.buche-error-reason %
+         @message
+      div.buche-error-path %
+         @channel??.path or @data.path or '<MISSING>'
+      tabbed-view %
+         view %
+            tab % "Table"
+            pane %
+               table %
+                  items(@data) each {k, v} ->
+                     tr %
+                        class = if{k in @fields, .highlight, ""}
+                        td % k
+                        td % JSON.stringify(v)
+                  @fields each field when not @data[field] ->
+                     tr.highlight %
+                        td % field
+                        td % '<MISSING>'
+         view %
+            tab % "JSON"
+            pane % pre % JSON.stringify(@data, null, 2)
+         view %
+            tab % "Traceback"
+            pane % pre % @orig-error??.stack or @stack
 
-   format() =
-      div.buche-error %
-         div.buche-error-reason %
-            @reason
-         div.buche-error-path %
-            @channel??.path or @message.path or '<MISSING>'
-         tabbed-view %
-            view %
-               tab % "Table"
-               pane %
-                  table %
-                     items(@message) each {k, v} ->
-                        tr %
-                           class = if{k in @fields, .highlight, ""}
-                           td % k
-                           td % JSON.stringify(v)
-                     @fields each field when not @message[field] ->
-                        tr.highlight %
-                           td % field
-                           td % '<MISSING>'
-            view %
-               tab % "JSON"
-               pane % pre % JSON.stringify(@message, null, 2)
-            view %
-               tab % "Traceback"
-               pane % pre % @orig-error??.stack or @stack
-
-   create-message(path = '/buche-errors') = {
-      command = .log
-      kind = .error
-      = path
-      format = .html
-      contents = html(@format())
-   }
+buche-exception-message(bexc, path = '/buche-errors') = {
+   command = .log
+   kind = .error
+   = path
+   format = .html
+   contents = html(format-buche-exception(bexc))
+}

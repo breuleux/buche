@@ -2,12 +2,11 @@
 require:
    /dom
    jquery as jq
-   buche-tools -> Channel
+   buche-tools ->
+      Channel, BucheError
    ..components -> CustomShadow
    ..format ->
-      formats, format as fmt
-   ..util ->
-      BucheException
+      format as fmt
 
 
 jsclass LogChannel < Channel:
@@ -26,7 +25,7 @@ jsclass LogChannel < Channel:
    dispatch_log(m) =
       content = m.content or m.contents
       if content is undefined:
-         throw new BucheException(___, {.content}, m) with
+         throw new BucheError(___, m, {fields = {.content}}) with
             '"log" command requires "content" field to be present.'
       element = fmt(@, m.format or .text, m.content or m.contents, m)
       if m.location is 'overlay':

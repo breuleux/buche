@@ -1,6 +1,7 @@
 
 require:
    events -> EventEmitter
+   buche-tools -> BucheError
    .plugins/log
    .plugins/tabs
    .plugins/redirect
@@ -10,7 +11,8 @@ require:
    .plugins/goodies
    .registry ->
       load-plugin, channel-constructors
-   .util -> BucheException
+   .util ->
+      buche-exception-message
 
 provide:
    RootDispatcher
@@ -84,9 +86,11 @@ class RootDispatcher < EventEmitter:
    dispatch(message) =
       {'path', 'command'} each field ->
          if not message[field]:
-            err = new BucheException(___, {field}, message, {path = '/'}) with
-               'Missing field in message: "{field}"'
-            @dispatch(err.create-message(buche-error-channel))
+            err = new BucheError('Missing field in message: "{field}"', message) with {
+               fields = {field}
+               channel = {path = '/'}
+            }
+            @dispatch(buche-exception-message(err, buche-error-channel))
             return
 
       try:
@@ -101,11 +105,11 @@ class RootDispatcher < EventEmitter:
             @open(p, c, message)
          else:
             @find-channel(path).dispatch(message)
-      catch BucheException? err:
-         @dispatch(err.create-message(buche-error-channel))
+      catch BucheError? err:
+         @dispatch(buche-exception-message(err, buche-error-channel))
       catch Error? e:
-         err = new BucheException(e.message, {}, message, null, e)
-         @dispatch(err.create-message(buche-error-channel))
+         err = new BucheError(e.message, message, {orig-error = e})
+         @dispatch(buche-exception-message(err, buche-error-channel))
 
    run() =
       @source.read(m -> @dispatch(m))
