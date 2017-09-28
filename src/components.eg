@@ -5,17 +5,30 @@ require:
    buche-tools ->
       Custom as _Custom
       CustomShadow as _CustomShadow
+      BucheElement as _BucheElement
 
 
 provide:
    Custom
    CustomShadow
    TabData
+   BucheElement
 
 
 globals:
    Text
    HTMLElement
+
+
+jsclass BucheElement < _BucheElement:
+   template(var children) =
+      if not @eg-template:
+         return children
+      children = children each
+         Text? t -> t.text-content
+         x -> x
+      Array! res = @eg-template(children)
+      res each r -> dom(r)
 
 
 jsclass Custom < _Custom:

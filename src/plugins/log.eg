@@ -4,7 +4,8 @@ require:
    jquery as jq
    buche-tools ->
       Channel, BucheError
-   ..components -> CustomShadow
+   ..components ->
+      BucheElement
    ..format ->
       format as fmt
 
@@ -38,7 +39,10 @@ jsclass LogChannel < Channel:
       @element.clear()
 
 
-jsclass LogChannelElement < CustomShadow:
+jsclass LogChannelElement < BucheElement:
+
+   requires-shadow() =
+      true
 
    setup() =
       @is-setup = true
@@ -47,7 +51,7 @@ jsclass LogChannelElement < CustomShadow:
 
    eg-template() =
       @scrolled-down = true
-      @area = dom with
+      @area and @target-element = dom with
          div.log-area %
             onscroll(e) =
                a = @jqarea
@@ -186,16 +190,16 @@ jsclass LogChannelElement < CustomShadow:
 
    add(child, kind = .log) =
       wrapped-child = dom(div[^'.{kind}'] % child)
-      if @area:
-         @area.append-child(wrapped-child)
-         if @scrolled-down:
-            set-timeout(f, 0) where f() =
-               @jqarea.scroll-top(@area.scroll-height)
-      else:
-         super.append-child(wrapped-child)
+      @area.append-child(wrapped-child)
+      if @scrolled-down:
+         set-timeout(f, 0) where f() =
+            @jqarea.scroll-top(@area.scroll-height)
 
    append-child(child) =
-      @add(child)
+      if @target-element:
+         @add(child)
+      else:
+         super.append-child(child)
 
 
 provide:

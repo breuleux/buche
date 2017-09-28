@@ -4,14 +4,16 @@ require:
    "highlight.js" as hljs
    fs
    ..components ->
-      Custom, TabData
+      TabData, BucheElement
+   ..format ->
+      format as fmt
 
 
 globals:
    Text
 
 
-jsclass ReplObject < Custom:
+jsclass ReplObject < BucheElement:
    setup() =
       @onclick(e) =
          e.stop-propagation()
@@ -26,7 +28,53 @@ jsclass ReplObject < Custom:
             }
 
 
-jsclass TabbedView < Custom:
+jsclass IBox < BucheElement:
+   setup() =
+      ch = @get-channel()
+      obj-id = @get-attribute('obj-id')
+      @onclick(e) =
+         e.stop-propagation()
+         if ch:
+            ch.write with {
+               command = .click
+               button = match e.button:
+                  0 -> .left
+                  1 -> .middle
+                  2 -> .right
+               shift = e.shift-key
+               ctrl = e.ctrl-key
+               alt = e.alt-key
+               meta = e.meta-key
+               = obj-id
+            }
+
+      path = '{ch.path}/#{obj-id}'
+      ch.master.channels[path] = [@]
+
+   dispatch(m and {command => match}) =
+      .replace ->
+         node = fmt(@, m.format or .html, m.content or m.contents, m)
+         @innerHTML = node.innerHTML
+      .highlight ->
+         if m.color is undefined:
+            m.color = .yellow
+         color = m.color or 'transparent'
+         @style.backgroundColor = color
+      .style ->
+         style = match m.style:
+            null? ->
+               ""
+            String? s ->
+               s
+            else ->
+               throw Error('TODO: support style dictionary')
+         print style
+         @style.css-text = style
+      else ->
+         throw Error('Unknown command: {m.command}')
+
+
+jsclass TabbedView < BucheElement:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
       @active = {}
@@ -151,7 +199,7 @@ jsclass TabbedView < Custom:
    }
 
 
-jsclass CodeSnippet < Custom:
+jsclass CodeSnippet < BucheElement:
    setup() =
       @filename = @get-attribute('src')
       try:
@@ -259,5 +307,6 @@ jsclass CodeSnippet < Custom:
 provide:
    {=} as channels
    {"repl-object" = ReplObject
+    "i-box" = IBox
     "tabbed-view" = TabbedView
     "code-snippet" = CodeSnippet} as components

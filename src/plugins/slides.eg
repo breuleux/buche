@@ -3,7 +3,8 @@ require:
    /dom
    jquery as jq
    buche-tools -> Channel
-   ..components -> CustomShadow
+   ..components ->
+      BucheElement
    ..format ->
       format as fmt
 
@@ -33,7 +34,10 @@ jsclass SlidesChannel < Channel:
       @element.clear()
 
 
-jsclass SlidesChannelElement < CustomShadow:
+jsclass SlidesChannelElement < BucheElement:
+
+   requires-shadow() =
+      true
 
    setup() =
       @is-setup = true
@@ -67,7 +71,7 @@ jsclass SlidesChannelElement < CustomShadow:
                ">>"
                onclick(e) =
                   @select(@area.child-nodes.length - 1)
-      @area = dom with
+      @area and @target-element = dom with
          div.slides-area %
             @child-nodes each x -> x
       @overlay-area = dom with
@@ -156,18 +160,18 @@ jsclass SlidesChannelElement < CustomShadow:
 
    add(child, kind = .log) =
       wrapped-child = dom(div[^'.{kind}'] % child)
-      if @area:
-         @area.append-child(wrapped-child)
-         nchildren = @area.child-nodes.length
-         if @active == nchildren - 2:
-            @select(nchildren - 1)
-         else:
-            @update-counter()
+      @area.append-child(wrapped-child)
+      nchildren = @area.child-nodes.length
+      if @active == nchildren - 2:
+         @select(nchildren - 1)
       else:
-         super.append-child(wrapped-child)
+         @update-counter()
 
    append-child(child) =
-      @add(child)
+      if @target-element:
+         @add(child)
+      else:
+         super.append-child(child)
 
 
 provide:

@@ -42,4 +42,4 @@ format(ch, fmt, text, options, message) =
       fields = items(m) each {k, v} when v is fmt -> k
       throw new BucheError(___, message or options, {= fields}) with
          'Unknown format: "{fmt}"'
-   return formatter(ch, text, options, message)
+   return formatter(ch, text, options)
