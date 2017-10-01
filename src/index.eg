@@ -13,15 +13,16 @@ require:
 var main-window = null
 var proc = null
 
+options =
+   chain commander:
+     @version(version)
+     @option('--dev', 'Open developer console.')
+     @option('-c, --cmd [command]', 'Command to execute.')
+     @option('--tee [file]', 'File to log the command\'s stdout to.')
+     @option('--inspect', 'Print stdout and stdin.')
+     @parse(process.argv)
+
 create-window() =
-   options =
-      chain commander:
-        @version(version)
-        @option('--dev', 'Open developer console.')
-        @option('-c, --cmd [command]', 'Command to execute.')
-        @option('--tee [file]', 'File to log the command\'s stdout to.')
-        @option('--inspect', 'Print stdout and stdin.')
-        @parse(process.argv)
 
    cmd =
       if options.cmd:

@@ -7,7 +7,7 @@ var root = path.join(__dirname, '..');
 
 cp.execFileSync(
     path.join(root, '/node_modules/.bin/electron'),
-    [path.join(root, 'lib/index.js')].concat(process.argv.slice(1)),
+    [path.join(root, 'lib/index.js')].concat(process.argv.slice(2)),
     {
         stdio: [process.stdin, process.stdout, process.stderr]
     }
