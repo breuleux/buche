@@ -47,7 +47,7 @@ jsclass LogChannelElement < BucheElement:
    setup() =
       @is-setup = true
       @scrolled-down = true
-      @has-input = @get-attribute('input') == "true"
+      @has-input = @get-attribute('input') !== null
 
    eg-template() =
       @scrolled-down = true
