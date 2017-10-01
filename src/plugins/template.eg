@@ -15,6 +15,8 @@ jsclass TemplateChannel < Channel:
 
    make-element() =
       d = dom(div %)
+      d.style.width = "100%"
+      d.style.height = "100%"
       shadow = d.attach-shadow(mode = .open)
       contents = @options.contents or fs.read-file-sync(@options.src, .utf8)
       shadow.innerHTML = contents
@@ -24,9 +26,13 @@ jsclass TemplateChannel < Channel:
    setup() =
       @element.shadow.query-selector-all('channel') each chelem ->
          attrs = object with chelem.attributes each attr ->
-            {attr.node-name, attr.node-value}
+            unhyph = attr.node-name.replace(R.g"\-([a-z])") with
+               {_, x} -> x.to-upper-case()
+            val = if{attr.node-value is "", true, attr.node-value}
+            {unhyph, val}
          attrs.path = '{@path}/{attrs.path}'
          ch = @master.construct(@, attrs.type, attrs)
+         @register-channel(ch)
          chelem.parent-node.replace-child(ch.element, chelem)
 
    add-channel(ch) =
