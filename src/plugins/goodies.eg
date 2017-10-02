@@ -9,6 +9,11 @@ require:
       format as fmt
 
 
+provide:
+   TabbedView
+   TabDataX
+
+
 globals:
    Text
 
@@ -58,8 +63,13 @@ jsclass IBox < BucheElement:
       .highlight ->
          if m.color is undefined:
             m.color = .yellow
-         color = m.color or 'transparent'
-         @style.backgroundColor = color
+         color = match m.color:
+            undefined? -> .yellow
+            null? -> .transparent
+            c -> c
+         to-hl = if{m.children, @child-nodes, {@}}
+         to-hl each x ->
+               x.style.backgroundColor = color
       .style ->
          style = match m.style:
             null? ->
@@ -68,16 +78,57 @@ jsclass IBox < BucheElement:
                s
             else ->
                throw Error('TODO: support style dictionary')
-         print style
          @style.css-text = style
       else ->
          throw Error('Unknown command: {m.command}')
 
 
+class TabDataX:
+   constructor(@tabbed-view, tab, pane, @initial-active, @order) =
+      @tab =
+         if tab.tag-name !== 'TAB':
+            dom with tab % tab
+         else:
+            tab
+      @pane =
+         if pane.tag-name !== 'PANE':
+            dom with pane % pane
+         else:
+            pane
+      sel(e) =
+         e.stop-propagation()
+         additive =
+            if @tabbed-view.sticky:
+               not e.shift-key
+            else:
+               e.shift-key
+         @tabbed-view.select(@, additive)
+      @tab.query-selector-all('*') each child ->
+         ;; Disable children's existing click events.
+         child.onclick = sel
+      @tab.onclick = sel
+
+   activate() =
+      @tab.class-list.add(.active)
+      @pane.class-list.add(.active)
+      @active = true
+      @tabbed-view.active.push(@)
+
+   deactivate() =
+      @tab.class-list.remove(.active)
+      @pane.class-list.remove(.active)
+      @active = false
+      @tabbed-view.active =
+         @tabbed-view.active each a when a !== [@] -> a
+
+
 jsclass TabbedView < BucheElement:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
+      @sticky = @get-attribute('sticky') !== null
       @active = {}
+      @nchannels = 0
+      @specs = {}
 
    select(spec, add-to-active = false) =
       if @active.length > 0 and not add-to-active:
@@ -88,57 +139,89 @@ jsclass TabbedView < BucheElement:
       else:
          spec.activate()
 
+   install(spec) =
+      var idx = 0
+      while @specs[idx] and @specs[idx].order <= spec.order:
+         idx += 1
+
+      if idx == @specs.length:
+         @tabs.append-child(spec.tab)
+         @panes.append-child(spec.pane)
+      else:
+         prev = @specs[idx]
+         @tabs.insert-before(spec.tab, prev.tab)
+         @panes.insert-before(spec.pane, prev.pane)
+      @specs.splice(idx, 0, spec)
+
+      if spec.initial-active:
+         spec.activate()
+
+   acquire(match node) =
+      String? tc and match is tc ->
+         R"^[ \n]*$"? ->
+            pass
+         else ->
+            @messages.append-child(dom with tc)
+      {tag-name => match} ->
+         .VIEW ->
+            {tab, pane} = node.child-nodes each x when not Text? x -> x
+            active = node.get-attribute('active') !== null
+            Number! order = node.get-attribute('order') or 1000
+            data = TabDataX(@, tab, pane, active, order)
+            @install(data)
+         .STYLE or .LINK ->
+            @add-resource(node)
+         else ->
+            @messages.append-child(node)
+
    eg-template(children) =
-      anchor-tag = '.tabs-{@anchor}'
-      datas = {}
-      tabs = {}
-      panes = {}
 
-      messages = {}
-      rest = {}
+      @messages = dom with
+         div.tabbed-view-globals %
+      @tabs = dom with
+         div.tabbed-view-tabs %
+      @panes = dom with
+         div.tabbed-view-panes %
 
-      children each match node ->
-         String? tc and match is tc ->
-            R"^[ \n]*$"? ->
-               pass
-            else ->
-               messages.push(tc)
-         {tag-name => match} ->
-            .VIEW ->
-               data = TabData(@)
-               {data.tab, data.pane} = node.child-nodes each x when not Text? x -> x
-               sel(e) = @select(data, e.shift-key)
-               data.tab.query-selector-all('*') each child ->
-                  ;; Disable children's existing click events.
-                  child.onclick = sel
-               data.tab.onclick = sel
-               datas.push(data)
-               tabs.push(data.tab)
-               panes.push(data.pane)
-               if node.get-attribute('active') !== null:
-                  data.activate()
-            .STYLE or .LINK ->
-               rest.push(node)
-            else ->
-               messages.push(node)
+      children each child -> @acquire(child)
 
       if @active.length == 0:
-         datas[0]??.activate()
+         @specs[0]??.activate()
 
-      div.tabbed-view-holder[^anchor-tag] %
-         rest
-         div.tabbed-view-tabs %
-            tabs
-         if messages.length > 0:
-            then:
-               div.tabs-global %
-                  messages
-            else:
-               ""
-         div.tabbed-view-panes %
-            panes
 
-   css() = {
+      if @anchor is .left or @anchor is .top:
+         div.tabbed-view-holder %
+            @tabs
+            @messages
+            @panes
+      else:
+         div.tabbed-view-holder %
+            @panes
+            @messages
+            @tabs
+
+   css() =
+      tab-loc =
+         if @anchor is 'left' or @anchor is 'right': {
+            ".tabbed-view-holder " = {
+               flex-direction = .row
+               width = "100px"
+            }
+            ".tabbed-view-tabs " = {
+               flex-direction = "column"
+            }
+         }
+         else: {
+            ".tabbed-view-holder " = {
+               flex-direction = .column
+            }
+            ".tabbed-view-tabs " = {
+               flex-direction = "row"
+            }
+         }
+      @basic-css() & tab-loc
+
+   basic-css() = {
 
       "tabbed-view" = {
          display = "inline-block"
@@ -146,15 +229,17 @@ jsclass TabbedView < BucheElement:
 
       ".tabbed-view-holder" = {
          display = "flex"
-         flex-direction = "column"  ;; use anchor
       }
 
       ".tabbed-view-tabs" = {
          display = "flex"
-         flex-direction = "row"
          flex-wrap = "wrap"
          overflow = "auto"
          border = "1px solid black"
+      }
+
+      ".tabbed-view-holder tab > *" = {
+         display = "inline-block"
       }
 
       ".tabbed-view-holder tab" = {
@@ -164,7 +249,6 @@ jsclass TabbedView < BucheElement:
          padding = "0px 2px 0px 2px"
          border = "1px solid black"
          user-select = "none"
-         ;; background = "yellow"
       }
 
       ".tabbed-view-holder tab.active" = {
@@ -176,11 +260,15 @@ jsclass TabbedView < BucheElement:
          border = "1px solid black"
          padding = "2px"
          border-top = "none"
+         border-bottom = "none"
       }
 
       ".tabbed-view-panes" = {
          display = "flex"
-         flex-direction = "row"
+         flex-direction =
+            if @anchor in {.left, .right}:
+               then: .column
+               else: .row
          flex = "1"
          overflow = "auto"
       }
@@ -190,11 +278,17 @@ jsclass TabbedView < BucheElement:
          padding = "2px"
          flex = "1"
          border = "1px solid black"
-         border-top = "none"
+         ;; border-top = "none"
+         height = "100%"
+         overflow = "auto"
       }
 
       ".tabbed-view-panes > .active" = {
          display = "block"
+      }
+
+      ".tabbed-view-holder > .tabbed-view-globals:empty" = {
+         display = 'none'
       }
    }
 
