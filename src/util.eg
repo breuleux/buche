@@ -39,7 +39,7 @@ format-buche-exception(@) =
 
 buche-exception-message(bexc, path = '/buche-errors') = {
    command = .log
-   kind = .error
+   gutter = .error
    = path
    format = .html
    contents = html(format-buche-exception(bexc))

@@ -28,7 +28,7 @@ jsclass SlidesChannel < Channel:
          @element.overlay-area.innerHTML = ""
          @element.overlay-area.append-child(dom(element))
       else:
-         @element.add(element, m.kind or .log)
+         @element.add(element)
 
    dispatch_clear(m) =
       @element.clear()
@@ -158,8 +158,8 @@ jsclass SlidesChannelElement < BucheElement:
    update-counter() =
       @counter.innerHTML = '{@active + 1} / {@area.child-nodes.length}'
 
-   add(child, kind = .log) =
-      wrapped-child = dom(div[^'.{kind}'] % child)
+   add(child) =
+      wrapped-child = dom(child)
       @area.append-child(wrapped-child)
       nchildren = @area.child-nodes.length
       if @active == nchildren - 2:

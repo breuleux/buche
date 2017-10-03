@@ -19,13 +19,13 @@ for line in sys.stdin:
     if code.strip() == '':
         continue
     buche(command='log', contents=code, format='pre',
-          kind='echo', path=data['path'])
+          gutter='echo', path=data['path'])
     try:
         try:
             buche(command='log', path='/log', format='pre',
-                  contents=repr(eval(code)), kind='result')
+                  contents=repr(eval(code)), gutter='result')
         except SyntaxError:
             exec(code)
     except Exception as exc:
         buche(command='log', path='/log', format='pre',
-              contents=repr(exc), kind='error')
+              contents=repr(exc), gutter='error')

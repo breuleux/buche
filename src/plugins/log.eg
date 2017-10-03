@@ -33,7 +33,7 @@ jsclass LogChannel < Channel:
          @element.overlay-area.innerHTML = ""
          @element.overlay-area.append-child(dom(element))
       else:
-         @element.add(element, m.kind or .log)
+         @element.add(element, m.gutter or .log)
 
    dispatch_clear(m) =
       @element.clear()
@@ -188,8 +188,8 @@ jsclass LogChannelElement < BucheElement:
       }
    }
 
-   add(child, kind = .log) =
-      wrapped-child = dom(div[^'.{kind}'] % child)
+   add(child, gutter = .log) =
+      wrapped-child = dom(div[^'.{gutter}'] % child)
       @area.append-child(wrapped-child)
       if @scrolled-down:
          set-timeout(f, 0) where f() =
