@@ -18,21 +18,6 @@ globals:
    Text
 
 
-jsclass ReplObject < BucheElement:
-   setup() =
-      @onclick(e) =
-         e.stop-propagation()
-         ch = @get-channel()
-         if ch:
-            ch.write with {
-               command = .click
-               shift = e.shift-key
-               ctrl = e.ctrl-key
-               alt = e.alt-key
-               obj-id = @get-attribute('obj-id')
-            }
-
-
 jsclass IBox < BucheElement:
    setup() =
       @style.display = 'inline-block'
@@ -405,7 +390,6 @@ jsclass CodeSnippet < BucheElement:
 
 provide:
    {=} as channels
-   {"repl-object" = ReplObject
-    "i-box" = IBox
+   {"i-box" = IBox
     "tabbed-view" = TabbedView
     "code-snippet" = CodeSnippet} as components
