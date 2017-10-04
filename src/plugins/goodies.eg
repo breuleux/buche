@@ -35,6 +35,7 @@ jsclass ReplObject < BucheElement:
 
 jsclass IBox < BucheElement:
    setup() =
+      @style.display = 'inline-block'
       ch = @get-channel()
       obj-id = @get-attribute('obj-id')
       @onclick(e) =
@@ -357,6 +358,10 @@ jsclass CodeSnippet < BucheElement:
    }
 
    css() = {
+      "code-snippet" = {
+         display = .block
+      }
+
       "code.filename" = {
          display = .block
          background = '#e8e8e8'
