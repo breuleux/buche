@@ -52,6 +52,11 @@ jsclass SlidesChannelElement < BucheElement:
       Number! @limit = @get-attribute('limit') or Infinity
       @len = 0
 
+   setup-end() =
+      if @input:
+         set-timeout((-> ___), 0) with
+            @input.focus()
+
    eg-template() =
       @active = -1
       @counter = dom with

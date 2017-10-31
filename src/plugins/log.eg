@@ -58,6 +58,11 @@ jsclass LogChannelElement < BucheElement:
       Number! @limit = @get-attribute('limit') or Infinity
       @len = 0
 
+   setup-end() =
+      if @input:
+         set-timeout((-> ___), 0) with
+            @input.focus()
+
    eg-template() =
       @scrolled-down = true
       @area and @target-element = dom with
