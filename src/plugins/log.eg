@@ -21,6 +21,11 @@ jsclass LogChannel < Channel:
                   contents = e.target.value
                }
                e.target.value = ""
+            limit =
+               match @options.limit:
+                  undefined? -> 1000
+                  === false -> -1
+                  lim -> lim
       if @options.has-input:
          d.set-attribute('input', 'input')
       d
@@ -50,6 +55,8 @@ jsclass LogChannelElement < BucheElement:
       @is-setup = true
       @scrolled-down = true
       @has-input = @get-attribute('input') !== null
+      Number! @limit = @get-attribute('limit') or Infinity
+      @len = 0
 
    eg-template() =
       @scrolled-down = true
@@ -193,6 +200,10 @@ jsclass LogChannelElement < BucheElement:
    add(child, gutter = .log) =
       wrapped-child = dom(div[^'.{gutter}'] % child)
       @area.append-child(wrapped-child)
+      @len += 1
+      while @len > @limit:
+         @area.remove-child(@area.child-nodes[0])
+         @len -= 1
       if @scrolled-down:
          set-timeout(f, 0) where f() =
             @jqarea.scroll-top(@area.scroll-height)

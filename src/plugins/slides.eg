@@ -12,7 +12,7 @@ require:
 jsclass SlidesChannel < Channel:
 
    make-element() =
-      dom with
+      d = dom with
          channel-slides %
             onsubmit(e) =
                @write with {
@@ -20,7 +20,14 @@ jsclass SlidesChannel < Channel:
                   contents = e.target.value
                }
                e.target.value = ""
-            input = @options.has-input
+            limit =
+               match @options.limit:
+                  undefined? -> 10
+                  === false -> -1
+                  lim -> lim
+      if @options.has-input:
+         d.set-attribute('input', 'input')
+      d
 
    dispatch_log(m) =
       element = fmt(@, m.format or .text, m.content or m.contents, m)
@@ -41,7 +48,9 @@ jsclass SlidesChannelElement < BucheElement:
 
    setup() =
       @is-setup = true
-      @has-input = @get-attribute('input') == "true"
+      @has-input = @get-attribute('input') !== null
+      Number! @limit = @get-attribute('limit') or Infinity
+      @len = 0
 
    eg-template() =
       @active = -1
@@ -161,9 +170,17 @@ jsclass SlidesChannelElement < BucheElement:
    add(child) =
       wrapped-child = dom(child)
       @area.append-child(wrapped-child)
-      nchildren = @area.child-nodes.length
-      if @active == nchildren - 2:
-         @select(nchildren - 1)
+      @len += 1
+      while @len > @limit:
+         ;; TODO: always keep active slide
+         @area.remove-child(@area.child-nodes[0])
+         @len -= 1
+         if @active > 0:
+            @active -= 1
+         else:
+            @select(@active)
+      if @active == @len - 2:
+         @select(@len - 1)
       else:
          @update-counter()
 
@@ -177,4 +194,3 @@ jsclass SlidesChannelElement < BucheElement:
 provide:
    {slides = SlidesChannel} as channels
    {"channel-slides" = SlidesChannelElement} as components
-
