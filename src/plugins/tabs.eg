@@ -14,10 +14,12 @@ default-log-tab = '_'
 jsclass TabsChannel < Channel:
 
    make-element() =
-      dom with
+      d = dom with
          channel-tabs %
             anchor = @options.anchor or .top
-            sticky = @options.sticky or false
+      if @options.sticky:
+         d.set-attribute('sticky', 'sticky')
+      d
 
    setup() =
       @log-tab = @options.log-tab or default-log-tab

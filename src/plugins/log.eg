@@ -13,7 +13,7 @@ require:
 jsclass LogChannel < Channel:
 
    make-element() =
-      dom with
+      d = dom with
          channel-log %
             onsubmit(e) =
                @write with {
@@ -21,7 +21,9 @@ jsclass LogChannel < Channel:
                   contents = e.target.value
                }
                e.target.value = ""
-            input = @options.has-input
+      if @options.has-input:
+         d.set-attribute('input', 'input')
+      d
 
    dispatch_log(m) =
       content = m.content or m.contents
