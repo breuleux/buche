@@ -14,15 +14,16 @@
   "dependencies": {
     "bokehjs": "^0.12.6",
     "buche-tools": "^0.1.0",
-    "commander": "^2.9.0",
     "decamelize": "^1.2.0",
     "earlgrey-runtime": "^0.1.0",
     "electron": "^1.4.15",
     "highlight.js": "^9.12.0",
     "jquery": "^2.2.4",
     "marked": "^0.3.6",
+    "minimist": "^1.2.0",
     "open": "0.0.5",
     "quaint": "^0.1.1",
+    "shell-escape": "^0.2.0",
     "tslib": "^1.7.1"
   },
   "devDependencies": {

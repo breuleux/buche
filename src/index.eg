@@ -4,7 +4,8 @@ require:
       app, BrowserWindow, ipc-main
    fs
    path
-   commander
+   minimist
+   shell-escape
    child_process ->
       spawn
    open
@@ -13,14 +14,46 @@ require:
 var main-window = null
 var proc = null
 
-options =
-   chain commander:
-     @version(version)
-     @option('--dev', 'Open developer console.')
-     @option('-c, --cmd [command]', 'Command to execute.')
-     @option('--tee [file]', 'File to log the command\'s stdout to.')
-     @option('--inspect', 'Print stdout and stdin.')
-     @parse(process.argv)
+usage = """
+Usage: buche [options] [command]
+
+Options:
+
+  -V, --version        Output the version number.
+  --dev                Open developer console.
+  --tee [file]         File to log the command's stdout to.
+  --inspect            Print stdout and stdin.
+  -h, --help           Output usage information.
+"""
+
+options = parse-options(process.argv[2...]) where parse-options(argv) =
+   var help = false
+   config = {
+      boolean = {'dev', 'inspect', 'version', 'help'}
+      string = {'tee'}
+      alias = {
+         v = .version
+         h = .help
+         t = .tee
+      }
+      stop-early = true
+      unknown(match x) =
+         R"^-"? ->
+            console.error('Unknown option: {x}')
+            help = true
+            false
+         else ->
+            true
+   }
+   opts = minimist(argv, config)
+   if help or opts.help:
+      console.error(usage)
+      process.exit(1)
+   opts.cmd = match opts._:
+      {cmd} -> cmd
+      args -> shell-escape(args)
+   opts
+
 
 create-window() =
 
@@ -99,4 +132,3 @@ app.on("window-all-closed") with {} ->
 app.on(.activate) with {} ->
    if main-window === null:
       create-window()
-
