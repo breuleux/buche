@@ -2,7 +2,7 @@
 // Each command's output can be nested into its own tab with the syntax
 // tab_name:command.
 
-// buche -c "node multiplex.js 'demo:python -u demo.py' 'plot:python -u plot.py' 'repl:python3 -u pyrepl.py'"
+// buche node multiplex.js 'demo:python -u demo.py' 'plot:python -u plot.py' 'repl:python3 -u pyrepl.py'
 
 let {spawn} = require('child_process');
 

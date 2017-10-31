@@ -1,6 +1,6 @@
 # Live plotting.
 
-# buche --inspect -c 'python -u plot.py'
+# buche --inspect python -u plot.py
 
 import time
 import math

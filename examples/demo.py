@@ -1,6 +1,6 @@
 # A simple demo.
 
-# buche --inspect -c 'python -u demo.py'
+# buche --inspect python -u demo.py
 
 import json
 

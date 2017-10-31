@@ -1,7 +1,7 @@
 # Python interactive interpreter. Requires the buche package and
 # Python >=3.6
 
-# buche --inspect -c 'python3 -u pyrepl_nice.py'
+# buche --inspect python3 -u pyrepl_nice.py
 
 import json
 import sys

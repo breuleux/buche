@@ -1,7 +1,7 @@
 # Python interactive interpreter. Doesn't seem to work with Python 2,
 # if you know why, let me know (probably some stdin buffering nonsense).
 
-# buche --inspect -c 'python3 -u pyrepl.py'
+# buche --inspect python3 -u pyrepl.py
 
 import json
 import sys

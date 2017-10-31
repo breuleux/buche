@@ -1,6 +1,6 @@
 # Showcase various tab layouts.
 
-# buche --inspect -c 'python3 tabular.py'
+# buche --inspect python3 tabular.py
 
 import json
 
