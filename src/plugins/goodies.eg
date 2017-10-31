@@ -20,7 +20,6 @@ globals:
 
 jsclass IBox < BucheElement:
    setup() =
-      @style.display = 'inline-block'
       ch = @get-channel()
       obj-id = @get-attribute('obj-id')
       @onclick(e) =
@@ -67,6 +66,12 @@ jsclass IBox < BucheElement:
          @style.css-text = style
       else ->
          throw Error('Unknown command: {m.command}')
+
+   css() = {
+      "i-box" = {
+         display = 'inline-block'
+      }
+   }
 
 
 class TabDataX:
