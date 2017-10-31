@@ -15,6 +15,8 @@ _ = None
 log = buche.open_log('log', hasInput=True)
 log.markdown('**Enter Python code in the input box at the bottom!**')
 
+code_globals = globals()
+
 @reader.on_input
 def repl_line(event, message):
     code = message.contents
@@ -23,9 +25,9 @@ def repl_line(event, message):
     log.pre(code, gutter='echo')
     try:
         try:
-            log.show(eval(code), gutter='result')
+            log.show(eval(code, code_globals), gutter='result')
         except SyntaxError:
-            exec(code)
+            exec(code, code_globals)
     except Exception as exc:
         log.show(exc, gutter='error')
 
