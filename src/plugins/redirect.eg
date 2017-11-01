@@ -18,5 +18,6 @@ jsclass RedirectChannel < Channel:
 
 
 provide:
+   true as is-buche-plugin
    {redirect = RedirectChannel} as channels
    {=} as components

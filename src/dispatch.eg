@@ -2,13 +2,6 @@
 require:
    events -> EventEmitter
    buche-tools -> BucheError
-   .plugins/log
-   .plugins/tabs
-   .plugins/redirect
-   .plugins/plot
-   .plugins/slides
-   .plugins/template
-   .plugins/goodies
    .registry ->
       load-plugin, channel-constructors
    .util ->
@@ -21,13 +14,14 @@ globals:
    document
 
 
-load-plugin(log)
-load-plugin(tabs)
-load-plugin(redirect)
-load-plugin(plot)
-load-plugin(slides)
-load-plugin(template)
-load-plugin(goodies)
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Load default plugins ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+{.nil, .redirect, .goodies
+ .log, .tabs, .slides, .template} each default-plugin ->
+   load-plugin{default-plugin}
 
 
 buche-error-channel = '/!buche-errors'
@@ -76,11 +70,29 @@ class RootDispatcher < EventEmitter:
 
    construct(parent-channel, type, options) =
       cls = channel-constructors[type]
+      if not cls:
+         return @construct(parent-channel, 'nil') with options & {
+            message = '''
+            <p>Failed to open channel of type <b>{type}</b></p>
+
+            <p>That channel may be available as a plugin. If that plugin
+            is installed, you may be able to use it by printing out this
+            JSON command before opening the channel:</p>
+
+            <pre>\{"command": "require", "path": "/", "pluginName": "{type}"\}</pre>
+
+            <p>This assumes the plugin name is the same as the channel.</p>
+
+            <p>If the plugin is not installed, try to install it with the
+            following command:</p>
+
+            <pre>npm install -g buche-{type}</pre>
+            '''
+            format = .html
+         }
       ch = new cls(@, options)
       if parent-channel is null:
          @target.append-child(ch.element)
-      else:
-         parent-channel.add-channel(ch, options)
       expr-value @channels[options.path] = ch
 
    dispatch(message) =
@@ -94,6 +106,10 @@ class RootDispatcher < EventEmitter:
             return
 
       try:
+         if message.command is 'require':
+            load-plugin(message.plugin-name)
+            return
+
          path = message.path
          if @intercepts[message.command]:
             hierarchy(path) each p ->

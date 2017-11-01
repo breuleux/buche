@@ -100,6 +100,6 @@ jsclass PlotChannel < Channel:
 
 
 provide:
+   true as is-buche-plugin
    {plot = PlotChannel} as channels
    {=} as components
-

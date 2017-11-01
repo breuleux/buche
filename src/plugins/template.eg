@@ -40,5 +40,6 @@ jsclass TemplateChannel < Channel:
 
 
 provide:
+   true as is-buche-plugin
    {template = TemplateChannel} as channels
    {=} as components

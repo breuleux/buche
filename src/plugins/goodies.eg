@@ -394,6 +394,7 @@ jsclass CodeSnippet < BucheElement:
 
 
 provide:
+   true as is-buche-plugin
    {=} as channels
    {"i-box" = IBox
     "tabbed-view" = TabbedView

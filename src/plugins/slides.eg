@@ -197,5 +197,6 @@ jsclass SlidesChannelElement < BucheElement:
 
 
 provide:
+   true as is-buche-plugin
    {slides = SlidesChannel} as channels
    {"channel-slides" = SlidesChannelElement} as components

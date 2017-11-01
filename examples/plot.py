@@ -9,6 +9,7 @@ import json
 def buche(**args):
     print(json.dumps(args))
 
+buche(command='require', path='/', pluginName='plot')
 buche(command='open', path='/plot', type='plot', title='Trigonometry')
 
 for i in range(0, 1000):

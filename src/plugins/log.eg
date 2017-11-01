@@ -221,5 +221,6 @@ jsclass LogChannelElement < BucheElement:
 
 
 provide:
+   true as is-buche-plugin
    {log = LogChannel} as channels
    {"channel-log" = LogChannelElement} as components

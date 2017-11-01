@@ -225,5 +225,6 @@ jsclass TabsChannelElement < CustomShadow:
 
 
 provide:
+   true as is-buche-plugin
    {tabs = TabsChannel} as channels
    {"channel-tabs" = TabsChannelElement} as components

@@ -10,14 +10,31 @@ globals:
    document
 
 
+rq = require
 channel-constructors = {=}
 channel-elements = {=}
 
 
-load-plugin(p) =
-   channel-constructors &: (p.channels or {=})
-   items(p.components or {=}) each {name, cls} ->
-      document.register-element(name, cls)
+require-plugin(p) =
+   candidates = {'./plugins/{p}', 'buche-{p}'}
+   for candidate of candidates:
+      try:
+         return rq(candidate)
+      catch _:
+         pass
+   throw Error('Cannot find plugin "{p}". Try: `npm install -g buche-{p}`')
+
+
+load-plugin(match p) =
+   String? ->
+      plugin = require-plugin(p)
+      load-plugin(plugin)
+   else ->
+      if not p.is-buche-plugin:
+         throw Error('"{p}" is not a valid Buche plugin.')
+      channel-constructors &: (p.channels or {=})
+      items(p.components or {=}) each {name, cls} ->
+         document.register-element(name, cls)
 
 
 register-element(name, cls) =
