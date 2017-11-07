@@ -3,6 +3,8 @@ require:
    /dom
    ..components ->
       CustomShadow, TabData
+   .goodies ->
+      TabbedView, TabDataX
    buche-tools -> Channel
    ..util -> join
    ..format -> format as fmt
@@ -50,6 +52,38 @@ jsclass TabsChannel < Channel:
       {type = .tabs, anchor = @options.anchor}
 
 
+jsclass TabsChannelElementX < TabbedView:
+
+   requires-shadow() =
+      true
+
+   setup-end() =
+      super.setup-end()
+      @tabs.class-list.add(.hide)
+
+   add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
+      data = TabDataX(@, tab-elem, pane-elem, false, order)
+      @install(data)
+      if @specs.length > 1 or tab-name != @channel.log-tab:
+         @tabs.class-list.remove(.hide)
+      if @active.length == 0:
+         @specs[0]??.activate()
+
+   css() =
+      super.css() & {
+         ".tabbed-view-holder  " = {
+            width = "100%"
+            height = "100%"
+         }
+         ".tabbed-view-tabs  " = {
+            "background" = .orange
+         }
+         ".tabbed-view-tabs.hide" = {
+            "display" = .none
+         }
+      }
+
+
 jsclass TabsChannelElement < CustomShadow:
    setup() =
       @anchor = @get-attribute('anchor') or 'top'
@@ -57,6 +91,27 @@ jsclass TabsChannelElement < CustomShadow:
       @active = {}
       @nchannels = 0
       @specs = {}
+
+   select(spec, add-to-active = false) =
+      if @active.length > 0 and not add-to-active:
+         {* @active} each a ->
+            a.deactivate()
+      if add-to-active and spec.active:
+         spec.deactivate()
+      else:
+         spec.activate()
+
+   make-tab(spec) =
+      dom with
+         div.tab %
+            spec.tab-elem
+            onclick(e) =
+               additive =
+                  if @sticky is 'false':
+                     e.shift-key
+                  else:
+                     not e.shift-key
+               @select(spec, additive)
 
    eg-template() =
       anchor-tag = '.tabs-{@anchor}'
@@ -70,18 +125,6 @@ jsclass TabsChannelElement < CustomShadow:
          div.tabs-area[^anchor-tag] %
             @element-panes
             @element-select
-
-   make-tab(spec) =
-      dom with
-         div.tab %
-            spec.tab-elem
-            onclick(e) =
-               additive =
-                  if @sticky is 'false':
-                     e.shift-key
-                  else:
-                     not e.shift-key
-               @select(spec, additive)
 
    add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
       spec = TabData(@)
@@ -110,15 +153,6 @@ jsclass TabsChannelElement < CustomShadow:
       @nchannels += 1
       if @nchannels > 1 or tab-name != @channel.log-tab:
          @element-select.class-list.remove(.hide)
-
-   select(spec, add-to-active = false) =
-      if @active.length > 0 and not add-to-active:
-         {* @active} each a ->
-            a.deactivate()
-      if add-to-active and spec.active:
-         spec.deactivate()
-      else:
-         spec.activate()
 
    css() =
       tab-loc =
