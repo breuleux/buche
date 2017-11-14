@@ -1,4 +1,8 @@
 
+require:
+   path
+
+
 provide:
    channel-constructors
    channel-elements
@@ -25,7 +29,14 @@ require-plugin(p) =
    throw Error('Cannot find plugin "{p}". Try: `npm install -g buche-{p}`')
 
 
-load-plugin(match p) =
+load-plugin(match p, exact = true) =
+   String? when exact ->
+      full-path =
+         match p:
+            R"^/"? -> p
+            else -> path.join(process.cwd(), p)
+      plugin = rq(full-path)
+      load-plugin(plugin)
    String? ->
       plugin = require-plugin(p)
       load-plugin(plugin)
