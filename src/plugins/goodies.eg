@@ -4,14 +4,14 @@ require:
    "highlight.js" as hljs
    fs
    ..components ->
-      TabData, BucheElement
+      BucheElement
    ..format ->
       format as fmt
 
 
 provide:
    TabbedView
-   TabDataX
+   TabData
 
 
 globals:
@@ -74,7 +74,7 @@ jsclass IBox < BucheElement:
    }
 
 
-class TabDataX:
+class TabData:
    constructor(@tabbed-view, tab, pane, @initial-active, @order) =
       @tab =
          if tab.tag-name !== 'TAB':
@@ -158,7 +158,7 @@ jsclass TabbedView < BucheElement:
             {tab, pane} = node.child-nodes each x when not Text? x -> x
             active = node.get-attribute('active') !== null
             Number! order = node.get-attribute('order') or 1000
-            data = TabDataX(@, tab, pane, active, order)
+            data = TabData(@, tab, pane, active, order)
             @install(data)
          .STYLE or .LINK ->
             @add-resource(node)

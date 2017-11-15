@@ -2,9 +2,9 @@
 require:
    /dom
    ..components ->
-      CustomShadow, TabData
+      CustomShadow
    .goodies ->
-      TabbedView, TabDataX
+      TabbedView, TabData
    buche-tools -> Channel
    ..util -> join
    ..format -> format as fmt
@@ -52,7 +52,7 @@ jsclass TabsChannel < Channel:
       {type = .tabs, anchor = @options.anchor}
 
 
-jsclass TabsChannelElementX < TabbedView:
+jsclass TabsChannelElement < TabbedView:
 
    requires-shadow() =
       true
@@ -62,7 +62,7 @@ jsclass TabsChannelElementX < TabbedView:
       @tabs.class-list.add(.hide)
 
    add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
-      data = TabDataX(@, tab-elem, pane-elem, false, order)
+      data = TabData(@, tab-elem, pane-elem, false, order)
       @install(data)
       if @specs.length > 1 or tab-name != @channel.log-tab:
          @tabs.class-list.remove(.hide)
@@ -70,192 +70,40 @@ jsclass TabsChannelElementX < TabbedView:
          @specs[0]??.activate()
 
    css() =
-      super.css() & {
+      tab-loc =
+         if @anchor is 'left' or @anchor is 'right': {
+            ".tabbed-view-tabs  " = {
+               background = "#88f"
+               border = "none"
+            }
+         }
+         else: {
+            ".tabbed-view-tabs  " = {
+               background = "#aaf"
+               border = "none"
+            }
+         }
+      [super.css() & tab-loc] & {
          ".tabbed-view-holder  " = {
             width = "100%"
             height = "100%"
          }
-         ".tabbed-view-tabs  " = {
-            "background" = .orange
-         }
          ".tabbed-view-tabs.hide" = {
-            "display" = .none
+            display = .none
+         }
+         ".tabbed-view-panes > *  " = {
+            padding = "0px"
+            border = "none"
+         }
+         ".tabbed-view-holder tab.active  " = {
+            border = "none"
+         }
+         ".tabbed-view-holder tab  " = {
+            border = "none"
+            margin = "0px"
+            padding = "2px 4px 2px 4px"
          }
       }
-
-
-jsclass TabsChannelElement < CustomShadow:
-   setup() =
-      @anchor = @get-attribute('anchor') or 'top'
-      @sticky = @get-attribute('sticky') or 'false'
-      @active = {}
-      @nchannels = 0
-      @specs = {}
-
-   select(spec, add-to-active = false) =
-      if @active.length > 0 and not add-to-active:
-         {* @active} each a ->
-            a.deactivate()
-      if add-to-active and spec.active:
-         spec.deactivate()
-      else:
-         spec.activate()
-
-   make-tab(spec) =
-      dom with
-         div.tab %
-            spec.tab-elem
-            onclick(e) =
-               additive =
-                  if @sticky is 'false':
-                     e.shift-key
-                  else:
-                     not e.shift-key
-               @select(spec, additive)
-
-   eg-template() =
-      anchor-tag = '.tabs-{@anchor}'
-      @element-select = dom with div.tabs-select.hide %
-      @element-panes = dom with div.tabs-panes %
-      if @anchor is .left or @anchor is .top:
-         div.tabs-area[^anchor-tag] %
-            @element-select
-            @element-panes
-      else:
-         div.tabs-area[^anchor-tag] %
-            @element-panes
-            @element-select
-
-   add(tab-name, pane-elem, tab-elem = tab-name, order = 100) =
-      spec = TabData(@)
-      spec.tab-name = tab-name
-      spec.tab-elem = tab-elem
-      spec.pane-elem = pane-elem
-      spec.order = order
-      spec.tab = @make-tab(spec)
-      spec.pane = dom(div % pane-elem)
-
-      var idx = 0
-      while @specs[idx] and @specs[idx].order <= order:
-         idx += 1
-
-      if idx == @specs.length:
-         @element-select.append-child(spec.tab)
-         @element-panes.append-child(spec.pane)
-      else:
-         prev = @specs[idx]
-         @element-select.insert-before(spec.tab, prev.tab)
-         @element-panes.insert-before(spec.pane, prev.pane)
-      @specs.splice(idx, 0, spec)
-
-      if @active.length == 0:
-         @select(spec)
-      @nchannels += 1
-      if @nchannels > 1 or tab-name != @channel.log-tab:
-         @element-select.class-list.remove(.hide)
-
-   css() =
-      tab-loc =
-         if @anchor is 'left' or @anchor is 'right': {
-            ".tabs-area " = {
-               flex-direction = .row
-            }
-            ".tabs-select" = {
-              width = "auto"
-              height = "100%"
-              background = "#88f"
-              display = "flex"
-              flex-direction = "column"
-              overflow = "auto"
-            }
-         }
-         else: {
-            ".tabs-area " = {
-               flex-direction = .column
-            }
-            ".tabs-select" = {
-              width = "100%"
-              height = "auto"
-              background = "#aaf"
-              display = "flex"
-              flex-direction = "row"
-              overflow = "auto"
-            }
-         }
-
-      @basic-css() & tab-loc
-
-   basic-css() = {
-      ".tabs-area" = {
-         width = "100%"
-         height = "100%"
-         display = "flex"
-         flex-direction = "column"
-      }
-
-      ".tabs-select.hide" = {
-        display = "none"
-      }
-
-      ".tabs-panes" = {
-        display = .flex
-        flex-direction =
-           if @anchor in {.left, .right}:
-              then: .column
-              else: .row
-        flex = "1"
-        overflow = "auto"
-        background =
-           if @anchor in {.left, .right}:
-              then: '#88f'
-              else: '#aaf'
-        ;; margin = '0px'
-        ;; padding = '1px'
-      }
-
-      ".tab" = {
-        cursor = "pointer"
-        padding-left = "5px"
-        padding-right = "5px"
-        padding-top = "2px"
-        padding-bottom = "2px"
-        user-select = "none"
-        width =
-           if @anchor in {.left, .right}:
-              then: '100px'
-              else: 'auto'
-      }
-
-      ;; ".tabs-panes > *" = {
-      ;;   flex = '1'
-      ;;   display = "none"
-      ;;   height = "100%"
-      ;;   border-style = 'solid'
-      ;;   border-color = 'black'
-      ;;   border-width = '0px'
-      ;;   border-width =
-      ;;      if @anchor in {.left, .right}:
-      ;;         then: '0px 0px 1px 0px'
-      ;;         else: '0px 1px 0px 0px'
-      ;; }
-
-      ".tabs-panes > *" = {
-        flex = '1'
-        display = "none"
-        height = "100%"
-        ;; margin = '1px'
-        background = 'white'
-        overflow = .auto
-      }
-
-      ".tabs-panes > .active" = {
-        display = "block"
-      }
-
-      ".tab.active" = {
-        background = "white"
-      }
-   }
 
 
 provide:
