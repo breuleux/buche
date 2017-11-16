@@ -10,7 +10,8 @@ require:
       spawn
    open
    ..package -> version
-   .registry -> get-config
+   .registry ->
+      get-config, install-plugin, uninstall-plugin
 
 var main-window = null
 var proc = null
@@ -24,14 +25,16 @@ Options:
   --dev                Open developer console.
   --tee [file]         File to log the command's stdout to.
   --inspect            Print stdout and stdin.
+  --install plugin     Install a buche plugin.
+  --uninstall plugin   Uninstall a buche plugin.
   -h, --help           Output usage information.
 """
 
-options = parse-options(process.argv[2...]) where parse-options(argv) =
+async parse-options(argv) =
    var help = false
    config = {
       boolean = {'dev', 'inspect', 'version', 'help'}
-      string = {'tee'}
+      string = {'tee', 'install', 'uninstall'}
       alias = {
          v = .version
          h = .help
@@ -49,17 +52,24 @@ options = parse-options(process.argv[2...]) where parse-options(argv) =
    opts = minimist(argv, config)
    if help or opts.help:
       console.error(usage)
-      process.exit(1)
-   if opts.version:
+      null
+   elif opts.version:
       print 'Buche v{version}'
-      process.exit(1)
-   opts.cmd = match opts._:
-      {cmd} -> cmd
-      args -> shell-escape(args)
-   opts
+      null
+   elif opts.install:
+      await install-plugin(opts.install)
+      null
+   elif opts.uninstall:
+      await uninstall-plugin(opts.uninstall)
+      null
+   else:
+      opts.cmd = match opts._:
+         {cmd} -> cmd
+         args -> shell-escape(args)
+      opts
 
 
-create-window() =
+create-window(options) =
    config = get-config()
    
    cmd =
@@ -127,13 +137,20 @@ create-window() =
          origin.on(.end) with -> ->
             w.web-contents.send(.end)
 
-app.on('ready', create-window)
 
-app.on("window-all-closed") with {} ->
-   app.quit()
-   if proc:
-      proc.stdin.end()
+main() where async main() =
+   options = await parse-options(process.argv[2...])
 
-app.on(.activate) with {} ->
-   if main-window === null:
-      create-window()
+   if options is null:
+      process.exit(1)
+
+   app.on('ready') with _ -> create-window(options)
+
+   app.on("window-all-closed") with {} ->
+      app.quit()
+      if proc:
+         proc.stdin.end()
+
+   app.on(.activate) with {} ->
+      if main-window === null:
+         create-window(options)

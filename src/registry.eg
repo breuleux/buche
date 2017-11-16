@@ -7,12 +7,14 @@ require:
 
 
 provide:
+   config-path
+   get-config
    channel-constructors
    channel-elements
    load-plugin
+   install-plugin
+   uninstall-plugin
    register-element
-   config-path
-   get-config
 
 
 globals:
@@ -68,6 +70,26 @@ load-plugin(match p, exact = true) =
       items(p.components or {=}) each {name, cls} ->
          document.register-element(name, cls)
 
+
+async npm-instance() =
+   require: npm
+   load = promisify(npm.load)
+   await load(JSON.parse(fs.readFileSync(config-path('package.json'))))
+
+
+async install-plugin(name) =
+   npm = await npm-instance()
+   npm.prefix = config-path()
+   install = promisify(npm.install)
+   await install('buche-{name}')
+
+
+async uninstall-plugin(name) =
+   npm = await npm-instance()
+   npm.prefix = config-path()
+   uninstall = promisify(npm.uninstall)
+   await uninstall('buche-{name}')
+   
 
 register-element(name, cls) =
    channel-elements[name] = cls
