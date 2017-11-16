@@ -10,6 +10,7 @@ require:
       spawn
    open
    ..package -> version
+   .registry -> get-config
 
 var main-window = null
 var proc = null
@@ -19,7 +20,7 @@ Usage: buche [options] [command]
 
 Options:
 
-  -V, --version        Output the version number.
+  -v, --version        Output the version number.
   --dev                Open developer console.
   --tee [file]         File to log the command's stdout to.
   --inspect            Print stdout and stdin.
@@ -49,6 +50,9 @@ options = parse-options(process.argv[2...]) where parse-options(argv) =
    if help or opts.help:
       console.error(usage)
       process.exit(1)
+   if opts.version:
+      print 'Buche v{version}'
+      process.exit(1)
    opts.cmd = match opts._:
       {cmd} -> cmd
       args -> shell-escape(args)
@@ -56,7 +60,8 @@ options = parse-options(process.argv[2...]) where parse-options(argv) =
 
 
 create-window() =
-
+   config = get-config()
+   
    cmd =
       if options.cmd:
          if options.tee:

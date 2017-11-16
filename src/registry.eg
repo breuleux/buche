@@ -1,6 +1,9 @@
 
 require:
+   fs
    path
+   expand-tilde
+   mkdirp
 
 
 provide:
@@ -8,22 +11,40 @@ provide:
    channel-elements
    load-plugin
    register-element
+   config-path
+   get-config
 
 
 globals:
    document
 
 
+config-path(name='') =
+   base = expand-tilde('~/.config/buche/')
+   path.join(base, name)
+
+
+get-config() =
+   if not fs.exists-sync(config-path()):
+      mkdirp.sync(config-path())
+      mkdirp.sync(config-path('node_modules'))
+      {'package.json', 'index.js'} each file ->
+         fs.write-file-sync(config-path(file)) with
+            fs.read-file-sync(p, .utf8) where p =
+               path.join(__dirname, '../default-config', file)
+
+
 rq = require
+rquser = rq(config-path('index.js')).require
 channel-constructors = {=}
 channel-elements = {=}
 
 
 require-plugin(p) =
-   candidates = {'./plugins/{p}', 'buche-{p}'}
-   for candidate of candidates:
+   candidates = {{rq, './plugins/{p}'}, {rquser, 'buche-{p}'}}
+   candidates each {rqfn, candidate} ->
       try:
-         return rq(candidate)
+         return rqfn(candidate)
       catch _:
          pass
    throw Error('Cannot find plugin "{p}". Try: `npm install -g buche-{p}`')
