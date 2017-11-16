@@ -16,6 +16,7 @@ provide:
 
 globals:
    Text
+   CustomEvent
 
 
 jsclass IBox < BucheElement:
@@ -104,6 +105,7 @@ class TabData:
       @pane.class-list.add(.active)
       @active = true
       @tabbed-view.active.push(@)
+      @pane.dispatch-event(new CustomEvent('display', {detail = this}))
 
    deactivate() =
       @tab.class-list.remove(.active)
