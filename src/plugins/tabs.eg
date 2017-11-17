@@ -34,12 +34,11 @@ jsclass TabsChannel < Channel:
          ch.send-path = @path
          if options.order is undefined:
             options.order = 1000
-      elif options.name.starts-with('!') and options.order is undefined:
-         options.order = 10000
       tab = fmt with
          @, options.label-format or .text
          options.label or options.name, options
-      @element.add(options.name, ch.element, tab, options.order or 100)
+      ord = if{options.order is undefined, 100, options.order}
+      @element.add(options.name, ch.element, tab, ord)
       @register-channel(ch)
 
    force-channel-options(options) =
@@ -66,8 +65,9 @@ jsclass TabsChannelElement < TabbedView:
       @install(data)
       if @specs.length > 1 or tab-name != @channel.log-tab:
          @tabs.class-list.remove(.hide)
-      if @active.length == 0:
-         @specs[0]??.activate()
+      if @active.length == 0 or not @user-selected:
+         if @specs.length > 0:
+            @select(@specs[0])
 
    css() =
       tab-loc =

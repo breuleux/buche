@@ -88,6 +88,7 @@ class TabData:
          else:
             pane
       sel(e) =
+         @tabbed-view.user-selected = true
          e.stop-propagation()
          additive =
             if @tabbed-view.sticky:
@@ -117,6 +118,7 @@ class TabData:
 
 jsclass TabbedView < BucheElement:
    setup() =
+      @user-selected = false
       @anchor = @get-attribute('anchor') or 'top'
       @sticky = @get-attribute('sticky') !== null
       @active = {}
