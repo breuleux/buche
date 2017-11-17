@@ -1,0 +1,50 @@
+
+require:
+   /dom
+   buche-tools -> Channel
+   ..format -> format as fmt
+   ..registry ->
+      DelayMessage, events
+
+
+jsclass PlaceholderChannel < Channel:
+
+   make-element() =
+      dom with
+         div %
+            style = 'width:100%;height:100%'
+            div.placeholder %
+               style = 'padding:10px'
+               'Channel of type '
+               b % @options._placeholder-type
+               ' cannot be created.'
+
+   setup() =
+      @type = @options._placeholder-type
+      @channel = null
+      @token = Symbol('ph/{@type}')
+      events.once('add-channel-type-{@type}') with {cls} ->
+         @channel = new cls(@master, @options)
+         @element.innerHTML = ""
+         @element.append-child(@channel.element)
+         @master.unblock-messages(@token)
+
+   dispatch(m) =
+      if @channel is null:
+         throw DelayMessage(@token)
+      else:
+         @channel.dispatch(m)
+
+   open-channel(options) =
+      if @channel is null:
+         throw DelayMessage(@token)
+      else:
+         @channel.open-channel(options)
+
+   ;; TODO: other things to redirect?
+
+
+provide:
+   true as is-buche-plugin
+   {placeholder = PlaceholderChannel} as channels
+   {=} as components

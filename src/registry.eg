@@ -4,10 +4,13 @@ require:
    path
    expand-tilde
    mkdirp
+   events as abc -> EventEmitter
 
 
 provide:
+   events
    ImportError
+   DelayMessage
    config-path
    get-config
    channel-constructors
@@ -22,9 +25,17 @@ globals:
    document
 
 
+events = new EventEmitter()
+
+
 jsclass ImportError < Error:
    constructor(message) =
       super(message)
+
+
+class DelayMessage:
+   constructor(@token) =
+      pass
 
 
 config-path(name='') =
@@ -76,8 +87,13 @@ load-plugin(match p, exact = true) =
    else ->
       if not p.is-buche-plugin:
          throw new Error('"{p._buche_name}" is not a valid Buche plugin.')
-      channel-constructors &: (p.channels or {=})
+      items(p.channels or {=}) each {name, cls} ->
+         events.emit('add-channel-type', name, cls)
+         events.emit('add-channel-type-{name}', cls)
+         channel-constructors[name] = cls
       items(p.components or {=}) each {name, cls} ->
+         events.emit('add-component-type', name, cls)
+         events.emit('add-component-type-{name}', cls)
          document.register-element(name, cls)
 
 

@@ -3,6 +3,7 @@ require:
    events -> EventEmitter
    buche-tools -> BucheError
    .registry ->
+      DelayMessage
       ImportError, channel-constructors
       load-plugin, install-plugin
    .util ->
@@ -20,7 +21,7 @@ globals:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-{.nil, .redirect, .goodies
+{.nil, .placeholder, .redirect, .goodies
  .log, .tabs, .slides, .template} each default-plugin ->
    load-plugin(default-plugin, false)
 
@@ -51,6 +52,7 @@ class RootDispatcher < EventEmitter:
       @set-max-listeners(Infinity)
       @channels = {=}
       @intercepts = {=}
+      @delayed = {=}
 
    find-channel(path) =
       ch = @channels[path]
@@ -74,25 +76,28 @@ class RootDispatcher < EventEmitter:
    construct(parent-channel, type, options) =
       cls = channel-constructors[type]
       if not cls:
-         return @construct(parent-channel, 'nil') with options & {
-            message = '''
-            <p>Failed to open channel of type <b>{type}</b></p>
-
-            <p>That channel may be available as a plugin. If that plugin
-            is installed, you may be able to use it by printing out this
-            JSON command before opening the channel:</p>
-
-            <pre>\{"command": "require", "path": "/", "pluginName": "{type}"\}</pre>
-
-            <p>This assumes the plugin name is the same as the channel.</p>
-
-            <p>If the plugin is not installed, try to install it with the
-            following command:</p>
-
-            <pre>buche --install {type}</pre>
-            '''
-            format = .html
+         return @construct(parent-channel, 'placeholder') with options & {
+            _placeholder-type = type
          }
+         ;; return @construct(parent-channel, 'nil') with options & {
+         ;;    message = '''
+         ;;    <p>Failed to open channel of type <b>{type}</b></p>
+
+         ;;    <p>That channel may be available as a plugin. If that plugin
+         ;;    is installed, you may be able to use it by printing out this
+         ;;    JSON command before opening the channel:</p>
+
+         ;;    <pre>\{"command": "require", "path": "/", "pluginName": "{type}"\}</pre>
+
+         ;;    <p>This assumes the plugin name is the same as the channel.</p>
+
+         ;;    <p>If the plugin is not installed, try to install it with the
+         ;;    following command:</p>
+
+         ;;    <pre>buche --install {type}</pre>
+         ;;    '''
+         ;;    format = .html
+         ;; }
       ch = new cls(@, options)
       if parent-channel is null:
          @target.append-child(ch.element)
@@ -166,11 +171,19 @@ class RootDispatcher < EventEmitter:
             @open(p, c, message)
          else:
             @find-channel(path).dispatch(message)
+      catch DelayMessage? delay:
+         (@delayed[delay.token] or= {}).push(message)
       catch BucheError? err:
          @dispatch(buche-exception-message(err, buche-error-channel))
       catch Error? e:
          err = new BucheError(e.message, message, {orig-error = e})
          @dispatch(buche-exception-message(err, buche-error-channel))
+
+   unblock-messages(token) =
+      messages = @delayed[token] or {}
+      delete @delayed[token]
+      messages each m ->
+         @dispatch(m)
 
    run() =
       @source.read(m -> @dispatch(m))
