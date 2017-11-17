@@ -13,7 +13,7 @@
   "main": "./lib/index.js",
   "dependencies": {
     "bokehjs": "^0.12.6",
-    "buche-tools": "^0.1.1",
+    "buche-tools": "^0.1.2",
     "decamelize": "^1.2.0",
     "earlgrey-runtime": "^0.1.0",
     "electron": "^1.4.15",
