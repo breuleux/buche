@@ -9,6 +9,7 @@ require:
 
 provide:
    events
+   import-failures
    ImportError
    DelayMessage
    config-path
@@ -19,6 +20,7 @@ provide:
    install-plugin
    uninstall-plugin
    register-element
+   make-installer-component
 
 
 globals:
@@ -26,6 +28,9 @@ globals:
 
 
 events = new EventEmitter()
+
+
+import-failures = {=}
 
 
 jsclass ImportError < Error:
@@ -68,6 +73,7 @@ require-plugin(p) =
          if e.message !== 'Cannot find module \'{candidate}\'':
             throw e
          pass
+   import-failures[p] = true
    throw new ImportError('Cannot find plugin "{p}". Try: `buche --install {p}`')
 
 
@@ -120,3 +126,56 @@ async uninstall-plugin(name) =
 register-element(name, cls) =
    channel-elements[name] = cls
    document.register-element(name, cls)
+
+
+make-installer-component(name, message) =
+   div.install-request %
+      style % """
+         .install-request {
+            background: #eee;
+            padding: 10px;
+         }
+         .install-button {
+            padding: 5px;
+         }
+         .install-error {
+            padding: 5px;
+            color: red;
+            font-weight: bold;
+         }
+         .install-installing {
+            padding: 5px;
+         }
+         .install-done {
+            padding: 5px;
+            color: green;
+            font-weight: bold;
+         }
+      """
+      div.install-message %
+         message
+      div.install-button % button %
+         'Install'
+         method onclick(e) =
+            ;; TODO: dismiss the install button when the package is
+            ;; installed from elsewhere.
+            ;; TODO: "Retry import" button?
+            f() where async f() =
+               parent = @parent-node
+               parent.innerHTML = "Installing..."
+               parent.className = 'install-installing'
+               try:
+                  await install-plugin(name)
+                  delete import-failures[name]
+               catch e:
+                  parent.innerHTML = e.message
+                  parent.className = 'install-error'
+                  return
+               try:
+                  load-plugin(name, false)
+               catch e:
+                  parent.innerHTML = e.message
+                  parent.className = 'install-error'
+                  return
+               parent.innerHTML = "Done!"
+               parent.className = 'install-done'

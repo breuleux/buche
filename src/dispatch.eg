@@ -5,7 +5,7 @@ require:
    .registry ->
       DelayMessage
       ImportError, channel-constructors
-      load-plugin, install-plugin
+      load-plugin, make-installer-component
    .util ->
       buche-exception-message
 
@@ -137,37 +137,15 @@ class RootDispatcher < EventEmitter:
                      command = .log,
                      format = ._enode,
                      gutter = .error,
-                     content =
-                        div.install-request %
-                           div.install-message % span %
-                              'Package '
-                              b % name
-                              ' is required, '
-                              'but it is not installed. '
-                              br %
-                              'Do you want to try installing it?'
-                           div.install-button % button %
-                              'Install'
-                              method onclick(e) =
-                                 f() where async f() =
-                                    parent = @parent-node
-                                    parent.innerHTML = "Installing..."
-                                    parent.className = 'install-installing'
-                                    try:
-                                       await install-plugin(name)
-                                    catch e:
-                                       parent.innerHTML = e.message
-                                       parent.className = 'install-error'
-                                       return
-                                    try:
-                                       load-plugin(name, false)
-                                    catch e:
-                                       parent.innerHTML = e.message
-                                       parent.className = 'install-error'
-                                       return
-                                    parent.innerHTML = "Done!"
-                                    parent.className = 'install-done'
-                                 }
+                     content = make-installer-component(name) with
+                        span %
+                           'Package '
+                           b % name
+                           ' is required, '
+                           'but it is not installed. '
+                           br %
+                           'Do you want to try installing it?'
+                  }
             return
 
          path = message.path

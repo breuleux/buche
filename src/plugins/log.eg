@@ -200,27 +200,6 @@ jsclass LogChannelElement < BucheElement:
       ".buche-error tr.highlight" = {
          background = '#fdd'
       }
-
-      ".install-request" = {
-         background = "#eee"
-         padding = "10px"
-      }
-      ".install-button" = {
-         padding = "5px"
-      }
-      ".install-error" = {
-         padding = "5px"
-         color = "red"
-         font-weight = "bold"
-      }
-      ".install-installing" = {
-         padding = "5px"
-      }
-      ".install-done" = {
-         padding = "5px"
-         color = "green"
-         font-weight = "bold"
-      }
    }
 
    add(child, gutter = .log) =
