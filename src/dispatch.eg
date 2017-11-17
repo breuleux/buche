@@ -3,7 +3,8 @@ require:
    events -> EventEmitter
    buche-tools -> BucheError
    .registry ->
-      load-plugin, channel-constructors
+      ImportError, channel-constructors
+      load-plugin, install-plugin
    .util ->
       buche-exception-message
 
@@ -88,7 +89,7 @@ class RootDispatcher < EventEmitter:
             <p>If the plugin is not installed, try to install it with the
             following command:</p>
 
-            <pre>npm install -g buche-{type}</pre>
+            <pre>buche --install {type}</pre>
             '''
             format = .html
          }
@@ -112,7 +113,46 @@ class RootDispatcher < EventEmitter:
             if message.plugin-path:
                load-plugin(message.plugin-path)
             else:
-               load-plugin(message.plugin-name, false)
+               name = message.plugin-name
+               try:
+                  load-plugin(name, false)
+               catch ImportError? e:
+                  @dispatch with {
+                     path = buche-error-channel,
+                     command = .log,
+                     format = ._enode,
+                     gutter = .error,
+                     content =
+                        div.install-request %
+                           div.install-message % span %
+                              'Package '
+                              b % name
+                              ' is required, '
+                              'but it is not installed. '
+                              br %
+                              'Do you want to try installing it?'
+                           div.install-button % button %
+                              'Install'
+                              method onclick(e) =
+                                 f() where async f() =
+                                    parent = @parent-node
+                                    parent.innerHTML = "Installing..."
+                                    parent.className = 'install-installing'
+                                    try:
+                                       await install-plugin(name)
+                                    catch e:
+                                       parent.innerHTML = e.message
+                                       parent.className = 'install-error'
+                                       return
+                                    try:
+                                       load-plugin(name, false)
+                                    catch e:
+                                       parent.innerHTML = e.message
+                                       parent.className = 'install-error'
+                                       return
+                                    parent.innerHTML = "Done!"
+                                    parent.className = 'install-done'
+                                 }
             return
 
          path = message.path

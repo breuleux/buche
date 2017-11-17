@@ -7,6 +7,7 @@ require:
 
 
 provide:
+   ImportError
    config-path
    get-config
    channel-constructors
@@ -19,6 +20,11 @@ provide:
 
 globals:
    document
+
+
+jsclass ImportError < Error:
+   constructor(message) =
+      super(message)
 
 
 config-path(name='') =
@@ -47,9 +53,11 @@ require-plugin(p) =
    candidates each {rqfn, candidate} ->
       try:
          return rqfn(candidate)
-      catch _:
+      catch e:
+         if e.message !== 'Cannot find module \'{candidate}\'':
+            throw e
          pass
-   throw Error('Cannot find plugin "{p}". Try: `npm install -g buche-{p}`')
+   throw new ImportError('Cannot find plugin "{p}". Try: `buche --install {p}`')
 
 
 load-plugin(match p, exact = true) =
@@ -59,13 +67,15 @@ load-plugin(match p, exact = true) =
             R"^/"? -> p
             else -> path.join(process.cwd(), p)
       plugin = rq(full-path)
+      plugin._buche_name = p
       load-plugin(plugin)
    String? ->
       plugin = require-plugin(p)
+      plugin._buche_name = p
       load-plugin(plugin)
    else ->
       if not p.is-buche-plugin:
-         throw Error('"{p}" is not a valid Buche plugin.')
+         throw new Error('"{p._buche_name}" is not a valid Buche plugin.')
       channel-constructors &: (p.channels or {=})
       items(p.components or {=}) each {name, cls} ->
          document.register-element(name, cls)
