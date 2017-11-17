@@ -22,7 +22,7 @@ globals:
 
 
 {.nil, .placeholder, .redirect, .goodies
- .log, .tabs, .slides, .template} each default-plugin ->
+ .log, .tabs, .slides, .template, .table} each default-plugin ->
    load-plugin(default-plugin, false)
 
 
