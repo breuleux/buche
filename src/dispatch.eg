@@ -53,12 +53,22 @@ class RootDispatcher < EventEmitter:
       @channels = {=}
       @intercepts = {=}
       @delayed = {=}
+      @channel-options = {
+         buche-error-channel => {
+            type = .log
+            order = 100000
+         }
+         buche-settings-channel => {
+            type = .log
+            order = 100001
+         }
+      }
 
    find-channel(path) =
       ch = @channels[path]
       if not ch:
          {p, c} = split-end(path)
-         @open(p, c, {path = path})
+         @open(p, c, (@channel-options[path] or {=}) & {path = path})
       else:
          ch
 
@@ -167,8 +177,11 @@ class RootDispatcher < EventEmitter:
                   if ch.intercepts(message):
                      return ch.dispatch(message)
          if message.command is .open:
-            {p, c} = split-end(path)
-            @open(p, c, message)
+            if message.wait-for-message:
+               @channel-options[path] = message
+            else:
+               {p, c} = split-end(path)
+               @open(p, c, message)
          else:
             @find-channel(path).dispatch(message)
       catch DelayMessage? delay:
