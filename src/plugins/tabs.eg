@@ -38,7 +38,8 @@ jsclass TabsChannel < Channel:
          @, options.label-format or .text
          options.label or options.name, options
       ord = if{options.order is undefined, 100, options.order}
-      @element.add(options.name, ch.element, tab, ord)
+      if ch.element and not ch.hidden:
+         @element.add(options.name, ch.element, tab, ord)
       @register-channel(ch)
 
    force-channel-options(options) =
