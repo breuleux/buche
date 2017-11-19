@@ -41,13 +41,13 @@ jsclass PlaceholderChannel < Channel:
 
    dispatch(m) =
       if @channel is null:
-         throw DelayMessage(@token)
+         throw DelayMessage(@token, m)
       else:
          @channel.dispatch(m)
 
    open-channel(options) =
       if @channel is null:
-         throw DelayMessage(@token)
+         throw DelayMessage(@token, null)
       else:
          @channel.open-channel(options)
 

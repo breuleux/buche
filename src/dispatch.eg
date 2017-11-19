@@ -113,6 +113,17 @@ class RootDispatcher < EventEmitter:
          @target.append-child(ch.element)
       expr-value @channels[options.path] = ch
 
+   wrap-thunk(message, thunk) =
+      try:
+         thunk()
+      catch DelayMessage? delay:
+         (@delayed[delay.token] or= {}).push(delay.message or message)
+      catch BucheError? err:
+         @dispatch(buche-exception-message(err, buche-error-channel))
+      catch Error? e:
+         err = new BucheError(e.message, message, {orig-error = e})
+         @dispatch(buche-exception-message(err, buche-error-channel))
+
    dispatch(message) =
       {'path', 'command'} each field ->
          if not message[field]:
@@ -123,7 +134,7 @@ class RootDispatcher < EventEmitter:
             @dispatch(buche-exception-message(err, buche-error-channel))
             return
 
-      try:
+      @wrap-thunk(message, -> ___) with
          if message.command is 'require':
             if message.plugin-path:
                load-plugin(message.plugin-path)
@@ -162,19 +173,17 @@ class RootDispatcher < EventEmitter:
                @open(p, c, message)
          else:
             @find-channel(path).dispatch(message)
-      catch DelayMessage? delay:
-         (@delayed[delay.token] or= {}).push(message)
-      catch BucheError? err:
-         @dispatch(buche-exception-message(err, buche-error-channel))
-      catch Error? e:
-         err = new BucheError(e.message, message, {orig-error = e})
-         @dispatch(buche-exception-message(err, buche-error-channel))
 
    unblock-messages(token) =
       messages = @delayed[token] or {}
       delete @delayed[token]
       messages each m ->
          @dispatch(m)
+
+   schedule(channel, message, thunk) =
+      ;; TODO: smart scheduling, e.g. prioritizing channels that are
+      ;; in focus, grouping thunks, etc.
+      set-timeout(-> @wrap-thunk(message, thunk), 0)
 
    run() =
       @source.read(m -> @dispatch(m))

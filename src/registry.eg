@@ -39,7 +39,7 @@ jsclass ImportError < Error:
 
 
 class DelayMessage:
-   constructor(@token) =
+   constructor(@token, @message) =
       pass
 
 
