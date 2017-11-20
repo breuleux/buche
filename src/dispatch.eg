@@ -53,6 +53,7 @@ class RootDispatcher < EventEmitter:
       @channels = {=}
       @intercepts = {=}
       @delayed = {=}
+      @workers = {=}
       @channel-options = {
          buche-error-channel => {
             type = .log
@@ -111,6 +112,11 @@ class RootDispatcher < EventEmitter:
       ch = new cls(@, options)
       if parent-channel is null:
          @target.append-child(ch.element)
+      ch.scheduler.on('has-work') with {match has-work, priority} ->
+         true? ->
+            @workers[ch.path] = {priority, ch.scheduler}
+         false? ->
+            delete @workers[ch.path]
       expr-value @channels[options.path] = ch
 
    wrap-thunk(message, thunk) =
@@ -164,7 +170,7 @@ class RootDispatcher < EventEmitter:
             hierarchy(path) each p ->
                if @channels[p] as ch:
                   if ch.intercepts(message):
-                     return ch.dispatch(message)
+                     return ch.schedule(message)
          if message.command is .open:
             if message.wait-for-message:
                @channel-options[path] = message
@@ -172,7 +178,7 @@ class RootDispatcher < EventEmitter:
                {p, c} = split-end(path)
                @open(p, c, message)
          else:
-            @find-channel(path).dispatch(message)
+            @find-channel(path).schedule(message)
 
    unblock-messages(token) =
       messages = @delayed[token] or {}
@@ -180,13 +186,17 @@ class RootDispatcher < EventEmitter:
       messages each m ->
          @dispatch(m)
 
-   schedule(channel, message, thunk) =
-      ;; TODO: smart scheduling, e.g. prioritizing channels that are
-      ;; in focus, grouping thunks, etc.
-      set-timeout(-> @wrap-thunk(message, thunk), 0)
-
    run() =
       @source.read(m -> @dispatch(m))
+      ;; TODO: smarter scheduling that takes priority and which
+      ;; channels are in focus into account
+      @process-all-work()
+
+   process-all-work() =
+      while @workers != {=}:
+         items(@workers) each {path, {_, worker}} ->
+            @wrap-thunk({=}) with -> worker.work()
+      set-timeout(-> ___, 10) with @process-all-work()
 
    send(message) =
       @source.send(message)
