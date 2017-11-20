@@ -9,8 +9,8 @@ import json
 def buche(**args):
     print(json.dumps(args))
 
-buche(command='require', path='/', pluginName='plot')
-buche(command='open', path='/plot', type='plot', title='Trigonometry')
+buche(command='require', path='/', pluginName='bokeh')
+buche(command='open', path='/plot', type='bokeh', title='Trigonometry')
 
 for i in range(0, 1000):
     v = i / 100.0

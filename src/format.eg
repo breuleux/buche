@@ -33,7 +33,6 @@ formats = {
       dom with div % text
 
    _enode(ch, enode, options) =
-      print enode
       dom with enode
 }
 
