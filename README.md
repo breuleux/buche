@@ -13,7 +13,7 @@ Here's why you might want to use it:
 * **Only stdout**: All you need to know to use `buche` is how to print JSON.
 * **Serverless**: You don't need to start a server or to connect to a server. Just write `buche <command> ...`
 * **Learn by example**: If you want to reproduce an existing command's output, just look at the JSON commands it prints (also: `buche --inspect`).
-* **Extensible**: It is easy to add new channel types and new components, and plugins can be installed directly through the UI!
+* **Extensible**: It is possible to define new channel types and new components, and plugins can be installed directly through the UI!
 * **Easy to use over ssh**: `buche <command>` => `buche ssh <machine> <command>`. It just works.
 
 A lot of Buche's advantages boil down to the first point: Buche works on a stream of JSON commands, and uses `stdin` and `stdout` as its interface. This means you can take everything you know about manipulating these streams, everything you know about manipulating plain files, and leverage that to make Buche do what you want.
@@ -58,6 +58,8 @@ cd buche/examples
 
 Each example is executable and uses the `--inspect` flag to show you the example's output stream. Executing an example works simply because the shebang in the file invokes `buche`, and you can look at it with `head -1 example`. It's all very simple. The code for most of the examples easily fit on a screen.
 
+Some Buche functionality and channels are not in any examples yet, unfortunately, but that will come.
+
 ## Language support
 
 This section contains advice about how to best use Buche with various programming languages. In general, it is possible to use it with any language without any specific support, but there are sometimes a few tricks to remember, and some languages may have libraries to make everything even easier.
@@ -71,6 +73,24 @@ This section contains advice about how to best use Buche with various programmin
 ## Stability
 
 There is no stable release of Buche at the moment and the interface and commands may still change. Some capabilities may be removed in order to enhance security, such as the ability to inject scripts with full permissions in the output stream. Suggestions are welcome.
+
+## Writing extensions
+
+TODO.
+
+Still, if you feel motivated, you can look at [buche-cytoscape](https://github.com/breuleux/buche-cytoscape) and [buche-bokeh](https://github.com/breuleux/buche-cytoscape) to get a general idea of how to write an extension. The extension can be loaded directly:
+
+```json
+{"command":"require", "path":"/", "pluginPath":"path/to/entry/point.js"}
+```
+
+Which is practical for development, or for really specialized extensions you only need for one project. It can require npm packages as needed. Otherwise, if you publish a plugin named `buche-xyz` on npm, it can be required like this:
+
+```json
+{"command":"require", "path":"/", "pluginName":"xyz"}
+```
+
+Note: these plugins are installed in `~/.config/buche/node_modules`.
 
 ## More screenshots
 
@@ -88,6 +108,6 @@ Shiny Python REPL:
 
 ![repl](media/example-pyrepl_nice.png)
 
-Merging the outputs of several commands:
+Merging the outputs of several commands (shift-click on tabs to do the split screen):
 
 ![merge](media/example-merge.png)
