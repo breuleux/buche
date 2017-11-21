@@ -8,6 +8,8 @@ require:
       load-plugin, make-installer-component
    .util ->
       buche-exception-message
+      buche-error-channel
+      buche-settings-channel
 
 provide:
    RootDispatcher
@@ -24,11 +26,6 @@ globals:
 {.nil, .placeholder, .redirect, .goodies
  .log, .tabs, .slides, .template, .table} each default-plugin ->
    load-plugin(default-plugin, false)
-
-
-;; buche-error-channel = '/!buche-errors'
-buche-error-channel = '/🐞'
-buche-settings-channel = '/⚙️'
 
 
 gen hierarchy(path) =

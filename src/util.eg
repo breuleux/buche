@@ -6,9 +6,21 @@ provide:
    join
    format-buche-exception
    buche-exception-message
+   buche-error-channel
+   buche-settings-channel
+
+;; buche-error-channel = '/!buche-errors'
+buche-error-channel = '/🐞'
+buche-settings-channel = '/⚙️'
 
 join(*parts) =
    parts.join("/").replace(R.g"//+", "/")
+
+stringify(v, a, b) =
+   try:
+      JSON.stringify(v, a, b)
+   catch e:
+      'ERROR: {e.message}'
 
 format-buche-exception(@) =
    div.buche-error %
@@ -25,19 +37,19 @@ format-buche-exception(@) =
                      tr %
                         class = if{k in @fields, .highlight, ""}
                         td % k
-                        td % JSON.stringify(v)
-                  @fields each field when not @data[field] ->
+                        td % stringify(v)
+                  (@fields or {}) each field when not @data[field] ->
                      tr.highlight %
                         td % field
                         td % '<MISSING>'
          view %
             tab % "JSON"
-            pane % pre % JSON.stringify(@data, null, 2)
+            pane % pre % stringify(@data, null, 2)
          view %
             tab % "Traceback"
             pane % pre % @orig-error??.stack or @stack
 
-buche-exception-message(bexc, path = '/buche-errors') = {
+buche-exception-message(bexc, path = buche-error-channel) = {
    command = .log
    gutter = .error
    = path

@@ -12,6 +12,9 @@ require:
    ..package -> version
    .registry ->
       get-config, install-plugin, uninstall-plugin
+   .util ->
+      buche-error-channel
+   /html
 
 var main-window = null
 var proc = null
@@ -21,13 +24,17 @@ Usage: buche [options] [command]
 
 Options:
 
-  -v, --version        Output the version number.
-  --dev                Open developer console.
   --tee [file]         File to log the command's stdout to.
   --inspect            Print stdout and stdin.
   --install plugin     Install a buche plugin.
   --uninstall plugin   Uninstall a buche plugin.
+  --dev                Open developer console.
   -h, --help           Output usage information.
+  -v, --version        Output the version number.
+
+Note:
+   The command must come after the options. Any options written
+   after the command are the options for that command.
 """
 
 async parse-options(argv) =
@@ -106,6 +113,12 @@ create-window(options) =
    w.web-contents.on('will-navigate', handle-redirect)
    w.web-contents.on('new-window', handle-redirect)
 
+   web-send(data, trail = '\n') =
+      try:
+         w.web-contents.send(.data, data + trail)
+      catch e:
+         console.error(e.stack)
+
    ipc-main.on(.ready) with ->
       var origins = {}
       if cmd:
@@ -121,7 +134,23 @@ create-window(options) =
          ipc-main.on(.data) with {_, data} ->
             if options.inspect:
                print '<- {data}'
-            proc.stdin.write(data + '\n')
+            try:
+               proc.stdin.write(data + '\n')
+            catch e:
+               web-send(.data, JSON.stringify(___)) with {
+                  command = .log
+                  path = buche-error-channel
+                  gutter = .error
+                  format = .html
+                  content = html with
+                     div.buche-error %
+                        div.buche-error-reason %
+                           "A message was sent to the command's standard input,"
+                           " but an error occurred:"
+                           div % e.message
+                        pre %
+                           data
+               }
       else:
          origins = {process.stdin}
          ipc-main.on(.data) with {_, data} ->
@@ -133,9 +162,12 @@ create-window(options) =
             if options.inspect:
                data.split('\n') each line when line ->
                   print '-> {line}'
-            w.web-contents.send(.data, data)
-         origin.on(.end) with -> ->
-            w.web-contents.send(.end)
+            web-send(data, '')
+         origin.on(.end) with ->
+            try:
+               w.web-contents.send(.end)
+            catch e:
+               console.error(e.stack)
 
 
 main() where async main() =
