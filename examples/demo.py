@@ -1,6 +1,6 @@
-# A simple demo.
+#!/usr/bin/env buche --inspect python -u
 
-# buche --inspect python -u demo.py
+# A simple demo.
 
 import json
 

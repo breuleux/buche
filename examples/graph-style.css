@@ -1,0 +1,10 @@
+node {
+    background-color: orange;
+    content: data(id);
+}
+edge {
+    curve-style: bezier;
+    line-color: red;
+    target-arrow-shape: triangle;
+    target-arrow-color: red;
+}

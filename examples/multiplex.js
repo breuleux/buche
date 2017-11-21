@@ -1,8 +1,12 @@
+#!/usr/bin/env buche node
+
 // Multiplex the output of multiple commands into the same buche session.
 // Each command's output can be nested into its own tab with the syntax
 // tab_name:command.
 
-// buche node multiplex.js 'demo:python -u demo.py' 'plot:python -u plot.py' 'repl:python3 -u pyrepl.py'
+// Try the following call:
+
+// ./multiplex.js 'demo:python -u demo.py' 'plot:python -u plot.py' 'repl:python3 -u pyrepl.py'
 
 let {spawn} = require('child_process');
 
