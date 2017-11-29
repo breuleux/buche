@@ -11,7 +11,7 @@ require:
    open
    ..package -> version
    .registry ->
-      get-config, install-plugin, uninstall-plugin
+      install-plugin, uninstall-plugin
    .util ->
       buche-error-channel
    /html
@@ -39,7 +39,7 @@ Note:
 
 async parse-options(argv) =
    var help = false
-   config = {
+   cfg = {
       boolean = {'dev', 'inspect', 'version', 'help'}
       string = {'tee', 'install', 'uninstall'}
       alias = {
@@ -56,7 +56,7 @@ async parse-options(argv) =
          else ->
             true
    }
-   opts = minimist(argv, config)
+   opts = minimist(argv, cfg)
    if help or opts.help:
       console.error(usage)
       null
@@ -77,7 +77,6 @@ async parse-options(argv) =
 
 
 create-window(options) =
-   config = get-config()
    
    cmd =
       if options.cmd:

@@ -12,8 +12,8 @@ provide:
    import-failures
    ImportError
    DelayMessage
+   config
    config-path
-   get-config
    channel-constructors
    channel-elements
    load-plugin
@@ -58,6 +58,7 @@ get-config() =
                path.join(__dirname, '../default-config', file)
 
 
+config = get-config()
 rq = require
 rquser = rq(config-path('index.js')).require
 channel-constructors = {=}
