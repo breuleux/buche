@@ -94,6 +94,7 @@ create-window(options) =
    w = new BrowserWindow with {
       width = 1200
       height = 900
+      title = cmd or 'buche'
       web-preferences = {
          experimental-features = true
       }
