@@ -1,0 +1,4 @@
+#!/bin/sh
+
+mkdir -p -m 775 /usr/local/bin
+cp $2/buche.app/Contents/MacOS/buche /usr/local/bin/

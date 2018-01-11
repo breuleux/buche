@@ -8,7 +8,10 @@
     "url": "https://github.com/breuleux/buche"
   },
   "keywords": [],
-  "author": "Olivier Breuleux",
+  "author": {
+    "name": "Olivier Breuleux",
+    "email": "breuleux@gmail.com"
+  },
   "license": "MIT",
   "main": "./lib/index.js",
   "dependencies": {
@@ -41,5 +44,16 @@
     "compile": "earl compile -rvso lib/ src/",
     "prepublish": "npm run compile",
     "test": "mocha"
+  },
+  "build": {
+    "appId": "com.electron.buche",
+    "productName": "buche",
+    "linux": {
+      "target": ["AppImage", "deb", "tar.gz"]
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": "pkg"
+    }
   }
 }
