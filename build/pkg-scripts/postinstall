@@ -1,4 +1,7 @@
 #!/bin/sh
 
 mkdir -p -m 775 /usr/local/bin
-cp $2/buche.app/Contents/MacOS/buche /usr/local/bin/
+rm /usr/local/bin/buche
+echo '#!/bin/sh' > /usr/local/bin/buche
+echo "$2/buche.app/Contents/MacOS/buche \$@" >> /usr/local/bin/buche
+chmod 775 /usr/local/bin/buche
