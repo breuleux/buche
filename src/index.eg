@@ -33,7 +33,7 @@ Options:
   -v, --version        Output the version number.
 
 Note:
-   The command must come after the options. Any options written
+   The options must come before the command. Any options written
    after the command are the options for that command.
 """
 
@@ -81,6 +81,9 @@ create-window(options) =
    cmd = options.cmd
    if cmd:
       print 'Using command: {cmd}'
+
+   var show-splash = if{cmd, false, true}
+
    stream =
       if options.tee:
          print 'Logging into: {options.tee}'
@@ -115,6 +118,15 @@ create-window(options) =
          w.web-contents.send(.data, data + trail)
       catch e:
          console.error(e.stack)
+
+   splash() =
+      data = {
+         command = .log
+         path = '/ℹ️'
+         format = .markdown
+         content = fs.read-file-sync('{__dirname}/../html/splash.md', .utf8)
+      }
+      web-send(JSON.stringify(data))
 
    ipc-main.on(.ready) with ->
       var origins = {}
@@ -155,6 +167,7 @@ create-window(options) =
       origins each origin ->
          origin.set-encoding(.utf8)
          origin.on(.data) with data ->
+            show-splash = false
             if stream:
                stream.write(data)
             if options.inspect:
@@ -162,11 +175,16 @@ create-window(options) =
                   print '-> {line}'
             web-send(data, '')
          origin.on(.end) with ->
+            if show-splash:
+               splash()
             try:
                w.web-contents.send(.end)
             catch e:
                console.error(e.stack)
 
+      if show-splash and process.stdin.isTTY:
+         splash()
+         show-splash = false
 
 main() where async main() =
    options = await parse-options(process.argv[cut...]) where cut =
