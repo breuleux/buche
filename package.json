@@ -49,7 +49,11 @@
     "appId": "com.electron.buche",
     "productName": "buche",
     "linux": {
-      "target": ["AppImage", "deb", "tar.gz"]
+      "target": [
+        "AppImage",
+        "deb",
+        "tar.gz"
+      ]
     },
     "mac": {
       "category": "public.app-category.utilities",
