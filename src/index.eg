@@ -170,7 +170,11 @@ create-window(options) =
 
 
 main() where async main() =
-   options = await parse-options(process.argv[2...])
+   options = await parse-options(process.argv[cut...]) where cut =
+      if process.argv[1] is __filename:
+         2
+      else:
+         1
 
    if options is null:
       process.exit(0)
