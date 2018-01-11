@@ -1,0 +1,7 @@
+{"command":"require","path":"/","pluginName":"cytoscape"}
+{"command":"open","path":"/graph","type":"cytoscape","options":{"style":"/Users/breuleuo/repos/buche/examples/graph-style.css"}}
+{"command":"element","path":"/graph","source":"A","target":"B"}
+{"command":"element","path":"/graph","source":"B","target":"C"}
+{"command":"element","path":"/graph","source":"C","target":"A"}
+{"command":"element","path":"/graph","source":"A","target":"D"}
+{"command":"element","path":"/graph","source":"D","target":"E"}

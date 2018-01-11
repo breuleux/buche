@@ -1,0 +1,19 @@
+{"path": "/", "command": "open", "anchor": "top", "type": "tabs"}
+{"path": "/fruits", "command": "open", "anchor": "left", "type": "tabs"}
+{"path": "/vegetables", "command": "open", "anchor": "right", "type": "tabs"}
+{"path": "/fruits/durian", "command": "log", "contents": "<div style=\"background:yellow\">1 durian</div>", "format": "html"}
+{"path": "/fruits/durian", "command": "log", "contents": "<div style=\"background:yellow\">2 durian</div>", "format": "html"}
+{"path": "/fruits/durian", "command": "log", "contents": "<div style=\"background:yellow\">3 durian</div>", "format": "html"}
+{"path": "/fruits/cherry", "command": "log", "contents": "<div style=\"background:red\">1 cherry</div>", "format": "html"}
+{"path": "/fruits/cherry", "command": "log", "contents": "<div style=\"background:red\">2 cherry</div>", "format": "html"}
+{"path": "/fruits/cherry", "command": "log", "contents": "<div style=\"background:red\">3 cherry</div>", "format": "html"}
+{"path": "/fruits/apple", "command": "log", "contents": "<div style=\"background:red\">1 apple</div>", "format": "html"}
+{"path": "/fruits/apple", "command": "log", "contents": "<div style=\"background:red\">2 apple</div>", "format": "html"}
+{"path": "/fruits/apple", "command": "log", "contents": "<div style=\"background:red\">3 apple</div>", "format": "html"}
+{"path": "/fruits/banana", "command": "log", "contents": "<div style=\"background:yellow\">1 banana</div>", "format": "html"}
+{"path": "/fruits/banana", "command": "log", "contents": "<div style=\"background:yellow\">2 banana</div>", "format": "html"}
+{"path": "/fruits/banana", "command": "log", "contents": "<div style=\"background:yellow\">3 banana</div>", "format": "html"}
+{"path": "/vegetables/yam", "command": "log", "contents": "**It is a vegetable.**", "format": "markdown"}
+{"path": "/vegetables/wombat", "command": "log", "contents": "**They eat vegetables.**", "format": "markdown"}
+{"path": "/vegetables/xylophone", "command": "log", "contents": "**That is not a vegetable!**", "format": "markdown"}
+{"path": "/vegetables/zucchini", "command": "log", "contents": "**It is a vegetable.**", "format": "markdown"}

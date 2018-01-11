@@ -33,8 +33,8 @@ html('''Logs can be printed to multiple tabs. For example,
 markdown("""
 ## Run more examples!
 
-* `buche --inspect -c 'python -u plot.py'` demonstrates live plotting.
-* `buche --inspect -c 'python -u tabs.py'` shows how to arrange tabs.
-* `buche --inspect -c 'python -u pyrepl.py'` implements a simple interactive
+* `buche --inspect python -u plot.py` demonstrates live plotting.
+* `buche --inspect python -u tabs.py` shows how to arrange tabs.
+* `buche --inspect python -u pyrepl.py` implements a simple interactive
   interpreter for Python.
 """)
