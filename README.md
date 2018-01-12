@@ -1,6 +1,8 @@
 
 # What is buche?
 
+[**Download**](https://github.com/breuleux/buche/releases/latest)
+
 Buche is a language-agnostic, serverless, extensible HTML "logger". No matter what language you are using, with only a little bit of code, it can do a lot of things:
 
 * Display log entries in HTML and Markdown.
