@@ -70,6 +70,23 @@ This section contains advice about how to best use Buche with various programmin
 
 **Package:** There is a `buche` package for Python >= 3.6 which you can install with `pip install buche`. `buche` gives a nicer syntax to open channels, log into them, and notably provides a `buche(object)` function that pretty-prints Python objects as HTML. These objects can also be interacted with by clicking on them. See [here](https://github.com/breuleux/pybuche) for documentation on the package. It is recommended to run `examples/pyrepl_nice.py` (in this repository) for a demonstration.
 
+## Plugins
+
+Install a plugin:
+
+```bash
+buche --install <plugin-name>
+```
+
+To use a plugin, you must either use the `-r <plugin-name>` flag or have your program print out a `require` command prior to opening channels or using components defined by the plugin. The latter is preferred, but the former can be useful if the `require` command is being filtered out somehow. You can tell `buche` to show you the JSON command your program needs to print out. Either of the following commands will do:
+
+```bash
+buche -hr <plugin-name>
+buche --dump -r <plugin-name>
+```
+
+You can simply copy paste the output into a string in your program and print it before anything else. You can also edit it to turn off or rename some of the features if you need to (which is probably never).
+
 ## Stability
 
 There is no stable release of Buche at the moment and the interface and commands may still change. Some capabilities may be removed in order to enhance security, such as the ability to inject scripts with full permissions in the output stream. Suggestions are welcome.

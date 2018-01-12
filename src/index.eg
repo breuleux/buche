@@ -11,7 +11,7 @@ require:
    open
    ..package -> version
    .registry ->
-      install-plugin, uninstall-plugin
+      install-plugin, uninstall-plugin, resolve-plugin
    .util ->
       buche-error-channel
    /html
@@ -29,6 +29,8 @@ Options:
   --install plugin     Install a buche plugin.
   --uninstall plugin   Uninstall a buche plugin.
   --dev                Open developer console.
+  --dump               Don't open a window, just print on stdout.
+  -r [plugins]         Require the given plugins.
   -h, --help           Output usage information.
   -v, --version        Output the version number.
 
@@ -40,12 +42,13 @@ Note:
 async parse-options(argv) =
    var help = false
    cfg = {
-      boolean = {'dev', 'inspect', 'version', 'help'}
-      string = {'tee', 'install', 'uninstall'}
+      boolean = {'dev', 'dump', 'inspect', 'version', 'help'}
+      string = {'tee', 'install', 'uninstall', 'require'}
       alias = {
          v = .version
          h = .help
          t = .tee
+         r = .require
       }
       stop-early = true
       unknown(match x) =
@@ -57,11 +60,40 @@ async parse-options(argv) =
             true
    }
    opts = minimist(argv, cfg)
+   if opts.r:
+      reqs = {}
+      opts.r.split(',') each plugin ->
+         try:
+            pkg = resolve-plugin('{plugin}/package.json')
+            if pkg.buche and pkg.buche??.requireHowto:
+               reqs.push({plugin, true, pkg.buche.requireHowto})
+            else:
+               reqs.push({plugin, false, new Error(___)}) with
+                  'There is no "buche.requireHowto" key in the plugin\'s package.json'
+         catch e:
+            reqs.push({plugin, false, e})
+      opts.r = reqs
    if help or opts.help:
-      console.error(usage)
+      if opts.r:
+         opts.r each {plugin, match success, value} ->
+            true? ->
+               console.error('Require `{plugin}` by printing this:')
+               console.error('  {JSON.stringify(value)}')
+            else ->
+               console.error('No help available about requiring `{plugin}`')
+               console.error('  {value??.message}')
+      else:
+         console.error(usage)
+      null
+   elif opts.dump:
+      if not opts.r or opts._.length > 0:
+         console.error('--dump only works with -r option for now')
+      else:
+         opts.r each {plugin, success, value} when success ->
+            print JSON.stringify(value)
       null
    elif opts.version:
-      print 'Buche v{version}'
+      print 'buche v{version}'
       null
    elif opts.install:
       await install-plugin(opts.install)
@@ -115,6 +147,12 @@ create-window(options) =
    w.web-contents.on('new-window', handle-redirect)
 
    web-send(data, trail = '\n') =
+      show-splash = false
+      if stream:
+         stream.write(data)
+      if options.inspect:
+         data.split('\n') each line when line ->
+            print '-> {line}'
       try:
          w.web-contents.send(.data, data + trail)
       catch e:
@@ -131,6 +169,11 @@ create-window(options) =
 
    ipc-main.on(.ready) with ->
       var origins = {}
+      if options.r:
+         options.r each {plugin, match success, value} ->
+            true? -> web-send(JSON.stringify(value))
+            else -> pass  ;; TODO: show error
+
       if cmd:
          proc = spawn(cmd, {}) with {
             shell = true
@@ -168,12 +211,6 @@ create-window(options) =
       origins each origin ->
          origin.set-encoding(.utf8)
          origin.on(.data) with data ->
-            show-splash = false
-            if stream:
-               stream.write(data)
-            if options.inspect:
-               data.split('\n') each line when line ->
-                  print '-> {line}'
             web-send(data, '')
          origin.on(.end) with ->
             if show-splash:

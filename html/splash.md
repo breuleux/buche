@@ -13,6 +13,8 @@ Options:
   --install plugin     Install a buche plugin.
   --uninstall plugin   Uninstall a buche plugin.
   --dev                Open developer console.
+  --dump               Don't open a window, just print on stdout.
+  -r [plugins]         Require the given plugins.
   -h, --help           Output usage information.
   -v, --version        Output the version number.
 
