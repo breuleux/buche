@@ -24,13 +24,13 @@ For example, you can save a command's output in a file, and play it back to Buch
 
 ## Install
 
-For the time being, Buche must be installed through `npm`:
+Packages and binaries for Mac/Linux can be downloaded on the [**latest release**](https://github.com/breuleux/buche/releases/latest) page.
+
+You can also install `buche` with `npm`:
 
 ```bash
 npm install buche -g
 ```
-
-There will be self-contained packages in the future, when the tool is more stable.
 
 To install plugins, you can write:
 
