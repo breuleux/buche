@@ -25,7 +25,7 @@ globals:
 
 {.nil, .placeholder, .redirect, .goodies
  .log, .tabs, .slides, .template, .table} each default-plugin ->
-   load-plugin(default-plugin, false)
+   load-plugin('{__dirname}/plugins/{default-plugin}.js', true, true)
 
 
 gen hierarchy(path) =
@@ -140,11 +140,11 @@ class RootDispatcher < EventEmitter:
       @wrap-thunk(message, -> ___) with
          if message.command is 'require':
             if message.plugin-path:
-               load-plugin(message.plugin-path)
+               load-plugin(message.plugin-path, true, message)
             else:
                name = message.plugin-name
                try:
-                  load-plugin(name, false)
+                  load-plugin(name, false, message)
                catch ImportError? e:
                   @dispatch with {
                      path = buche-error-channel,

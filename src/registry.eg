@@ -16,6 +16,8 @@ provide:
    config-path
    channel-constructors
    channel-elements
+   all-features
+   resolve-plugin
    load-plugin
    install-plugin
    uninstall-plugin
@@ -65,43 +67,83 @@ channel-constructors = {=}
 channel-elements = {=}
 
 
-require-plugin(p) =
-   candidates = {{rq, './plugins/{p}'}, {rquser, 'buche-{p}'}}
-   candidates each {rqfn, candidate} ->
-      try:
-         return rqfn(candidate)
-      catch e:
-         if e.message !== 'Cannot find module \'{candidate}\'':
-            throw e
-         pass
-   import-failures[p] = true
-   throw new ImportError('Cannot find plugin "{p}". Try: `buche --install {p}`')
+fetch-buche-plugin(shortname) =
+   fullname = 'buche-{shortname}'
+   try:
+      rquser(fullname)
+   catch e:
+      if e.message !== 'Cannot find module \'{fullname}\'':
+         throw e
+      import-failures[shortname] = true
+      throw new ImportError with
+         'Cannot find plugin "{shortname}". Try: `buche --install {shortname}`'
 
 
-load-plugin(match p, exact = true) =
-   String? when exact ->
+resolve-plugin(p, local) =
+   if local or p.starts-with('/') or p.starts-with('.'):
       full-path =
          match p:
             R"^/"? -> p
             else -> path.join(process.cwd(), p)
       plugin = rq(full-path)
       plugin._buche_name = p
-      load-plugin(plugin)
-   String? ->
-      plugin = require-plugin(p)
+      plugin
+   else:
+      plugin = fetch-buche-plugin(p)
       plugin._buche_name = p
-      load-plugin(plugin)
-   else ->
-      if not p.is-buche-plugin:
-         throw new Error('"{p._buche_name}" is not a valid Buche plugin.')
-      items(p.channels or {=}) each {name, cls} ->
-         events.emit('add-channel-type', name, cls)
-         events.emit('add-channel-type-{name}', cls)
-         channel-constructors[name] = cls
-      items(p.components or {=}) each {name, cls} ->
-         events.emit('add-component-type', name, cls)
-         events.emit('add-component-type-{name}', cls)
-         document.register-element(name, cls)
+      plugin
+
+
+load-plugin(name, local, features) =
+   p = resolve-plugin(name, local)
+   import-plugin-features(p, features)
+
+
+all-features(p) =
+   {
+      channels = object with items(p.channels) each {x, _} -> {x, x}
+      components = object with items(p.components) each {x, _} -> {x, x}
+   }
+
+
+import-plugin-features(p, var features) =
+
+   normalize(match, field) =
+      undefined? ->
+         {=}
+      null? ->
+         {=}
+      "*" ->
+         all-features(p)[field]
+      String? s ->
+         {s => s}
+      Array? xs ->
+         object with xs each x -> {x, x}
+      features ->
+         object with items(features) each {name, match} ->
+            (=== true) -> {name, name}
+            false? -> continue
+            name2 -> {name, name2}
+
+   if features is true:
+      features = all-features(p)
+
+   if not p.is-buche-plugin:
+      throw new Error('"{p._buche_name}" is not a valid Buche plugin.')
+
+   items(normalize(features.channels, .channels)) each {ch, destch} ->
+      cls = p.channels[ch]
+      if channel-constructors[destch] or not cls:
+         throw new Error('Cannot not load channel "{ch}"')
+      events.emit('add-channel-type', destch, cls)
+      events.emit('add-channel-type-{destch}', cls)
+      channel-constructors[destch] = cls
+
+   items(normalize(features.components, .components)) each {c, destc} ->
+      cls = p.components[c]
+      events.emit('add-component-type', destc, cls)
+      events.emit('add-component-type-{destc}', cls)
+      document.register-element(destc, cls)
 
 
 async npm-instance() =
@@ -173,7 +215,7 @@ make-installer-component(name, message) =
                   parent.className = 'install-error'
                   return
                try:
-                  load-plugin(name, false)
+                  load-plugin(name, false, true)
                catch e:
                   parent.innerHTML = e.message
                   parent.className = 'install-error'
