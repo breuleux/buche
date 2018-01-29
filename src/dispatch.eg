@@ -1,7 +1,8 @@
 
 require:
    events -> EventEmitter
-   buche-tools -> BucheError
+   buche-tools ->
+      BucheError, make-resources
    .registry ->
       DelayMessage
       ImportError, channel-constructors
@@ -136,6 +137,12 @@ class RootDispatcher < EventEmitter:
             }
             @dispatch(buche-exception-message(err, buche-error-channel))
             return
+
+      if message.command is 'resource' and message.path is '/':
+         ;; Special case. This adds to <head>
+         resources = make-resources(message)
+         resources each res ->
+            document.head.append-child(res)
 
       @wrap-thunk(message, -> ___) with
          if message.command is 'require':
