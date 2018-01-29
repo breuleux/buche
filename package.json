@@ -57,7 +57,8 @@
     },
     "mac": {
       "category": "public.app-category.utilities",
-      "target": "pkg"
+      "target": "pkg",
+      "identity": null
     }
   }
 }
