@@ -1,0 +1,190 @@
+
+require:
+   buche-tools ->
+      BucheError
+      TrivialScheduler
+
+globals:
+   HTMLElement
+   Element
+   Text
+   document
+
+provide:
+   attribute-types
+   children-types
+   BucheElement2
+   UnifiedChannel
+
+
+attribute-types = {
+   boolean(x) =
+      if x is "":
+         true
+      else:
+         false
+
+   numeric(x) =
+      match JSON.parse(x):
+         Number? n -> n
+         else ->
+            throw TypeError('Expected number.')
+
+   json(x) =
+      JSON.parse(x)
+}
+
+
+children-types = {
+   json(x) =
+      data = JSON.parse(x.textContent)
+      if Element? data:
+         data.command = data.tag-name.to-lower-case()
+      data
+}
+
+
+jsclass BucheElement2 < HTMLElement:
+
+   attribute-defaults() =
+      {=}
+
+   attribute-spec() = {
+      path = true,
+      subpath = true,
+      __default = false
+   }
+
+   children-spec() = {
+      __default = true
+   }
+
+   get-attribute-spec(name) =
+      spec = @attribute-spec()
+      match spec[name]:
+         undefined? -> spec.__default
+         x -> x
+
+   get-child-spec(tag) =
+      spec = @children-spec()
+      match spec[tag]:
+         undefined? -> spec.__default
+         x -> x
+
+   _set-attribute(name, value) =
+      if @connected:
+         throw Error('Attributes are frozen.')
+      v = match @get-attribute-spec(name):
+         false? ->
+            throw Error('Attribute {name} is invalid.')
+         == true ->
+            value
+         spec ->
+            spec(value)
+      @settings[name] = v
+
+   _dispatch-child(child) =
+      tag = if{Text? child, '--text', child.tag-name.to-lower-case()}
+      msg = match @get-child-spec(tag):
+         false? ->
+            throw Error('Tag {tag} is invalid.')
+         == true ->
+            return
+         spec ->
+            x = spec(child)
+            child.remove()
+            x
+      @scheduler.schedule(msg)
+
+   make-scheduler() =
+      new TrivialScheduler(@)
+
+   get-dispatcher() =
+      @get-root-node({composed = true}).dispatcher
+
+   get-parent-channel-old() =
+      var curr = [@]
+      while curr and not curr.channel:
+         curr = curr.get-root-node().host
+      curr and curr.channel
+
+   get-parent-channel() =
+      if @_parent-channel !== undefined:
+         return @_parent-channel
+      var curr = @parent-node
+      while curr and not curr.dispatch-path:
+         curr = curr.parent-node
+      if not curr:
+         curr = @get-parent-channel-old()
+      @_parent-channel = curr
+      curr
+
+   attribute-changed-callback(name, oldv, newv) =
+      @_set-attribute(name, newv)
+
+   created-callback() =
+      @connected = false
+      @scheduler = @make-scheduler()
+
+      ;; Settings
+      @settings = @attribute-defaults()
+      @attributes each attr ->
+         @_set-attribute(attr.name, attr.value)
+
+      ;; Children
+      @child-nodes each child ->
+         msg = @_dispatch-child(child)
+         if msg !== null:1
+            @scheduler.schedule(msg)
+
+   attached-callback() =
+      @connected = true
+
+
+jsclass UnifiedChannel < BucheElement2:
+
+   schedule(m) =
+      @scheduler.schedule(m)
+
+   dispatch(m) =
+      {=> command} = m
+      meth = this['dispatch_{command}']
+      if meth:
+          meth.call(@, m)
+      else:
+          @missing-command(m)
+
+   missing-command(m) =
+      throw new BucheError(
+         'Unrecognized command: "{m.command}"'
+         m
+         {channel = this,
+          fields = {'command'}}
+      )
+
+   attached-callback() =
+      super.attached-callback()
+      path =
+         if @settings.path:
+            @settings.path
+         elif @settings.subpath:
+            sp = @settings.subpath
+            match @get-parent-channel():
+               false? ->
+                  '/{sp}'
+               parent ->
+                  pp = parent.dispatch-path or parent.path
+                  {pp, sp}.join('/')
+         else:
+            null
+
+      if path:
+         @dispatch-path = path
+         dispatcher = @get-dispatcher()
+         dispatcher.neo-register(path, @)
+
+   detached-callback() =
+      if @dispatch-path:
+         dispatcher = @get-dispatcher()
+         delete dispatcher.channels[@dispatch-path]
+         delete @dispatch-path

@@ -33,4 +33,5 @@ main() where main() =
          with write(x) =
             ipc-renderer.send(.data, x)
    dispatcher = RootDispatcher(stream, mount-content)
+   document.dispatcher = dispatcher
    dispatcher.run()

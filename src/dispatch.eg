@@ -117,6 +117,14 @@ class RootDispatcher < EventEmitter:
             delete @workers[ch.path]
       expr-value @channels[options.path] = ch
 
+   neo-register(path, ch) =
+      ch.scheduler.on('has-work') with {match has-work, priority} ->
+         true? ->
+            @workers[path] = {priority, ch.scheduler}
+         false? ->
+            delete @workers[path]
+      expr-value @channels[path] = ch
+
    wrap-thunk(message, thunk) =
       try:
          thunk()
