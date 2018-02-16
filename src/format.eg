@@ -6,9 +6,17 @@ require:
 
 provide:
    format, formats
+   format2, formats2
+
+
+globals:
+   document
 
 
 formats = {
+
+   direct(ch, node, options) =
+      node
 
    pre(ch, text, options) =
       dom with
@@ -27,18 +35,70 @@ formats = {
 
    quaint(ch, text, options) =
       require: quaint
-      dom with div[raw] % quaint.toHTML(text)
+      dom(div[raw] % quaint.toHTML(text))
 
    text(ch, text, options) =
-      dom with div % text
+      ;; dom with div % text
+      ;; document.create-text-node(text)
+      dom(span % text)
 
    _enode(ch, enode, options) =
-      dom with enode
+      dom(enode)
 }
 
 
 format(ch, fmt, text, options, message) =
    formatter = formats[fmt]
+   if not formatter:
+      m = message or options
+      fields = items(m) each {k, v} when v is fmt -> k
+      throw new BucheError(___, message or options, {= fields}) with
+         'Unknown format: "{fmt}"'
+   return formatter(ch, text, options)
+
+
+extract-raw(text) =
+   node = dom(div[raw] % text)
+   match consume(node.child-nodes):
+      {x} ->
+         x
+      xs ->
+         xs
+
+
+formats2 = {
+
+   direct(ch, node, options) =
+      node
+
+   pre(ch, text, options) =
+      dom with
+         div.raw-line % text
+
+   html(ch, text, options) =
+      extract-raw(text)
+
+   markdown(ch, text, options) =
+      require: marked
+      extract-raw with
+         if options.inline:
+            then: marked.inline-lexer(text, {})
+            else: marked(text, {})
+
+   quaint(ch, text, options) =
+      require: quaint
+      extract-raw(quaint.toHTML(text))
+
+   text(ch, text, options) =
+      document.create-text-node(text)
+
+   _enode(ch, enode, options) =
+      dom(enode)
+}
+
+
+format2(ch, fmt, text, options, message) =
+   formatter = formats2[fmt]
    if not formatter:
       m = message or options
       fields = items(m) each {k, v} when v is fmt -> k
