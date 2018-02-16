@@ -49,6 +49,7 @@ class RootDispatcher < EventEmitter:
    constructor(@source, @target) =
       @set-max-listeners(Infinity)
       @channels = {=}
+      @pending = {=}
       @intercepts = {=}
       @delayed = {=}
       @workers = {=}
@@ -123,7 +124,11 @@ class RootDispatcher < EventEmitter:
             @workers[path] = {priority, ch.scheduler}
          false? ->
             delete @workers[path]
-      expr-value @channels[path] = ch
+      @channels[path] = ch
+      (@pending[path] or {}) each message ->
+         ch.schedule(message)
+      delete @pending[path]
+      ch
 
    wrap-thunk(message, thunk) =
       try:
@@ -189,6 +194,13 @@ class RootDispatcher < EventEmitter:
             else:
                {p, c} = split-end(path)
                @open(p, c, message)
+         elif ':' in path:
+            ch = @channels[path]
+            if ch:
+               ch.schedule(message)
+            else:
+               @pending[path] or= {}
+               @pending[path].push(message)
          else:
             @find-channel(path).schedule(message)
 
