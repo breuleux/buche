@@ -3,18 +3,109 @@ require:
    buche-tools ->
       BucheError
       TrivialScheduler
+   .format ->
+      format2 as fmt
 
 globals:
    HTMLElement
    Element
    Text
+   Node
    document
 
 provide:
+   ElementAnalyzer
    attribute-types
    children-types
-   BucheElement2
    UnifiedChannel
+   default-analyzer
+   channel-analyzer
+
+
+tag-name(elem) =
+   if Text? elem:
+      '--text'
+   else:
+      elem.tag-name.to-lower-case()
+
+
+run-spec(spec, *args) =
+   if spec.run:
+      spec.run(*args)
+   else:
+      spec(*args)
+
+
+jsclass ElementAnalyzer:
+
+   constructor(*settings) =
+      {
+         .attribute-defaults
+         .attribute-spec
+         .children-spec
+      } each field ->
+         this[field] and r = {=}
+         settings each s ->
+            r &: (s[field] or {=})
+
+   get-attribute-spec(name) =
+      spec = @attribute-spec
+      match spec[name]:
+         undefined? -> spec.__default
+         x -> x
+
+   get-child-spec(tag) =
+      spec = @children-spec
+      match spec[tag]:
+         undefined? -> spec.__default
+         x -> x
+
+   set-attribute(name, value) =
+      v = match @get-attribute-spec(name):
+         false? ->
+            throw Error('Attribute {name} is invalid.')
+         == true ->
+            value
+         spec ->
+            spec(value)
+      #set{name, v}
+
+   dispatch-child(child) =
+      tag = tag-name(child)
+      msg = match @get-child-spec(tag):
+         false? ->
+            throw Error('Tag {tag} is invalid here.')
+         == true ->
+            message = {
+               command = .push
+               format = .direct
+               content = child
+            }
+            #message{message}
+         #set{target, spec} ->
+            #set{target, run-spec(spec, child)}
+         #message{spec} ->
+            #message{run-spec(spec, child)}
+
+   apply(data, match) =
+      #set{k, v} ->
+         data[k] = v
+      #message{m} ->
+         data.messages.push(m)
+
+   run(elem) =
+      data = (___ & @attribute-defaults) with {
+         command = tag-name(elem)
+         messages = {}
+      }
+
+      elem.attributes each attr ->
+         @apply(data) with @set-attribute(attr.name, attr.value)
+
+      elem.child-nodes each child ->
+         @apply(data) with @dispatch-child(child)
+
+      data
 
 
 attribute-types = {
@@ -44,60 +135,87 @@ children-types = {
 }
 
 
-jsclass BucheElement2 < HTMLElement:
+default-analyzer = new ElementAnalyzer with {
+   attribute-defaults = {=}
+   attribute-spec = {
+      __default = false
+   }
+   children-spec = {
+      __default = true
+   }
+}
+
+
+channel-analyzer = new ElementAnalyzer(default-analyzer) with {
+   attribute-spec = {
+      path = true
+      subpath = true
+   }
+}
+
+
+jsclass UnifiedChannel < HTMLElement:
+
+   ;;;;;;;;;;;;;;
+   ;; Analyzer ;;
+   ;;;;;;;;;;;;;;
+
+   base-analyzer() =
+      channel-analyzer
 
    attribute-defaults() =
       {=}
 
-   attribute-spec() = {
-      path = true,
-      subpath = true,
-      __default = false
-   }
+   attribute-spec() =
+      {=}
 
-   children-spec() = {
-      __default = true
-   }
+   children-spec() =
+      {=}
 
-   get-attribute-spec(name) =
-      spec = @attribute-spec()
-      match spec[name]:
-         undefined? -> spec.__default
-         x -> x
+   make-analyzer() =
+      new ElementAnalyzer(@base-analyzer()) with {
+         attribute-defaults = @attribute-defaults()
+         attribute-spec = @attribute-spec()
+         children-spec = @children-spec()
+      }
 
-   get-child-spec(tag) =
-      spec = @children-spec()
-      match spec[tag]:
-         undefined? -> spec.__default
-         x -> x
-
-   _set-attribute(name, value) =
-      if @connected:
-         throw Error('Attributes are frozen.')
-      v = match @get-attribute-spec(name):
-         false? ->
-            throw Error('Attribute {name} is invalid.')
-         == true ->
-            value
-         spec ->
-            spec(value)
-      @settings[name] = v
-
-   _dispatch-child(child) =
-      tag = if{Text? child, '--text', child.tag-name.to-lower-case()}
-      msg = match @get-child-spec(tag):
-         false? ->
-            throw Error('Tag {tag} is invalid.')
-         == true ->
-            return
-         spec ->
-            x = spec(child)
-            child.remove()
-            x
-      @scheduler.schedule(msg)
+   ;;;;;;;;;;;;;;;;
+   ;; Scheduling ;;
+   ;;;;;;;;;;;;;;;;
 
    make-scheduler() =
       new TrivialScheduler(@)
+
+   schedule(m) =
+      @scheduler.schedule(m)
+
+   dispatch(m) =
+      {=> command} = m
+      meth = this['dispatch_{command}']
+      if meth:
+          meth.call(@, m)
+      else:
+          @missing-command(m)
+
+   missing-command(m) =
+      throw new BucheError(
+         'Unrecognized command: "{m.command}"'
+         m
+         {channel = this,
+          fields = {'command'}}
+      )
+
+   ;;;;;;;;;;;;;;
+   ;; Behavior ;;
+   ;;;;;;;;;;;;;;
+
+   dispatch_push(m) =
+      node = fmt(@, m.format or .text, m.content, m)
+      @_append-child(node)
+
+   ;;;;;;;;;;;;;;;;;
+   ;; Environment ;;
+   ;;;;;;;;;;;;;;;;;
 
    get-dispatcher() =
       @get-root-node({composed = true}).dispatcher
@@ -119,56 +237,34 @@ jsclass BucheElement2 < HTMLElement:
       @_parent-channel = curr
       curr
 
+   ;;;;;;;;;;;;;;;
+   ;; Callbacks ;;
+   ;;;;;;;;;;;;;;;
+
    attribute-changed-callback(name, oldv, newv) =
-      @_set-attribute(name, newv)
+      if @connected:
+         throw Error('Attributes are frozen.')
+      @analyzer.apply(@props) with
+         @analyzer.set-attribute(name, newv)
 
    created-callback() =
       @connected = false
       @scheduler = @make-scheduler()
-
-      ;; Settings
-      @settings = @attribute-defaults()
-      @attributes each attr ->
-         @_set-attribute(attr.name, attr.value)
-
-      ;; Children
-      @child-nodes each child ->
-         msg = @_dispatch-child(child)
-         if msg !== null:1
-            @scheduler.schedule(msg)
+      @analyzer = @make-analyzer()
+      @props = run-spec(@analyzer, @)
+      print @props
+      delete @props.command
+      @innerHTML = ""
+      @props.messages each m ->
+         @dispatch(m)
 
    attached-callback() =
       @connected = true
-
-
-jsclass UnifiedChannel < BucheElement2:
-
-   schedule(m) =
-      @scheduler.schedule(m)
-
-   dispatch(m) =
-      {=> command} = m
-      meth = this['dispatch_{command}']
-      if meth:
-          meth.call(@, m)
-      else:
-          @missing-command(m)
-
-   missing-command(m) =
-      throw new BucheError(
-         'Unrecognized command: "{m.command}"'
-         m
-         {channel = this,
-          fields = {'command'}}
-      )
-
-   attached-callback() =
-      super.attached-callback()
       path =
-         if @settings.path:
-            @settings.path
-         elif @settings.subpath:
-            sp = @settings.subpath
+         if @props.path:
+            @props.path
+         elif @props.subpath:
+            sp = @props.subpath
             match @get-parent-channel():
                false? ->
                   '/{sp}'
@@ -188,3 +284,24 @@ jsclass UnifiedChannel < BucheElement2:
          dispatcher = @get-dispatcher()
          delete dispatcher.channels[@dispatch-path]
          delete @dispatch-path
+
+   ;;;;;;;;;;;;;;;
+   ;; Overrides ;;
+   ;;;;;;;;;;;;;;;
+
+   _append-child(match) =
+      Node? child ->
+         super.append-child(child)
+      xs ->
+         xs each x -> @_append-child(x)
+
+   append-child(child) =
+      match @analyzer.dispatch-child(child):
+         #set{k, v} ->
+            if @connected:
+               throw Error('Attributes are frozen.')
+            else:
+               @analyzer.apply(@props) with
+                  @analyzer.set-attribute(k, v)
+         #message{m} ->
+            @dispatch(m)

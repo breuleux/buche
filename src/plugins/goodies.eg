@@ -7,6 +7,8 @@ require:
       BucheElement
    ..format ->
       format as fmt
+   ..unified ->
+      UnifiedChannel
 
 
 provide:
@@ -17,6 +19,11 @@ provide:
 globals:
    Text
    CustomEvent
+
+
+jsclass DivAccum < UnifiedChannel:
+   _dummy() =
+      pass
 
 
 jsclass IBox < BucheElement:
@@ -401,5 +408,6 @@ provide:
    true as is-buche-plugin
    {=} as channels
    {"i-box" = IBox
+    "div-accum" = DivAccum
     "tabbed-view" = TabbedView
     "code-snippet" = CodeSnippet} as components
