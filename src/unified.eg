@@ -1,5 +1,6 @@
 
 require:
+   /dom
    buche-tools ->
       BucheError
       TrivialScheduler
@@ -154,6 +155,15 @@ channel-analyzer = new ElementAnalyzer(default-analyzer) with {
 }
 
 
+to-node-list(match) =
+   Node? child ->
+      {child}
+   ENode? child ->
+      {dom(child)}
+   xs ->
+      xs.map(to-node-list).reduce(++, {})
+
+
 jsclass UnifiedChannel < HTMLElement:
 
    ;;;;;;;;;;;;;;
@@ -211,7 +221,7 @@ jsclass UnifiedChannel < HTMLElement:
 
    dispatch_push(m) =
       node = fmt(@, m.format or .text, m.content, m)
-      @_append-child(node)
+      @push(node)
 
    ;;;;;;;;;;;;;;;;;
    ;; Environment ;;
@@ -237,6 +247,17 @@ jsclass UnifiedChannel < HTMLElement:
       @_parent-channel = curr
       curr
 
+   ;;;;;;;;;;;
+   ;; Setup ;;
+   ;;;;;;;;;;;
+
+   setup() =
+      @innerHTML = ""
+      @_append-child(@template())
+
+   template() =
+      {}
+
    ;;;;;;;;;;;;;;;
    ;; Callbacks ;;
    ;;;;;;;;;;;;;;;
@@ -254,7 +275,7 @@ jsclass UnifiedChannel < HTMLElement:
       @props = run-spec(@analyzer, @)
       print @props
       delete @props.command
-      @innerHTML = ""
+      @setup()
       @props.messages each m ->
          @dispatch(m)
 
@@ -285,15 +306,24 @@ jsclass UnifiedChannel < HTMLElement:
          delete dispatcher.channels[@dispatch-path]
          delete @dispatch-path
 
-   ;;;;;;;;;;;;;;;
-   ;; Overrides ;;
-   ;;;;;;;;;;;;;;;
+   ;;;;;;;;;;;;;;;;;;;;;
+   ;; Adding children ;;
+   ;;;;;;;;;;;;;;;;;;;;;
 
-   _append-child(match) =
-      Node? child ->
-         super.append-child(child)
-      xs ->
-         xs each x -> @_append-child(x)
+   append-helper(x, fn) =
+      to-node-list(x) each node ->
+         fn(node)
+
+   push(x) =
+      @append-helper(x) with node ->
+         if @push-target:
+            @push-target.append-child(node)
+         else:
+            @_append-child(node)
+
+   _append-child(x) =
+      to-node-list(x) each node ->
+         super.append-child(node)
 
    append-child(child) =
       match @analyzer.dispatch-child(child):
