@@ -2,3 +2,5 @@
 node_modules
 egcache
 lib
+dist
+buche.code-workspace
