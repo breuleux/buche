@@ -1,226 +1,114 @@
 
 require:
    events -> EventEmitter
-   buche-tools ->
-      BucheError, make-resources
-   .registry ->
-      DelayMessage
-      ImportError, channel-constructors
-      load-plugin, make-installer-component
-   .util ->
-      buche-exception-message
-      buche-error-channel
-      buche-settings-channel
+   /dom
+
 
 provide:
    RootDispatcher
 
+
 globals:
-   document
+   document, MutationObserver, Element, Text
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Load default plugins ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;
+class InteractiveDocument < EventEmitter:
+
+   constructor(@container) =
+      @channels = {=}
+      @create-channel('/', @container)
+      @add-channels-from(@container.child-nodes, @container)
+
+   create-channel(path, element) =
+      element.buche-path = path
+      @channels[path] = element
+      @emit('add-channel', path, element)
+      @emit(path, element)
+      @obs = new MutationObserver with (muts each mut) ->
+         @add-channels-from(mut.added-nodes, mut.target)
+         @remove-channels-from(mut.removed-nodes, mut.target)
+      @obs.observe(@container) with {
+         child-list = true
+         subtree = true
+      }
+
+   add-channels-from(match node, var parent) =
+      Element? ->
+         match node.get-attribute('address') as addr:
+            undefined? or null? ->
+               pass
+            R"^/"? ->
+               @create-channel(addr, node)
+            else ->
+               while not parent.buche-path:
+                  parent = parent.parent-node
+               prefix = parent.buche-path.replace(R"/+$", "")
+               full-addr = '{prefix}/{addr}'
+               @create-channel(full-addr, node)
+         @add-channels-from(node.child-nodes, parent)
+      Text? ->
+         pass
+      else ->
+         node each x -> @add-channels-from(x, parent)
+
+   remove-channels-from(match node, parent) =
+      Element? ->
+         throw Error('Cannot remove nodes at the moment.')
+      Text? ->
+         pass
+      else ->
+         node each x -> @remove-channels-from(x, parent)
 
 
-{.nil, .placeholder, .redirect, .goodies
- .log, .tabs, .slides, .template, .table} each default-plugin ->
-   load-plugin('{__dirname}/plugins/{default-plugin}.js', true, true)
-
-
-gen hierarchy(path) =
-   parts = path.split('/')
-   last = parts.pop()
-   2..parts.length each i ->
-      yield parts.join('/')
-      parts.pop()
-   yield "/"
-
-
-split-end(path) =
-   parts = path.split('/')
-   last = parts.pop()
-   {parts.join('/') or '/', last or null}
+make-nodes(match message) =
+   undefined? or null? ->
+      {}
+   String? ->
+      dummy = document.create-element('div')
+      dummy.innerHTML = message
+      Array.from(dummy.child-nodes)
+   Array? ->
+      message.map(make-nodes).reduce(++)
+   {=> tag} ->
+      enode = ENode(tag, props, make-nodes(message.children)) where props =
+         object with items(message) each {match k, v} ->
+            .tag or .children ->
+               continue
+            else ->
+               {k, v}
+      {dom(enode)}
+   {=> children} ->
+      make-nodes(children)
+   else ->
+      throw Error('Cannot make a node out of this.')
 
 
 class RootDispatcher < EventEmitter:
 
-   constructor(@source, @target) =
-      @set-max-listeners(Infinity)
-      @channels = {=}
-      @pending = {=}
-      @intercepts = {=}
-      @delayed = {=}
-      @workers = {=}
-      @channel-options = {
-         buche-error-channel => {
-            type = .log
-            order = 100000
-         }
-         buche-settings-channel => {
-            type = .log
-            order = 100001
-         }
-      }
-
-   find-channel(path) =
-      ch = @channels[path]
-      if not ch:
-         {p, c} = split-end(path)
-         @open(p, c, (@channel-options[path] or {=}) & {path = path})
-      else:
-         ch
-
-   open(parent-path, name, base-options) =
-      options = base-options & {
-         parent-path = parent-path
-         name = name
-      }
-      if parent-path == '/' and not name:
-         @construct(null, .tabs, options)
-      else:
-         parent = @find-channel(parent-path)
-         parent.open-channel(options)
-
-   construct(parent-channel, type, options) =
-      cls = channel-constructors[type]
-      if not cls:
-         return @construct(parent-channel, 'placeholder') with options & {
-            _placeholder-type = type
-         }
-         ;; return @construct(parent-channel, 'nil') with options & {
-         ;;    message = '''
-         ;;    <p>Failed to open channel of type <b>{type}</b></p>
-
-         ;;    <p>That channel may be available as a plugin. If that plugin
-         ;;    is installed, you may be able to use it by printing out this
-         ;;    JSON command before opening the channel:</p>
-
-         ;;    <pre>\{"command": "require", "path": "/", "pluginName": "{type}"\}</pre>
-
-         ;;    <p>This assumes the plugin name is the same as the channel.</p>
-
-         ;;    <p>If the plugin is not installed, try to install it with the
-         ;;    following command:</p>
-
-         ;;    <pre>buche --install {type}</pre>
-         ;;    '''
-         ;;    format = .html
-         ;; }
-      ch = new cls(@, options)
-      if parent-channel is null:
-         @target.append-child(ch.element)
-      ch.scheduler.on('has-work') with {match has-work, priority} ->
-         true? ->
-            @workers[ch.path] = {priority, ch.scheduler}
-         false? ->
-            delete @workers[ch.path]
-      expr-value @channels[options.path] = ch
-
-   neo-register(path, ch) =
-      ch.scheduler.on('has-work') with {match has-work, priority} ->
-         true? ->
-            @workers[path] = {priority, ch.scheduler}
-         false? ->
-            delete @workers[path]
-      @channels[path] = ch
-      (@pending[path] or {}) each message ->
-         ch.schedule(message)
-      delete @pending[path]
-      ch
-
-   wrap-thunk(message, thunk) =
-      try:
-         thunk()
-      catch DelayMessage? delay:
-         (@delayed[delay.token] or= {}).push(delay.message or message)
-      catch BucheError? err:
-         @dispatch(buche-exception-message(err, buche-error-channel))
-      catch Error? e:
-         err = new BucheError(e.message, message, {orig-error = e})
-         @dispatch(buche-exception-message(err, buche-error-channel))
+   constructor(@source, @container) =
+      @doc = InteractiveDocument(@container)
+      @waitlist = {=}
 
    dispatch(message) =
-      {'path', 'command'} each field ->
-         if not message[field]:
-            err = new BucheError('Missing field in message: "{field}"', message) with {
-               fields = {field}
-               channel = {path = '/'}
-            }
-            @dispatch(buche-exception-message(err, buche-error-channel))
-            return
-
-      if message.command is 'resource' and message.path is '/':
-         ;; Special case. This adds to <head>
-         resources = make-resources(message)
-         resources each res ->
-            document.head.append-child(res)
-
-      @wrap-thunk(message, -> ___) with
-         if message.command is 'require':
-            if message.plugin-path:
-               load-plugin(message.plugin-path, true, message)
-            else:
-               name = message.plugin-name
-               try:
-                  load-plugin(name, false, message)
-               catch ImportError? e:
-                  @dispatch with {
-                     path = buche-error-channel,
-                     command = .log,
-                     format = ._enode,
-                     gutter = .error,
-                     content = make-installer-component(name) with
-                        span %
-                           'Package '
-                           b % name
-                           ' is required, '
-                           'but it is not installed. '
-                           br %
-                           'Do you want to try installing it?'
-                  }
-            return
-
-         path = message.path
-         if @intercepts[message.command]:
-            hierarchy(path) each p ->
-               if @channels[p] as ch:
-                  if ch.intercepts(message):
-                     return ch.schedule(message)
-         if message.command is .open:
-            if message.wait-for-message:
-               @channel-options[path] = message
-            else:
-               {p, c} = split-end(path)
-               @open(p, c, message)
-         elif ':' in path:
-            ch = @channels[path]
-            if ch:
-               ch.schedule(message)
-            else:
-               @pending[path] or= {}
-               @pending[path].push(message)
-         else:
-            @find-channel(path).schedule(message)
-
-   unblock-messages(token) =
-      messages = @delayed[token] or {}
-      delete @delayed[token]
-      messages each m ->
-         @dispatch(m)
+      clone! m = message
+      channel = m.parent
+      delete m.parent
+      match @doc.channels[channel]:
+         undefined? and match is @waitlist[channel] ->
+            undefined? ->
+               w = {}
+               @waitlist[channel] = w
+               w.push(message)
+               @doc.once(channel) with element ->
+                  delete @waitlist[channel]
+                  w each m ->
+                     @dispatch(m)
+            w ->
+               w.push(message)
+         channel ->
+            nodes = make-nodes(m)
+            nodes each node ->
+               channel.append-child(node)
 
    run() =
       @source.read(m -> @dispatch(m))
-      ;; TODO: smarter scheduling that takes priority and which
-      ;; channels are in focus into account
-      @process-all-work()
-
-   process-all-work() =
-      while @workers != {=}:
-         items(@workers) each {path, {_, worker}} ->
-            @wrap-thunk({=}) with -> worker.work()
-      set-timeout(-> ___, 10) with @process-all-work()
-
-   send(message) =
-      @source.send(message)
