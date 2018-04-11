@@ -1,6 +1,7 @@
 
 require:
    events -> EventEmitter
+   "./format" -> format
    /dom
 
 
@@ -60,17 +61,16 @@ class InteractiveDocument < EventEmitter:
          node each x -> @remove-channels-from(x, parent)
 
 
-make-nodes(match message) =
+make-nodes(match message, fmt) =
    undefined? or null? ->
       {}
    String? ->
-      dummy = document.create-element('div')
-      dummy.innerHTML = message
-      Array.from(dummy.child-nodes)
+      Array! format(fmt, message)
    Array? ->
       message.map(make-nodes).reduce(++)
    {=> tag} ->
-      enode = ENode(tag, props, make-nodes(message.children)) where props =
+      new-children = make-nodes(message.children, message.format or .html)
+      enode = ENode(tag, props, new-children) where props =
          object with items(message) each {match k, v} ->
             .tag or .children ->
                continue
@@ -78,7 +78,7 @@ make-nodes(match message) =
                {k, v}
       {dom(enode)}
    {=> children} ->
-      make-nodes(children)
+      make-nodes(children, message.format or .html)
    else ->
       throw Error('Cannot make a node out of this.')
 
