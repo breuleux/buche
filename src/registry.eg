@@ -1,38 +1,14 @@
 
 require:
-   fs
+   mkdirp
    path
    expand-tilde
-   mkdirp
-   events as abc -> EventEmitter
+   fs
 
 
 provide:
-   events
-   import-failures
+   PluginManager
    ImportError
-   DelayMessage
-   config
-   config-path
-   channel-constructors
-   channel-elements
-   all-features
-   resolve-plugin
-   load-plugin
-   install-plugin
-   uninstall-plugin
-   register-element
-   make-installer-component
-
-
-globals:
-   document
-
-
-events = new EventEmitter()
-
-
-import-failures = {=}
 
 
 jsclass ImportError < Error:
@@ -40,185 +16,81 @@ jsclass ImportError < Error:
       super(message)
 
 
-class DelayMessage:
-   constructor(@token, @message) =
-      pass
-
-
-config-path(name='') =
-   base = expand-tilde('~/.config/buche/')
-   path.join(base, name)
-
-
-get-config() =
-   if not fs.exists-sync(config-path()):
-      mkdirp.sync(config-path())
-      mkdirp.sync(config-path('node_modules'))
-      {'package.json', 'index.js'} each file ->
-         fs.write-file-sync(config-path(file)) with
-            fs.read-file-sync(p, .utf8) where p =
-               path.join(__dirname, '../default-config', file)
-
-
-config = get-config()
 rq = require
-rquser = rq(config-path('index.js')).require
-channel-constructors = {=}
-channel-elements = {=}
 
 
-fetch-buche-plugin(shortname) =
-   fullname = 'buche-{shortname}'
-   try:
-      rquser(fullname)
-   catch e:
-      if e.message !== 'Cannot find module \'{fullname}\'':
-         throw e
-      import-failures[shortname] = true
-      throw new ImportError with
-         'Cannot find plugin "{shortname}". Try: `buche --install {shortname}`'
+class PluginManager:
 
+   constructor(expand-tilde! @config-directory) =
+      @import-failures = {=}
+      @config-defaults-directory =
+         path.join(__dirname, '../default-config')
+      @config-files = {'package.json', 'index.js'}
+      @ensure()
+      @require = rq(@config-path('index.js')).require
 
-resolve-plugin(p, local) =
-   if local or p.starts-with('/') or p.starts-with('.'):
-      full-path =
-         match p:
-            R"^/"? -> p
-            else -> path.join(process.cwd(), p)
-      plugin = rq(full-path)
-      plugin._buche_name = p
-      plugin
-   else:
-      plugin = fetch-buche-plugin(p)
-      plugin._buche_name = p
-      plugin
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   ;; Configuration directory ;;
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+   config-path(name='') =
+      path.join(@config-directory, name)
 
-load-plugin(name, local, features) =
-   p = resolve-plugin(name, local)
-   import-plugin-features(p, features)
+   ensure() =
+      if not fs.exists-sync(@config-directory):
+         mkdirp.sync(@config-directory)
+         mkdirp.sync(@config-path('node_modules'))
+         @config-files each file ->
+            fs.write-file-sync(@config-path(file)) with
+               fs.read-file-sync(p, .utf8) where p =
+                  path.join(@config-defaults-directory, file)
 
+   ;;;;;;;;;;;;;;;;
+   ;; Installing ;;
+   ;;;;;;;;;;;;;;;;
 
-all-features(p) =
-   {
-      channels = object with items(p.channels) each {x, _} -> {x, x}
-      components = object with items(p.components) each {x, _} -> {x, x}
-   }
+   async npm-instance() =
+      require: npm
+      load = promisify(npm.load)
+      await load(JSON.parse(fs.readFileSync(@config-path('package.json'))))
 
+   async install(name) =
+      npm = await @npm-instance()
+      npm.prefix = @config-directory
+      install = promisify(npm.install)
+      await install('buche-{name}')
 
-import-plugin-features(p, var features) =
+   async uninstall(name) =
+      npm = await @npm-instance()
+      npm.prefix = @config-directory
+      uninstall = promisify(npm.uninstall)
+      await uninstall('buche-{name}')
 
-   normalize(match, field) =
-      undefined? ->
-         {=}
-      null? ->
-         {=}
-      "*" ->
-         all-features(p)[field]
-      String? s ->
-         {s => s}
-      Array? xs ->
-         object with xs each x -> {x, x}
-      features ->
-         object with items(features) each {name, match} ->
-            (=== true) -> {name, name}
-            false? -> continue
-            name2 -> {name, name2}
+   ;;;;;;;;;;;;;;;
+   ;; Resolving ;;
+   ;;;;;;;;;;;;;;l
 
-   if features is true:
-      features = all-features(p)
+   _fetch(shortname) =
+      fullname = 'buche-{shortname}'
+      try:
+         @require(fullname)
+      catch e:
+         if e.message !== 'Cannot find module \'{fullname}\'':
+            throw e
+         @import-failures[shortname] = true
+         throw new ImportError with
+            'Cannot find plugin "{shortname}". Try: `buche --install {shortname}`'
 
-   if not p.is-buche-plugin:
-      throw new Error('"{p._buche_name}" is not a valid Buche plugin.')
-
-   items(normalize(features.channels, .channels)) each {ch, destch} ->
-      cls = p.channels[ch]
-      if channel-constructors[destch] or not cls:
-         throw new Error('Cannot not load channel "{ch}"')
-      events.emit('add-channel-type', destch, cls)
-      events.emit('add-channel-type-{destch}', cls)
-      channel-constructors[destch] = cls
-
-   items(normalize(features.components, .components)) each {c, destc} ->
-      cls = p.components[c]
-      events.emit('add-component-type', destc, cls)
-      events.emit('add-component-type-{destc}', cls)
-      document.register-element(destc, cls)
-
-
-async npm-instance() =
-   require: npm
-   load = promisify(npm.load)
-   await load(JSON.parse(fs.readFileSync(config-path('package.json'))))
-
-
-async install-plugin(name) =
-   npm = await npm-instance()
-   npm.prefix = config-path()
-   install = promisify(npm.install)
-   await install('buche-{name}')
-
-
-async uninstall-plugin(name) =
-   npm = await npm-instance()
-   npm.prefix = config-path()
-   uninstall = promisify(npm.uninstall)
-   await uninstall('buche-{name}')
-
-
-register-element(name, cls) =
-   channel-elements[name] = cls
-   document.register-element(name, cls)
-
-
-make-installer-component(name, message) =
-   div.install-request %
-      style % """
-         .install-request {
-            background: #eee;
-            padding: 10px;
-         }
-         .install-button {
-            padding: 5px;
-         }
-         .install-error {
-            padding: 5px;
-            color: red;
-            font-weight: bold;
-         }
-         .install-installing {
-            padding: 5px;
-         }
-         .install-done {
-            padding: 5px;
-            color: green;
-            font-weight: bold;
-         }
-      """
-      div.install-message %
-         message
-      div.install-button % button %
-         'Install'
-         method onclick(e) =
-            ;; TODO: dismiss the install button when the package is
-            ;; installed from elsewhere.
-            ;; TODO: "Retry import" button?
-            f() where async f() =
-               parent = @parent-node
-               parent.innerHTML = "Installing..."
-               parent.className = 'install-installing'
-               try:
-                  await install-plugin(name)
-                  delete import-failures[name]
-               catch e:
-                  parent.innerHTML = e.message
-                  parent.className = 'install-error'
-                  return
-               try:
-                  load-plugin(name, false, true)
-               catch e:
-                  parent.innerHTML = e.message
-                  parent.className = 'install-error'
-                  return
-               parent.innerHTML = "Done!"
-               parent.className = 'install-done'
+   get(p, local) =
+      if local or p.starts-with('/') or p.starts-with('.'):
+         full-path =
+            match p:
+               R"^/"? -> p
+               else -> path.join(process.cwd(), p)
+         plugin = rq(full-path)
+         plugin._buche_name = p
+         plugin
+      else:
+         plugin = @_fetch(p)
+         plugin._buche_name = p
+         plugin

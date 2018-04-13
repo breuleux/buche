@@ -6,15 +6,14 @@ require:
    path
    minimist
    shell-escape
-   child_process ->
-      spawn
+   child_process -> spawn
    open
    ..package -> version
-   .registry ->
-      install-plugin, uninstall-plugin, resolve-plugin
-   .util ->
-      buche-error-channel
+   .registry -> PluginManager
+   .util -> buche-error-channel
    /html
+
+plugins = PluginManager('~/.config/buche/')
 
 var main-window = null
 var proc = null
@@ -64,7 +63,7 @@ async parse-options(argv) =
       reqs = {}
       opts.r.split(',') each plugin ->
          try:
-            pkg = resolve-plugin('{plugin}/package.json')
+            pkg = plugins.get('{plugin}/package.json')
             if pkg.buche and pkg.buche??.requireHowto:
                reqs.push({plugin, true, pkg.buche.requireHowto})
             else:
@@ -96,10 +95,10 @@ async parse-options(argv) =
       print 'buche v{version}'
       null
    elif opts.install:
-      await install-plugin(opts.install)
+      await plugins.install(opts.install)
       null
    elif opts.uninstall:
-      await uninstall-plugin(opts.uninstall)
+      await plugins.uninstall(opts.uninstall)
       null
    else:
       opts.cmd = match opts._:
