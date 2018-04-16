@@ -113,30 +113,53 @@ make-nodes(match message, fmt) =
 
 class RootDispatcher < EventEmitter:
 
-   constructor(@source, @container) =
+   constructor(@source, @container, @plugins) =
       @doc = InteractiveDocument(@container)
       @waitlist = {=}
 
-   dispatch(message) =
-      clone! m = message
-      channel = m.parent
-      delete m.parent
-      match @doc.channels[channel]:
-         undefined? and match is @waitlist[channel] ->
+   dispatch(message and match is message.command) =
+      do:
+         clone! m = message
+         channel-name = m.parent
+         delete m.parent
+      .resource ->
+         if channel-name is not undefined:
+            throw Error('resource command should not set parent field')
+         make-nodes(message) each node ->
+            document.head.append-child(node)
+      .plugin ->
+         if channel-name is not undefined:
+            throw Error('plugin command should not set parent field')
+         @plugins.load(message.name)
+      .error ->
+         console.error('[E] {message.type}: {message.message}')
+         console.error(message.data)
+
+      do:
+         channel = channel-name and @doc.channels[channel-name]
+      when channel is undefined ->
+         ;; We stash the message until its parent channel has been created.
+         match @waitlist[channel-name]:
             undefined? ->
                w = {}
-               @waitlist[channel] = w
+               @waitlist[channel-name] = w
                w.push(message)
-               @doc.once(channel) with element ->
-                  delete @waitlist[channel]
+               @doc.once(channel-name) with element ->
+                  delete @waitlist[channel-name]
                   w each m ->
                      @dispatch(m)
             w ->
                w.push(message)
-         channel ->
-            nodes = make-nodes(m)
-            nodes each node ->
-               channel.append-child(node)
+      .log or undefined? ->
+         make-nodes(m) each node ->
+            channel.append-child(node)
+      .clear ->
+         if channel.clear:
+            channel.clear()
+         else:
+            channel.innerHTML = ""
+      cmd ->
+         throw 'Unknown command: {cmd}'
 
    run() =
       @source.read(m -> @dispatch(m))

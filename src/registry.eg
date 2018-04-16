@@ -81,8 +81,8 @@ class PluginManager:
          throw new ImportError with
             'Cannot find plugin "{shortname}". Try: `buche --install {shortname}`'
 
-   get(p, local) =
-      if local or p.starts-with('/') or p.starts-with('.'):
+   get(p) =
+      if p.starts-with('/') or p.starts-with('.'):
          full-path =
             match p:
                R"^/"? -> p
@@ -94,3 +94,17 @@ class PluginManager:
          plugin = @_fetch(p)
          plugin._buche_name = p
          plugin
+
+   ;;;;;;;;;;;;;;;;;;;;;;
+   ;; Loading a plugin ;;
+   ;;;;;;;;;;;;;;;;;;;;;;
+
+   load(name) =
+      p = @get(name)
+      @import(p)
+
+   import(p) =
+      if p.__installed:
+         return
+      p.buche-install()
+      p.__installed = true

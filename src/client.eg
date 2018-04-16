@@ -7,6 +7,8 @@ require:
       StreamSource
    .dispatch ->
       RootDispatcher
+   .registry ->
+      PluginManager
    buche-tools
 
 
@@ -15,6 +17,9 @@ globals:
 
 
 Buche = buche-tools
+
+
+plugins = PluginManager('~/.config/buche/')
 
 
 stdin-buffer = new EventEmitter()
@@ -32,6 +37,6 @@ main() where main() =
          stdin-buffer
          with write(x) =
             ipc-renderer.send(.data, x)
-   dispatcher = RootDispatcher(stream, mount-content)
+   dispatcher = RootDispatcher(stream, mount-content, plugins)
    document.dispatcher = dispatcher
    dispatcher.run()
