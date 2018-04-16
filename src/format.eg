@@ -9,9 +9,23 @@ globals:
    document
 
 
+fix-script-tags(node) =
+   ;; <script> tags creates through setting innerHTML won't run.
+   ;; This method fixes that behavior by replacing all script tags
+   ;; by explicitly built nodes.
+   node.query-selector-all('script') each s ->
+      s2 = document.create-element('script')
+      s2.type = s.type
+      if s.src:
+         s2.src = s.src
+      s2.text-content = s.text-content
+      s.parent-node.replace-child(s2, s)
+
+
 extract-raw(text) =
    dummy = document.create-element('div')
    dummy.innerHTML = text
+   fix-script-tags(dummy)
    match consume(dummy.child-nodes):
       {x} ->
          x
