@@ -1,6 +1,7 @@
 
 require:
    events -> EventEmitter
+   .elements -> custom-elements
    "./format" -> format
    /dom
 
@@ -26,12 +27,37 @@ class InteractiveDocument < EventEmitter:
       @emit('add-channel', path, element)
       @emit(path, element)
       @obs = new MutationObserver with (muts each mut) ->
+         @insert-placeholders(mut.added-nodes, mut.target)
          @add-channels-from(mut.added-nodes, mut.target)
          @remove-channels-from(mut.removed-nodes, mut.target)
       @obs.observe(@container) with {
          child-list = true
          subtree = true
       }
+
+   async schedule-placeholder-removal(tag-name, ph, ch) =
+      await custom-elements.when-defined(tag-name)
+      ph.parent-node.replace-child(ch, ph)
+
+   insert-placeholders(match node, parent) =
+      ;; Any undefined custom element is replaced by an informative
+      ;; placeholder until the required plugin is installed.
+      Element? and match is node.tag-name.to-lower-case() ->
+         do:
+            @insert-placeholders(node.child-nodes, node)
+         name when custom-elements.is-valid-name(name)
+                   \ and custom-elements.get(name) is undefined ->
+            ph = dom with
+               placeholder-element %
+                  tag = name
+            parent.replace-child(ph, node)
+            @schedule-placeholder-removal(name, ph, node)
+         else ->
+            pass
+      Text? ->
+         pass
+      else ->
+         node each x -> @insert-placeholders(x, parent)
 
    add-channels-from(match node, var parent) =
       Element? ->
@@ -54,7 +80,9 @@ class InteractiveDocument < EventEmitter:
 
    remove-channels-from(match node, parent) =
       Element? ->
-         throw Error('Cannot remove nodes at the moment.')
+         ;; TODO
+         pass
+         ;; throw Error('Cannot remove nodes at the moment.')
       Text? ->
          pass
       else ->

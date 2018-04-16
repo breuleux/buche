@@ -1,0 +1,49 @@
+
+require:
+   /dom
+
+
+provide:
+   custom-elements
+
+
+globals:
+   HTMLElement, custom-elements, CustomElementRegistry
+
+
+jsclass PlaceholderElement < HTMLElement:
+   constructor() =
+      super()
+
+   connected-callback() =
+      tag = @get-attribute(.tag)
+      @set-attribute(.title) with
+         'Undefined tag: <{tag}>. You may need to install a plugin.'
+      @append-child(dom('<{tag}>'))
+
+
+_standard-hyphenated = {
+   "annotation-xml" = true
+   "color-profile" = true
+   "font-face" = true
+   "font-face-src" = true
+   "font-face-uri" = true
+   "font-face-format" = true
+   "font-face-name" = true
+   "missing-glyph" = true
+}
+
+
+CustomElementRegistry.prototype.is-valid-name(name) =
+   ;; This is not exhaustive. Actual spec at:
+   ;; https://www.w3.org/TR/custom-elements/#valid-custom-element-name
+   R"[a-z_]+-[a-z_]+"? name and not _standard-hyphenated[name]
+
+
+elements-map = {
+   "placeholder-element" = PlaceholderElement
+}
+
+
+items(elements-map) each {tag, cls} ->
+   custom-elements.define(tag, cls)

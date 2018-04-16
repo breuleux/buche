@@ -30,6 +30,19 @@ html, body, #app {
   height: 100vh;
 }
 
+placeholder-element {
+  display: inline-block;
+  background: red;
+  padding: 2px;
+  margin: 2px;
+  color: white;
+}
+
+placeholder-element:before {
+  font-weight: bold;
+  content: "?";
+}
+
 /* .log-area-stack { */
 /*   display: flex; */
 /*   flex-direction: column; */
