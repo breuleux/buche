@@ -1,8 +1,8 @@
 
 require:
    events -> EventEmitter
-   .elements -> custom-elements
-   "./format" -> format
+   .elements ->
+      custom-elements, make-nodes
    /dom
 
 
@@ -89,28 +89,6 @@ class InteractiveDocument < EventEmitter:
          node each x -> @remove-channels-from(x, parent)
 
 
-make-nodes(match message, fmt) =
-   undefined? or null? ->
-      {}
-   String? ->
-      Array! format(fmt, message)
-   Array? ->
-      message.map(make-nodes).reduce(++)
-   {=> tag} ->
-      new-children = make-nodes(message.children, message.format or .html)
-      enode = ENode(tag, props, new-children) where props =
-         object with items(message) each {match k, v} ->
-            .tag or .children ->
-               continue
-            else ->
-               {k, v}
-      {dom(enode)}
-   {=> children} ->
-      make-nodes(children, message.format or .html)
-   else ->
-      throw Error('Cannot make a node out of this.')
-
-
 class RootDispatcher < EventEmitter:
 
    constructor(@source, @container, @plugins) =
@@ -122,6 +100,7 @@ class RootDispatcher < EventEmitter:
          clone! m = message
          channel-name = m.parent
          delete m.parent
+         delete m.command
       .resource ->
          if channel-name is not undefined:
             throw Error('resource command should not set parent field')
@@ -150,16 +129,9 @@ class RootDispatcher < EventEmitter:
                      @dispatch(m)
             w ->
                w.push(message)
-      .log or undefined? ->
-         make-nodes(m) each node ->
-            channel.append-child(node)
-      .clear ->
-         if channel.clear:
-            channel.clear()
-         else:
-            channel.innerHTML = ""
+
       cmd ->
-         throw 'Unknown command: {cmd}'
+         channel.dispatch(cmd or 'log', m)
 
    run() =
       @source.read(m -> @dispatch(m))

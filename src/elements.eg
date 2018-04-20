@@ -1,14 +1,55 @@
 
 require:
+   "./format" -> format
    /dom
 
 
 provide:
    custom-elements
+   make-nodes
 
 
 globals:
    HTMLElement, custom-elements, CustomElementRegistry
+
+
+make-nodes(match message, fmt) =
+   undefined? or null? ->
+      {}
+   String? ->
+      Array! format(fmt, message)
+   Array? ->
+      message.map(make-nodes).reduce(++)
+   {=> tag} ->
+      new-children = make-nodes(message.children, message.format or .html)
+      enode = ENode(tag, props, new-children) where props =
+         object with items(message) each {match k, v} ->
+            .tag or .children ->
+               continue
+            else ->
+               {k, v}
+      {dom(enode)}
+   {=> children} ->
+      make-nodes(children, message.format or .html)
+   else ->
+      throw Error('Cannot make a node out of this.')
+
+
+method HTMLElement.prototype.dispatch(cmd, data) =
+   m = @['command_{cmd}']
+   if m:
+      m.call(@, cmd, data)
+   else:
+      throw new Error('Unrecognized command: {cmd}')
+
+
+method HTMLElement.prototype.command_log(_, data) =
+   make-nodes(data) each node ->
+      @append-child(node)
+
+
+method HTMLElement.prototype.command_clear(_, data) =
+   @innerHTML = ""
 
 
 jsclass PlaceholderElement < HTMLElement:
