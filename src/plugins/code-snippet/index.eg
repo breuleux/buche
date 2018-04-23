@@ -1,0 +1,93 @@
+
+require:
+   fs
+   path
+   "highlight.js" as hljs
+   /dom
+
+
+provide:
+   buche-install
+
+
+globals:
+   document, HTMLElement, custom-elements, Text
+
+
+jsclass CodeSnippet < HTMLElement:
+   constructor() =
+      super()
+
+   connected-callback() =
+      if @_done:
+         return
+
+      @filename = @get-attribute('src')
+      try:
+         @contents = fs.read-file-sync(@filename, .utf8)
+      catch e:
+         @contents = match @child-nodes[0]:
+            undefined? -> ""
+            Text? t -> t.text-content
+            node -> node.inner-text
+      @language = @get-attribute('language') or 'auto'
+      Number! @column = @get-attribute('column') or -1
+      @column -= 1
+      Number! @lineno = @get-attribute('line') or 1
+      @lineno -= 1
+      Number! @context = @get-attribute('context') or 0
+      lines = @contents.split(R"\n") each line -> '{line}\n'
+      lo = Math.max(@lineno - @context, 0)
+      hi = Math.min(@lineno + @context, lines.length - 1)
+      lang-class = '.{@language}'
+
+      @excerpt = dom with
+         div.hljs[^lang-class] %
+            lines[lo ... @lineno]
+            span.hljs-line-focus %
+               if @column < 0:
+                  then:
+                     lines[@lineno]
+                  else:
+                     l = lines[@lineno]
+                     {
+                        l[0 ... @column]
+                        span.hljs-column-focus % l[@column]
+                        l[(@column + 1) ...]
+                     }
+            lines[(@lineno + 1) .. hi]
+      @hl-excerpt = hljs.highlight-block(@excerpt)
+      @hl-excerpt = @excerpt
+
+      @line-numbers = (lo..hi each i -> ___) with
+         if i == @lineno:
+            then: div.hljs-lineno-focus % '{i + 1}'
+            else: div % '{i + 1}'
+   
+      @innerHTML = ""
+
+      @append-child(dom(___)) with
+         code.filename %
+            @filename
+
+      @append-child(dom(___)) with
+         div.hljs-box %
+            .hljs-linenos %
+               @line-numbers
+            @hl-excerpt
+
+      @_done = true
+
+
+buche-install() =
+   custom-elements.define('code-snippet', CodeSnippet)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = '../node_modules/highlight.js/styles/github.css'

@@ -1,0 +1,48 @@
+
+code-snippet {
+   display: inline-block;
+   border: 3px solid blue;
+}
+
+code.filename {
+   display: block;
+   background: #e8e8e8;
+}
+
+.hljs-lineno-focus {
+   background: #ddd;
+   color: purple;
+}
+
+.hljs-line-focus {
+   background: #ddd;
+   display: block;
+}
+
+.hljs-column-focus {
+   background: #aaa;
+}
+
+.hljs-box {
+   display: flex;
+   flex-direction: row;
+}
+
+.hljs-linenos, .hljs {
+   font-size: 16px;
+   line-height: 1.2;
+   font-family: monospace;
+   white-space: pre;
+}
+
+.hljs-linenos {
+   font-weight: bold;
+   padding-right: 4px;
+   border-right: 2px solid purple;
+}
+
+.hljs {
+   flex: 1;
+   padding: 0px !IMPORTANT;
+   padding-left: 4px !IMPORTANT;
+}
