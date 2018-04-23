@@ -30,7 +30,7 @@ html, body, #app {
   height: 100vh;
 }
 
-placeholder-element {
+placeholder-element, buche-command {
   display: inline-block;
   background: red;
   padding: 2px;
@@ -42,6 +42,7 @@ placeholder-element:before {
   font-weight: bold;
   content: "?";
 }
+
 
 /* .log-area-stack { */
 /*   display: flex; */

@@ -7,10 +7,11 @@ require:
 provide:
    custom-elements
    make-nodes
+   element-to-command
 
 
 globals:
-   HTMLElement, custom-elements, CustomElementRegistry
+   HTMLElement, Text, custom-elements, CustomElementRegistry
 
 
 make-nodes(match message, fmt) =
@@ -52,6 +53,41 @@ method HTMLElement.prototype.command_clear(_, data) =
    @innerHTML = ""
 
 
+_process-child-as-command(match ch, state) =
+   when state.data !== null ->
+      state.state = .invalid
+   Text? t ->
+      ;; TODO: error handling
+      state.data = JSON.parse(t.data)
+      state.state = .ok
+   else ->
+      state.state = .invalid
+
+
+element-to-command(node, command = null) =
+   data = {
+      state = .invalid
+      command = command or node.get-attribute(.command) or node.get-attribute(.cmd) or .log
+      data = null
+   }
+
+   node.child-nodes each ch ->
+      _process-child-as-command(ch, data)
+
+   node.buche-data = data
+   data
+
+
+jsclass BucheCommand < HTMLElement:
+   constructor() =
+      super()
+      element-to-command(@)
+      @innerHTML = "&lt;buche-command&gt; should not be in the DOM tree."
+
+   append-child(ch) =
+      _process-child-as-command(ch, @buche-data)
+
+
 jsclass PlaceholderElement < HTMLElement:
    constructor() =
       super()
@@ -83,6 +119,7 @@ CustomElementRegistry.prototype.is-valid-name(name) =
 
 elements-map = {
    "placeholder-element" = PlaceholderElement
+   "buche-command" = BucheCommand
 }
 
 
