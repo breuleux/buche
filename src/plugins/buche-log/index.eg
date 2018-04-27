@@ -1,0 +1,76 @@
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass LogEntry < HTMLElement:
+   constructor() =
+      super()
+
+
+jsclass BucheLog < BucheElement:
+
+   attribute-defaults() = {
+      limit = 1000
+   }
+
+   attribute-spec() = {
+      limit(match lim) =
+         "0" or "none" or "null" or "infinity" ->
+            Infinity
+         else ->
+            lim
+   }
+
+   constructor() =
+      super()
+
+      @jqarea = jq(@)
+      @scrolled-down = true
+      @len = 0
+
+      @onscroll(e) =
+         a = @jqarea
+         @scrolled-down =
+            a[0].scroll-height - a.scroll-top() == a.outer-height()
+
+   _add(ch) =
+      @_append-child(ch)
+
+      @len += 1
+      while @len > @config.limit:
+         @remove-child(@child-nodes[0])
+         @len -= 1
+
+      if @scrolled-down:
+         set-timeout(f, 0) where f() =
+            @jqarea.scroll-top(@scroll-height)
+
+   push-child(match ch) =
+      LogEntry? ->
+         @_add(ch)
+      else ->
+         @_add(dom(___)) with
+            log-entry %
+               ch
+
+
+buche-install() =
+   custom-elements.define('buche-log', BucheLog)
+   custom-elements.define('log-entry', LogEntry)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")

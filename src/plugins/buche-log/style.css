@@ -1,0 +1,40 @@
+
+buche-log {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    overflow: auto;
+}
+
+buche-log > log-entry {
+    display: block;
+    padding-left: 25px;
+    margin-left: 5px;
+}
+
+buche-log > log-entry.echo {
+    border-left: 15px solid green;
+    margin-left: 0px;
+    padding-left: 15px;
+    background-color: #eee;
+ }
+ 
+buche-log > log-entry.result,
+buche-log > log-entry.error,
+buche-log > log-entry.warning {
+    padding-left: 20px;
+    margin-left: 5px;
+}
+
+buche-log > log-entry.result {
+    border-left: 5px solid blue;
+}
+
+buche-log > log-entry.error {
+    border-left: 5px solid red;
+}
+
+buche-log > log-entry.warning {
+    border-left: 5px solid orange;
+}

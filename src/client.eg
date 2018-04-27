@@ -20,7 +20,7 @@ Buche = buche-tools
 
 
 plugins = PluginManager('~/.config/buche/')
-{'code-snippet'} each plugin-name ->
+{'code-snippet', 'buche-log'} each plugin-name ->
    p = require: ^['./plugins/{plugin-name}']
    plugins.import(p)
 
