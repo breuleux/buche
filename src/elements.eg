@@ -5,6 +5,7 @@ require:
 
 
 provide:
+   BucheElement
    custom-elements
    make-nodes
    element-to-command
@@ -76,6 +77,53 @@ element-to-command(node, command = null) =
 
    node.buche-data = data
    data
+
+
+jsclass BucheElement < HTMLElement:
+
+   constructor() =
+      super()
+      @_locked = false
+
+   attribute-defaults() =
+      {=}
+
+   attribute-spec() =
+      {=}
+
+   _lock() =
+      if not @_locked:
+         @_locked = true
+         spec = @attribute-spec()
+         config = @attribute-defaults()
+         @attributes each attr ->
+            name = attr.name
+            v =
+               if spec[name]:
+                  spec[name](attr.value)
+               else:
+                  attr.value
+            config[name] = v
+         children = consume(@child-nodes)
+         @innerHTML = ""
+         @setup(config, children)
+
+   setup(config, children) =
+      @config = config
+      children each ch ->
+         @push-child(ch)
+
+   connected-callback() =
+      @_lock()
+
+   append-child(ch) =
+      if @_locked:
+         @push-child(ch)
+      else:
+         super.append-child(ch)
+
+   _append-child(ch) =
+      super.append-child(ch)
 
 
 jsclass BucheCommand < HTMLElement:
