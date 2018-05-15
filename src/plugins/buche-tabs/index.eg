@@ -1,0 +1,32 @@
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass BucheTabs < BucheElement:
+
+   constructor() =
+      super()
+
+   push-child(ch) =
+      @_append-child(ch)
+
+
+buche-install() =
+   custom-elements.define('buche-tabs', BucheTabs)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
