@@ -5,6 +5,7 @@ require:
 
 
 provide:
+   extract-config
    BucheElement
    custom-elements
    make-nodes
@@ -79,6 +80,22 @@ element-to-command(node, command = null) =
    data
 
 
+extract-config(@) =
+   spec = @attribute-spec()
+   config = @attribute-defaults()
+   @attributes each attr ->
+      name = attr.name
+      v =
+         if spec[name]:
+            spec[name](attr.value)
+         else:
+            attr.value
+      config[name] = v
+   items(config) each {name, v} ->
+      @set-attribute(name, v)
+   config
+
+
 jsclass BucheElement < HTMLElement:
 
    constructor() =
@@ -94,16 +111,7 @@ jsclass BucheElement < HTMLElement:
    _lock() =
       if not @_locked:
          @_locked = true
-         spec = @attribute-spec()
-         config = @attribute-defaults()
-         @attributes each attr ->
-            name = attr.name
-            v =
-               if spec[name]:
-                  spec[name](attr.value)
-               else:
-                  attr.value
-            config[name] = v
+         config = extract-config(@)
          children = consume(@child-nodes)
          @innerHTML = ""
          @setup(config, children)

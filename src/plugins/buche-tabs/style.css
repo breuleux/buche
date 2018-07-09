@@ -1,4 +1,123 @@
 
+/* Layout */
+
 buche-tabs {
-    border: 3px solid crimson;
+    display: flex;
+    height: 100%;
+    width: 100%;
+    overflow: auto;
+}
+
+buche-tabs > .labels {
+    display: flex;
+    user-select: none;
+    overflow: auto;
+}
+
+buche-tabs > .panes {
+    display: flex;
+    flex: 1;
+    height: 100%;
+}
+
+buche-tabs[layout='top'],
+buche-tabs[layout='bottom'] {
+    flex-direction: column;
+}
+
+buche-tabs[layout='left'],
+buche-tabs[layout='right'] {
+    flex-direction: row;
+}
+
+buche-tabs[layout='top'] > *,
+buche-tabs[layout='bottom'] > * {
+    flex-direction: row;
+}
+
+buche-tabs[layout='left'] > *,
+buche-tabs[layout='right'] > * {
+    flex-direction: column;
+}
+
+buche-tabs[layout='bottom'] > .panes,
+buche-tabs[layout='right'] > .panes {
+    order: -1;
+}
+
+tab-pane {
+    flex: 1;
+    overflow: auto;
+}
+
+tab-pane {
+    display: none;
+}
+
+tab-pane.active {
+    display: block;
+}
+
+
+/* Style */
+
+buche-tabs {
+    border: 1px solid black;
+}
+
+#mount-content > buche-tabs,
+tab-pane > buche-tabs {
+    border: none;
+}
+
+buche-tabs > .labels {
+    background: #88f;
+}
+
+tab-label {
+    cursor: pointer;
+    color: white;
+    margin-left: 5px;
+    margin-right: 5px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    border-radius: 5px;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+tab-label.active {
+    color: black;
+    background: white;
+}
+
+tab-pane {
+    box-sizing: border-box;
+    /* border: 2px solid #88f; */
+}
+
+buche-tabs[layout='left'] > .labels {
+    border-right: 2px solid #66f;
+}
+
+buche-tabs[layout='right'] > .labels {
+    border-left: 2px solid #66f;
+}
+
+buche-tabs[layout='top'] > .labels {
+    border-bottom: 2px solid #66f;
+}
+
+buche-tabs[layout='bottom'] > .labels {
+    border-top: 2px solid #66f;
+}
+
+buche-tabs[layout='left'] > .panes > tab-pane.active ~ tab-pane.active,
+buche-tabs[layout='right'] > .panes > tab-pane.active ~ tab-pane.active {
+    border-top: 2px solid #66f;
+}
+
+buche-tabs[layout='top'] > .panes > tab-pane.active ~ tab-pane.active,
+buche-tabs[layout='bottom'] > .panes > tab-pane.active ~ tab-pane.active {
+    border-left: 2px solid #66f;
 }

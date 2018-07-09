@@ -1,30 +1,174 @@
 
 globals:
-   document, HTMLElement, custom-elements
+   document, Text, HTMLElement, custom-elements, CustomEvent
 
 
 require:
    path
    /dom
    jquery as jq
-   ...elements -> BucheElement
+   ...elements ->
+      extract-config, BucheElement
 
 
 provide:
    buche-install
 
 
-jsclass BucheTabs < BucheElement:
+class TabData:
+   constructor(@buche-tabs, @tab, @pane, @initial-active, @order) =
+      sel(e) =
+         @buche-tabs.user-selected = true
+         e.stop-propagation()
+         additive =
+            if @buche-tabs.config.sticky:
+               not e.shift-key
+            else:
+               e.shift-key
+         @buche-tabs.select(@, additive)
+      @tab.query-selector-all('*') each child ->
+         ;; Disable children's existing click events.
+         child.onclick = sel
+      @tab.onclick = sel
+
+   activate() =
+      @tab.class-list.add(.active)
+      @pane.class-list.add(.active)
+      @active = true
+      @buche-tabs.active.push(@)
+      @pane.dispatch-event(new CustomEvent('display', {detail = this}))
+
+   deactivate() =
+      @tab.class-list.remove(.active)
+      @pane.class-list.remove(.active)
+      @active = false
+      @buche-tabs.active =
+         @buche-tabs.active each a when a !== [@] -> a
+
+
+jsclass TabEntry < HTMLElement:
+   attribute-defaults() = {
+      order = 0
+      active = false
+   }
+
+   attribute-spec() = {
+      order = parse-int
+      active(match) =
+         null? -> false
+         "" -> true
+   }
 
    constructor() =
       super()
 
-   push-child(ch) =
-      @_append-child(ch)
+
+jsclass TabLabel < HTMLElement:
+   constructor() =
+      super()
+
+
+jsclass TabPane < HTMLElement:
+   constructor() =
+      super()
+
+
+jsclass BucheTabs < BucheElement:
+   attribute-defaults() = {
+      layout = .top
+      sticky = false
+   }
+
+   attribute-spec() = {
+      sticky(match) =
+         null? -> false
+         "" -> true
+   }
+
+   constructor() =
+      super()
+
+   _add(ch) =
+      match consume(ch.children):
+         {TabLabel? lbl, TabPane? pane} ->
+            cfg = extract-config(ch)
+            data = TabData(@, lbl, pane, cfg.active, cfg.order)
+            order = data.order
+
+            idx =
+               if not order:
+                  @_data.length
+               else:
+                  var idx = 0
+                  while @_data[idx] and @_data[idx].order <= order:
+                     idx += 1
+                  idx
+
+            if idx == @_data.length:
+               @_tabs.append-child(data.tab)
+               @_panes.append-child(data.pane)
+            else:
+               prev = @_data[idx]
+               @_tabs.insert-before(data.tab, prev.tab)
+               @_panes.insert-before(data.pane, prev.pane)
+            @_data.splice(idx, 0, data)
+
+            if data.initial-active:
+               data.activate()
+
+         else ->
+            throw Error with
+               '<tab-entry> should contain <tab-label> followed by <tab-pane>'
+
+   install(spec) =
+      var idx = 0
+      while @specs[idx] and @specs[idx].order <= spec.order:
+         idx += 1
+
+      if idx == @specs.length:
+         @tabs.append-child(spec.tab)
+         @panes.append-child(spec.pane)
+      else:
+         prev = @specs[idx]
+         @tabs.insert-before(spec.tab, prev.tab)
+         @panes.insert-before(spec.pane, prev.pane)
+      @specs.splice(idx, 0, spec)
+
+      if spec.initial-active:
+         spec.activate()
+
+   setup(config, children) =
+      @active = {}
+      @_data = {}
+      @_tabs = dom with div.labels %
+      @_panes = dom with div.panes %
+      @_append-child(@_tabs)
+      @_append-child(@_panes)
+      super.setup(config, children)
+
+   push-child(match ch) =
+      TabEntry? ->
+         @_add(ch)
+      Text? t when not t.text-content.trim() ->
+         pass
+      else ->
+         throw Error('<buche-tabs> only accepts <tab-entry>, not {ch}')
+
+   select(spec, add-to-active = false) =
+      if @active.length > 0 and not add-to-active:
+         {* @active} each a ->
+            a.deactivate()
+      if add-to-active and spec.active:
+         spec.deactivate()
+      else:
+         spec.activate()
 
 
 buche-install() =
    custom-elements.define('buche-tabs', BucheTabs)
+   custom-elements.define('tab-entry', TabEntry)
+   custom-elements.define('tab-label', TabLabel)
+   custom-elements.define('tab-pane', TabPane)
    document.head.append-child(dom(___)) with
       link %
          type = "text/css"
