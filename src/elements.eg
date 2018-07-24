@@ -13,7 +13,7 @@ provide:
 
 
 globals:
-   HTMLElement, Text, custom-elements, CustomElementRegistry
+   HTMLElement, Text, custom-elements, CustomElementRegistry, Event
 
 
 make-nodes(match message, fmt) =
@@ -55,6 +55,43 @@ method HTMLElement.prototype.command_clear(_, data) =
    @innerHTML = ""
 
 
+method HTMLElement.prototype.buche-dispatcher() =
+   var root = [@]
+   while not root._buche-dispatcher:
+      root = root.parent-node
+   root._buche-dispatcher
+
+
+method HTMLElement.prototype.buche-send(obj, arg) =
+   message = match obj:
+      Event? ->
+         {
+            path = @buche-path or null
+            event-type = obj.type
+            modifiers = {
+               ctrl = obj.ctrl-key
+               shift = obj.shift-key
+               alt = obj.alt-key
+               meta = obj.meta-key
+            }
+            which = obj.which
+         }
+      Number? or String? ->
+         {
+            path = @buche-path or null
+            argument = obj
+         }
+      else ->
+         obj
+
+   if typeof(arg) is .object:
+      Object.assign(message, arg)
+   else:
+      message.argument = arg
+
+   @buche-dispatcher().source.send(message)
+
+
 _process-child-as-command(match ch, state) =
    when state.data !== null ->
       state.state = .invalid
@@ -69,7 +106,10 @@ _process-child-as-command(match ch, state) =
 element-to-command(node, command = null) =
    data = {
       state = .invalid
-      command = command or node.get-attribute(.command) or node.get-attribute(.cmd) or .log
+      command = command
+         \ or node.get-attribute(.command)
+         \ or node.get-attribute(.cmd)
+         \ or .log
       data = null
    }
 

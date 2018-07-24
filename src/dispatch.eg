@@ -16,10 +16,11 @@ globals:
 
 class InteractiveDocument < EventEmitter:
 
-   constructor(@container) =
+   constructor(@container, @dispatcher) =
       @channels = {=}
       @create-channel('/', @container)
       @add-channels-from(@container.child-nodes, @container)
+      @container._buche-dispatcher = @dispatcher
 
    create-channel(path, element) =
       element.buche-path = path
@@ -101,7 +102,7 @@ class InteractiveDocument < EventEmitter:
 class RootDispatcher < EventEmitter:
 
    constructor(@source, @container, @plugins) =
-      @doc = InteractiveDocument(@container)
+      @doc = InteractiveDocument(@container, @)
       @waitlist = {=}
 
    dispatch(message and match is message.command) =
