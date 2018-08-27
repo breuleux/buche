@@ -89,6 +89,8 @@ method HTMLElement.prototype.buche-send(obj, arg) =
    else:
       message.argument = arg
 
+   message.path or= @buche-path or null
+
    @buche-dispatcher().source.send(message)
 
 

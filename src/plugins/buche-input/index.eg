@@ -1,0 +1,55 @@
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass BucheInput < BucheElement:
+
+   setup(config, children) =
+      @current = 0
+      @history = {}
+      if children.length > 0:
+         throw Error('No children allowed for buche-input')
+      @_input = dom with
+         input %
+            onkeyup(event and match is event.key-code) =
+               13 ->
+                  ;; Enter
+                  event.prevent-default()
+                  @buche-send(event) with {
+                     event-type = .submit
+                     which = undefined
+                     value = event.target.value
+                  }
+               code ->
+                  pass
+      @_append-child(@_input)
+
+   push-child(ch) =
+      match ch.tag-name.to-lower-case():
+         "command-set" ->
+            @_input.value = ch.text-content
+         "command-focus" ->
+            @_input.focus()
+         else ->
+            throw Error('Illegal child')
+
+
+buche-install() =
+   custom-elements.define('buche-input', BucheInput)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
