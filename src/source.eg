@@ -58,13 +58,14 @@ class StreamSource:
    process-line(line) =
       result =
          try:
+            if not line.starts-with("{"):
+               throw SyntaxError()
             JSON.parse(line)
          catch SyntaxError? e:
             {command = .log
-             path = '/'
-             format = 'pre'
-             contents = line
-             raw = true}
+             parent = '/'
+             format = 'text'
+             children = line}
       @in-callback(result)
 
    send(message) =
