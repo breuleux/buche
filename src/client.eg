@@ -39,7 +39,7 @@ ipc-renderer.send(.ready)
 
 
 main() where main() =
-   mount-content = document.get-element-by-id("mount-content")
+   mount-content = document.get-element-by-id("buche-mount-content")
    stream =
       StreamSource with
          stdin-buffer

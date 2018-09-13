@@ -63,7 +63,7 @@ class StreamSource:
             JSON.parse(line)
          catch SyntaxError? e:
             {command = .log
-             parent = '/'
+             parent = '/stdout'
              format = 'text'
              children = line}
       @in-callback(result)

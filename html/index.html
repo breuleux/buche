@@ -5,9 +5,21 @@
     <link rel="stylesheet" href="style.css" type="text/css">
   </head>
   <body>
-    <div id="app">
-      <div id="mount-content">
-      </div>
+    <div id="buche-mount-content">
+      <bubble-tabs id="buche-info-root"
+                    address="/_info"
+                    hide-empty
+                    layout="top">
+        <tab-entry>
+          <tab-label id=buche-stdout-label>🖨️</tab-label>
+          <tab-pane address="/stdout" id=buche-stdout-pane></tab-pane>
+        </tab-entry>
+        <tab-entry>
+          <tab-label id=buche-stderr-label>🐞</tab-label>
+          <tab-pane address="/stderr" id=buche-stderr-pane></tab-pane>
+        </tab-entry>
+      </bubble-tabs>
+      <div id="buche-root" address="/"></div>
     </div>
     <script>
       require('../lib/client.js');

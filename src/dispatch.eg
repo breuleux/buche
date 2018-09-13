@@ -18,7 +18,6 @@ class InteractiveDocument < EventEmitter:
 
    constructor(@container, @dispatcher) =
       @channels = {=}
-      @create-channel('/', @container)
       @add-channels-from(@container.child-nodes, @container)
       @container._buche-dispatcher = @dispatcher
 
