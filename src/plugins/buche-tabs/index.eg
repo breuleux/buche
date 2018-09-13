@@ -17,6 +17,9 @@ provide:
 
 class TabData:
    constructor(@buche-tabs, @tab, @pane, @initial-active, @order) =
+      @pane._tab = @tab
+      if not @pane.has-child-nodes():
+         @tab.class-list.add(.empty)
       sel(e) =
          @buche-tabs.user-selected = true
          e.stop-propagation()
@@ -71,6 +74,10 @@ jsclass TabLabel < HTMLElement:
 jsclass TabPane < HTMLElement:
    constructor() =
       super()
+
+   append-child(ch) =
+      @_tab.class-list.remove('empty')
+      super.append-child(ch)
 
 
 jsclass BucheTabs < BucheElement:
@@ -155,22 +162,29 @@ jsclass BucheTabs < BucheElement:
          throw Error('<buche-tabs> only accepts <tab-entry>, not {ch}')
 
    select(spec, add-to-active = false) =
+      was-active = spec.active
       if @active.length > 0 and not add-to-active:
          {* @active} each a ->
             a.deactivate()
-      if add-to-active and spec.active:
+      if was-active:
          spec.deactivate()
       else:
          spec.activate()
 
 
+jsclass BubbleTabs < BucheTabs:
+   []
+
+
 buche-install() =
-   custom-elements.define('buche-tabs', BucheTabs)
    custom-elements.define('tab-entry', TabEntry)
    custom-elements.define('tab-label', TabLabel)
    custom-elements.define('tab-pane', TabPane)
-   document.head.append-child(dom(___)) with
-      link %
-         type = "text/css"
-         rel = .stylesheet
-         href = path.join(__dirname, "style.css")
+   custom-elements.define('buche-tabs', BucheTabs)
+   custom-elements.define('bubble-tabs', BubbleTabs)
+   {'style.css', 'bubble-style.css'} each sheet ->
+      document.head.append-child(dom(___)) with
+         link %
+            type = "text/css"
+            rel = .stylesheet
+            href = path.join(__dirname, sheet)

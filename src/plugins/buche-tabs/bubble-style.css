@@ -1,0 +1,104 @@
+
+/* Layout */
+
+bubble-tabs {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    overflow: auto;
+    background: transparent;
+}
+
+bubble-tabs > .labels {
+    display: flex;
+    user-select: none;
+    overflow: auto;
+}
+
+bubble-tabs > .panes {
+    display: flex;
+    flex: 1;
+    height: 100%;
+}
+
+bubble-tabs[layout='top'],
+bubble-tabs[layout='bottom'] {
+    flex-direction: column;
+}
+
+bubble-tabs[layout='left'],
+bubble-tabs[layout='right'] {
+    flex-direction: row;
+}
+
+bubble-tabs[layout='top'] > *,
+bubble-tabs[layout='bottom'] > * {
+    flex-direction: row;
+}
+
+bubble-tabs[layout='left'] > *,
+bubble-tabs[layout='right'] > * {
+    flex-direction: column;
+}
+
+bubble-tabs[layout='bottom'] > .panes,
+bubble-tabs[layout='right'] > .panes {
+    order: -1;
+}
+
+bubble-tabs > .panes > tab-pane {
+    flex: 1;
+    overflow: auto;
+    display: none;
+}
+
+bubble-tabs > .panes > tab-pane.active {
+    display: block;
+}
+
+
+/* Style */
+
+
+bubble-tabs > .labels > tab-label {
+    background: white;
+    cursor: pointer;
+    color: black;
+    font-size: 20px;
+    margin: 5px;
+    height: 30px;
+    width: 30px;
+    border-radius: 15px;
+    text-align: center;
+    line-height: 30px;
+}
+
+bubble-tabs > .labels > tab-label:hover {
+    background: #eee;
+}
+
+bubble-tabs > .labels > tab-label.active {
+    background: #ddd;
+}
+
+bubble-tabs > .panes > tab-pane {
+    margin: 8px;
+    padding: 8px;
+    background: #eee;
+    border-radius: 8px;
+}
+
+bubble-tabs > .panes > tab-pane
+bubble-tabs > .panes > tab-pane {
+    background: #d8d8d8;
+}
+
+bubble-tabs > .panes > tab-pane
+bubble-tabs > .panes > tab-pane
+bubble-tabs > .panes > tab-pane {
+    background: #ddd;
+}
+
+bubble-tabs[hide-empty] > .labels > tab-label.empty {
+    display: none;
+}

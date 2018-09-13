@@ -45,16 +45,13 @@ buche-tabs[layout='right'] > .panes {
     order: -1;
 }
 
-tab-pane {
+buche-tabs > .panes > tab-pane {
     flex: 1;
     overflow: auto;
-}
-
-tab-pane {
     display: none;
 }
 
-tab-pane.active {
+buche-tabs > .panes > tab-pane.active {
     display: block;
 }
 
@@ -65,7 +62,7 @@ buche-tabs {
     border: 1px solid black;
 }
 
-#mount-content > buche-tabs,
+#buche-root > buche-tabs,
 tab-pane > buche-tabs {
     border: none;
 }
@@ -74,7 +71,7 @@ buche-tabs > .labels {
     background: #88f;
 }
 
-tab-label {
+buche-tabs > .labels > tab-label {
     cursor: pointer;
     color: white;
     margin-left: 5px;
@@ -86,14 +83,13 @@ tab-label {
     padding-right: 3px;
 }
 
-tab-label.active {
+buche-tabs > .labels > tab-label.active {
     color: black;
     background: white;
 }
 
-tab-pane {
+buche-tabs > .panes > tab-pane {
     box-sizing: border-box;
-    /* border: 2px solid #88f; */
 }
 
 buche-tabs[layout='left'] > .labels {
