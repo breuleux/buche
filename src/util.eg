@@ -3,18 +3,9 @@ require:
    /html
 
 provide:
-   join
+   stringify
    format-buche-exception
-   buche-exception-message
-   buche-error-channel
-   buche-settings-channel
 
-;; buche-error-channel = '/!buche-errors'
-buche-error-channel = '/🐞'
-buche-settings-channel = '/⚙️'
-
-join(*parts) =
-   parts.join("/").replace(R.g"//+", "/")
 
 stringify(v, a, b) =
    try:
@@ -22,37 +13,28 @@ stringify(v, a, b) =
    catch e:
       'ERROR: {e.message}'
 
-format-buche-exception(@) =
-   div.buche-error %
-      div.buche-error-reason %
-         @message
-      div.buche-error-path %
-         @channel??.path or @data.path or '<MISSING>'
-      tabbed-view %
-         view %
-            tab % "Table"
-            pane %
-               table %
-                  items(@data) each {k, v} ->
-                     tr %
-                        class = if{k in @fields, .highlight, ""}
-                        td % k
-                        td % stringify(v)
-                  (@fields or {}) each field when not @data[field] ->
-                     tr.highlight %
-                        td % field
-                        td % '<MISSING>'
-         view %
-            tab % "JSON"
-            pane % pre % stringify(@data, null, 2)
-         view %
-            tab % "Traceback"
-            pane % pre % @orig-error??.stack or @stack
 
-buche-exception-message(bexc, path = buche-error-channel) = {
-   command = .log
-   gutter = .error
-   = path
-   format = .html
-   contents = html(format-buche-exception(bexc))
-}
+format-buche-exception(command, err, prefix="") =
+   {
+      command = .log
+      parent = '/stderr'
+      format = .html
+      children = html with box-tabs.buche-error-report %
+         tab-entry %
+            active = true
+            tab-label %
+               "Error"
+            tab-pane %
+               prefix
+               err.message
+         tab-entry %
+            tab-label %
+               "Command"
+            tab-pane %
+               pre % stringify(command, null, 2)
+         tab-entry %
+            tab-label %
+               "Traceback"
+            tab-pane %
+               pre % err.stack
+   }

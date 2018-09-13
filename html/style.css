@@ -73,3 +73,18 @@ placeholder-element:before {
   font-weight: bold;
   content: "?";
 }
+
+.buche-error-report {
+  border-left: 2px solid red;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.buche-error-report tab-pane {
+  padding: 5px;
+}
+
+span.stdout {
+  font-family: monospace;
+  white-space: pre;
+}

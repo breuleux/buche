@@ -64,8 +64,8 @@ class StreamSource:
          catch SyntaxError? e:
             {command = .log
              parent = '/stdout'
-             format = 'text'
-             children = line}
+             format = 'stdout'
+             children = line + "\n"}
       @in-callback(result)
 
    send(message) =

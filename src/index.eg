@@ -10,7 +10,7 @@ require:
    open
    ..package -> version
    .registry -> PluginManager
-   .util -> buche-error-channel
+   .util -> format-buche-exception
    /html
 
 plugins = PluginManager('~/.config/buche/')
@@ -188,20 +188,10 @@ create-window(options) =
             try:
                proc.stdin.write(data + '\n')
             catch e:
-               web-send(.data, JSON.stringify(___)) with {
-                  command = .log
-                  path = buche-error-channel
-                  gutter = .error
-                  format = .html
-                  content = html with
-                     div.buche-error %
-                        div.buche-error-reason %
-                           "A message was sent to the command's standard input,"
-                           " but an error occurred:"
-                           div % e.message
-                        pre %
-                           data
-               }
+               web-send(format-buche-exception(___)) with
+                  data, e
+                  "A command was sent to the command's standard input,"
+                  \ + " but an error occurred:"
       else:
          origins = {process.stdin}
          ipc-main.on(.data) with {_, data} ->

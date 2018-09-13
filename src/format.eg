@@ -44,9 +44,9 @@ formats = {
    text(text, options) =
       document.create-text-node(text)
 
-   pre(text, options) =
+   stdout(text, options) =
       dom with
-         div.raw-line % text
+         span.stdout % text
 
    html(text, options) =
       extract-raw(text)

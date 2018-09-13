@@ -3,6 +3,8 @@ require:
    events -> EventEmitter
    .elements ->
       custom-elements, make-nodes, element-to-command
+   .util ->
+      format-buche-exception
    /dom
 
 
@@ -104,7 +106,7 @@ class RootDispatcher < EventEmitter:
       @doc = InteractiveDocument(@container, @)
       @waitlist = {=}
 
-   dispatch(message and match is message.command) =
+   _dispatch(message and match is message.command) =
       do:
          clone! m = message
          channel-name = m.parent
@@ -123,6 +125,9 @@ class RootDispatcher < EventEmitter:
          console.error('[E] {message.type}: {message.message}')
          console.error(message.data)
 
+      when channel-name is undefined ->
+         throw Error("'parent' field was not set in command")
+
       do:
          channel = channel-name and @doc.channels[channel-name]
       when channel is undefined ->
@@ -135,12 +140,18 @@ class RootDispatcher < EventEmitter:
                @doc.once(channel-name) with element ->
                   delete @waitlist[channel-name]
                   w each m ->
-                     @dispatch(m)
+                     @_dispatch(m)
             w ->
                w.push(message)
 
       cmd ->
          channel.dispatch(cmd or 'log', m)
+
+   dispatch(message) =
+      try:
+         @_dispatch(message)
+      catch err:
+         @_dispatch(format-buche-exception(message, err))
 
    run() =
       @source.read(m -> @dispatch(m))

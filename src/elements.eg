@@ -19,10 +19,10 @@ globals:
 make-nodes(match message, fmt) =
    undefined? or null? ->
       {}
-   String? ->
+   String? or ENode? or HTMLElement? ->
       Array! format(fmt, message)
    Array? ->
-      message.map(make-nodes).reduce(++)
+      (message each x -> make-nodes(x, fmt)).reduce(++)
    {=> tag} ->
       new-children = make-nodes(message.children, message.format or .html)
       enode = ENode(tag, props, new-children) where props =
