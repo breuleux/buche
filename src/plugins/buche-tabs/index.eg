@@ -76,7 +76,8 @@ jsclass TabPane < HTMLElement:
       super()
 
    append-child(ch) =
-      @_tab.class-list.remove('empty')
+      if @_tab:
+         @_tab.class-list.remove('empty')
       super.append-child(ch)
 
 
@@ -176,13 +177,18 @@ jsclass BubbleTabs < BucheTabs:
    []
 
 
+jsclass BoxTabs < BucheTabs:
+   []
+
+
 buche-install() =
    custom-elements.define('tab-entry', TabEntry)
    custom-elements.define('tab-label', TabLabel)
    custom-elements.define('tab-pane', TabPane)
    custom-elements.define('buche-tabs', BucheTabs)
    custom-elements.define('bubble-tabs', BubbleTabs)
-   {'style.css', 'bubble-style.css'} each sheet ->
+   custom-elements.define('box-tabs', BoxTabs)
+   {'style.css', 'bubble-style.css', 'box-style.css'} each sheet ->
       document.head.append-child(dom(___)) with
          link %
             type = "text/css"

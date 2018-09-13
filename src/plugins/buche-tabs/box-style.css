@@ -1,0 +1,105 @@
+
+/* Layout */
+
+box-tabs {
+    display: flex;
+    overflow: auto;
+    max-height: 600px;
+}
+
+box-tabs > .labels {
+    display: flex;
+    user-select: none;
+    overflow: auto;
+}
+
+box-tabs > .panes {
+    display: flex;
+    flex: 1;
+    height: 100%;
+}
+
+box-tabs[layout='top'],
+box-tabs[layout='bottom'] {
+    flex-direction: column;
+}
+
+box-tabs[layout='left'],
+box-tabs[layout='right'] {
+    flex-direction: row;
+}
+
+box-tabs[layout='top'] > *,
+box-tabs[layout='bottom'] > * {
+    flex-direction: row;
+}
+
+box-tabs[layout='left'] > *,
+box-tabs[layout='right'] > * {
+    flex-direction: column;
+}
+
+box-tabs[layout='bottom'] > .panes,
+box-tabs[layout='right'] > .panes {
+    order: -1;
+}
+
+box-tabs > .panes > tab-pane {
+    flex: 1;
+    overflow: auto;
+    display: none;
+}
+
+box-tabs > .panes > tab-pane.active {
+    display: block;
+}
+
+
+/* Style */
+
+box-tabs {
+    background: white;
+    border: 1px solid black;
+}
+
+box-tabs > .labels > tab-label {
+    cursor: pointer;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+box-tabs > .labels > tab-label.active {
+    background: #ccc;
+}
+
+box-tabs > .panes > tab-pane {
+    box-sizing: border-box;
+}
+
+box-tabs[layout='left'] > .labels {
+    border-right: 1px solid black;
+}
+
+box-tabs[layout='right'] > .labels {
+    border-left: 1px solid black;
+}
+
+box-tabs[layout='top'] > .labels {
+    border-bottom: 1px solid black;
+}
+
+box-tabs[layout='bottom'] > .labels {
+    border-top: 1px solid black;
+}
+
+box-tabs[layout='left'] > .panes > tab-pane.active ~ tab-pane.active,
+box-tabs[layout='right'] > .panes > tab-pane.active ~ tab-pane.active {
+    border-top: 1px solid black;
+}
+
+box-tabs[layout='top'] > .panes > tab-pane.active ~ tab-pane.active,
+box-tabs[layout='bottom'] > .panes > tab-pane.active ~ tab-pane.active {
+    border-left: 1px solid black;
+}
