@@ -3,6 +3,8 @@ require:
    events -> EventEmitter
    electron -> ipc-renderer
    /browser -> document
+   .elements ->
+      BucheElement as _BucheElement
    .source ->
       StreamSource
    .dispatch ->
@@ -13,9 +15,10 @@ require:
 
 
 globals:
-   Buche
+   Buche, BucheElement
 
 
+BucheElement = _BucheElement
 Buche = buche-tools
 
 

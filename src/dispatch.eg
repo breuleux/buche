@@ -22,20 +22,21 @@ class InteractiveDocument < EventEmitter:
       @channels = {=}
       @add-channels-from(@container.child-nodes, @container)
       @container._buche-dispatcher = @dispatcher
+      @obs = new MutationObserver with (muts each mut) ->
+         @dispatcher.wrap(___, null) with ->
+            @insert-placeholders(mut.added-nodes, mut.target)
+            @add-channels-from(mut.added-nodes, mut.target)
+            @remove-channels-from(mut.removed-nodes, mut.target)
+      @obs.observe(@container) with {
+         child-list = true
+         subtree = true
+      }
 
    create-channel(path, element) =
       element.buche-path = path
       @channels[path] = element
       @emit('add-channel', path, element)
       @emit(path, element)
-      @obs = new MutationObserver with (muts each mut) ->
-         @insert-placeholders(mut.added-nodes, mut.target)
-         @add-channels-from(mut.added-nodes, mut.target)
-         @remove-channels-from(mut.removed-nodes, mut.target)
-      @obs.observe(@container) with {
-         child-list = true
-         subtree = true
-      }
 
    async schedule-placeholder-removal(tag-name, ph, ch) =
       await custom-elements.when-defined(tag-name)
@@ -46,10 +47,16 @@ class InteractiveDocument < EventEmitter:
       ;; placeholder until the required plugin is installed.
       ;; Also, <command-*> tags are removed and their JSON content
       ;; is dispatched to the parent as a command.
+      do:
+         if node.__buche-processed:
+            return
       Element? and {buche-data => data and {state => "ok"}} ->
+         node.__buche-processed = true
          parent.dispatch(data.command, data.data)
          parent.remove-child(node)
       Element? and match is node.tag-name.to-lower-case() ->
+         do:
+            node.__buche-processed = true
          R"^command-([a-z]+)$"! {_, command-name} ->
             data = element-to-command(node, command-name)
             parent.dispatch(data.command, data.data)
@@ -113,12 +120,12 @@ class RootDispatcher < EventEmitter:
          delete m.parent
          delete m.command
       .resource ->
-         if channel-name is not undefined:
+         if channel-name !== undefined:
             throw Error('resource command should not set parent field')
          make-nodes(message) each node ->
             document.head.append-child(node)
       .plugin ->
-         if channel-name is not undefined:
+         if channel-name !== undefined:
             throw Error('plugin command should not set parent field')
          @plugins.load(message.name)
       .error ->
@@ -147,11 +154,15 @@ class RootDispatcher < EventEmitter:
       cmd ->
          channel.dispatch(cmd or 'log', m)
 
-   dispatch(message) =
+   wrap(f, message) =
       try:
-         @_dispatch(message)
+         f()
       catch err:
-         @_dispatch(format-buche-exception(message, err))
+         m = message or err.json-message
+         @_dispatch(format-buche-exception(m, err))
+
+   dispatch(message) =
+      @wrap(-> @_dispatch(message), message)
 
    run() =
       @source.read(m -> @dispatch(m))
