@@ -24,7 +24,7 @@ make-nodes(match message, fmt) =
    Array? ->
       (message each x -> make-nodes(x, fmt)).reduce(++)
    {=> tag} ->
-      new-children = make-nodes(message.content, message.format)
+      new-children = make-nodes(message.content, message.format or .html)
       enode = ENode(tag, message.attributes or {=}, new-children)
       {dom(enode)}
    {=> content} ->
@@ -141,8 +141,14 @@ extract-config(@) =
          else:
             attr.value
       config[name] = v
-   items(config) each {name, v} ->
-      @set-attribute(name, v)
+   items(config) each {name, match v} ->
+      === true ->
+         @set-attribute(name, "")
+      === false ->
+         pass
+      else ->
+         @set-attribute(name, v)
+
    config
 
 
