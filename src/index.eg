@@ -160,9 +160,15 @@ create-window(options) =
    splash() =
       data = {
          command = .log
-         path = '/ℹ️'
-         format = .markdown
-         content = fs.read-file-sync('{__dirname}/../html/splash.md', .utf8)
+         parent = '/'
+         tag = 'div'
+         attributes = {
+            style = 'margin-left: 20px; margin-right: 20px'
+         }
+         content = {
+            format = .markdown
+            content = fs.read-file-sync('{__dirname}/../html/splash.md', .utf8)
+         }
       }
       web-send(JSON.stringify(data))
 

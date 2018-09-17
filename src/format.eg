@@ -1,6 +1,7 @@
 
 require:
    /dom
+   marked
 
 provide:
    format
@@ -47,6 +48,11 @@ formats = {
    stdout(text, options) =
       dom with
          span.stdout % text
+
+   markdown(text, options) =
+      rval = document.create-element('div')
+      rval.innerHTML = marked(text)
+      rval
 
    html(text, options) =
       extract-raw(text)
