@@ -19,7 +19,7 @@ format-buche-exception(command, err, prefix="") =
       command = .log
       parent = '/stderr'
       format = .html
-      children = html with box-tabs.buche-error-report %
+      content = html with box-tabs.buche-error-report %
          tab-entry %
             active = true
             tab-label %

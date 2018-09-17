@@ -24,16 +24,11 @@ make-nodes(match message, fmt) =
    Array? ->
       (message each x -> make-nodes(x, fmt)).reduce(++)
    {=> tag} ->
-      new-children = make-nodes(message.children, message.format or .html)
-      enode = ENode(tag, props, new-children) where props =
-         object with items(message) each {match k, v} ->
-            .tag or .children ->
-               continue
-            else ->
-               {k, v}
+      new-children = make-nodes(message.content, message.format)
+      enode = ENode(tag, message.attributes or {=}, new-children)
       {dom(enode)}
-   {=> children} ->
-      make-nodes(children, message.format or .html)
+   {=> content} ->
+      make-nodes(content, message.format or .html)
    else ->
       throw Error('Cannot make a node out of this.')
 
@@ -49,13 +44,16 @@ method HTMLElement.prototype.dispatch(cmd, data) =
 
 
 method HTMLElement.prototype.command_log(_, data) =
-   make-nodes(data) each node ->
-      match node.tag-name.to-lower-case():
-         R"^command-([a-z]+)$"! {_, command-name} ->
-            dat = element-to-command(node, command-name)
-            @dispatch(dat.command, dat.data)
-         else ->
-            @append-child(node)
+   make-nodes(data) each
+      HTMLElement? node ->
+         match node.tag-name.to-lower-case():
+            R"^command-([a-z]+)$"! {_, command-name} ->
+               dat = element-to-command(node, command-name)
+               @dispatch(dat.command, dat.data)
+            else ->
+               @append-child(node)
+      node ->
+         @append-child(node)
 
 
 method HTMLElement.prototype.command_clear(_, data) =
@@ -164,9 +162,20 @@ jsclass BucheElement < HTMLElement:
       if not @_locked:
          @_locked = true
          config = extract-config(@)
-         children = consume(@child-nodes)
+         commands = {}
+         children = @child-nodes each
+            HTMLElement? node ->
+               match node.tag-name.to-lower-case():
+                  R"^command-([a-z]+)$"! {_, command-name} ->
+                     dat = element-to-command(node, command-name)
+                     commands.push with {dat.command, dat.data}
+                  else ->
+                     node
+            other -> other
          @innerHTML = ""
          @setup(config, children)
+         commands each {cmd, dat} ->
+            @dispatch(cmd, dat)
 
    setup(config, children) =
       @config = config

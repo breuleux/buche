@@ -65,7 +65,7 @@ class StreamSource:
             {command = .log
              parent = '/stdout'
              format = 'stdout'
-             children = line + "\n"}
+             content = line + "\n"}
       @in-callback(result)
 
    send(message) =
