@@ -1,5 +1,11 @@
 
+buche-input {
+    display: inline-block;
+}
+
 buche-input > input {
     outline: none;
     padding: 3px;
+    width: 100%;
+    height: 100%;
 }

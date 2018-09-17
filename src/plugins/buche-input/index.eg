@@ -36,14 +36,11 @@ jsclass BucheInput < BucheElement:
                   pass
       @_append-child(@_input)
 
-   push-child(ch) =
-      match ch.tag-name.to-lower-case():
-         "command-set" ->
-            @_input.value = ch.text-content
-         "command-focus" ->
-            @_input.focus()
-         else ->
-            throw Error('Illegal child')
+   command_set(_, data) =
+      @_input.value = data.value or ""
+
+   command_focus(_, data) =
+      @_input.focus()
 
 
 buche-install() =
