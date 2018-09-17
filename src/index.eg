@@ -166,8 +166,7 @@ create-window(options) =
             style = 'margin-left: 20px; margin-right: 20px'
          }
          content = {
-            format = .markdown
-            content = fs.read-file-sync('{__dirname}/../html/splash.md', .utf8)
+            src = '{__dirname}/../html/splash.md'
          }
       }
       web-send(JSON.stringify(data))

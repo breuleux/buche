@@ -1,5 +1,6 @@
 
 require:
+   fs
    "./format" -> format
    /dom
 
@@ -39,6 +40,11 @@ make-nodes(match message, fmt) =
       attrs = adjust-attributes(message.attributes or {=})
       enode = ENode(tag, attrs, new-children)
       {dom(enode)}
+   {=> src} ->
+      content = fs.read-file-sync(src, .utf8)
+      parts = src.split('.')
+      ext = parts[parts.length - 1]
+      make-nodes(content, message.format or ext)
    {=> content} ->
       make-nodes(content, message.format or .html)
    else ->

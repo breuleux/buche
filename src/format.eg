@@ -57,6 +57,10 @@ formats = {
    html(text, options) =
       extract-raw(text)
 
+   ;; Aliases
+
+   md = .markdown
+   txt = .text
 }
 
 
@@ -70,7 +74,9 @@ format(fmt, obj) =
          throw new Error with
             'Cannot parse format: "{fmt}"'
 
-   formatter = formats[name]
+   var formatter = formats[name]
+   while String? formatter:
+      formatter = formats[formatter]
    if not formatter:
       throw new Error with
          'Unknown format: "{name}"'
