@@ -28,8 +28,6 @@ Options:
   --install plugin     Install a buche plugin.
   --uninstall plugin   Uninstall a buche plugin.
   --dev                Open developer console.
-  --dump               Don't open a window, just print on stdout.
-  -r [plugins]         Require the given plugins.
   -h, --help           Output usage information.
   -v, --version        Output the version number.
 
@@ -59,37 +57,8 @@ async parse-options(argv) =
             true
    }
    opts = minimist(argv, cfg)
-   if opts.r:
-      reqs = {}
-      opts.r.split(',') each plugin ->
-         try:
-            pkg = plugins.get('{plugin}/package.json')
-            if pkg.buche and pkg.buche??.requireHowto:
-               reqs.push({plugin, true, pkg.buche.requireHowto})
-            else:
-               reqs.push({plugin, false, new Error(___)}) with
-                  'There is no "buche.requireHowto" key in the plugin\'s package.json'
-         catch e:
-            reqs.push({plugin, false, e})
-      opts.r = reqs
    if help or opts.help:
-      if opts.r:
-         opts.r each {plugin, match success, value} ->
-            true? ->
-               console.error('Require `{plugin}` by printing this:')
-               console.error('  {JSON.stringify(value)}')
-            else ->
-               console.error('No help available about requiring `{plugin}`')
-               console.error('  {value??.message}')
-      else:
-         console.error(usage)
-      null
-   elif opts.dump:
-      if not opts.r or opts._.length > 0:
-         console.error('--dump only works with -r option for now')
-      else:
-         opts.r each {plugin, success, value} when success ->
-            print JSON.stringify(value)
+      console.error(usage)
       null
    elif opts.version:
       print 'buche v{version}'
@@ -173,11 +142,6 @@ create-window(options) =
 
    ipc-main.on(.ready) with ->
       var origins = {}
-      if options.r:
-         options.r each {plugin, match success, value} ->
-            true? -> web-send(JSON.stringify(value))
-            else -> pass  ;; TODO: show error
-
       if cmd:
          proc = spawn(cmd, {}) with {
             shell = true
