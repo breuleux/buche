@@ -9,7 +9,7 @@ require:
    /dom
    jquery as jq
    ...elements ->
-      extract-config, BucheElement
+      extract-config, BucheElement, make-nodes
 
 
 provide:
@@ -207,12 +207,16 @@ jsclass BucheTabs < BucheElement:
          spec.obs.disconnect()
 
    command_new(_, options) =
+      pane = dom with
+         tab-pane %
+            make-nodes(options)
+      if options.pane-address as addr:
+         pane.set-attribute('address', addr)
       new-tab = dom with
          tab-entry %
             tab-label %
                options.label or 'tab{@_tabs.length}'
-            tab-pane %
-               address = options.pane-address
+            pane
       if options.active:
          new-tab.set-attribute(.active, "")
       @_add(new-tab)

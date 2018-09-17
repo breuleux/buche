@@ -147,7 +147,7 @@ class RootDispatcher < EventEmitter:
                @doc.once(channel-name) with element ->
                   delete @waitlist[channel-name]
                   w each m ->
-                     @_dispatch(m)
+                     @dispatch(m)
             w ->
                w.push(message)
 
