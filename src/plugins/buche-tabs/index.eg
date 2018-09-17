@@ -172,6 +172,17 @@ jsclass BucheTabs < BucheElement:
       else:
          spec.activate()
 
+   command_new(_, options) =
+      new-tab = dom with
+         tab-entry %
+            tab-label %
+               options.label or 'tab{@_tabs.length}'
+            tab-pane %
+               address = options.pane-address
+      if options.active:
+         new-tab.set-attribute(.active, "")
+      @_add(new-tab)
+
 
 jsclass BubbleTabs < BucheTabs:
    []
