@@ -45,11 +45,18 @@ bubble-tabs#buche-info-root > .labels {
   justify-content: flex-end;
 }
 
+bubble-tabs#buche-info-root > .panes
+> tab-pane > buche-log > log-entry {
+  padding-left: 0px;
+  margin-left: 0px;
+}
+
 #buche-stdout-label.active {
   background: #ccf;
 }
 
-#buche-stderr-label.active {
+#buche-stderr-label.active,
+#buche-buerr-label.active {
   background: #fcc;
 }
 
@@ -57,7 +64,8 @@ bubble-tabs#buche-info-root > .labels {
   border-left: 4px solid blue;
 }
 
-#buche-stderr-pane {
+#buche-stderr-pane,
+#buche-buerr-pane {
   border-left: 4px solid red;
 }
 

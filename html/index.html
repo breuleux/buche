@@ -12,11 +12,21 @@
                     layout="top">
         <tab-entry>
           <tab-label id=buche-stdout-label>🖨️</tab-label>
-          <tab-pane address="/stdout" id=buche-stdout-pane></tab-pane>
+          <tab-pane id=buche-stdout-pane>
+            <buche-log address="/stdout"></buche-log>
+          </tab-pane>
         </tab-entry>
         <tab-entry>
-          <tab-label id=buche-stderr-label>🐞</tab-label>
-          <tab-pane address="/stderr" id=buche-stderr-pane></tab-pane>
+          <tab-label id=buche-stderr-label>❌</tab-label>
+          <tab-pane id=buche-stderr-pane>
+            <buche-log address="/stderr"></buche-log>
+          </tab-pane>
+        </tab-entry>
+        <tab-entry>
+          <tab-label id=buche-buerr-label>🐞</tab-label>
+          <tab-pane id=buche-buerr-pane>
+            <buche-log address="/buerr"></buche-log>
+          </tab-pane>
         </tab-entry>
       </bubble-tabs>
       <div id="buche-root" address="/"></div>

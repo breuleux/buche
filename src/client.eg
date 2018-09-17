@@ -34,8 +34,8 @@ plugins = PluginManager('~/.config/buche/')
 
 
 stdin-buffer = new EventEmitter()
-ipc-renderer.on(.data) with {event, data} ->
-   stdin-buffer.emit(.data, data)
+ipc-renderer.on(.data) with {event, data, origin} ->
+   stdin-buffer.emit(.data, data, origin)
 ipc-renderer.on(.end) with {event, data} ->
    stdin-buffer.emit(.end)
 ipc-renderer.send(.ready)

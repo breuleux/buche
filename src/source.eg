@@ -43,19 +43,19 @@ class StreamSource:
       @in-stream.set-encoding??(.utf8)
 
    read(@in-callback) =
-      @in-stream.on(.data) with data ->
+      @in-stream.on(.data) with {data, origin} ->
          if data:
             {*lines, last} = data.split(R"\n")
             if lines.length > 0:
                lines[0] = @current-chunk + lines[0]
                @current-chunk = ""
                lines each line ->
-                  @process-line(line)
+                  @process-line(line, origin)
             @current-chunk += last
       ;; @in-stream.on(.end) with ->
       ;;    @in-callback(null)
 
-   process-line(line) =
+   process-line(line, origin) =
       result =
          try:
             if not line.starts-with("{"):
@@ -63,7 +63,7 @@ class StreamSource:
             JSON.parse(line)
          catch SyntaxError? e:
             {command = .log
-             parent = '/stdout'
+             parent = '/{origin}'
              format = 'stdout'
              content = line + "\n"}
       @in-callback(result)

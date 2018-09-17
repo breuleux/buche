@@ -145,7 +145,7 @@ create-window(options) =
    w.web-contents.on('will-navigate', handle-redirect)
    w.web-contents.on('new-window', handle-redirect)
 
-   web-send(data, trail = '\n') =
+   web-send(data, trail = '\n', origin = "buche") =
       show-splash = false
       if stream:
          stream.write(data)
@@ -153,7 +153,7 @@ create-window(options) =
          data.split('\n') each line when line ->
             print '-> {line}'
       try:
-         w.web-contents.send(.data, data + trail)
+         w.web-contents.send(.data, data + trail, origin)
       catch e:
          console.error(e.stack)
 
@@ -181,7 +181,7 @@ create-window(options) =
          proc.on(.error) with err ->
             print 'Failed to start process.'
             print err
-         origins = {proc.stdout, proc.stderr}
+         origins = {#stdout{proc.stdout}, #stderr{proc.stderr}}
          ipc-main.on(.data) with {_, data} ->
             if options.inspect:
                print '<- {data}'
@@ -193,14 +193,14 @@ create-window(options) =
                   "A command was sent to the command's standard input,"
                   \ + " but an error occurred:"
       else:
-         origins = {process.stdin}
+         origins = {#stdout{process.stdin}}
          ipc-main.on(.data) with {_, data} ->
             console.error('Cannot receive data!')
             console.error(JSON.stringify(data))
-      origins each origin ->
+      origins each {origin-name, origin} ->
          origin.set-encoding(.utf8)
          origin.on(.data) with data ->
-            web-send(data, '')
+            web-send(data, '', origin-name)
          origin.on(.end) with ->
             if show-splash:
                splash()
