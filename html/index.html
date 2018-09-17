@@ -6,30 +6,34 @@
   </head>
   <body>
     <div id="buche-mount-content">
-      <bubble-tabs id="buche-info-root"
-                    address="/_info"
-                    hide-empty
-                    layout="top">
+      <buche-tabs id="buche-real-root"
+                  address="/buche"
+                  hide-empty
+                  autofocus
+                  layout="top">
         <tab-entry>
-          <tab-label id=buche-stdout-label>🖨️</tab-label>
+          <tab-label class="empty" id=buche-root-label>/</tab-label>
+          <tab-pane id=buche-root address="/"></tab-pane>
+        </tab-entry>
+        <tab-entry>
+          <tab-label class="empty" id=buche-stdout-label>/stdout</tab-label>
           <tab-pane id=buche-stdout-pane>
             <buche-log address="/stdout"></buche-log>
           </tab-pane>
         </tab-entry>
         <tab-entry>
-          <tab-label id=buche-stderr-label>❌</tab-label>
+          <tab-label class="empty" id=buche-stderr-label>/stderr</tab-label>
           <tab-pane id=buche-stderr-pane>
             <buche-log address="/stderr"></buche-log>
           </tab-pane>
         </tab-entry>
         <tab-entry>
-          <tab-label id=buche-buerr-label>🐞</tab-label>
-          <tab-pane id=buche-buerr-pane>
-            <buche-log address="/buerr"></buche-log>
+          <tab-label class="empty" id=buche-bucherr-label>/bucherr</tab-label>
+          <tab-pane id=buche-bucherr-pane>
+            <buche-log address="/bucherr"></buche-log>
           </tab-pane>
         </tab-entry>
-      </bubble-tabs>
-      <div id="buche-root" address="/"></div>
+      </buche-tabs>
     </div>
     <script>
       require('../lib/client.js');

@@ -55,8 +55,13 @@ buche-tabs > .panes > tab-pane.active {
     display: block;
 }
 
+buche-tabs[hide-empty] > .labels > tab-label.empty {
+    display: none;
+}
+
 
 /* Style */
+
 
 buche-tabs {
     border: 1px solid black;
@@ -86,6 +91,10 @@ buche-tabs > .labels > tab-label {
 buche-tabs > .labels > tab-label.active {
     color: black;
     background: white;
+}
+
+buche-tabs > .labels > tab-label.has-activity {
+    text-decoration: underline;
 }
 
 buche-tabs > .panes > tab-pane {

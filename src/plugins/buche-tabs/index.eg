@@ -1,6 +1,7 @@
 
 globals:
    document, Text, HTMLElement, custom-elements, CustomEvent
+   MutationObserver
 
 
 require:
@@ -17,9 +18,9 @@ provide:
 
 class TabData:
    constructor(@buche-tabs, @tab, @pane, @initial-active, @order) =
-      @pane._tab = @tab
-      if not @pane.has-child-nodes():
-         @tab.class-list.add(.empty)
+      @pane._tabdata = (@)
+      empty = @tab.class-list.contains(.empty) or not @pane.has-child-nodes()
+      @buche-tabs.set-empty(@, empty)
       sel(e) =
          @buche-tabs.user-selected = true
          e.stop-propagation()
@@ -33,9 +34,18 @@ class TabData:
          ;; Disable children's existing click events.
          child.onclick = sel
       @tab.onclick = sel
+      bc = @buche-tabs.config
+      if bc.autofocus or bc.hide-empty or bc['watch-activity']:
+         @obs = new MutationObserver with muts ->
+            @buche-tabs.log-activity(@, muts)
+         @obs.observe(@pane) with {
+            child-list = true
+            subtree = true
+         }
 
    activate() =
       @tab.class-list.add(.active)
+      @tab.class-list.remove('has-activity')
       @pane.class-list.add(.active)
       @active = true
       @buche-tabs.active.push(@)
@@ -75,20 +85,33 @@ jsclass TabPane < HTMLElement:
    constructor() =
       super()
 
-   append-child(ch) =
-      if @_tab:
-         @_tab.class-list.remove('empty')
-      super.append-child(ch)
-
 
 jsclass BucheTabs < BucheElement:
+
    attribute-defaults() = {
+      ;; Whether the tabs are at the top, bottom, left or right
       layout = .top
+      ;; If true, clicking and shift-clicking are swapped
       sticky = false
+      ;; Whether to focus the first tab that shows activity
+      autofocus = false
+      ;; Whether to hide empty tabs
+      "hide-empty" = false
+      ;; Whether to watch for activity in tabs
+      "watch-activity" = false
    }
 
    attribute-spec() = {
       sticky(match) =
+         null? -> false
+         "" -> true
+      autofocus(match) =
+         null? -> false
+         "" -> true
+      "hide-empty"(match) =
+         null? -> false
+         "" -> true
+      "watch-activity"(match) =
          null? -> false
          "" -> true
    }
@@ -128,25 +151,9 @@ jsclass BucheTabs < BucheElement:
             throw Error with
                '<tab-entry> should contain <tab-label> followed by <tab-pane>'
 
-   install(spec) =
-      var idx = 0
-      while @specs[idx] and @specs[idx].order <= spec.order:
-         idx += 1
-
-      if idx == @specs.length:
-         @tabs.append-child(spec.tab)
-         @panes.append-child(spec.pane)
-      else:
-         prev = @specs[idx]
-         @tabs.insert-before(spec.tab, prev.tab)
-         @panes.insert-before(spec.pane, prev.pane)
-      @specs.splice(idx, 0, spec)
-
-      if spec.initial-active:
-         spec.activate()
-
    setup(config, children) =
       @active = {}
+      @_nonempty = new Set()
       @_data = {}
       @_tabs = dom with div.labels %
       @_panes = dom with div.panes %
@@ -164,13 +171,40 @@ jsclass BucheTabs < BucheElement:
 
    select(spec, add-to-active = false) =
       was-active = spec.active
-      if @active.length > 0 and not add-to-active:
+      nactive = @active.length
+      if nactive > 0 and not add-to-active:
          {* @active} each a ->
             a.deactivate()
-      if was-active:
+      if was-active and nactive == 1:
          spec.deactivate()
       else:
          spec.activate()
+
+   set-empty(spec, empty) =
+      if empty:
+         spec.tab.class-list.add(.empty)
+         @_nonempty.delete(spec)
+      else:
+         spec.tab.class-list.remove(.empty)
+         @_nonempty.add(spec)
+
+      if @_nonempty.size == 1:
+         @class-list.add('one-nonempty')
+      else:
+         @class-list.remove('one-nonempty')
+
+   log-activity(spec, muts) =
+      @set-empty(spec, false)
+
+      if @config.autofocus:
+         @select(spec)
+         @config.autofocus = false
+
+      if @config['watch-activity']:
+         if not spec.active:
+            spec.tab.class-list.add('has-activity')
+      else:
+         spec.obs.disconnect()
 
    command_new(_, options) =
       new-tab = dom with

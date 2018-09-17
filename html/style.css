@@ -16,7 +16,7 @@ body {
   background-color: transparent;
 }
 
-html, body, #buche-mount-content, #buche-root {
+html, body, #buche-mount-content {
   width: 100vw;
   height: 100vh;
   max-width: 100vw;
@@ -25,48 +25,46 @@ html, body, #buche-mount-content, #buche-root {
   padding: 0px;
 }
 
-#buche-overlay {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: flex;
-  flex-direction: row;
+#buche-real-root {
+  border: 0px;
 }
 
-#buche-info-root {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 600px;
-  height: 100vh;
+#buche-real-root > .labels {
+  background: black;
+  color: white;
+  font-weight: bold;
+  border: 0px;
 }
 
-bubble-tabs#buche-info-root > .labels {
-  justify-content: flex-end;
-}
-
-bubble-tabs#buche-info-root > .panes
-> tab-pane > buche-log > log-entry {
-  padding-left: 0px;
-  margin-left: 0px;
-}
-
-#buche-stdout-label.active {
-  background: #ccf;
+#buche-real-root > .labels > tab-label {
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  border-radius: 0px;
+  margin: 0px;
 }
 
 #buche-stderr-label.active,
-#buche-buerr-label.active {
-  background: #fcc;
-}
-
-#buche-stdout-pane {
-  border-left: 4px solid blue;
+#buche-bucherr-label.active {
+  background: red;
+  color: white;
 }
 
 #buche-stderr-pane,
-#buche-buerr-pane {
-  border-left: 4px solid red;
+#buche-bucherr-pane {
+  border-top: 8px solid red;
+}
+
+#buche-real-root.one-nonempty #buche-root-label.active {
+  display: none;
+}
+
+/* We need to load this rule eagerly to avoid flickering,
+   because the buche-tabs plugin is not loaded at this point. */
+buche-tabs[hide-empty] > .labels > tab-label.empty {
+  display: none;
 }
 
 placeholder-element, buche-command {

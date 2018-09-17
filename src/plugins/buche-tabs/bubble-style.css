@@ -56,6 +56,10 @@ bubble-tabs > .panes > tab-pane.active {
     display: block;
 }
 
+bubble-tabs[hide-empty] > .labels > tab-label.empty {
+    display: none;
+}
+
 
 /* Style */
 
@@ -71,6 +75,10 @@ bubble-tabs > .labels > tab-label {
     border-radius: 15px;
     text-align: center;
     line-height: 30px;
+}
+
+bubble-tabs > .labels > tab-label.has-activity {
+    background: yellow;
 }
 
 bubble-tabs > .labels > tab-label:hover {
@@ -97,8 +105,4 @@ bubble-tabs > .panes > tab-pane
 bubble-tabs > .panes > tab-pane
 bubble-tabs > .panes > tab-pane {
     background: #ddd;
-}
-
-bubble-tabs[hide-empty] > .labels > tab-label.empty {
-    display: none;
 }

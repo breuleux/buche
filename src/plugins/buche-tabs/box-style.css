@@ -54,8 +54,13 @@ box-tabs > .panes > tab-pane.active {
     display: block;
 }
 
+box-tabs[hide-empty] > .labels > tab-label.empty {
+    display: none;
+}
+
 
 /* Style */
+
 
 box-tabs {
     background: white;
@@ -72,6 +77,10 @@ box-tabs > .labels > tab-label {
 
 box-tabs > .labels > tab-label.active {
     background: #ccc;
+}
+
+box-tabs > .labels > tab-label.has-activity {
+    text-decoration: underline;
 }
 
 box-tabs > .panes > tab-pane {
