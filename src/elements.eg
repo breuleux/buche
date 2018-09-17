@@ -2,6 +2,7 @@
 require:
    fs
    "./format" -> format
+   .util -> format-buche-exception
    /dom
 
 
@@ -88,6 +89,7 @@ method HTMLElement.prototype.buche-dispatcher() =
 method HTMLElement.prototype.buche-send(obj, arg) =
    message = match obj:
       Event? ->
+         obj.stop-propagation()
          {
             path = @buche-path or null
             event-type = obj.type
@@ -97,6 +99,7 @@ method HTMLElement.prototype.buche-send(obj, arg) =
                alt = obj.alt-key
                meta = obj.meta-key
             }
+            address = @get-attribute(.address)
             which = obj.which
          }
       Number? or String? ->
@@ -201,7 +204,11 @@ jsclass BucheElement < HTMLElement:
          @push-child(ch)
 
    connected-callback() =
-      @_lock()
+      try:
+         @_lock()
+      catch err:
+         m = @innerHTML
+         @buche-dispatcher()._dispatch(format-buche-exception(m, err))
 
    append-child(ch) =
       if @_locked:

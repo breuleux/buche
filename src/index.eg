@@ -157,10 +157,15 @@ create-window(options) =
             try:
                proc.stdin.write(data + '\n')
             catch e:
-               web-send(format-buche-exception(___)) with
-                  data, e
+               dat =
+                  try:
+                     JSON.parse(data)
+                  catch e:
+                     data
+               web-send(JSON.stringify(format-buche-exception(___))) with
+                  dat, e
                   "A command was sent to the command's standard input,"
-                  \ + " but an error occurred:"
+                  \ + " but an error occurred: "
       else:
          origins = {#stdout{process.stdin}}
          ipc-main.on(.data) with {_, data} ->
