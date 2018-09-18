@@ -120,36 +120,51 @@ jsclass BucheTabs < BucheElement:
       super()
 
    _add(ch) =
-      match consume(ch.children):
-         {TabLabel? lbl, TabPane? pane} ->
-            cfg = extract-config(ch)
-            data = TabData(@, lbl, pane, cfg.active, cfg.order)
-            order = data.order
+      {lbl, pane} =
+         match consume(ch.children):
+            {} ->
+               l = ch.get-attribute(.label)
+               {
+                  dom with (tab-label % l)
+                  dom with (tab-pane %)
+               }
+            {TabLabel? lbl} ->
+               {lbl, dom with (tab-pane %)}
+            {TabLabel? lbl, TabPane? pane} ->
+               {lbl, pane}
+            else ->
+               throw Error with
+                  '<tab-entry> should contain <tab-label> followed by <tab-pane>'
 
-            idx =
-               if not order:
-                  @_data.length
-               else:
-                  var idx = 0
-                  while @_data[idx] and @_data[idx].order <= order:
-                     idx += 1
-                  idx
+      if not pane.get-attribute(.address):
+         chaddr = ch.get-attribute(.address)
+         if chaddr:
+            pane.set-attribute(.address, chaddr)
 
-            if idx == @_data.length:
-               @_tabs.append-child(data.tab)
-               @_panes.append-child(data.pane)
-            else:
-               prev = @_data[idx]
-               @_tabs.insert-before(data.tab, prev.tab)
-               @_panes.insert-before(data.pane, prev.pane)
-            @_data.splice(idx, 0, data)
+      cfg = extract-config(ch)
+      data = TabData(@, lbl, pane, cfg.active, cfg.order)
+      order = data.order
 
-            if data.initial-active:
-               data.activate()
+      idx =
+         if not order:
+            @_data.length
+         else:
+            var idx = 0
+            while @_data[idx] and @_data[idx].order <= order:
+               idx += 1
+            idx
 
-         else ->
-            throw Error with
-               '<tab-entry> should contain <tab-label> followed by <tab-pane>'
+      if idx == @_data.length:
+         @_tabs.append-child(data.tab)
+         @_panes.append-child(data.pane)
+      else:
+         prev = @_data[idx]
+         @_tabs.insert-before(data.tab, prev.tab)
+         @_panes.insert-before(data.pane, prev.pane)
+      @_data.splice(idx, 0, data)
+
+      if data.initial-active:
+         data.activate()
 
    setup(config, children) =
       @active = {}
