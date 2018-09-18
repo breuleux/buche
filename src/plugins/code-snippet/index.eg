@@ -63,7 +63,7 @@ jsclass CodeSnippet < HTMLElement:
          if i == @lineno:
             then: div.hljs-lineno-focus % '{i + 1}'
             else: div % '{i + 1}'
-   
+
       @innerHTML = ""
 
       @append-child(dom(___)) with

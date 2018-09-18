@@ -35,7 +35,7 @@ class TabData:
          child.onclick = sel
       @tab.onclick = sel
       bc = @buche-tabs.config
-      if bc.autofocus or bc.hide-empty or bc['watch-activity']:
+      if bc.autofocus or bc['hide-empty'] or bc['watch-activity']:
          @obs = new MutationObserver with muts ->
             @buche-tabs.log-activity(@, muts)
          @obs.observe(@pane) with {
@@ -133,8 +133,10 @@ jsclass BucheTabs < BucheElement:
             {TabLabel? lbl, TabPane? pane} ->
                {lbl, pane}
             else ->
-               throw Error with
+               e = Error with
                   '<tab-entry> should contain <tab-label> followed by <tab-pane>'
+               e.context = ch.innerHTML
+               throw e
 
       if not pane.get-attribute(.address):
          chaddr = ch.get-attribute(.address)
@@ -182,7 +184,9 @@ jsclass BucheTabs < BucheElement:
       Text? t when not t.text-content.trim() ->
          pass
       else ->
-         throw Error('<buche-tabs> only accepts <tab-entry>, not {ch}')
+         e = Error('<buche-tabs> only accepts <tab-entry>')
+         e.context = ch.innerHTML
+         throw e
 
    select(spec, add-to-active = false) =
       was-active = spec.active

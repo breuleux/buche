@@ -207,7 +207,7 @@ jsclass BucheElement < HTMLElement:
       try:
          @_lock()
       catch err:
-         m = @innerHTML
+         m = err.context or 'No message info.'
          @buche-dispatcher()._dispatch(format-buche-exception(m, err))
 
    append-child(ch) =

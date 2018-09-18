@@ -2,6 +2,7 @@
 require:
    /dom
    marked
+   "highlight.js" as hljs
 
 provide:
    format
@@ -45,13 +46,32 @@ formats = {
    text(text, options) =
       document.create-text-node(text)
 
+   source(code, options) =
+      match options.language:
+         undefined? ->
+            dom with
+               pre % code
+         lang when hljs.get-language(lang) ->
+            node = dom with pre %
+            node.innerHTML = hljs.highlight(lang, code).value
+            node
+         else ->
+            dom with
+               pre % code
+
    stdout(text, options) =
       dom with
          span.stdout % text
 
    markdown(text, options) =
       rval = document.create-element('div')
-      rval.innerHTML = marked(text)
+      rval.innerHTML = marked(text, highlight = ___) with {code, match lang} ->
+         undefined? ->
+            code
+         when hljs.get-language(lang) ->
+            hljs.highlight(lang, code).value
+         else ->
+            code
       rval
 
    html(text, options) =
