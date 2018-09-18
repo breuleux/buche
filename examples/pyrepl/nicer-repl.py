@@ -42,11 +42,11 @@ def repl_line(event, message):
         try:
             res = eval(code, code_globals)
             if res is not None:
-                repl.repr.logEntry['result'](res, interactive=True)
+                repl.show.logEntry['result'](res, interactive=True)
         except SyntaxError:
             exec(code, code_globals)
     except Exception as exc:
-        repl.repr.logEntry['error'](exc)
+        repl.show.logEntry['error'](exc)
 
 @reader.on_click
 def repl_select(event, message):
