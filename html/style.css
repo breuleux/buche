@@ -47,13 +47,13 @@ html, body, #buche-mount-content {
 }
 
 #buche-stderr-label.active,
-#buche-bucherr-label.active {
+#buche-errors-label.active {
   background: red;
   color: white;
 }
 
 #buche-stderr-pane,
-#buche-bucherr-pane {
+#buche-errors-pane {
   border-top: 8px solid red;
 }
 

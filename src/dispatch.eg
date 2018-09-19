@@ -56,15 +56,15 @@ required-channels = {
             id = "buche-stderr-pane"
             buche-log %
                address = "/stderr"
-   "/bucherr" =
+   "/buche/errors" =
       tab-entry %
          tab-label.empty %
-            id = "buche-bucherr-label"
+            id = "buche-errors-label"
             "🐞"
          tab-pane %
-            id = "buche-bucherr-pane"
+            id = "buche-errors-pane"
             buche-log %
-               address = "/bucherr"
+               address = "/buche/errors"
 }
 
 
