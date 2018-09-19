@@ -91,10 +91,16 @@ class InteractiveDocument < EventEmitter:
       @initialized = true
 
    create-channel(path, element) =
-      element.buche-path = path
-      @channels[path] = element
-      @emit('add-channel', path, element)
-      @emit(path, element)
+      match @channels[path]:
+         undefined? ->
+            element.buche-path = path
+            @channels[path] = element
+            @emit('add-channel', path, element)
+            @emit(path, element)
+         !== element ->
+            throw Error('Channel {path} already exists.')
+         else ->
+            pass
 
    async schedule-placeholder-removal(tag-name, ph, ch) =
       await custom-elements.when-defined(tag-name)
