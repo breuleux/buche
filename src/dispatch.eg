@@ -5,6 +5,8 @@ require:
       custom-elements, make-nodes, element-to-command
    .util ->
       format-buche-exception
+   .plugins/buche-tabs ->
+      TabEntry
    /dom
 
 
@@ -16,12 +18,67 @@ globals:
    document, MutationObserver, Element, Text
 
 
+top-template =
+   buche-tabs %
+      id = "buche-real-root"
+      address = "/buche"
+      "hide-empty" = true
+      autofocus = true
+      layout = .top
+
+
+default-root-template =
+   tab-entry %
+      tab-label.empty %
+         id = "buche-root-label"
+         "/"
+      tab-pane %
+         id = "buche-root"
+         address = "/"
+
+
+required-channels = {
+   "/stdout" =
+      tab-entry %
+         tab-label.empty %
+            id = "buche-stdout-label"
+            "/stdout"
+         tab-pane %
+            id = "buche-stdout-pane"
+            buche-log %
+               address = "/stdout"
+   "/stderr" =
+      tab-entry %
+         tab-label.empty %
+            id = "buche-stderr-label"
+            "/stderr"
+         tab-pane %
+            id = "buche-stderr-pane"
+            buche-log %
+               address = "/stderr"
+   "/bucherr" =
+      tab-entry %
+         tab-label.empty %
+            id = "buche-bucherr-label"
+            "🐞"
+         tab-pane %
+            id = "buche-bucherr-pane"
+            buche-log %
+               address = "/bucherr"
+}
+
+
 class InteractiveDocument < EventEmitter:
 
    constructor(@container, @dispatcher) =
       @channels = {=}
-      @add-channels-from(@container.child-nodes, @container)
       @container._buche-dispatcher = @dispatcher
+      @initialized = false
+
+   initialize(content) =
+      @container.innerHTML = ""
+      @container.append-child(content)
+      @add-channels-from(@container.child-nodes, @container)
       @obs = new MutationObserver with (muts each mut) ->
          @dispatcher.wrap(___, null) with ->
             @insert-placeholders(mut.added-nodes, mut.target)
@@ -31,6 +88,7 @@ class InteractiveDocument < EventEmitter:
          child-list = true
          subtree = true
       }
+      @initialized = true
 
    create-channel(path, element) =
       element.buche-path = path
@@ -113,29 +171,65 @@ class RootDispatcher < EventEmitter:
       @doc = InteractiveDocument(@container, @)
       @waitlist = {=}
 
+   _no-parent(m) =
+      if m.parent !== undefined:
+         throw Error('{m.command} command should not set parent field')
+
+   _install-template(Array! template) =
+      if @doc.initialized:
+         throw Error('template command should come before any other')
+      top = dom with top-template
+      main-tab = dom with tab-entry %
+      template each
+         TabEntry? node ->
+            top.append-child(node)
+         Element? node ->
+            match node.get-attribute(.address):
+               null? -> pass
+               addr -> main-tab.set-attribute(.label, addr)
+            main-tab.append-child(node)
+         Text? node ->
+            if node.data.trim():
+               main-tab.append-child(node)
+      if main-tab.has-child-nodes():
+         top.append-child(main-tab)
+      ;; Query all the addresses defined by the template
+      addresses = new Set with
+         top.query-selector-all('[address]') each node ->
+            node.get-attribute('address')
+      ;; Some channels *must* be defined. If they are missing from the
+      ;; template, we add them as tabs to the top.
+      items(required-channels) each {name, tpl} ->
+         if not addresses.has(name):
+            top.append-child(dom(tpl))
+      @doc.initialize(top)
+
    _dispatch(message and match is message.command) =
       do:
          clone! m = message
          channel-name = m.parent
          delete m.parent
          delete m.command
+      .template ->
+         @_no-parent(message)
+         @_install-template(make-nodes(message))
+      .redirect ->
+         @_no-parent(message)
+         @doc.channels[message.from] = @doc.channels[message.to]
       .resource ->
-         if channel-name !== undefined:
-            throw Error('resource command should not set parent field')
+         @_no-parent(message)
          make-nodes(message) each node ->
             document.head.append-child(node)
       .plugin ->
-         if channel-name !== undefined:
-            throw Error('plugin command should not set parent field')
+         @_no-parent(message)
          @plugins.load(message.name)
-      .error ->
-         console.error('[E] {message.type}: {message.message}')
-         console.error(message.data)
 
       when channel-name is undefined ->
          throw Error("'parent' field was not set in command")
 
       do:
+         if not @doc.initialized:
+            @_install-template(dom(default-root-template))
          channel = channel-name and @doc.channels[channel-name]
       when channel is undefined ->
          ;; We stash the message until its parent channel has been created.

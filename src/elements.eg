@@ -81,9 +81,9 @@ method HTMLElement.prototype.command_clear(_, data) =
 
 method HTMLElement.prototype.buche-dispatcher() =
    var root = [@]
-   while not root._buche-dispatcher:
+   while root and not root._buche-dispatcher:
       root = root.parent-node
-   root._buche-dispatcher
+   root and root._buche-dispatcher
 
 
 method HTMLElement.prototype.buche-send(obj, arg) =
@@ -208,7 +208,12 @@ jsclass BucheElement < HTMLElement:
          @_lock()
       catch err:
          m = err.context or 'No message info.'
-         @buche-dispatcher()._dispatch(format-buche-exception(m, err))
+         match @buche-dispatcher():
+            undefined? or null? ->
+               throw err
+            d ->
+               d._dispatch(format-buche-exception(m, err))
+
 
    append-child(ch) =
       if @_locked:

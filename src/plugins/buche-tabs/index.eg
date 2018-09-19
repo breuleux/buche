@@ -13,6 +13,7 @@ require:
 
 
 provide:
+   TabEntry
    buche-install
 
 
@@ -132,11 +133,12 @@ jsclass BucheTabs < BucheElement:
                {lbl, dom with (tab-pane %)}
             {TabLabel? lbl, TabPane? pane} ->
                {lbl, pane}
-            else ->
-               e = Error with
-                  '<tab-entry> should contain <tab-label> followed by <tab-pane>'
-               e.context = ch.innerHTML
-               throw e
+            children ->
+               l = ch.get-attribute(.label)
+               {
+                  dom with (tab-label % l)
+                  dom with (tab-pane % children)
+               }
 
       if not pane.get-attribute(.address):
          chaddr = ch.get-attribute(.address)
