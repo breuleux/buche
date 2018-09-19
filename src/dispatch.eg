@@ -179,20 +179,32 @@ class RootDispatcher < EventEmitter:
       if @doc.initialized:
          throw Error('template command should come before any other')
       top = dom with top-template
-      main-tab = dom with tab-entry %
+
+      main-tab-children = {}
+      var main-tab-label = 'main'
+
       template each
          TabEntry? node ->
             top.append-child(node)
          Element? node ->
             match node.get-attribute(.address):
                null? -> pass
-               addr -> main-tab.set-attribute(.label, addr)
-            main-tab.append-child(node)
+               addr ->
+                  main-tab-label = addr
+            main-tab-children.push(node)
          Text? node ->
             if node.data.trim():
-               main-tab.append-child(node)
-      if main-tab.has-child-nodes():
-         top.append-child(main-tab)
+               main-tab-children.push(node)
+
+      if main-tab-children.length > 0:
+         top.append-child(dom(___)) with
+            tab-entry %
+               tab-label %
+                  id = "buche-root-label"
+                  main-tab-label
+               tab-pane %
+                  main-tab-children
+
       ;; Query all the addresses defined by the template
       addresses = new Set with
          top.query-selector-all('[address]') each node ->
