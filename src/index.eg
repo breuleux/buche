@@ -145,7 +145,8 @@ create-window(options) =
       if cmd:
          proc = spawn(cmd, {}) with {
             shell = true
-            stdio = {.pipe, .pipe, .pipe} ;; process.stderr}
+            stdio = {.pipe, .pipe, .pipe}
+            env = Object.assign({=}, process.env, {BUCHE = 'v{version}'})
          }
          proc.on(.error) with err ->
             print 'Failed to start process.'
