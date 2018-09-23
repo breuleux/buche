@@ -1,0 +1,13 @@
+{"content": "<h2>Buche demo!</h2>", "format": "html", "parent": "/"}
+{"content": "Buche makes it easy to print: <ul address=\"list\"></ul>", "format": "html", "parent": "/"}
+{"content": "<li><b>HTML</b></li>", "format": "html", "parent": "/list"}
+{"content": "<li>**Markdown**</li>", "format": "markdown", "parent": "/list"}
+stdout goes to the /stdout address
+{"content": "Check out the tabs above.", "format": "text", "parent": "/"}
+{"content": "<tab-entry label=\"/README\" address=\"/README\"/>", "parent": "/buche"}
+{"src": "/Users/breuleuo/repos/buche/examples/demo/README.md", "parent": "/README"}
+{"content": "<tab-entry label=\"/source\" address=\"/source\"/>", "parent": "/buche"}
+{"content": "<p>This is the source code for demo.py</p>", "parent": "/source"}
+{"src": "examples/demo/demo.py", "format": {"name": "source", "language": "python"}, "parent": "/source"}
+stderr goes to the /stderr address
+{"content": "<li>...and more, eventually!</li>", "format": "html", "parent": "/list"}

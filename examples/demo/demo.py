@@ -2,39 +2,48 @@
 
 # A simple demo.
 
+import sys
+import os
 import json
+import time
 
-def buche(**args):
-    print(json.dumps(args))
+def buche(**kwargs):
+    print(json.dumps(kwargs))
 
-def log(message, **args):
-    args.setdefault('path', '/log')
-    buche(command='log', contents=message, **args)
+def log(message, **kwargs):
+    kwargs.setdefault('parent', '/')
+    buche(content=message, **kwargs)
 
-def html(message, **args):
-    log(message, format='html', **args)
+def html(message, **kwargs):
+    log(message, format='html', **kwargs)
 
-def pre(message, **args):
-    log(message, format='pre', **args)
+def text(message, **kwargs):
+    log(message, format='text', **kwargs)
 
-def markdown(message, **args):
-    log(message, format='markdown', **args)
+def markdown(message, **kwargs):
+    log(message, format='markdown', **kwargs)
+
+dirname = os.path.dirname(os.path.realpath(__file__))
 
 html('<h2>Buche demo!</h2>')
-html('Buche makes it easy to print <b>HTML</b>')
-markdown('You can also print **Markdown**.')
+html('Buche makes it easy to print: <ul address="list"></ul>')
+html('<li><b>HTML</b></li>', parent="/list")
+markdown('<li>**Markdown**</li>', parent="/list")
 
-markdown(open('../README.md').read(), path='/README')
-pre(open(__file__).read(), path='/source')
-html('''Logs can be printed to multiple tabs. For example,
-     I have printed the README in the README tab, and the
-     source code for demo.py in the source tab.''')
+print("stdout goes to the /stdout address")
+print("stderr goes to the /stderr address", file=sys.stderr)
 
-markdown("""
-## Run more examples!
+text('Check out the tabs above.')
 
-* `buche --inspect python -u plot.py` demonstrates live plotting.
-* `buche --inspect python -u tabs.py` shows how to arrange tabs.
-* `buche --inspect python -u pyrepl.py` implements a simple interactive
-  interpreter for Python.
-""")
+log('<tab-entry label="/README" address="/README"/>', parent="/buche")
+buche(src=dirname + '/README.md', parent="/README")
+
+log('<tab-entry label="/source" address="/source"/>', parent="/buche")
+log('<p>This is the source code for demo.py</p>', parent="/source")
+buche(src=__file__,
+      format={'name': 'source', 'language': "python"},
+      parent="/source")
+
+time.sleep(1)
+
+html('<li>...and more, eventually!</li>', parent="/list")
