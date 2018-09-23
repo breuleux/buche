@@ -1,6 +1,6 @@
 {"attributes": {"layout": "top", "address": "root"}, "tag": "buche-tabs", "parent": "/"}
-{"parent": "/root", "label": "fruits", "tag": "buche-tabs", "command": "new", "active": true, "attributes": {"layout": "left", "address": "fruits"}}
-{"attributes": {"layout": "right", "address": "vegetables"}, "tag": "buche-tabs", "command": "new", "parent": "/root", "label": "vegetables"}
+{"parent": "/root", "label": "fruits", "tag": "buche-tabs", "command": "new", "active": true, "attributes": {"autofocus": true, "layout": "left", "address": "fruits"}}
+{"attributes": {"autofocus": true, "layout": "right", "address": "vegetables"}, "tag": "buche-tabs", "command": "new", "parent": "/root", "label": "vegetables"}
 {"paneAddress": "durian", "command": "new", "parent": "/root/fruits", "label": "durian"}
 {"content": "<div style=\"background:yellow\">1 durian</div>", "parent": "/root/fruits/durian"}
 {"content": "<div style=\"background:yellow\">2 durian</div>", "parent": "/root/fruits/durian"}
@@ -17,7 +17,7 @@
 {"content": "<div style=\"background:yellow\">1 banana</div>", "parent": "/root/fruits/banana"}
 {"content": "<div style=\"background:yellow\">2 banana</div>", "parent": "/root/fruits/banana"}
 {"content": "<div style=\"background:yellow\">3 banana</div>", "parent": "/root/fruits/banana"}
-{"content": "<b>It is a vegetable.</b>", "command": "new", "parent": "/root/vegetables", "label": "yam"}
-{"content": "<b>They eat vegetables.</b>", "command": "new", "parent": "/root/vegetables", "label": "wombat"}
-{"content": "<b>That is not a vegetable!</b>", "command": "new", "parent": "/root/vegetables", "label": "xylophone"}
-{"content": "<b>It is a vegetable.</b>", "command": "new", "parent": "/root/vegetables", "label": "zucchini"}
+{"active": true, "content": "<b>It is a vegetable.</b>", "command": "new", "parent": "/root/vegetables", "label": "yam"}
+{"active": true, "content": "<b>They eat vegetables.</b>", "command": "new", "parent": "/root/vegetables", "label": "wombat"}
+{"active": true, "content": "<b>That is not a vegetable!</b>", "command": "new", "parent": "/root/vegetables", "label": "xylophone"}
+{"active": true, "content": "<b>It is a vegetable.</b>", "command": "new", "parent": "/root/vegetables", "label": "zucchini"}
