@@ -23,13 +23,20 @@ Usage: buche [options] [command]
 
 Options:
 
-  --tee [file]         File to log the command's stdout to.
-  --inspect            Print stdout and stdin.
-  --install plugin     Install a buche plugin.
-  --uninstall plugin   Uninstall a buche plugin.
-  --dev                Open developer console.
-  -h, --help           Output usage information.
-  -v, --version        Output the version number.
+  --help, -h             Output usage information.
+  --tee <file>           File to log the command's stdout to.
+  --template, -t <file>  Use the given template.
+  --version              Output the version number.
+
+Debugging options:
+
+  --dev                  Open developer console.
+  --inspect, -v          Print messages exchanged on stdout/stdin.
+
+Plugin management:
+
+  --install plugin       Install a buche plugin.
+  --uninstall plugin     Uninstall a buche plugin.
 
 Note:
    The options must come before the command. Any options written
@@ -40,12 +47,11 @@ async parse-options(argv) =
    var help = false
    cfg = {
       boolean = {'dev', 'dump', 'inspect', 'version', 'help'}
-      string = {'tee', 'install', 'uninstall', 'require'}
+      string = {'tee', 'template', 'install', 'uninstall', 'require'}
       alias = {
-         v = .version
          h = .help
-         t = .tee
-         r = .require
+         t = .template
+         v = .inspect
       }
       stop-early = true
       unknown(match x) =
@@ -142,6 +148,11 @@ create-window(options) =
 
    ipc-main.on(.ready) with ->
       var origins = {}
+      if options.template:
+         web-send(JSON.stringify(___)) with {
+            command = .template
+            src = options.template
+         }
       if cmd:
          proc = spawn(cmd, {}) with {
             shell = true
