@@ -36,10 +36,10 @@ jsclass BucheInput < BucheElement:
                   pass
       @_append-child(@_input)
 
-   command_set(_, data) =
+   command_set(_, _, data) =
       @_input.value = data.value or ""
 
-   command_focus(_, data) =
+   command_focus(_, _, data) =
       @_input.focus()
 
 

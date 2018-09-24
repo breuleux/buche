@@ -52,30 +52,30 @@ make-nodes(match message, fmt) =
       throw Error('Cannot make a node out of this.')
 
 
-method HTMLElement.prototype.dispatch(cmd, data) =
+method HTMLElement.prototype.dispatch(path, cmd, data) =
    m = @['command_{cmd}']
    if m:
-      m.call(@, cmd, data)
+      m.call(@, path, cmd, data)
    else:
       e = new Error('Unrecognized command: {cmd}')
-      e.json-message = {command = cmd, data = data}
+      e.json-message = {parent = path, command = cmd, data = data}
       throw e
 
 
-method HTMLElement.prototype.command_log(_, data) =
+method HTMLElement.prototype.command_log(path, _, data) =
    make-nodes(data) each
       HTMLElement? node ->
          match node.tag-name.to-lower-case():
             R"^command-([a-z]+)$"! {_, command-name} ->
                dat = element-to-command(node, command-name)
-               @dispatch(dat.command, dat.data)
+               @dispatch(path, dat.command, dat.data)
             else ->
                @append-child(node)
       node ->
          @append-child(node)
 
 
-method HTMLElement.prototype.command_clear(_, data) =
+method HTMLElement.prototype.command_clear(_, _, data) =
    @innerHTML = ""
 
 
@@ -196,7 +196,7 @@ jsclass BucheElement < HTMLElement:
          @innerHTML = ""
          @setup(config, children)
          commands each {cmd, dat} ->
-            @dispatch(cmd, dat)
+            @dispatch(@buche-path, cmd, dat)
 
    setup(config, children) =
       @config = config

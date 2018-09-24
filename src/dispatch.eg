@@ -117,16 +117,12 @@ class InteractiveDocument < EventEmitter:
       do:
          if node.__buche-processed:
             return
-      Element? and {buche-data => data and {state => "ok"}} ->
-         node.__buche-processed = true
-         parent.dispatch(data.command, data.data)
-         parent.remove-child(node)
       Element? and match is node.tag-name.to-lower-case() ->
          do:
             node.__buche-processed = true
          R"^command-([a-z]+)$"! {_, command-name} ->
             data = element-to-command(node, command-name)
-            parent.dispatch(data.command, data.data)
+            parent.dispatch(parent.buche-path, data.command, data.data)
             parent.remove-child(node)
          do:
             @insert-placeholders(consume(node.child-nodes), node)
@@ -275,7 +271,7 @@ class RootDispatcher < EventEmitter:
          @wait-for(channel-name, message)
 
       cmd ->
-         channel.dispatch(cmd or 'log', m)
+         channel.dispatch(channel-name, cmd or 'log', m)
 
    wrap(f, message) =
       try:
