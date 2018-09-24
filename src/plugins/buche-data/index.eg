@@ -1,0 +1,80 @@
+
+require:
+   events -> EventEmitter
+
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass BucheData < BucheElement:
+
+   setup(config, children) =
+      if children.length:
+         throw Error('<buche-data> does not allow children.')
+      @events = new EventEmitter()
+      @columns = null
+      @data = {}
+
+   on_columns(fn) =
+      if @columns:
+         fn(@columns)
+      else:
+         @events.on(.columns, fn)
+
+   on_row(fn) =
+      @data each row ->
+         fn(row)
+      @events.on(.row, fn)
+
+   command_configure(_, _, data) =
+      @columns = data.columns or null
+      @events.emit(.columns, @columns)
+
+   command_data(_, _, {data => match}) =
+      Array? rows ->
+         rows each row ->
+            @add-row(row)
+      row ->
+         @add-row(row)
+
+   command_batch(_, _, {=> data}) =
+      its = items(data)
+      n = its[0][1].length
+      0...n each i ->
+         row = object with its each {k, values} -> {k, values[i]}
+         @add-row(row)
+
+   add-row(d) =
+      if @columns is null:
+         @columns = object with items(d) each {name, value} ->
+            {name} with match value:
+               Number? ->
+                  {type = 'number'}
+               String? ->
+                  {type = 'string'}
+               else ->
+                  {type = 'string'}
+         @events.emit(.columns, @columns)
+      @data.push(d)
+      @events.emit(.row, d)
+
+
+buche-install() =
+   custom-elements.define('buche-data', BucheData)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
