@@ -28,6 +28,7 @@ plugins = PluginManager('~/.config/buche/')
    'buche-log'
    'buche-tabs'
    'buche-input'
+   'buche-null'
 } each plugin-name ->
    p = require: ^['./plugins/{plugin-name}']
    plugins.import(p)

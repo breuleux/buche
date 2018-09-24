@@ -1,0 +1,33 @@
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass BucheNull < BucheElement:
+
+   setup(config, children) =
+      pass
+
+   dispatch(_, _, _) =
+      print 'holey'
+      pass
+
+
+buche-install() =
+   custom-elements.define('buche-null', BucheNull)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
