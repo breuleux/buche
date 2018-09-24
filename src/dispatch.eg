@@ -15,7 +15,7 @@ provide:
 
 
 globals:
-   document, MutationObserver, Element, Text
+   document, MutationObserver, Element, Text, Comment
 
 
 top-template =
@@ -200,6 +200,8 @@ class RootDispatcher < EventEmitter:
          Text? node ->
             if node.data.trim():
                main-tab-children.push(node)
+         Comment? node ->
+            pass
 
       if main-tab-children.length > 0:
          top.append-child(dom(___)) with

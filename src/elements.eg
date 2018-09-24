@@ -1,6 +1,7 @@
 
 require:
    fs
+   path
    "./format" -> format
    .util -> format-buche-exception
    /dom
@@ -42,10 +43,17 @@ make-nodes(match message, fmt) =
       enode = ENode(tag, attrs, new-children)
       {dom(enode)}
    {=> src} ->
-      content = fs.read-file-sync(src, .utf8)
-      parts = src.split('.')
-      ext = parts[parts.length - 1]
-      make-nodes(content, message.format or ext)
+      resolved = path.resolve(src)
+      content = fs.read-file-sync(resolved, .utf8)
+      ext = path.extname(resolved).slice(1)
+      fmt-obj = match message.format:
+         undefined? ->
+            {name = ext}
+         String? s ->
+            {name = s}
+         obj ->
+            obj
+      make-nodes(content, fmt-obj & {directory = path.dirname(resolved)})
    {=> content} ->
       make-nodes(content, message.format or .html)
    else ->

@@ -1,6 +1,7 @@
 
 require:
    /dom
+   path
    marked
    "highlight.js" as hljs
 
@@ -24,9 +25,27 @@ fix-script-tags(node) =
       s.parent-node.replace-child(s2, s)
 
 
-extract-raw(text) =
+re-source(root, dir) =
+   helper(node, attr) =
+      match node.get-attribute(attr):
+         R"^/"? ->
+            pass
+         R"://"? ->
+            pass
+         p ->
+            node.set-attribute(attr, path.join(dir, p))
+
+   root.query-selector-all('a, link') each node ->
+      helper(node, 'href')
+   root.query-selector-all('img, script, iframe') each node ->
+      helper(node, 'src')
+
+
+extract-raw(text, directory) =
    dummy = document.create-element('div')
    dummy.innerHTML = text
+   if directory:
+      re-source(dummy, directory)
    fix-script-tags(dummy)
    match consume(dummy.child-nodes):
       {x} ->
@@ -65,17 +84,21 @@ formats = {
 
    markdown(text, options) =
       rval = document.create-element('div')
-      rval.innerHTML = marked(text, highlight = ___) with {code, match lang} ->
-         undefined? ->
-            code
-         when hljs.get-language(lang) ->
-            hljs.highlight(lang, code).value
-         else ->
-            code
+      rval.innerHTML = marked(text) with {
+         highlight(code, match lang) =
+            undefined? ->
+               code
+            when hljs.get-language(lang) ->
+               hljs.highlight(lang, code).value
+            else ->
+               code
+      }
+      if options.directory:
+         re-source(rval, options.directory)
       rval
 
    html(text, options) =
-      extract-raw(text)
+      extract-raw(text, options.directory)
 
    ;; Aliases
 
