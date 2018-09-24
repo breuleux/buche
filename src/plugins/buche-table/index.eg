@@ -1,0 +1,65 @@
+
+globals:
+   document, HTMLElement, custom-elements
+
+
+require:
+   path
+   /dom
+   jquery as jq
+   ...elements -> BucheElement
+
+
+provide:
+   buche-install
+
+
+jsclass BucheTable < BucheElement:
+
+   setup(config, children) =
+      @table = dom with
+         table %
+      @_append-child(@table)
+      @columns = config.columns or null
+      dis = @buche-dispatcher()
+      src = config['data-source']
+      if dis.doc.channels[src] as element:
+         @hook-on-data-source(element)
+      else:
+         dis.doc.once(src) with element ->
+            @hook-on-data-source(element)
+
+   hook-on-data-source(element) =
+      element.on_columns with cols ->
+         @column-info = cols
+         @columns or= keys(cols)
+         @add-header()
+      element.on_row with row ->
+         @add-row(row)
+
+   add-header() =
+      @table.append-child(dom(___)) with
+         tr %
+            @columns each colname ->
+               col = @column-info[colname]
+               th %
+                  class = 'column-type-{col.type} column-name-{colname}'
+                  colname
+
+   add-row(row) =
+      @table.append-child(dom(___)) with
+         tr %
+            @columns each colname ->
+               col = @column-info[colname]
+               td %
+                  class = 'column-type-{col.type} column-name-{colname}'
+                  row[colname]
+
+
+buche-install() =
+   custom-elements.define('buche-table', BucheTable)
+   document.head.append-child(dom(___)) with
+      link %
+         type = "text/css"
+         rel = .stylesheet
+         href = path.join(__dirname, "style.css")
