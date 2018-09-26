@@ -39,6 +39,9 @@ jsclass BucheInput < BucheElement:
    command_set(_, _, data) =
       @_input.value = data.value or ""
 
+   command_append(_, _, data) =
+      @_input.value += data.value or ""
+
    command_focus(_, _, data) =
       @_input.focus()
 
