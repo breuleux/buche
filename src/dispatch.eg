@@ -101,6 +101,13 @@ class InteractiveDocument < EventEmitter:
          else ->
             pass
 
+   get-channel(path) =
+      new Promise with {resolve, reject} ->
+         if @channels[path] as element:
+            resolve(element)
+         else:
+            @once(path, resolve)
+
    async schedule-placeholder-removal(tag-name, ph, ch) =
       await custom-elements.when-defined(tag-name)
       ph.parent-node.replace-child(ch, ph)

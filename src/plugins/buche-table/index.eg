@@ -23,11 +23,8 @@ jsclass BucheTable < BucheElement:
       @columns = config.columns or null
       dis = @buche-dispatcher()
       src = config['data-source']
-      if dis.doc.channels[src] as element:
+      dis.doc.get-channel(src).then with element ->
          @hook-on-data-source(element)
-      else:
-         dis.doc.once(src) with element ->
-            @hook-on-data-source(element)
 
    hook-on-data-source(element) =
       element.on_columns with cols ->
