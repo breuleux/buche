@@ -227,7 +227,7 @@ jsclass BucheTabs < BucheElement:
       else:
          spec.obs.disconnect()
 
-   command_new(_, options) =
+   command_new(_, _, options) =
       options.content or= ""
       pane = dom with
          tab-pane %
