@@ -26,6 +26,7 @@ jsclass BucheData < BucheElement:
       @events = new EventEmitter()
       @columns = null
       @data = {}
+      @transposed = {=}
 
    on_columns(fn) =
       if @columns:
@@ -68,6 +69,8 @@ jsclass BucheData < BucheElement:
                   {type = 'string'}
          @events.emit(.columns, @columns)
       @data.push(d)
+      items(d) each {k, v} ->
+         (@transposed[k] or= {}).push(v)
       @events.emit(.row, d)
 
 
