@@ -32,8 +32,8 @@
   "devDependencies": {
     "earl-mocha": "^0.1.0",
     "earlgrey": "^0.1.2",
-    "electron": "^1.4.15",
-    "electron-builder": "^19.52.1",
+    "electron": "^4.0.5",
+    "electron-builder": "^20.38.5",
     "mocha": "^3.2.0"
   },
   "bin": {
