@@ -105,7 +105,6 @@ method HTMLElement.prototype.buche-send(obj, arg) =
       Event? ->
          obj.stop-propagation()
          {
-            path = @buche-path or null
             event-type = obj.type
             modifiers = {
                ctrl = obj.ctrl-key
@@ -118,7 +117,6 @@ method HTMLElement.prototype.buche-send(obj, arg) =
          }
       Number? or String? ->
          {
-            path = @buche-path or null
             argument = obj
          }
       else ->
@@ -130,6 +128,12 @@ method HTMLElement.prototype.buche-send(obj, arg) =
       message.argument = arg
 
    message.path or= @buche-path or null
+
+   var curr = [@]
+   while curr and not curr.buche-path and curr.parent-node:
+      curr = curr.parent-node
+
+   message.enclosing-path = curr??.buche-path
 
    @buche-dispatcher().source.send(message)
 
