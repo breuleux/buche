@@ -17,6 +17,7 @@ provide:
 
 globals:
    HTMLElement, Text, custom-elements, CustomElementRegistry, Event
+   Function
 
 
 adjust-attributes(clone! attrs) =
@@ -85,6 +86,11 @@ method HTMLElement.prototype.command_log(path, _, data) =
 
 method HTMLElement.prototype.command_clear(_, _, data) =
    @innerHTML = ""
+
+
+method HTMLElement.prototype.command_eval(_, _, data) =
+   fn = Function(data.expression)
+   fn.call(@)
 
 
 method HTMLElement.prototype.buche-dispatcher() =
