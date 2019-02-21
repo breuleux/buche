@@ -78,6 +78,12 @@ method HTMLElement.prototype.command_log(path, _, data) =
             R"^command-([a-z]+)$"! {_, command-name} ->
                dat = element-to-command(node, command-name)
                @dispatch(path, dat.command, dat.data)
+            "script" and match is node.get-attribute('type') ->
+               R"^buche/([a-z]+)$"! {_, command-name} ->
+                  dat = JSON.parse(node.text-content)
+                  @dispatch(path, command-name, dat)
+               else ->
+                  @append-child(node)
             else ->
                @append-child(node)
       node ->
@@ -139,10 +145,6 @@ method HTMLElement.prototype.buche-send(obj, arg) =
 
 
 element-to-command(node, command) =
-   children = node.child-nodes each match ->
-      Text? t when t.data.trim() == "" -> continue
-      ch -> ch
-
    data = {=}
 
    node.attributes each attr ->
@@ -154,17 +156,7 @@ element-to-command(node, command) =
             catch err:
                attr.value
 
-   match children:
-      {} -> pass
-      {match ch} ->
-         HTMLElement? {tag-name => "SCRIPT", type => "application/json"} ->
-            data &: JSON.parse(ch.text-content)
-         HTMLElement? {tag-name => "SCRIPT", type => ""} ->
-            data &: JSON.parse(ch.text-content)
-         else ->
-            data.children = {ch}
-      else ->
-         data.children = node.child-nodes
+   data.children = node.child-nodes
 
    return {=command, =data}
 
@@ -208,6 +200,12 @@ jsclass BucheElement < HTMLElement:
                   R"^command-([a-z]+)$"! {_, command-name} ->
                      dat = element-to-command(node, command-name)
                      commands.push with {dat.command, dat.data}
+                  "script" and match is node.get-attribute('type') ->
+                     R"^buche/([a-z]+)$"! {_, command-name} ->
+                        dat = JSON.parse(node.text-content)
+                        commands.push with {command-name, dat}
+                     else ->
+                        node
                   else ->
                      node
             other -> other

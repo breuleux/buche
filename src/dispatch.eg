@@ -127,6 +127,13 @@ class InteractiveDocument < EventEmitter:
       Element? and match is node.tag-name.to-lower-case() ->
          do:
             node.__buche-processed = true
+         "script" and match is node.get-attribute('type') ->
+            R"^buche/([a-z]+)$"! {_, command-name} ->
+               data = JSON.parse(node.text-content)
+               parent.dispatch(parent.buche-path, data.command, data.data)
+               parent.remove-child(node)
+            else ->
+               pass
          R"^command-([a-z]+)$"! {_, command-name} ->
             data = element-to-command(node, command-name)
             parent.dispatch(parent.buche-path, data.command, data.data)
