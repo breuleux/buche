@@ -23,6 +23,18 @@ jsclass BucheInput < BucheElement:
          throw Error('No children allowed for buche-input')
       @_input = dom with
          input %
+            onkeydown(event and match is event.key-code) =
+               code and (38 or 40) ->
+                  ;; Up/Down
+                  event.prevent-default()
+                  @buche-send(event) with {
+                     event-type = .keyup
+                     which = if{code == 38, .Up, .Down}
+                     value = event.target.value
+                  }
+               else ->
+                  pass
+
             onkeyup(event and match is event.key-code) =
                13 ->
                   ;; Enter
