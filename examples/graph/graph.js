@@ -1,7 +1,5 @@
 #!/usr/bin/env buche -v node
 
-// Neat graphs.
-
 function buche(cfg) {
     console.log(JSON.stringify(cfg));
 }
