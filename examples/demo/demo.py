@@ -1,4 +1,4 @@
-#!/usr/bin/env buche --inspect python -u
+#!/usr/bin/env buche --inspect python3 -u
 
 # A simple demo.
 

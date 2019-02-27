@@ -48,6 +48,95 @@ Buche takes commands from stdout and (when applicable) outputs commands on stdin
 
 The best way to learn how to use Buche is by example: take a program that does something you would like to do, and either inspect its code, or inspect its output (which should be pretty simple most of the time). For this purpose, the `--inspect` flag makes buche print out all the commands that are exchanged between it and a program, in the following format: `-> <command_to_buche>` and `<- <command_from_buche>`. The former is what you should print, the latter is what you should parse and respond to (but don't worry too much about that, because it is only relevant if you want to write an interactive application).
 
+## Commands
+
+Here is how buche commands work:
+
+* The command must be formatted as JSON and must be all on a single line (no pretty printing).
+* Except for the commands `template`, `redirect`, `resource` and `plugin`, all commands must specify a `parent`.
+* The `parent` is typically some DOM element. Plugins can define custom components that answer to custom commands.
+* Defining the `address` attribute on an element is required to make it addressable. Read about the `log` command below for more information on how this works.
+
+### `log`
+
+The simplest command is `log`, which you can omit since it is the default. Log takes some HTML content and dumps it in the specified element. For example, this adds a div to the root element:
+
+```json
+{"parent": "/", "command": "log", "content": "<div>Hello!</div>"}
+```
+
+Other elements can be reached through their address. For example:
+
+```json
+{"parent": "/", "command": "log", "content": "<div address=\"above\">Above</div><div address=\"below\"></div>"}
+{"parent": "/above", "command": "log", "content": "<b address=\"nested\">Hello</b>"}
+{"parent": "/below", "command": "log", "content": "<b>World</b>"}
+{"parent": "/above/nested", "command": "log", "content": ", beautiful"}
+```
+
+This will display, incrementally, the following HTML:
+
+```html
+<div>Above <b>Hello, beautiful</b></div>
+<div>Below <b>World</b></div>
+```
+
+Notice that addresses are relative: when we add the element with address `nested` to the element with address `/above`, the address of that element becomes `/above/nested`. It is possible to define an element with an absolute address by prepending it with a `/`, so the address for `<div address="/notnested"></div>` is `/notnested` regardless of where you put it.
+
+
+### `eval`
+
+`eval` evaluates some JavaScript in the context of the specified parent. For example, this sets the focus on the element at `/myinput`:
+
+```json
+{"parent": "/myinput", "command": "eval", "expression": "this.focus()"}
+```
+
+
+### `resource`
+
+The `resource` command does not have a parent. It simply adds a resource in the document's `<head>`. For example:
+
+```json
+{"command": "resource", "content": "<style>.myclass {color: red}</style>"}
+```
+
+Anything you can put in `<head>` will work here.
+
+
+### `plugin`
+
+The `plugin` command imports a plugin. It does not have a parent. If the plugin contains a slash, it will be interpreted as a path and the plugin will be fetched on the filesystem. Otherwise, buche will try to import the plugin from its global cache.
+
+```json
+{"command": "plugin", "name": "cytoscape"}
+{"command": "plugin", "name": "./index.js"}
+```
+
+If the plugin is not found, try installing it with `buche --install <name>`, e.g. `buche --install cytoscape`.
+
+
+### `redirect`
+
+The `redirect` command redirects an address to another. This is mostly useful to redirect `/stdout` and `/stderr`, which by default go to separate tabs from the root element `/`. Example:
+
+```json
+{"command": "redirect", "from": "/stdout", "to": "/"}
+```
+
+
+### `template`
+
+The `template` command, if provided, must be the *first* command. Either `src` or `content` can be used:
+
+```json
+{"command": "template", "src": "my-template.html"}
+{"command": "template", "content": "<div class=\"root\" address=\"/\">...</div>"}
+```
+
+The template should define an element with address `/` and may also define `/stdout`, `/stderr` and `/buche/errors`, which is where Buche will respectively put non-json lines on stdout, non-json lines on stderr, and various errors such as a `log` command without a parent. Note that Buche will still make sure all of these exist even if they are not in the template, so that nothing is accidentally thrown away.
+
+
 ## Examples
 
 There are several simple examples in this repository to get you started. They are [here](https://github.com/breuleux/buche/tree/master/examples). You can also clone the repository to get to them:
@@ -55,10 +144,10 @@ There are several simple examples in this repository to get you started. They ar
 ```bash
 git clone https://github.com/breuleux/buche
 cd buche/examples
-./demo.py
+./demo/demo.py
 ```
 
-Each example is executable and uses the `--inspect` flag to show you the example's output stream. Executing an example works simply because the shebang in the file invokes `buche`, and you can look at it with `head -1 example`. It's all very simple. The code for most of the examples easily fit on a screen.
+Each example is executable and uses the `--inspect` or `-v` flag to show you the example's output stream. Executing an example works simply because the shebang in the file invokes `buche`, and you can look at it with `head -1 example`. It's all very simple. The code for most of the examples easily fit on a screen.
 
 Some Buche functionality and channels are not in any examples yet, unfortunately, but that will come.
 
@@ -74,20 +163,14 @@ This section contains advice about how to best use Buche with various programmin
 
 ## Plugins
 
-Install a plugin:
+Install a plugin with this command:
 
 ```bash
 buche --install <plugin-name>
 ```
 
-To use a plugin, you must either use the `-r <plugin-name>` flag or have your program print out a `require` command prior to opening channels or using components defined by the plugin. The latter is preferred, but the former can be useful if the `require` command is being filtered out somehow. You can tell `buche` to show you the JSON command your program needs to print out. Either of the following commands will do:
+To use a plugin, you must have your program print out a `require` command prior to using components defined by the plugin.
 
-```bash
-buche -hr <plugin-name>
-buche --dump -r <plugin-name>
-```
-
-You can simply copy paste the output into a string in your program and print it before anything else. You can also edit it to turn off or rename some of the features if you need to (which is probably never).
 
 ## Stability
 
@@ -97,17 +180,9 @@ There is no stable release of Buche at the moment and the interface and commands
 
 TODO.
 
-Still, if you feel motivated, you can look at [buche-cytoscape](https://github.com/breuleux/buche-cytoscape) and [buche-bokeh](https://github.com/breuleux/buche-cytoscape) to get a general idea of how to write an extension. The extension can be loaded directly:
+Still, if you feel motivated, you can look at [buche-cytoscape](https://github.com/breuleux/buche-cytoscape) and [buche-bokeh](https://github.com/breuleux/buche-cytoscape) to get a general idea of how to write an extension.
 
-```json
-{"command":"require", "path":"/", "pluginPath":"path/to/entry/point.js"}
-```
-
-Which is practical for development, or for really specialized extensions you only need for one project. It can require npm packages as needed. Otherwise, if you publish a plugin named `buche-xyz` on npm, it can be required like this:
-
-```json
-{"command":"require", "path":"/", "pluginName":"xyz"}
-```
+Essentially, you want to define one or more custom components, and then various `command_<name>` methods for any commands you want your component to understand.
 
 Note: these plugins are installed in `~/.config/buche/node_modules`.
 
@@ -127,6 +202,8 @@ Shiny Python REPL:
 
 ![repl](media/example-pyrepl_nice.png)
 
-Merging the outputs of several commands (shift-click on tabs to do the split screen):
+(If you're wondering, the [hrepr](https://pypi.org/project/hrepr/) package handles the pretty printing. It was written for Buche but it will also work in Jupyter, minus the ability to put objects in variables by clicking on their representation)
+
+Merging the outputs of several commands in the same window:
 
 ![merge](media/example-merge.png)
