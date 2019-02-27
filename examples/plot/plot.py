@@ -7,7 +7,7 @@ def buche(**cfg):
     print(json.dumps(cfg))
 
 here = os.path.dirname(os.path.realpath(__file__))
-expr = ' '.join(sys.argv[1:]) or 'sin(x)'
+exprs = sys.argv[1:] or ['sin(x)']
 
 buche(command='plugin', name='plotly')
 
@@ -26,18 +26,18 @@ buche(
         expr: {
             'dataSource': '/data',
             'x': {'field': 'x'},
-            'y': {'field': 'y'},
-        }
+            'y': {'field': expr},
+        } for expr in exprs
     }
 )
 
-for i in range(100):
-    x = i / 10.0
+for j in range(100):
+    x = j / 10.0
     buche(
         parent='/data',
         command='data',
         data={
             'x': x,
-            'y': eval(expr)
+            **{expr: eval(expr) for expr in exprs}
         }
     )
