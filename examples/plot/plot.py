@@ -1,12 +1,13 @@
 #!/usr/bin/env buche -v python
 
-import json, os, sys, math
+from math import *
+import json, os, sys
 
 def buche(**cfg):
     print(json.dumps(cfg))
 
 here = os.path.dirname(os.path.realpath(__file__))
-expr = ' '.join(sys.argv[1:]) or 'math.sin(x)'
+expr = ' '.join(sys.argv[1:]) or 'sin(x)'
 
 buche(command='plugin', name='plotly')
 
