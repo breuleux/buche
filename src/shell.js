@@ -39,6 +39,10 @@ async function* merge(iterables) {
 }
 
 class Shell {
+    constructor() {
+        this._processes = new Map();
+    }
+
     run(inputStream) {
         const self = this;
         async function* handlers() {
@@ -60,12 +64,25 @@ class Shell {
         await new Promise((r) => setTimeout(r, obj.seconds * 1000));
     }
 
+    async handle$input(obj) {
+        const child = this._processes.get(obj.id);
+        if (child) child.stdin.write(obj.text);
+    }
+
+    async handle$close_stdin(obj) {
+        const child = this._processes.get(obj.id);
+        if (child) child.stdin.end();
+    }
+
     async *handle$run(obj) {
         const id = obj.id ?? randomUUID();
-        yield { type: "process_start", id };
+        if (this._processes.has(id)) throw new Error(`Process ${id} already exists`);
 
         const [cmd, ...args] = [obj.function, ...(obj.args || [])];
         const child = spawn(cmd, args);
+        this._processes.set(id, child);
+
+        yield { type: "process_start", id };
 
         const events = [];
         let resolve = null;
@@ -76,14 +93,16 @@ class Shell {
             if (resolve) { const r = resolve; resolve = null; r(); }
         }
 
-        child.stdout.on("data", (data) => push({ type: "stdout", id, data: data.toString() }));
-        child.stderr.on("data", (data) => push({ type: "stderr", id, data: data.toString() }));
+        child.stdout.on("data", (data) => push({ type: "std", stream: "stdout", id, data: data.toString() }));
+        child.stderr.on("data", (data) => push({ type: "std", stream: "stderr", id, data: data.toString() }));
         child.on("close", (return_code) => {
+            this._processes.delete(id);
             push({ type: "process_end", id, return_code });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });
         child.on("error", (err) => {
+            this._processes.delete(id);
             push({ type: "stderr", id, data: err.message });
             push({ type: "process_end", id, return_code: 1 });
             done = true;
