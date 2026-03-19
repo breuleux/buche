@@ -109,7 +109,9 @@ class Shell {
         const child = spawn(cmd, args);
         this._processes.set(id, child);
 
-        yield { type: "process_start", id };
+        const startEvent = { type: "new", id, process_id: child.pid };
+        if (obj.echo) startEvent.echo = obj.echo;
+        yield startEvent;
 
         const events = [];
         let resolve = null;
@@ -124,14 +126,14 @@ class Shell {
         child.stderr.on("data", (data) => push({ type: "std", stream: "stderr", id, data: data.toString() }));
         child.on("close", (return_code) => {
             this._processes.delete(id);
-            push({ type: "process_end", id, return_code });
+            push({ type: "close", id, return_code });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });
         child.on("error", (err) => {
             this._processes.delete(id);
             push(makeError(err, id));
-            push({ type: "process_end", id, return_code: 1 });
+            push({ type: "close", id, return_code: 1 });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });

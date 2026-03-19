@@ -12,13 +12,30 @@ async function collect(asyncIter) {
 }
 
 describe("run", () => {
-    test("emits process_start and process_end", async () => {
+    test("emits new and close", async () => {
         const shell = new Shell();
         const out = await collect(shell.run(stream([
             { type: "run", command: "true", id: "p1" },
         ])));
-        expect(out[0]).toMatchObject({ type: "process_start", id: "p1" });
-        expect(out[out.length - 1]).toMatchObject({ type: "process_end", id: "p1", return_code: 0 });
+        expect(out[0]).toMatchObject({ type: "new", id: "p1" });
+        expect(typeof out[0].process_id).toBe("number");
+        expect(out[out.length - 1]).toMatchObject({ type: "close", id: "p1", return_code: 0 });
+    });
+
+    test("includes echo in new event when provided", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "run", command: "true", id: "p1", echo: "ls -l" },
+        ])));
+        expect(out[0]).toMatchObject({ type: "new", id: "p1", echo: "ls -l" });
+    });
+
+    test("omits echo in new event when not provided", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "run", command: "true", id: "p1" },
+        ])));
+        expect(out[0].echo).toBeUndefined();
     });
 
     test("captures stdout", async () => {
@@ -44,7 +61,7 @@ describe("run", () => {
         const out = await collect(shell.run(stream([
             { type: "run", command: "false", id: "p1" },
         ])));
-        expect(out.find(e => e.type === "process_end")).toMatchObject({ return_code: 1 });
+        expect(out.find(e => e.type === "close")).toMatchObject({ return_code: 1 });
     });
 
     test("generates id when not provided", async () => {
@@ -52,7 +69,7 @@ describe("run", () => {
         const out = await collect(shell.run(stream([
             { type: "run", command: "true" },
         ])));
-        expect(out[0].type).toBe("process_start");
+        expect(out[0].type).toBe("new");
         expect(typeof out[0].id).toBe("string");
     });
 
@@ -84,7 +101,7 @@ describe("parse", () => {
         const out = await collect(shell.run(stream([
             { type: "parse", text: "echo hello", id: "p1" },
         ])));
-        expect(out[0]).toMatchObject({ type: "process_start", id: "p1" });
+        expect(out[0]).toMatchObject({ type: "new", id: "p1" });
         const stdout = out.filter(e => e.type === "std" && e.stream === "stdout");
         expect(stdout[0].data).toContain("hello");
     });
@@ -94,7 +111,7 @@ describe("parse", () => {
         const out = await collect(shell.run(stream([
             { type: "parse", text: "true", id: "my-id" },
         ])));
-        expect(out[0]).toMatchObject({ type: "process_start", id: "my-id" });
+        expect(out[0]).toMatchObject({ type: "new", id: "my-id" });
     });
 
     test("generates id when null", async () => {
@@ -102,7 +119,7 @@ describe("parse", () => {
         const out = await collect(shell.run(stream([
             { type: "parse", text: "true", id: null },
         ])));
-        expect(out[0].type).toBe("process_start");
+        expect(out[0].type).toBe("new");
         expect(typeof out[0].id).toBe("string");
     });
 
