@@ -27,7 +27,7 @@ describe("run", () => {
         const out = await collect(shell.run(stream([
             { type: "run", command: "true", cell_id: "p1", echo: "ls -l" },
         ])));
-        expect(out[0]).toMatchObject({ type: "new", cell_id: "p1", echo: "ls -l" });
+        expect(out[0]).toMatchObject({ type: "new", cell_id: "p1", mode: "text", data: { text: "> ls -l" } });
     });
 
     test("omits echo in new event when not provided", async () => {

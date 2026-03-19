@@ -84,7 +84,7 @@ class Shell {
 
     async *handle$parse(obj) {
         const [command, ...args] = obj.text.trim().split(/\s+/);
-        yield* this.handle$run({ command, args, cell_id: obj.cell_id, echo: obj.echo });
+        yield* this.handle$run({ command, args, cell_id: obj.cell_id, echo: obj.echo ?? obj.text });
     }
 
     async handle$wait(obj) {
@@ -110,7 +110,9 @@ class Shell {
         this._processes.set(cell_id, child);
 
         const startEvent = { type: "new", cell_id, mode: "text", process_id: child.pid };
-        if (obj.echo) startEvent.echo = obj.echo;
+        if (obj.echo) {
+            startEvent.data = {text: `> ${obj.echo}`};
+        }
         yield startEvent;
 
         const events = [];
