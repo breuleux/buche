@@ -3,40 +3,38 @@ const { randomUUID } = require("crypto");
 
 async function* merge(iterables) {
     const queue = [];
-    let resolve = null;
+    let notify = null;
     let active = 0;
+    let outerDone = false;
 
     function push(value) {
         queue.push(value);
-        if (resolve) { const r = resolve; resolve = null; r(); }
+        if (notify) { const r = notify; notify = null; r(); }
     }
 
-    function pump(iter) {
-        active++;
-        async function drain() {
-            for await (const value of iter) push({ value });
-            if (--active === 0) push({ done: true });
-            else push({ noop: true });
+    async function pumpOuter() {
+        for await (const iter of iterables) {
+            active++;
+            async function drain() {
+                for await (const value of iter) push({ value });
+                active--;
+                push({ noop: true });
+            }
+            drain();
         }
-        drain();
+        outerDone = true;
+        push({ noop: true });
     }
 
-    for await (const iter of iterables) {
-        pump(iter);
+    pumpOuter();
+
+    while (true) {
         while (queue.length > 0) {
             const item = queue.shift();
-            if (item.done) return;
             if (!item.noop) yield item.value;
         }
-    }
-
-    while (active > 0) {
-        while (queue.length > 0) {
-            const item = queue.shift();
-            if (item.done) return;
-            if (!item.noop) yield item.value;
-        }
-        await new Promise((r) => { resolve = r; });
+        if (outerDone && active === 0) break;
+        await new Promise((r) => { notify = r; });
     }
 }
 
@@ -46,10 +44,20 @@ class Shell {
         async function* handlers() {
             for await (const obj of inputStream) {
                 const handler = self[`handle$${obj.command}`];
-                if (handler) yield handler.call(self, obj);
+                if (!handler) continue;
+                const result = handler.call(self, obj);
+                if (result[Symbol.asyncIterator]) {
+                    yield result;
+                } else {
+                    await result;
+                }
             }
         }
         return merge(handlers());
+    }
+
+    async handle$wait(obj) {
+        await new Promise((r) => setTimeout(r, obj.seconds * 1000));
     }
 
     async *handle$run(obj) {
