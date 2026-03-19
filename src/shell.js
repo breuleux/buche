@@ -82,6 +82,11 @@ class Shell {
         return merge(handlers());
     }
 
+    async *handle$parse(obj) {
+        const [command, ...args] = obj.text.trim().split(/\s+/);
+        yield* this.handle$run({ command, args, id: obj.id });
+    }
+
     async handle$wait(obj) {
         await new Promise((r) => setTimeout(r, obj.seconds * 1000));
     }

@@ -78,6 +78,44 @@ describe("run", () => {
     });
 });
 
+describe("parse", () => {
+    test("runs the parsed command", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "parse", text: "echo hello", id: "p1" },
+        ])));
+        expect(out[0]).toMatchObject({ type: "process_start", id: "p1" });
+        const stdout = out.filter(e => e.type === "std" && e.stream === "stdout");
+        expect(stdout[0].data).toContain("hello");
+    });
+
+    test("uses provided id", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "parse", text: "true", id: "my-id" },
+        ])));
+        expect(out[0]).toMatchObject({ type: "process_start", id: "my-id" });
+    });
+
+    test("generates id when null", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "parse", text: "true", id: null },
+        ])));
+        expect(out[0].type).toBe("process_start");
+        expect(typeof out[0].id).toBe("string");
+    });
+
+    test("handles multiple args", async () => {
+        const shell = new Shell();
+        const out = await collect(shell.run(stream([
+            { type: "parse", text: "echo foo bar baz", id: "p1" },
+        ])));
+        const stdout = out.filter(e => e.type === "std" && e.stream === "stdout");
+        expect(stdout[0].data).toContain("foo bar baz");
+    });
+});
+
 describe("input / close_stdin", () => {
     test("sends text to process stdin", async () => {
         const shell = new Shell();
