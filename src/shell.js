@@ -38,21 +38,21 @@ async function* merge(iterables) {
     }
 }
 
-function makeError(err, id = null) {
+function makeError(err, cell_id = null) {
     return {
         type: "error",
         error_type: err.code ?? err.constructor.name,
         message: err.message,
         traceback: err.stack ? err.stack.split("\n").slice(1).map((s) => s.trim()) : [],
-        id,
+        cell_id,
     };
 }
 
-async function* withErrorCatch(iter, id) {
+async function* withErrorCatch(iter, cell_id) {
     try {
         yield* iter;
     } catch (err) {
-        yield makeError(err, id);
+        yield makeError(err, cell_id);
     }
 }
 
@@ -70,12 +70,12 @@ class Shell {
                 try {
                     const result = handler.call(self, obj);
                     if (result[Symbol.asyncIterator]) {
-                        yield withErrorCatch(result, obj.id ?? null);
+                        yield withErrorCatch(result, obj.cell_id ?? null);
                     } else {
                         await result;
                     }
                 } catch (err) {
-                    yield (async function* singleError() { yield makeError(err, obj.id ?? null); })();
+                    yield (async function* singleError() { yield makeError(err, obj.cell_id ?? null); })();
                 }
             }
         }
@@ -84,7 +84,7 @@ class Shell {
 
     async *handle$parse(obj) {
         const [command, ...args] = obj.text.trim().split(/\s+/);
-        yield* this.handle$run({ command, args, id: obj.id });
+        yield* this.handle$run({ command, args, cell_id: obj.cell_id, echo: obj.echo });
     }
 
     async handle$wait(obj) {
@@ -92,24 +92,24 @@ class Shell {
     }
 
     async handle$input(obj) {
-        const child = this._processes.get(obj.id);
+        const child = this._processes.get(obj.cell_id);
         if (child) child.stdin.write(obj.text);
     }
 
     async handle$close_stdin(obj) {
-        const child = this._processes.get(obj.id);
+        const child = this._processes.get(obj.cell_id);
         if (child) child.stdin.end();
     }
 
     async *handle$run(obj) {
-        const id = obj.id ?? randomUUID();
-        if (this._processes.has(id)) throw new Error(`Process ${id} already exists`);
+        const cell_id = obj.cell_id ?? randomUUID();
+        if (this._processes.has(cell_id)) throw new Error(`Process ${cell_id} already exists`);
 
         const [cmd, ...args] = [obj.command, ...(obj.args || [])];
         const child = spawn(cmd, args);
-        this._processes.set(id, child);
+        this._processes.set(cell_id, child);
 
-        const startEvent = { type: "new", id, process_id: child.pid };
+        const startEvent = { type: "new", cell_id, mode: "text", process_id: child.pid };
         if (obj.echo) startEvent.echo = obj.echo;
         yield startEvent;
 
@@ -122,18 +122,18 @@ class Shell {
             if (resolve) { const r = resolve; resolve = null; r(); }
         }
 
-        child.stdout.on("data", (data) => push({ type: "std", stream: "stdout", id, data: data.toString() }));
-        child.stderr.on("data", (data) => push({ type: "std", stream: "stderr", id, data: data.toString() }));
+        child.stdout.on("data", (data) => push({ type: "send", cell_id, data: { stream: "stdout", text: data.toString() } }));
+        child.stderr.on("data", (data) => push({ type: "send", cell_id, data: { stream: "stderr", text: data.toString() } }));
         child.on("close", (return_code) => {
-            this._processes.delete(id);
-            push({ type: "close", id, return_code });
+            this._processes.delete(cell_id);
+            push({ type: "close", cell_id, return_code });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });
         child.on("error", (err) => {
-            this._processes.delete(id);
-            push(makeError(err, id));
-            push({ type: "close", id, return_code: 1 });
+            this._processes.delete(cell_id);
+            push(makeError(err, cell_id));
+            push({ type: "close", cell_id, return_code: 1 });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });
