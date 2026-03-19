@@ -1,0 +1,19 @@
+{
+  "name": "buche",
+  "version": "0.1.0",
+  "description": "A terminal-like electron app",
+  "main": "main.js",
+  "bin": {
+    "buche": "bin/buche.js"
+  },
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "monaco-editor": "^0.52.0"
+  }
+}

@@ -1,0 +1,122 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Menlo', monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Buffer ──
+ * #buffer-wrap: flex child of body, holds the fade overlays.
+ * #buffer:      the actual scroll container (inside the wrap, not the overlay host).
+ * Keeping overlays on the wrap means they are never inside the scrollable element,
+ * so they don't move when the user scrolls.
+ */
+#buffer-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#buffer {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 0;
+}
+
+#buffer-inner {
+  padding: 8px 12px;
+}
+
+.scroll-shadow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.scroll-shadow-top    { top: 0;    background: linear-gradient(#1e1e1e, transparent); }
+.scroll-shadow-bottom { bottom: 0; background: linear-gradient(transparent, #1e1e1e); }
+.scroll-shadow.visible { opacity: 1; }
+
+/* ── Monaco input ── */
+#input-container {
+  flex: 0 0 auto;
+  border-top: 1px solid #3c3c3c;
+}
+
+#monaco-editor {
+  width: 100%;
+  height: 28px;
+}
+
+/* ── Cells ── */
+.cell {
+  margin-bottom: 8px;
+}
+
+/*
+ * .cell-text:        overlay host — block container, clips pseudo-elements.
+ * .cell-text-scroll: carries its own max-height and overflow so it is the
+ *                    real scroll container; the pseudo-elements live on
+ *                    .cell-text (outside the scroll area) and stay fixed.
+ */
+.cell-text {
+  position: relative;
+  overflow: hidden;
+}
+
+.cell-text-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+
+.cell-text-inner {
+  margin: 0;
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.cell-input {
+  margin: 0 0 2px 0;
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #569cd6;
+}
+
+.text-stdout { color: #d4d4d4; }
+.text-stderr { background: #3a0000; color: #f48771; }
+
+/* ── Context / completions pane ── */
+#context-pane {
+  flex: 0 0 auto;
+  height: calc(5 * 1.4em + 8px); /* ~5 lines */
+  border-top: 1px solid #3c3c3c;
+  background: #252526;
+  color: #858585;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 12px;
+  overflow: hidden;
+}
