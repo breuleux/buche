@@ -1,3 +1,5 @@
+import { html } from './utils.js';
+
 const vsBase = 'file://' + window.buche.vsBase;
 
 // Tell Monaco where to load its web workers from
@@ -56,12 +58,8 @@ const cells      = new Map(); // cell_id -> handler
 
 // Both scroll containers use column-reverse: scrollTop=0 = physical bottom (newest content).
 function makeShadows(parent, height) {
-  const top = document.createElement('div');
-  top.className = 'scroll-shadow scroll-shadow-top';
-  top.style.height = height + 'px';
-  const bottom = document.createElement('div');
-  bottom.className = 'scroll-shadow scroll-shadow-bottom';
-  bottom.style.height = height + 'px';
+  const top    = html`<div class="scroll-shadow scroll-shadow-top"    style="height:${height}px"></div>`;
+  const bottom = html`<div class="scroll-shadow scroll-shadow-bottom" style="height:${height}px"></div>`;
   parent.appendChild(top);
   parent.appendChild(bottom);
   return { top, bottom };
@@ -92,23 +90,13 @@ class TextHandler {
 
   init() {
     if (this.instruction.data) {
-      const header = document.createElement('pre');
-      header.className = 'cell-input';
-      header.textContent = this.instruction.data.text;
-      this.cellNode.appendChild(header);
+      this.cellNode.appendChild(html`<pre class="cell-input">${this.instruction.data.text}</pre>`);
     }
 
-    this.wrapper = document.createElement('div');
-    this.wrapper.className = 'cell-text';
+    this.wrapper  = html`<div class="cell-text"><div class="cell-text-scroll"><pre class="cell-text-inner"></pre></div></div>`;
+    this.scrollEl = this.wrapper.querySelector('.cell-text-scroll');
+    this.pre      = this.wrapper.querySelector('.cell-text-inner');
     this.cellNode.appendChild(this.wrapper);
-
-    this.scrollEl = document.createElement('div');
-    this.scrollEl.className = 'cell-text-scroll';
-    this.wrapper.appendChild(this.scrollEl);
-
-    this.pre = document.createElement('pre');
-    this.pre.className = 'cell-text-inner';
-    this.scrollEl.appendChild(this.pre);
 
     this.shadows = makeShadows(this.wrapper, 32);
     this.scrollEl.addEventListener('scroll',
@@ -117,10 +105,7 @@ class TextHandler {
   }
 
   send(data) {
-    const span = document.createElement('span');
-    span.className = 'text-' + (data.stream || 'stdout');
-    span.textContent = data.text;
-    this.pre.appendChild(span);
+    this.pre.appendChild(html`<span class="text-${data.stream || 'stdout'}">${data.text}</span>`);
     updateScrollFades(this.scrollEl, this.shadows);
     updateScrollFades(bufferEl, bufferShadows);
   }
@@ -134,9 +119,7 @@ function executeInstruction(instruction) {
       console.error('Cell already exists:', instruction.cell_id);
       return;
     }
-    const cellNode = document.createElement('div');
-    cellNode.className = 'cell';
-    cellNode.dataset.cellId = instruction.cell_id;
+    const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}"></div>`;
     buffer.appendChild(cellNode);
     updateScrollFades(bufferEl, bufferShadows);
 
