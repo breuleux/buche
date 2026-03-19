@@ -38,6 +38,24 @@ async function* merge(iterables) {
     }
 }
 
+function makeError(err, id = null) {
+    return {
+        type: "error",
+        error_type: err.code ?? err.constructor.name,
+        message: err.message,
+        traceback: err.stack ? err.stack.split("\n").slice(1).map((s) => s.trim()) : [],
+        id,
+    };
+}
+
+async function* withErrorCatch(iter, id) {
+    try {
+        yield* iter;
+    } catch (err) {
+        yield makeError(err, id);
+    }
+}
+
 class Shell {
     constructor() {
         this._processes = new Map();
@@ -47,13 +65,17 @@ class Shell {
         const self = this;
         async function* handlers() {
             for await (const obj of inputStream) {
-                const handler = self[`handle$${obj.command}`];
+                const handler = self[`handle$${obj.type}`];
                 if (!handler) continue;
-                const result = handler.call(self, obj);
-                if (result[Symbol.asyncIterator]) {
-                    yield result;
-                } else {
-                    await result;
+                try {
+                    const result = handler.call(self, obj);
+                    if (result[Symbol.asyncIterator]) {
+                        yield withErrorCatch(result, obj.id ?? null);
+                    } else {
+                        await result;
+                    }
+                } catch (err) {
+                    yield (async function* singleError() { yield makeError(err, obj.id ?? null); })();
                 }
             }
         }
@@ -78,7 +100,7 @@ class Shell {
         const id = obj.id ?? randomUUID();
         if (this._processes.has(id)) throw new Error(`Process ${id} already exists`);
 
-        const [cmd, ...args] = [obj.function, ...(obj.args || [])];
+        const [cmd, ...args] = [obj.command, ...(obj.args || [])];
         const child = spawn(cmd, args);
         this._processes.set(id, child);
 
@@ -103,7 +125,7 @@ class Shell {
         });
         child.on("error", (err) => {
             this._processes.delete(id);
-            push({ type: "stderr", id, data: err.message });
+            push(makeError(err, id));
             push({ type: "process_end", id, return_code: 1 });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
