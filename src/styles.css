@@ -113,7 +113,8 @@ html, body {
   flex: 0 0 auto;
   height: calc(5 * 1.4em + 8px); /* ~5 lines */
   border-top: 1px solid #3c3c3c;
-  background: #252526;
+  /* background: #252526; */
+  background: #1e1e1e;
   color: #858585;
   font-size: 13px;
   line-height: 1.4;

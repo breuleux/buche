@@ -33,6 +33,13 @@ loaderScript.onload = () => {
       fontFamily: 'Consolas, Menlo, monospace',
       padding: { top: 4, bottom: 4 },
       lineHeight: 20,
+      quickSuggestions: false,
+      suggestOnTriggerCharacters: false,
+      acceptSuggestionOnEnter: 'off',
+      tabCompletion: 'off',
+      wordBasedSuggestions: 'off',
+      parameterHints: { enabled: false },
+      suggest: { showWords: false },
     });
 
     // Submit on Enter (Shift+Enter inserts a newline)
@@ -41,7 +48,7 @@ loaderScript.onload = () => {
       () => {
         const value = window.editor.getValue().trim();
         if (!value) return;
-        console.log('command:', value);
+        window.buche.sendCommand({ type: 'parse', text: value, cell_id: crypto.randomUUID() });
         window.editor.setValue('');
       }
     );
@@ -114,7 +121,7 @@ class TextHandler {
 const handlers = { text: TextHandler };
 
 function executeInstruction(instruction) {
-  if (instruction.command === 'new') {
+  if (instruction.type === 'new') {
     if (cells.has(instruction.cell_id)) {
       console.error('Cell already exists:', instruction.cell_id);
       return;
@@ -132,7 +139,7 @@ function executeInstruction(instruction) {
     handler.init();
     cells.set(instruction.cell_id, handler);
 
-  } else if (instruction.command === 'send') {
+  } else if (instruction.type === 'send') {
     const handler = cells.get(instruction.cell_id);
     if (!handler) {
       // TODO: handle send to expired/missing cell
