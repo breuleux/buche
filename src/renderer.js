@@ -118,35 +118,47 @@ class TextHandler {
   }
 }
 
-const handlers = { text: TextHandler };
+const cellHandlers = { text: TextHandler };
 
-function executeInstruction(instruction) {
-  if (instruction.type === 'new') {
-    if (cells.has(instruction.cell_id)) {
+class Executor {
+  constructor() {
+    this.cells = new Map();
+  }
+
+  execute(instruction) {
+    const handler = this[`handle$${instruction.type}`];
+    if (handler) handler.call(this, instruction);
+  }
+
+  handle$new(instruction) {
+    if (this.cells.has(instruction.cell_id)) {
       console.error('Cell already exists:', instruction.cell_id);
+      return;
+    }
+    const HandlerClass = cellHandlers[instruction.mode];
+    if (!HandlerClass) {
+      console.error('Unknown mode:', instruction.mode);
       return;
     }
     const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}"></div>`;
     buffer.appendChild(cellNode);
     updateScrollFades(bufferEl, bufferShadows);
 
-    const HandlerClass = handlers[instruction.mode];
-    if (!HandlerClass) {
-      console.error('Unknown mode:', instruction.mode);
-      return;
-    }
     const handler = new HandlerClass(cellNode, instruction);
     handler.init();
-    cells.set(instruction.cell_id, handler);
+    this.cells.set(instruction.cell_id, handler);
+  }
 
-  } else if (instruction.type === 'send') {
-    const handler = cells.get(instruction.cell_id);
-    if (!handler) {
-      // TODO: handle send to expired/missing cell
-      return;
-    }
+  handle$send(instruction) {
+    const handler = this.cells.get(instruction.cell_id);
+    if (!handler) return;
     handler.send(instruction.data);
+  }
+
+  handle$close(instruction) {
+    this.cells.delete(instruction.cell_id);
   }
 }
 
-window.buche.onInstruction(executeInstruction);
+const executor = new Executor();
+window.buche.onInstruction(instruction => executor.execute(instruction));
