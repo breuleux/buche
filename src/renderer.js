@@ -42,6 +42,8 @@ loaderScript.onload = () => {
       suggest: { showWords: false },
     });
 
+    window.editor.focus();
+
     // Submit on Enter (Shift+Enter inserts a newline)
     window.editor.addCommand(
       monaco.KeyCode.Enter,
