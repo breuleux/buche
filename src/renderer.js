@@ -1,5 +1,6 @@
 import { html } from './utils.js';
 import { TextHandler } from './cell/text.js';
+import './scroll-fader.js';
 
 const vsBase = 'file://' + window.buche.vsBase;
 
@@ -62,32 +63,9 @@ document.head.appendChild(loaderScript);
 // ── Buffer protocol ─────────────────────────────────────────────────────
 
 const bufferWrap = document.getElementById('buffer-wrap');
-const bufferEl   = document.getElementById('buffer');
-const buffer     = document.getElementById('buffer-inner');
-const cells      = new Map(); // cell_id -> handler
-
-// Both scroll containers use column-reverse: scrollTop=0 = physical bottom (newest content).
-function makeShadows(parent, height) {
-  const top    = html`<div class="scroll-shadow scroll-shadow-top"    style="height:${height}px"></div>`;
-  const bottom = html`<div class="scroll-shadow scroll-shadow-bottom" style="height:${height}px"></div>`;
-  parent.appendChild(top);
-  parent.appendChild(bottom);
-  return { top, bottom };
-}
-
-function updateScrollFades(scrollEl, shadows) {
-  const { scrollTop, scrollHeight, clientHeight } = scrollEl;
-  const maxScroll = scrollHeight - clientHeight;
-  // column-reverse: scrollTop is 0 at visual bottom (newest), goes negative scrolling up
-  const scrolled  = Math.abs(scrollTop);
-  const atBottom  = scrolled <= 2;
-  const atTop     = maxScroll <= 2 || scrolled >= maxScroll - 4;
-  shadows.top.classList.toggle('visible',    !atTop);
-  shadows.bottom.classList.toggle('visible', !atBottom);
-}
-
-const bufferShadows = makeShadows(bufferWrap, 48);
-bufferEl.addEventListener('scroll', () => updateScrollFades(bufferEl, bufferShadows));
+const buffer     = document.createElement('div');
+buffer.id = 'buffer-inner';
+bufferWrap.inner.appendChild(buffer);
 
 const cellHandlers = { text: TextHandler };
 
@@ -113,10 +91,9 @@ class Executor {
     }
     const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}"></div>`;
     buffer.appendChild(cellNode);
-    updateScrollFades(bufferEl, bufferShadows);
 
     const handler = new HandlerClass(cellNode, instruction);
-    handler.init(makeShadows, updateScrollFades);
+    handler.init();
     this.cells.set(instruction.cell_id, handler);
   }
 
@@ -124,7 +101,6 @@ class Executor {
     const handler = this.cells.get(instruction.cell_id);
     if (!handler) return;
     handler.send(instruction.data);
-    updateScrollFades(bufferEl, bufferShadows);
   }
 
   handle$close(instruction) {
