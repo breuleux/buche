@@ -1,4 +1,5 @@
 import { html } from './utils.js';
+import { TextHandler } from './cell/text.js';
 
 const vsBase = 'file://' + window.buche.vsBase;
 
@@ -88,38 +89,6 @@ function updateScrollFades(scrollEl, shadows) {
 const bufferShadows = makeShadows(bufferWrap, 48);
 bufferEl.addEventListener('scroll', () => updateScrollFades(bufferEl, bufferShadows));
 
-class TextHandler {
-  constructor(cellNode, instruction) {
-    this.cellNode    = cellNode;
-    this.instruction = instruction;
-    this.wrapper     = null; // .cell-text  — overlay host
-    this.scrollEl    = null; // .cell-text-scroll — scroll container
-    this.pre         = null; // .cell-text-inner  — content
-  }
-
-  init() {
-    if (this.instruction.data) {
-      this.cellNode.appendChild(html`<pre class="cell-input">${this.instruction.data.text}</pre>`);
-    }
-
-    this.wrapper  = html`<div class="cell-text"><div class="cell-text-scroll"><pre class="cell-text-inner"></pre></div></div>`;
-    this.scrollEl = this.wrapper.querySelector('.cell-text-scroll');
-    this.pre      = this.wrapper.querySelector('.cell-text-inner');
-    this.cellNode.appendChild(this.wrapper);
-
-    this.shadows = makeShadows(this.wrapper, 32);
-    this.scrollEl.addEventListener('scroll',
-      () => updateScrollFades(this.scrollEl, this.shadows));
-    updateScrollFades(this.scrollEl, this.shadows);
-  }
-
-  send(data) {
-    this.pre.appendChild(html`<span class="text-${data.stream || 'stdout'}">${data.text}</span>`);
-    updateScrollFades(this.scrollEl, this.shadows);
-    updateScrollFades(bufferEl, bufferShadows);
-  }
-}
-
 const cellHandlers = { text: TextHandler };
 
 class Executor {
@@ -147,7 +116,7 @@ class Executor {
     updateScrollFades(bufferEl, bufferShadows);
 
     const handler = new HandlerClass(cellNode, instruction);
-    handler.init();
+    handler.init(makeShadows, updateScrollFades);
     this.cells.set(instruction.cell_id, handler);
   }
 
@@ -155,6 +124,7 @@ class Executor {
     const handler = this.cells.get(instruction.cell_id);
     if (!handler) return;
     handler.send(instruction.data);
+    updateScrollFades(bufferEl, bufferShadows);
   }
 
   handle$close(instruction) {
