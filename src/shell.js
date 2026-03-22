@@ -1,5 +1,7 @@
+const pty = require("node-pty");
 const { spawn } = require("child_process");
 const { randomUUID } = require("crypto");
+const fs = require("fs");
 
 async function* merge(iterables) {
     const queue = [];
@@ -106,12 +108,29 @@ class Shell {
         if (this._processes.has(cell_id)) throw new Error(`Process ${cell_id} already exists`);
 
         const [cmd, ...args] = [obj.command, ...(obj.args || [])];
-        const child = spawn(cmd, args);
+
+        // Open a PTY pair for each stream so the child's isatty() returns true,
+        // while we still read stdout and stderr separately from the master sides.
+        const stdoutPty = pty.open({ cols: 220, rows: 50 });
+        const stderrPty = pty.open({ cols: 220, rows: 50 });
+        const { O_RDWR, O_NOCTTY } = fs.constants;
+        const stdoutSlave = fs.openSync(stdoutPty.ptsName, O_RDWR | O_NOCTTY);
+        const stderrSlave = fs.openSync(stderrPty.ptsName, O_RDWR | O_NOCTTY);
+
+        const child = spawn(cmd, args, {
+            stdio: ['pipe', stdoutSlave, stderrSlave],
+            env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+        });
+
+        // Parent no longer needs the slave fds — child inherited them.
+        fs.closeSync(stdoutSlave);
+        fs.closeSync(stderrSlave);
+
         this._processes.set(cell_id, child);
 
         const startEvent = { type: "new", cell_id, mode: "text", process_id: child.pid };
         if (obj.echo) {
-            startEvent.data = {text: `> ${obj.echo}`};
+            startEvent.data = { text: `> ${obj.echo}` };
         }
         yield startEvent;
 
@@ -124,15 +143,24 @@ class Shell {
             if (resolve) { const r = resolve; resolve = null; r(); }
         }
 
-        child.stdout.on("data", (data) => push({ type: "send", cell_id, data: { stream: "stdout", text: data.toString() } }));
-        child.stderr.on("data", (data) => push({ type: "send", cell_id, data: { stream: "stderr", text: data.toString() } }));
+        stdoutPty._socket.on("data",  (d) => console.log(d));
+        stdoutPty._socket.on("data",  (d) => push({ type: "send", cell_id, data: { stream: "stdout", text: d.toString() } }));
+        stderrPty._socket.on("data",  (d) => push({ type: "send", cell_id, data: { stream: "stderr", text: d.toString() } }));
+        // EIO means the slave side closed (process exited) — not a real error.
+        stdoutPty._socket.on("error", (e) => { if (e.code !== "EIO") push(makeError(e, cell_id)); });
+        stderrPty._socket.on("error", (e) => { if (e.code !== "EIO") push(makeError(e, cell_id)); });
+
         child.on("close", (return_code) => {
+            stdoutPty._socket.destroy();
+            stderrPty._socket.destroy();
             this._processes.delete(cell_id);
-            push({ type: "close", cell_id, return_code });
+            push({ type: "close", cell_id, return_code: return_code ?? 0 });
             done = true;
             if (resolve) { const r = resolve; resolve = null; r(); }
         });
         child.on("error", (err) => {
+            stdoutPty._socket.destroy();
+            stderrPty._socket.destroy();
             this._processes.delete(cell_id);
             push(makeError(err, cell_id));
             push({ type: "close", cell_id, return_code: 1 });

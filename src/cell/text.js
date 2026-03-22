@@ -1,11 +1,14 @@
 import { html } from '../utils.js';
 import '../scroll-fader.js';
+import { AnsiParser } from '../ansi.js';
 
 export class TextHandler {
   constructor(cellNode, instruction) {
     this.cellNode    = cellNode;
     this.instruction = instruction;
     this.pre         = null;
+    this.ansi        = new AnsiParser();
+    this.init();
   }
 
   init() {
@@ -21,6 +24,7 @@ export class TextHandler {
   }
 
   send(data) {
-    this.pre.appendChild(html`<span class="text-${data.stream || 'stdout'}">${data.text}</span>`);
+    for (const node of this.ansi.parse(data.text, data.stream || 'stdout'))
+      this.pre.appendChild(node);
   }
 }

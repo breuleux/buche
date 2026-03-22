@@ -93,7 +93,6 @@ class Executor {
     buffer.appendChild(cellNode);
 
     const handler = new HandlerClass(cellNode, instruction);
-    handler.init();
     this.cells.set(instruction.cell_id, handler);
   }
 
