@@ -1,64 +1,9 @@
 import { html } from './utils.js';
 import { TextHandler } from './cell/text.js';
+import { InputPrompt } from './prompt.js';
 import './scroll-fader.js';
 
-const vsBase = 'file://' + window.buche.vsBase;
-
-// Tell Monaco where to load its web workers from
-window.MonacoEnvironment = {
-  getWorkerUrl(_moduleId, _label) {
-    return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
-      self.MonacoEnvironment = { baseUrl: '${vsBase}/' };
-      importScripts('${vsBase}/base/worker/workerMain.js');
-    `)}`;
-  }
-};
-
-const loaderScript = document.createElement('script');
-loaderScript.src = vsBase + '/loader.js';
-loaderScript.onload = () => {
-  require.config({ paths: { vs: vsBase } });
-
-  require(['vs/editor/editor.main'], () => {
-    window.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
-      value: '',
-      language: 'plaintext',
-      theme: 'vs-dark',
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      lineNumbers: 'off',
-      renderLineHighlight: 'none',
-      overviewRulerLanes: 0,
-      folding: false,
-      wordWrap: 'on',
-      fontSize: 13,
-      fontFamily: 'Consolas, Menlo, monospace',
-      padding: { top: 4, bottom: 4 },
-      lineHeight: 20,
-      quickSuggestions: false,
-      suggestOnTriggerCharacters: false,
-      acceptSuggestionOnEnter: 'off',
-      tabCompletion: 'off',
-      wordBasedSuggestions: 'off',
-      parameterHints: { enabled: false },
-      suggest: { showWords: false },
-    });
-
-    window.editor.focus();
-
-    // Submit on Enter (Shift+Enter inserts a newline)
-    window.editor.addCommand(
-      monaco.KeyCode.Enter,
-      () => {
-        const value = window.editor.getValue().trim();
-        if (!value) return;
-        window.buche.sendCommand({ type: 'parse', text: value, cell_id: crypto.randomUUID() });
-        window.editor.setValue('');
-      }
-    );
-  });
-};
-document.head.appendChild(loaderScript);
+const prompt = new InputPrompt('monaco-editor', window.buche);
 
 // ── Buffer protocol ─────────────────────────────────────────────────────
 
@@ -104,6 +49,16 @@ class Executor {
 
   handle$close(instruction) {
     this.cells.delete(instruction.cell_id);
+  }
+
+  handle$error(instruction) {
+    const traceback = (instruction.traceback || []).map(line => html`<div class="error-traceback-line">${line}</div>`);
+    const cell = html`
+      <div class="cell cell-error">
+        <pre class="error-header">${instruction.error_type}: ${instruction.message}</pre>
+        ${traceback.length ? html`<div class="error-traceback">${traceback}</div>` : null}
+      </div>`;
+    buffer.appendChild(cell);
   }
 }
 

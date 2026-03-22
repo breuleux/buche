@@ -44,7 +44,7 @@ scroll-fader#buffer-wrap .scroll-fader-inner {
 }
 
 .cell scroll-fader .scroll-fader-inner {
-  max-height: 300px;
+  max-height: 600px;
   overflow-y: auto;
   display: flex;
   flex-direction: column-reverse;
@@ -72,10 +72,20 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom { height: 48px; }
 #input-container {
   flex: 0 0 auto;
   border-top: 1px solid #3c3c3c;
+  display: flex;
+  align-items: center;
+}
+
+#input-prompt {
+  padding: 0 8px;
+  color: #569cd6;
+  font-size: 13px;
+  line-height: 28px;
+  user-select: none;
 }
 
 #monaco-editor {
-  width: 100%;
+  flex: 1 1 auto;
   height: 28px;
 }
 
@@ -106,6 +116,33 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom { height: 48px; }
 
 .text-stdout { color: #d4d4d4; }
 .text-stderr { background: #3a0000; color: #f48771; }
+
+/* ── Error cells ── */
+.cell-error {
+  border-left: 3px solid #f44747;
+  padding-left: 8px;
+}
+
+.cell-error .error-header {
+  margin: 0 0 4px 0;
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #f44747;
+}
+
+.cell-error .error-traceback {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #858585;
+}
+
+.cell-error .error-traceback-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 
 /* ── Context / completions pane ── */
 #context-pane {
