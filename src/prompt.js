@@ -1,5 +1,5 @@
 export class InputPrompt {
-  constructor(containerId, buche) {
+  constructor(container, buche) {
     this._buche = buche;
 
     const vsBase = 'file://' + buche.vsBase;
@@ -17,7 +17,7 @@ export class InputPrompt {
     loaderScript.src = vsBase + '/loader.js';
     loaderScript.onload = () => {
       require.config({ paths: { vs: vsBase } });
-      require(['vs/editor/editor.main'], () => this._init(containerId));
+      require(['vs/editor/editor.main'], () => this._init(container));
     };
     document.head.appendChild(loaderScript);
   }
@@ -26,8 +26,8 @@ export class InputPrompt {
     this._buche.sendCommand({ type: 'parse', text: value, cell_id: crypto.randomUUID() });
   }
 
-  _init(containerId) {
-    this._editor = monaco.editor.create(document.getElementById(containerId), {
+  _init(container) {
+    this._editor = monaco.editor.create(container, {
       value: '',
       language: 'plaintext',
       theme: 'vs-dark',

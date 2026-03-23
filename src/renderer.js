@@ -3,8 +3,6 @@ import { TextHandler } from './cell/text.js';
 import { InputPrompt } from './prompt.js';
 import './scroll-fader.js';
 
-const prompt = new InputPrompt('monaco-editor', window.buche);
-
 // ── Buffer protocol ─────────────────────────────────────────────────────
 
 const bufferWrap = document.getElementById('buffer-wrap');
@@ -15,8 +13,11 @@ bufferWrap.inner.appendChild(buffer);
 const cellHandlers = { text: TextHandler };
 
 class Executor {
-  constructor() {
+  constructor(bridge) {
     this.cells = new Map();
+    this.bridge = bridge;
+    this.bridge.onInstruction(instruction => executor.execute(instruction));
+    this.prompt = new InputPrompt(document.getElementById('monaco-editor'), this.bridge);
   }
 
   execute(instruction) {
@@ -62,5 +63,4 @@ class Executor {
   }
 }
 
-const executor = new Executor();
-window.buche.onInstruction(instruction => executor.execute(instruction));
+const executor = new Executor(window.buche);
