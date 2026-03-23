@@ -171,7 +171,6 @@ class Shell {
 			}
 		}
 
-		stdoutPty._socket.on("data", (d) => console.log(d));
 		stdoutPty._socket.on("data", (d) =>
 			push({
 				type: "send",
