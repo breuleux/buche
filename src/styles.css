@@ -1,15 +1,20 @@
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
 
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100vh;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  font-family: 'Consolas', 'Menlo', monospace;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100vh;
+	background: #1e1e1e;
+	color: #d4d4d4;
+	font-family: "Consolas", "Menlo", monospace;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 /* ── Buffer ──
@@ -19,141 +24,156 @@ html, body {
  * so they don't move when the user scrolls.
  */
 scroll-fader {
-  display: block;
-  position: relative;
-  overflow: hidden;
+	display: block;
+	position: relative;
+	overflow: hidden;
 }
 
 scroll-fader#buffer-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 scroll-fader#buffer-wrap .scroll-fader-inner {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column-reverse;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column-reverse;
 }
 
 #buffer-inner {
-  padding: 8px 12px;
+	padding: 8px 12px;
 }
 
 .cell scroll-fader .scroll-fader-inner {
-  max-height: 600px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column-reverse;
+	max-height: 600px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column-reverse;
 }
 
 .scroll-shadow {
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 0.2s;
+	position: absolute;
+	left: 0;
+	right: 0;
+	pointer-events: none;
+	z-index: 1;
+	opacity: 0;
+	transition: opacity 0.2s;
 }
-.scroll-shadow-top    { top: 0;    background: linear-gradient(#1e1e1e, transparent); }
-.scroll-shadow-bottom { bottom: 0; background: linear-gradient(transparent, #1e1e1e); }
-.scroll-shadow.visible { opacity: 1; }
+.scroll-shadow-top {
+	top: 0;
+	background: linear-gradient(#1e1e1e, transparent);
+}
+.scroll-shadow-bottom {
+	bottom: 0;
+	background: linear-gradient(transparent, #1e1e1e);
+}
+.scroll-shadow.visible {
+	opacity: 1;
+}
 
 scroll-fader#buffer-wrap .scroll-shadow-top,
-scroll-fader#buffer-wrap .scroll-shadow-bottom { height: 48px; }
+scroll-fader#buffer-wrap .scroll-shadow-bottom {
+	height: 48px;
+}
 .cell .scroll-shadow-top,
-.cell .scroll-shadow-bottom                    { height: 32px; }
+.cell .scroll-shadow-bottom {
+	height: 32px;
+}
 
 /* ── Monaco input ── */
 #input-container {
-  flex: 0 0 auto;
-  border-top: 1px solid #3c3c3c;
-  display: flex;
-  align-items: center;
+	flex: 0 0 auto;
+	border-top: 1px solid #3c3c3c;
+	display: flex;
+	align-items: center;
 }
 
 #input-prompt {
-  padding: 0 8px;
-  color: #569cd6;
-  font-size: 13px;
-  line-height: 28px;
-  user-select: none;
+	padding: 0 8px;
+	color: #569cd6;
+	font-size: 13px;
+	line-height: 28px;
+	user-select: none;
 }
 
 #monaco-editor {
-  flex: 1 1 auto;
-  height: 28px;
+	flex: 1 1 auto;
+	height: 28px;
 }
 
 /* ── Cells ── */
 .cell {
-  margin-bottom: 8px;
+	margin-bottom: 8px;
 }
 
-
-
 .cell-text-inner {
-  margin: 0;
-  font-family: 'Consolas', 'Menlo', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
+	margin: 0;
+	font-family: "Consolas", "Menlo", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-all;
 }
 
 .cell-input {
-  margin: 0 0 2px 0;
-  font-family: 'Consolas', 'Menlo', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  color: #569cd6;
+	margin: 0 0 2px 0;
+	font-family: "Consolas", "Menlo", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	color: #569cd6;
 }
 
-.text-stdout { color: #d4d4d4; }
-.text-stderr { background: #3a0000; color: #f48771; }
+.text-stdout {
+	color: #d4d4d4;
+}
+.text-stderr {
+	background: #3a0000;
+	color: #f48771;
+}
 
 /* ── Error cells ── */
 .cell-error {
-  border-left: 3px solid #f44747;
-  padding-left: 8px;
+	border-left: 3px solid #f44747;
+	padding-left: 8px;
 }
 
 .cell-error .error-header {
-  margin: 0 0 4px 0;
-  font-family: 'Consolas', 'Menlo', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  color: #f44747;
+	margin: 0 0 4px 0;
+	font-family: "Consolas", "Menlo", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	color: #f44747;
 }
 
 .cell-error .error-traceback {
-  font-family: 'Consolas', 'Menlo', monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #858585;
+	font-family: "Consolas", "Menlo", monospace;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #858585;
 }
 
 .cell-error .error-traceback-line {
-  white-space: pre-wrap;
-  word-break: break-all;
+	white-space: pre-wrap;
+	word-break: break-all;
 }
 
 /* ── Context / completions pane ── */
 #context-pane {
-  flex: 0 0 auto;
-  height: calc(5 * 1.4em + 8px); /* ~5 lines */
-  border-top: 1px solid #3c3c3c;
-  /* background: #252526; */
-  background: #1e1e1e;
-  color: #858585;
-  font-size: 13px;
-  line-height: 1.4;
-  padding: 4px 12px;
-  overflow: hidden;
+	flex: 0 0 auto;
+	height: calc(5 * 1.4em + 8px); /* ~5 lines */
+	border-top: 1px solid #3c3c3c;
+	/* background: #252526; */
+	background: #1e1e1e;
+	color: #858585;
+	font-size: 13px;
+	line-height: 1.4;
+	padding: 4px 12px;
+	overflow: hidden;
 }
