@@ -1,4 +1,5 @@
 import { html } from "./utils.js";
+import { Cell } from "./cell/cell.js";
 import { TextHandler } from "./cell/text.js";
 import { InputPrompt } from "./prompt.js";
 import "./scroll-fader.js";
@@ -15,7 +16,6 @@ const cellHandlers = { text: TextHandler };
 class Executor {
 	constructor(bridge) {
 		this.cells = new Map();
-		this.statusDots = new Map();
 		this.bridge = bridge;
 		this.bridge.onInstruction((instruction) => executor.execute(instruction));
 		this.prompt = new InputPrompt(
@@ -39,34 +39,22 @@ class Executor {
 			console.error("Unknown mode:", instruction.mode);
 			return;
 		}
-		const echo = instruction.echo
-			? this.prompt.takeEcho(instruction.cell_id)
-			: null;
-		const statusDot = html`<div class="cell-status cell-status-running"></div>`;
-		const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}">
-			${statusDot}
-			<div class="cell-header">${echo}</div>
-		</div>`;
-		buffer.appendChild(cellNode);
-		this.statusDots.set(instruction.cell_id, statusDot);
-
-		const handler = new HandlerClass(cellNode, instruction);
-		this.cells.set(instruction.cell_id, handler);
+		const echo = instruction.echo ? this.prompt.takeEcho(instruction.cell_id) : null;
+		const cell = new Cell(instruction, echo, HandlerClass);
+		buffer.appendChild(cell.node);
+		this.cells.set(instruction.cell_id, cell);
 	}
 
 	handle$send(instruction) {
-		const handler = this.cells.get(instruction.cell_id);
-		if (!handler) return;
-		handler.send(instruction.data);
+		this.cells.get(instruction.cell_id)?.send(instruction.data);
 	}
 
 	handle$close(instruction) {
-		const dot = this.statusDots.get(instruction.cell_id);
-		if (dot) {
-			dot.className = `cell-status ${instruction.return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
-			this.statusDots.delete(instruction.cell_id);
+		const cell = this.cells.get(instruction.cell_id);
+		if (cell) {
+			cell.close(instruction.return_code);
+			this.cells.delete(instruction.cell_id);
 		}
-		this.cells.delete(instruction.cell_id);
 	}
 
 	handle$error(instruction) {

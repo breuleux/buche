@@ -1,21 +1,27 @@
 export class ScrollFader extends HTMLElement {
+	constructor() {
+		super();
+		this._inner = document.createElement("div");
+		this._inner.className = "scroll-fader-inner";
+	}
+
 	connectedCallback() {
+		if (this._initialized) return;
+		this._initialized = true;
+
 		const top = document.createElement("div");
 		const bottom = document.createElement("div");
-		const inner = document.createElement("div");
 		top.className = "scroll-shadow scroll-shadow-top";
 		bottom.className = "scroll-shadow scroll-shadow-bottom";
-		inner.className = "scroll-fader-inner";
 
 		this.appendChild(top);
 		this.appendChild(bottom);
-		this.appendChild(inner);
+		this.appendChild(this._inner);
 
 		this._shadows = { top, bottom };
-		this._inner = inner;
 
-		inner.addEventListener("scroll", () => this._update());
-		new MutationObserver(() => this._update()).observe(inner, {
+		this._inner.addEventListener("scroll", () => this._update());
+		new MutationObserver(() => this._update()).observe(this._inner, {
 			childList: true,
 			subtree: true,
 		});
