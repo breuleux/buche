@@ -1,6 +1,9 @@
+import { html } from "./utils.js";
+
 export class InputPrompt {
 	constructor(container, buche) {
 		this._buche = buche;
+		this._echoes = new Map();
 
 		const vsBase = "file://" + buche.vsBase;
 
@@ -23,11 +26,15 @@ export class InputPrompt {
 	}
 
 	onSubmit(value) {
-		this._buche.sendCommand({
-			type: "parse",
-			text: value,
-			cell_id: crypto.randomUUID(),
-		});
+		const cell_id = crypto.randomUUID();
+		this._echoes.set(cell_id, this.echo());
+		this._buche.sendCommand({ type: "parse", text: value, cell_id });
+	}
+
+	takeEcho(cell_id) {
+		const node = this._echoes.get(cell_id);
+		this._echoes.delete(cell_id);
+		return node;
 	}
 
 	_init(container) {
@@ -64,6 +71,11 @@ export class InputPrompt {
 			this.onSubmit(value);
 			this._editor.setValue("");
 		});
+	}
+
+	echo() {
+		const text = this._editor?.getValue() ?? "";
+		return html`<pre class="cell-input">&gt; ${text}</pre>`;
 	}
 
 	focus() {

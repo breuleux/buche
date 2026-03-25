@@ -15,6 +15,7 @@ const cellHandlers = { text: TextHandler };
 class Executor {
 	constructor(bridge) {
 		this.cells = new Map();
+		this.statusDots = new Map();
 		this.bridge = bridge;
 		this.bridge.onInstruction((instruction) => executor.execute(instruction));
 		this.prompt = new InputPrompt(
@@ -38,8 +39,16 @@ class Executor {
 			console.error("Unknown mode:", instruction.mode);
 			return;
 		}
-		const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}"></div>`;
+		const echo = instruction.echo
+			? this.prompt.takeEcho(instruction.cell_id)
+			: null;
+		const statusDot = html`<div class="cell-status cell-status-running"></div>`;
+		const cellNode = html`<div class="cell" data-cell-id="${instruction.cell_id}">
+			${statusDot}
+			<div class="cell-header">${echo}</div>
+		</div>`;
 		buffer.appendChild(cellNode);
+		this.statusDots.set(instruction.cell_id, statusDot);
 
 		const handler = new HandlerClass(cellNode, instruction);
 		this.cells.set(instruction.cell_id, handler);
@@ -52,6 +61,11 @@ class Executor {
 	}
 
 	handle$close(instruction) {
+		const dot = this.statusDots.get(instruction.cell_id);
+		if (dot) {
+			dot.className = `cell-status ${instruction.return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
+			this.statusDots.delete(instruction.cell_id);
+		}
 		this.cells.delete(instruction.cell_id);
 	}
 

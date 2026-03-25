@@ -103,7 +103,7 @@ class Shell {
 			command,
 			args,
 			cell_id: obj.cell_id,
-			echo: obj.echo ?? obj.text,
+			echo: obj.echo ?? true,
 		});
 	}
 
@@ -151,11 +151,9 @@ class Shell {
 			type: "new",
 			cell_id,
 			mode: "text",
+			echo: obj.echo,
 			process_id: child.pid,
 		};
-		if (obj.echo) {
-			startEvent.data = { text: `> ${obj.echo}` };
-		}
 		yield startEvent;
 
 		const events = [];
