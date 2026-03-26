@@ -29,6 +29,18 @@ export class InputPrompt {
     const cell_id = crypto.randomUUID();
     this._echoes.set(cell_id, this.echo());
     this._buche.sendCommand({ type: "parse", text: value, cell_id });
+    this.onAfterSubmit(cell_id);
+  }
+
+  // Override from outside to hook into submit events.
+  onAfterSubmit(_cell_id) {}
+
+  disable() {
+    this._editor?.updateOptions({ readOnly: true });
+  }
+
+  enable() {
+    this._editor?.updateOptions({ readOnly: false });
   }
 
   takeEcho(cell_id) {

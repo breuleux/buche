@@ -16,12 +16,26 @@ const cellHandlers = { text: TextHandler };
 class Executor {
   constructor(bridge) {
     this.cells = new Map();
+    this._activeCell = null;
     this.bridge = bridge;
     this.bridge.onInstruction((instruction) => executor.execute(instruction));
     this.prompt = new InputPrompt(
       document.getElementById("monaco-editor"),
       this.bridge,
     );
+    this.prompt.onAfterSubmit = (cell_id) => {
+      this.prompt.disable();
+      setTimeout(() => {
+        const cell = this.cells.get(cell_id);
+        if (cell) {
+          this._activeCell = cell_id;
+          cell.node.focus();
+        } else {
+          this.prompt.enable();
+          this.prompt.focus();
+        }
+      }, 50);
+    };
   }
 
   execute(instruction) {
@@ -60,8 +74,17 @@ class Executor {
   handle$close(instruction) {
     const cell = this.cells.get(instruction.cell_id);
     if (cell) {
+      const isFocused = cell.node === document.activeElement;
       cell.close(instruction.return_code);
       this.cells.delete(instruction.cell_id);
+      if (this._activeCell === instruction.cell_id) {
+        this._activeCell = null;
+        this.prompt.enable();
+        if (isFocused) this.prompt.focus();
+      } else if (isFocused) {
+        this.prompt.enable();
+        this.prompt.focus();
+      }
     }
   }
 
