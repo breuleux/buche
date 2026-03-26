@@ -49,7 +49,26 @@ function createWindow() {
   const inputQueue = [];
   let inputResolve = null;
 
+  let recordLastTime = null;
+  if (args.record) {
+    fs.writeFileSync(args.record, '');
+  }
+
+  function recordCommand(obj) {
+    if (!args.record) return;
+    const now = Date.now();
+    if (recordLastTime !== null) {
+      const seconds = parseFloat(((now - recordLastTime) / 1000).toFixed(3));
+      if (seconds >= 0.1) {
+        fs.appendFileSync(args.record, JSON.stringify({ type: 'wait', seconds }) + '\n');
+      }
+    }
+    recordLastTime = now;
+    fs.appendFileSync(args.record, JSON.stringify(obj) + '\n');
+  }
+
   ipcMain.on('command', (_event, obj) => {
+    recordCommand(obj);
     inputQueue.push(obj);
     if (inputResolve) { const r = inputResolve; inputResolve = null; r(); }
   });

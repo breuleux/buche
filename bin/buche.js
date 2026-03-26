@@ -8,7 +8,8 @@ const appDir = path.join(__dirname, '..');
 
 program
   .option('--debug',          'open DevTools on launch')
-  .option('--replay <file>',  'replay a JSONL instruction file');
+  .option('--replay <file>',  'replay a JSONL instruction file')
+  .option('--record <file>',  'record shell instructions to a JSONL file');
 
 program.parse();
 const cli = program.opts();
@@ -16,6 +17,7 @@ const cli = program.opts();
 const opts = {
   devtools: cli.debug ?? false,
   replay:   cli.replay ?? null,
+  record:   cli.record ?? null,
 };
 
 const child = spawn(electron, [appDir], {
