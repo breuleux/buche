@@ -111,6 +111,12 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	position: relative;
 	padding-left: 16px;
 	margin-bottom: 8px;
+	outline: none;
+	border-radius: 3px;
+}
+
+.cell:focus {
+	background: #232323;
 }
 
 .cell-header {
