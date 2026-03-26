@@ -72,6 +72,7 @@ async function* withErrorCatch(iter, cell_id) {
 class Shell {
 	constructor() {
 		this._processes = new Map();
+		this._shutdown = false;
 	}
 
 	run(inputStream) {
@@ -92,6 +93,7 @@ class Shell {
 						yield makeError(err, obj.cell_id ?? null);
 					})();
 				}
+				if (self._shutdown) break;
 			}
 		}
 		return merge(handlers());
@@ -113,12 +115,19 @@ class Shell {
 
 	async handle$input(obj) {
 		const proc = this._processes.get(obj.cell_id);
-		if (proc) proc.stdinPty._socket.write(obj.text);
+		if (proc) await new Promise((resolve, reject) =>
+			fs.write(proc.stdinPty._fd, obj.text, (err) => err ? reject(err) : resolve())
+		);
 	}
 
 	async handle$close_stdin(obj) {
 		const proc = this._processes.get(obj.cell_id);
-		if (proc) proc.stdinPty._socket.end();
+		if (proc) fs.closeSync(proc.stdinPty._fd);
+	}
+
+	async handle$shutdown(_obj) {
+		for (const { child } of this._processes.values()) child.kill();
+		this._shutdown = true;
 	}
 
 	async *handle$run(obj) {
@@ -131,6 +140,7 @@ class Shell {
 		// Open a PTY pair for each stream so the child's isatty() returns true,
 		// while we still read stdout and stderr separately from the master sides.
 		const stdinPty  = pty.open({ cols: 220, rows: 50 });
+		stdinPty._slave.destroy(); // prevent _slave from racing the child for stdin reads
 		const stdoutPty = pty.open({ cols: 220, rows: 50 });
 		const stderrPty = pty.open({ cols: 220, rows: 50 });
 		const { O_RDWR, O_NOCTTY } = fs.constants;
