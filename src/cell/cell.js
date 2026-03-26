@@ -53,6 +53,8 @@ export class Cell {
       e.preventDefault();
       sendInput(text);
     });
+    this.node.addEventListener("focus", () => this.handler.setCursorState?.("active"));
+    this.node.addEventListener("blur", () => this.handler.setCursorState?.("inactive"));
   }
 
   send(data) {
@@ -61,6 +63,7 @@ export class Cell {
 
   close(return_code) {
     this._statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
+    this.handler.setCursorState?.("hidden");
     this.node.removeAttribute("tabindex");
     this.node.blur();
   }

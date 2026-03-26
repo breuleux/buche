@@ -27,10 +27,15 @@ export class TextHandler {
     this._startEl = html`<pre class="cell-text-inner"></pre>`;
     this._marker = html`<div class="cell-lines-dropped" hidden></div>`;
     this._restEl = html`<pre class="cell-text-inner"></pre>`;
+    this._cursorEl = html`<span class="cursor cursor-inactive"></span>`;
 
     fader.inner.appendChild(this._restEl);
     fader.inner.appendChild(this._marker);
     fader.inner.appendChild(this._startEl);
+  }
+
+  setCursorState(state) {
+    this._cursorEl.className = `cursor cursor-${state}`;
   }
 
   send(data) {
@@ -63,10 +68,37 @@ export class TextHandler {
   _flush() {
     this._throttleTimer = null;
 
-    // Remove current partial-line element so we can reattach it at the end.
+    // Remove current partial-line element and cursor so we can reattach them.
+    this._cursorEl.remove();
     if (this._currentEl) {
       this._currentEl.remove();
       this._currentEl = null;
+    }
+
+    // Drop excess lines from the front before feeding into TermBuffer.
+    const capacity = (START_MAX - this._startLines) + REST_MAX;
+    let bufNewlines = 0;
+    for (const { text } of this._buffer) {
+      for (let i = 0; i < text.length; i++) if (text[i] === "\n") bufNewlines++;
+    }
+    if (bufNewlines > capacity) {
+      let toDrop = bufNewlines - capacity;
+      this._droppedLines += toDrop;
+      while (toDrop > 0) {
+        const entry = this._buffer[0];
+        let count = 0;
+        for (let i = 0; i < entry.text.length; i++) if (entry.text[i] === "\n") count++;
+        if (count <= toDrop) {
+          toDrop -= count;
+          this._buffer.shift();
+        } else {
+          let idx = -1;
+          for (let i = 0; i < toDrop; i++) idx = entry.text.indexOf("\n", idx + 1);
+          this._buffer[0] = { text: entry.text.slice(idx + 1), stream: entry.stream };
+          toDrop = 0;
+        }
+      }
+      this.term.resetStyle();
     }
 
     for (const { text, stream } of this._buffer) {
@@ -76,13 +108,11 @@ export class TextHandler {
     }
     this._buffer = [];
 
-    // Re-append the current partial line at the end.
+    // Re-append the current partial line and cursor at the end.
+    const activeEl = this._startLines < START_MAX ? this._startEl : this._restEl;
     this._currentEl = this.term.currentLineNode();
-    if (this._currentEl) {
-      (this._startLines < START_MAX ? this._startEl : this._restEl).appendChild(
-        this._currentEl,
-      );
-    }
+    if (this._currentEl) activeEl.appendChild(this._currentEl);
+    activeEl.appendChild(this._cursorEl);
 
     if (this._droppedLines > 0) {
       this._marker.innerHTML = `<div>${this._droppedLines} lines dropped</div>`;

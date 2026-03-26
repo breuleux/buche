@@ -74,6 +74,14 @@ export class TermBuffer {
     this._col = 0; // cursor column
   }
 
+  resetStyle() {
+    this.fg = null;
+    this.bg = null;
+    this.bold = false;
+    this.italic = false;
+    this.underline = false;
+  }
+
   _apply(codes, i) {
     const c = codes[i];
     if (c === 0) {
@@ -225,7 +233,7 @@ export class TermBuffer {
       const ch = src[i];
 
       if (ch === "\x1b" && src[i + 1] === "[") {
-        const m = /^\x1b\[([0-9;]*)([A-Za-z~])/.exec(src.slice(i));
+        const m = /^\x1b\[([0-9;?]*)([A-Za-z~])/.exec(src.slice(i));
         if (m) {
           this._handleCSI(m[1], m[2]);
           i += m[0].length;
@@ -233,14 +241,16 @@ export class TermBuffer {
           i++;
         }
       } else if (ch === "\x1b") {
-        i++; // skip unknown escape
+        i += src[i + 1] ? 2 : 1; // skip 2-char escape (e.g. \x1b= \x1b>)
       } else if (ch === "\r") {
         this._col = 0;
         i++;
       } else if (ch === "\n") {
+        const line = document.createElement("span");
         const frag = this._cellsToFrag();
-        frag.appendChild(document.createTextNode("\n"));
-        lines.push(frag);
+        while (frag.firstChild) line.appendChild(frag.firstChild);
+        line.appendChild(document.createTextNode("\n"));
+        lines.push(line);
         this._cells = [];
         this._col = 0;
         i++;
