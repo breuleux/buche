@@ -32,20 +32,48 @@ function c256(n) {
 	return `rgb(${x(r)},${x(g)},${x(b)})`;
 }
 
-const SGR_RE = /\x1b\[([0-9;]*)m/g;
 const INCOMPLETE_RE = /\x1b(?:\[[0-9;]*)?$/;
 
-export class AnsiParser {
+function makeSpan(text, streamClass, fg, bg, bold, italic, underline) {
+	const span = document.createElement("span");
+	span.className = `text-${streamClass}`;
+	let style = "";
+	if (fg) style += `color:${fg};`;
+	if (bg) style += `background:${bg};`;
+	if (bold) style += "font-weight:bold;";
+	if (italic) style += "font-style:italic;";
+	if (underline) style += "text-decoration:underline;";
+	if (style) span.style.cssText = style;
+	span.textContent = text;
+	return span;
+}
+
+function stylesEq(a, b) {
+	return (
+		a.fg === b.fg &&
+		a.bg === b.bg &&
+		a.bold === b.bold &&
+		a.italic === b.italic &&
+		a.underline === b.underline &&
+		a.stream === b.stream
+	);
+}
+
+// TermBuffer: processes raw terminal output into DOM nodes.
+// Handles \b (backspace), \r (carriage return), \n (linefeed),
+// ANSI SGR (colors/styles), and \x1b[K (erase to EOL).
+export class TermBuffer {
 	constructor() {
 		this.fg = null;
 		this.bg = null;
 		this.bold = false;
 		this.italic = false;
 		this.underline = false;
-		this._buf = "";
+		this._esc = ""; // pending incomplete escape sequence
+		this._cells = []; // current line: [{char, fg, bg, bold, italic, underline, stream}]
+		this._col = 0; // cursor column
 	}
 
-	// Apply one SGR code, return how many extra codes were consumed.
 	_apply(codes, i) {
 		const c = codes[i];
 		if (c === 0) {
@@ -91,44 +119,133 @@ export class AnsiParser {
 		return 0;
 	}
 
-	_makeSpan(text, streamClass) {
+	_put(ch, stream) {
+		const cell = {
+			char: ch,
+			fg: this.fg,
+			bg: this.bg,
+			bold: this.bold,
+			italic: this.italic,
+			underline: this.underline,
+			stream,
+		};
+		if (this._col < this._cells.length) {
+			this._cells[this._col] = cell;
+		} else {
+			while (this._cells.length < this._col) {
+				this._cells.push({
+					char: " ",
+					fg: null,
+					bg: null,
+					bold: false,
+					italic: false,
+					underline: false,
+					stream,
+				});
+			}
+			this._cells.push(cell);
+		}
+		this._col++;
+	}
+
+	// Convert current cells to a DocumentFragment of styled spans.
+	_cellsToFrag() {
+		const frag = document.createDocumentFragment();
+		const cells = this._cells;
+		let i = 0;
+		while (i < cells.length) {
+			const c0 = cells[i];
+			let j = i + 1;
+			while (j < cells.length && stylesEq(cells[j], c0)) j++;
+			const text = cells
+				.slice(i, j)
+				.map((c) => c.char)
+				.join("");
+			frag.appendChild(
+				makeSpan(text, c0.stream, c0.fg, c0.bg, c0.bold, c0.italic, c0.underline),
+			);
+			i = j;
+		}
+		return frag;
+	}
+
+	// Return a <span> wrapping the current partial line (non-destructive).
+	currentLineNode() {
+		if (this._cells.length === 0) return null;
 		const span = document.createElement("span");
-		span.className = `text-${streamClass}`;
-		let style = "";
-		if (this.fg) style += `color:${this.fg};`;
-		if (this.bg) style += `background:${this.bg};`;
-		if (this.bold) style += "font-weight:bold;";
-		if (this.italic) style += "font-style:italic;";
-		if (this.underline) style += "text-decoration:underline;";
-		if (style) span.style.cssText = style;
-		span.textContent = text;
+		const frag = this._cellsToFrag();
+		while (frag.firstChild) span.appendChild(frag.firstChild);
 		return span;
 	}
 
-	// Returns an array of spans.
-	parse(text, streamClass) {
-		const input = this._buf + text;
-		this._buf = "";
+	_handleCSI(params, cmd) {
+		if (cmd === "m") {
+			const codes = params === "" ? [0] : params.split(";").map(Number);
+			for (let i = 0; i < codes.length; i++) i += this._apply(codes, i);
+		} else if (cmd === "K") {
+			const n = parseInt(params) || 0;
+			if (n === 0) this._cells.splice(this._col); // erase cursor→EOL
+			else if (n === 1) {
+				this._cells.splice(0, this._col);
+				this._col = 0;
+			} // erase BOL→cursor
+			else if (n === 2) {
+				this._cells = [];
+				this._col = 0;
+			} // erase entire line
+		}
+		// Other sequences (cursor movement, screen ops) ignored for now.
+	}
 
-		// Hold back any trailing incomplete escape sequence for the next chunk.
+	// Process raw terminal text. Returns an array of DocumentFragments,
+	// one per completed line (each fragment ends with a '\n' text node).
+	// The current partial line is not returned; call currentLineNode() to get it.
+	write(text, streamClass) {
+		const input = this._esc + text;
+		this._esc = "";
+
+		// Hold back any trailing incomplete escape sequence.
 		const tail = INCOMPLETE_RE.exec(input);
 		const src = tail ? input.slice(0, tail.index) : input;
-		if (tail) this._buf = tail[0];
+		if (tail) this._esc = tail[0];
 
-		const nodes = [];
-		let last = 0;
-		SGR_RE.lastIndex = 0;
+		const lines = [];
+		let i = 0;
 
-		for (const m of src.matchAll(SGR_RE)) {
-			if (m.index > last)
-				nodes.push(this._makeSpan(src.slice(last, m.index), streamClass));
-			last = m.index + m[0].length;
-			const codes = m[1] === "" ? [0] : m[1].split(";").map(Number);
-			for (let i = 0; i < codes.length; i++) i += this._apply(codes, i);
+		while (i < src.length) {
+			const ch = src[i];
+
+			if (ch === "\x1b" && src[i + 1] === "[") {
+				const m = /^\x1b\[([0-9;]*)([A-Za-z~])/.exec(src.slice(i));
+				if (m) {
+					this._handleCSI(m[1], m[2]);
+					i += m[0].length;
+				} else {
+					i++;
+				}
+			} else if (ch === "\x1b") {
+				i++; // skip unknown escape
+			} else if (ch === "\r") {
+				this._col = 0;
+				i++;
+			} else if (ch === "\n") {
+				const frag = this._cellsToFrag();
+				frag.appendChild(document.createTextNode("\n"));
+				lines.push(frag);
+				this._cells = [];
+				this._col = 0;
+				i++;
+			} else if (ch === "\b") {
+				if (this._col > 0) this._col--;
+				i++;
+			} else if (ch >= " ") {
+				this._put(ch, streamClass);
+				i++;
+			} else {
+				i++; // skip other C0 controls
+			}
 		}
 
-		if (last < src.length)
-			nodes.push(this._makeSpan(src.slice(last), streamClass));
-		return nodes;
+		return lines;
 	}
 }
