@@ -95,6 +95,10 @@ function createWindow() {
     }
   }
 
+  if (args.startCommand) {
+    inputQueue.push({ type: "parse", text: args.startCommand });
+  }
+
   win.webContents.once("did-finish-load", () => {
     (async () => {
       for await (const instruction of shell.run(shellInput())) {
