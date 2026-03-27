@@ -125,7 +125,7 @@ class Shell {
 
   async handle$close_stdin(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (proc) fs.closeSync(proc.stdinPty._fd);
+    if (proc) proc.stdinPty._socket.destroy();
   }
 
   async handle$shutdown(_obj) {

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "electron .",
+    "test": "node --test tests/shell.test.js",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "devDependencies": {
