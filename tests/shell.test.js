@@ -42,14 +42,14 @@ describe("run", () => {
 
   test("captures stdout", async () => {
     const out = await run({ type: "run", command: "echo", args: ["hello"], cell_id: "p1" });
-    const stdout = out.filter((e) => e.type === "send" && e.data.stream === "stdout");
-    assert.ok(stdout[0].data.text.includes("hello"));
+    const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
+    assert.ok(stdout[0].text.includes("hello"));
   });
 
   test("captures stderr", async () => {
     const out = await run({ type: "run", command: "sh", args: ["-c", "echo err >&2"], cell_id: "p1" });
-    const stderr = out.filter((e) => e.type === "send" && e.data.stream === "stderr");
-    assert.ok(stderr[0].data.text.includes("err"));
+    const stderr = out.filter((e) => e.type === "send" && e.stream === "stderr");
+    assert.ok(stderr[0].text.includes("err"));
   });
 
   test("non-zero return code", async () => {
@@ -85,8 +85,8 @@ describe("parse", () => {
   test("runs the parsed command", async () => {
     const out = await run({ type: "parse", text: "echo hello", cell_id: "p1" });
     matchObject(out[0], { type: "new", cell_id: "p1" });
-    const stdout = out.filter((e) => e.type === "send" && e.data.stream === "stdout");
-    assert.ok(stdout[0].data.text.includes("hello"));
+    const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
+    assert.ok(stdout[0].text.includes("hello"));
   });
 
   test("uses provided cell_id", async () => {
@@ -102,8 +102,8 @@ describe("parse", () => {
 
   test("handles multiple args", async () => {
     const out = await run({ type: "parse", text: "echo foo bar baz", cell_id: "p1" });
-    const stdout = out.filter((e) => e.type === "send" && e.data.stream === "stdout");
-    assert.ok(stdout[0].data.text.includes("foo bar baz"));
+    const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
+    assert.ok(stdout[0].text.includes("foo bar baz"));
   });
 });
 
@@ -114,8 +114,8 @@ describe("input / close_stdin", () => {
       { type: "run", command: "sh", args: ["-c", "read line; echo \"$line\""], cell_id: "p1" },
       { type: "input", cell_id: "p1", text: "hello\n" },
     );
-    const stdout = out.filter((e) => e.type === "send" && e.data.stream === "stdout");
-    assert.ok(stdout.map((e) => e.data.text).join("").includes("hello"));
+    const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
+    assert.ok(stdout.map((e) => e.text).join("").includes("hello"));
   });
 
   test("close_stdin terminates process", async () => {

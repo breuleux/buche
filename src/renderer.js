@@ -70,7 +70,7 @@ class Executor {
   }
 
   handle$send(instruction) {
-    this.cells.get(instruction.cell_id)?.send(instruction.data);
+    this.cells.get(instruction.cell_id)?.send(instruction);
   }
 
   handle$close(instruction) {

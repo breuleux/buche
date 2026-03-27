@@ -99,13 +99,13 @@ class Process {
 
     // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
     stdinPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, data: { stream: "stdout", text: d.toString() } }),
+      emit({ type: "send", cell_id, stream: "stdout", text: d.toString() }),
     );
     stdoutPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, data: { stream: "stdout", text: d.toString() } }),
+      emit({ type: "send", cell_id, stream: "stdout", text: d.toString() }),
     );
     stderrPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, data: { stream: "stderr", text: d.toString() } }),
+      emit({ type: "send", cell_id, stream: "stderr", text: d.toString() }),
     );
     // EIO means the slave side closed (process exited) — not a real error.
     stdinPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
