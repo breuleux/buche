@@ -179,6 +179,14 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	border-bottom: 2px solid #555555;
 }
 
+.cell-term {
+	padding: 4px 0;
+}
+
+.cell-term .xterm {
+	padding: 0;
+}
+
 .cell-text-inner {
 	margin: 0;
 	font-family: "Consolas", "Menlo", monospace;

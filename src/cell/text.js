@@ -1,4 +1,4 @@
-import { html } from "../utils.js";
+import { html, keyToInput } from "../utils.js";
 import "../scroll-fader.js";
 import { TermBuffer } from "../ansi.js";
 
@@ -7,7 +7,7 @@ const START_MAX = 100;
 const REST_MAX = 1000;
 
 export class TextHandler {
-  constructor(cellNode, instruction) {
+  constructor(cellNode, instruction, sendInput) {
     this.cellNode = cellNode;
     this.instruction = instruction;
     this.term = new TermBuffer();
@@ -18,6 +18,14 @@ export class TextHandler {
     this._throttleTimer = null;
     this._currentEl = null; // current partial-line element in DOM
     this.init();
+    if (sendInput) {
+      cellNode.addEventListener("keydown", (e) => {
+        const text = keyToInput(e);
+        if (text === null) return;
+        e.preventDefault();
+        sendInput(text);
+      });
+    }
   }
 
   init() {

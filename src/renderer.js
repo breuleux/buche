@@ -1,6 +1,8 @@
 import { html } from "./utils.js";
 import { Cell } from "./cell/cell.js";
 import { TextHandler } from "./cell/text.js";
+import { TermHandler } from "./cell/term.js";
+import { AutoHandler } from "./cell/auto.js";
 import { InputPrompt } from "./prompt.js";
 import "./scroll-fader.js";
 
@@ -11,7 +13,7 @@ const buffer = document.createElement("div");
 buffer.id = "buffer-inner";
 bufferWrap.inner.appendChild(buffer);
 
-const cellHandlers = { text: TextHandler };
+const cellHandlers = { text: TextHandler, term: TermHandler, auto: AutoHandler };
 
 class Executor {
   constructor(bridge) {
@@ -26,12 +28,12 @@ class Executor {
     this.prompt.onAfterSubmit = (cell_id) => {
       this.prompt.disable();
       setTimeout(() => {
+        this.prompt.enable();
         const cell = this.cells.get(cell_id);
         if (cell) {
           this._activeCell = cell_id;
           cell.node.focus();
         } else {
-          this.prompt.enable();
           this.prompt.focus();
         }
       }, 50);

@@ -1,3 +1,27 @@
+export function keyToInput(e) {
+  if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+    const code = e.key.toUpperCase().charCodeAt(0) - 64;
+    if (code > 0 && code < 32) return String.fromCharCode(code);
+  }
+  if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) return e.key;
+  switch (e.key) {
+    case "Enter":     return "\n";
+    case "Backspace": return "\x7f";
+    case "Tab":       return "\t";
+    case "Escape":    return "\x1b";
+    case "ArrowUp":   return "\x1b[A";
+    case "ArrowDown": return "\x1b[B";
+    case "ArrowRight":return "\x1b[C";
+    case "ArrowLeft": return "\x1b[D";
+    case "Delete":    return "\x1b[3~";
+    case "Home":      return "\x1b[H";
+    case "End":       return "\x1b[F";
+    case "PageUp":    return "\x1b[5~";
+    case "PageDown":  return "\x1b[6~";
+  }
+  return null;
+}
+
 /**
  * Escape a string for safe insertion into HTML (e.g. textContent that will not be interpreted as HTML).
  */

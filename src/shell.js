@@ -240,7 +240,7 @@ class Shell {
     const startEvent = {
       type: "new",
       cell_id,
-      mode: "text",
+      mode: "auto",
       echo: obj.echo,
       process_id: child.pid,
     };
