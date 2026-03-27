@@ -84,7 +84,7 @@ export class TextHandler {
     }
 
     // Drop excess lines from the front before feeding into TermBuffer.
-    const capacity = (START_MAX - this._startLines) + REST_MAX;
+    const capacity = START_MAX - this._startLines + REST_MAX;
     let bufNewlines = 0;
     for (const { text } of this._buffer) {
       for (let i = 0; i < text.length; i++) if (text[i] === "\n") bufNewlines++;
@@ -95,14 +95,19 @@ export class TextHandler {
       while (toDrop > 0) {
         const entry = this._buffer[0];
         let count = 0;
-        for (let i = 0; i < entry.text.length; i++) if (entry.text[i] === "\n") count++;
+        for (let i = 0; i < entry.text.length; i++)
+          if (entry.text[i] === "\n") count++;
         if (count <= toDrop) {
           toDrop -= count;
           this._buffer.shift();
         } else {
           let idx = -1;
-          for (let i = 0; i < toDrop; i++) idx = entry.text.indexOf("\n", idx + 1);
-          this._buffer[0] = { text: entry.text.slice(idx + 1), stream: entry.stream };
+          for (let i = 0; i < toDrop; i++)
+            idx = entry.text.indexOf("\n", idx + 1);
+          this._buffer[0] = {
+            text: entry.text.slice(idx + 1),
+            stream: entry.stream,
+          };
           toDrop = 0;
         }
       }
@@ -117,7 +122,8 @@ export class TextHandler {
     this._buffer = [];
 
     // Re-append the current partial line and cursor at the end.
-    const activeEl = this._startLines < START_MAX ? this._startEl : this._restEl;
+    const activeEl =
+      this._startLines < START_MAX ? this._startEl : this._restEl;
     this._currentEl = this.term.currentLineNode();
     if (this._currentEl) activeEl.appendChild(this._currentEl);
     activeEl.appendChild(this._cursorEl);

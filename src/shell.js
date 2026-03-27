@@ -2,6 +2,7 @@ const pty = require("node-pty");
 const { spawn } = require("child_process");
 const { randomUUID } = require("crypto");
 const fs = require("fs");
+const readline = require("readline");
 
 async function* merge(iterables) {
   const queue = [];
@@ -108,12 +109,18 @@ class Process {
       emit({ type: "send", cell_id, stream: "stderr", text: d.toString() }),
     );
     // EIO means the slave side closed (process exited) — not a real error.
-    stdinPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
-    stdoutPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
-    stderrPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
+    stdinPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") emit(makeError(e, cell_id));
+    });
+    stdoutPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") emit(makeError(e, cell_id));
+    });
+    stderrPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") emit(makeError(e, cell_id));
+    });
 
     const child = spawn(cmd, args, {
-      stdio: [stdinSlave, stdoutSlave, stderrSlave],
+      stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe"],
       env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
     });
 
@@ -122,10 +129,26 @@ class Process {
     fs.closeSync(stdoutSlave);
     fs.closeSync(stderrSlave);
 
+    this._datain = child.stdio[3];
+
+    readline
+      .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
+      .on("line", (line) => {
+        let data;
+        try {
+          data = JSON.parse(line);
+        } catch {
+          return;
+        }
+        emit({ type: "send", cell_id, stream: "dataout", data });
+      });
+
     const cleanup = () => {
       stdinPty._socket.destroy();
       stdoutPty._socket.destroy();
       stderrPty._socket.destroy();
+      child.stdio[3].destroy();
+      child.stdio[4].destroy();
     };
 
     child.on("close", (return_code) => {
@@ -146,7 +169,17 @@ class Process {
 
   writeStdin(text) {
     return new Promise((resolve, reject) =>
-      fs.write(this._stdinPty._fd, text, (err) => (err ? reject(err) : resolve())),
+      fs.write(this._stdinPty._fd, text, (err) =>
+        err ? reject(err) : resolve(),
+      ),
+    );
+  }
+
+  writeDatain(json) {
+    return new Promise((resolve, reject) =>
+      this._datain.write(JSON.stringify(json) + "\n", (err) =>
+        err ? reject(err) : resolve(),
+      ),
     );
   }
 
@@ -215,7 +248,12 @@ class Shell {
 
   async handle$input(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (proc) await proc.writeStdin(obj.text);
+    if (!proc) return;
+    if (obj.data !== undefined) {
+      await proc.writeDatain(obj.data);
+    } else {
+      await proc.writeStdin(obj.text);
+    }
   }
 
   async handle$close_stdin(obj) {
@@ -237,7 +275,13 @@ class Shell {
     const proc = new Process(cmd, args, cell_id);
     this._processes.set(cell_id, proc);
 
-    yield { type: "new", cell_id, mode: "auto", echo: obj.echo, process_id: proc.pid };
+    yield {
+      type: "new",
+      cell_id,
+      mode: "auto",
+      echo: obj.echo,
+      process_id: proc.pid,
+    };
 
     for await (const event of proc.events()) {
       if (event.type === "close") this._processes.delete(cell_id);

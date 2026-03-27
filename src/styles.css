@@ -219,9 +219,15 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	height: 1em;
 	vertical-align: text-bottom;
 }
-.cursor-inactive { background: #444; }
-.cursor-active   { background: #fff; }
-.cursor-hidden   { display: none; }
+.cursor-inactive {
+	background: #444;
+}
+.cursor-active {
+	background: #fff;
+}
+.cursor-hidden {
+	display: none;
+}
 
 /* ── Error cells ── */
 .cell-error {

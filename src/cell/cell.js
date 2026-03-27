@@ -10,8 +10,12 @@ export class Cell {
     this.handler = new HandlerClass(this.node, instruction, sendInput);
 
     this.node.addEventListener("click", () => this.node.focus());
-    this.node.addEventListener("focus", () => this.handler.setCursorState?.("active"));
-    this.node.addEventListener("blur", () => this.handler.setCursorState?.("inactive"));
+    this.node.addEventListener("focus", () =>
+      this.handler.setCursorState?.("active"),
+    );
+    this.node.addEventListener("blur", () =>
+      this.handler.setCursorState?.("inactive"),
+    );
   }
 
   send(data) {

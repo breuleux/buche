@@ -3,6 +3,7 @@ import { Cell } from "./cell/cell.js";
 import { TextHandler } from "./cell/text.js";
 import { TermHandler } from "./cell/term.js";
 import { AutoHandler } from "./cell/auto.js";
+import { DataHandler } from "./cell/data.js";
 import { InputPrompt } from "./prompt.js";
 import "./scroll-fader.js";
 
@@ -13,7 +14,12 @@ const buffer = document.createElement("div");
 buffer.id = "buffer-inner";
 bufferWrap.inner.appendChild(buffer);
 
-const cellHandlers = { text: TextHandler, term: TermHandler, auto: AutoHandler };
+const cellHandlers = {
+  text: TextHandler,
+  term: TermHandler,
+  auto: AutoHandler,
+  data: DataHandler,
+};
 
 class Executor {
   constructor(bridge) {

@@ -1,5 +1,6 @@
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
+const { execSync } = require("node:child_process");
 const { Shell } = require("../src/shell");
 
 function matchObject(actual, expected) {
@@ -143,5 +144,19 @@ describe("wait", () => {
       { type: "wait", seconds: 0.1 },
     );
     assert.ok(out.filter((e) => e.type === "send").length > 0);
+  });
+});
+
+describe("scripts/hello.js", () => {
+  test("sends dataout when fd4 is available", async () => {
+    const out = await run({ type: "run", command: "node", args: ["scripts/hello.js"], cell_id: "p1" });
+    const dataout = out.find((e) => e.type === "send" && e.stream === "dataout");
+    assert.ok(dataout !== undefined);
+    assert.deepEqual(dataout.data, { type: "html", content: "<b>hello!</b>" });
+  });
+
+  test("prints to stdout when fd4 is not available", () => {
+    const output = execSync("node scripts/hello.js").toString();
+    assert.ok(output.includes("hello"));
   });
 });
