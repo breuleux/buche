@@ -69,6 +69,106 @@ async function* withErrorCatch(iter, cell_id) {
   }
 }
 
+class Process {
+  constructor(cmd, args, cell_id) {
+    this._queue = [];
+    this._resolve = null;
+    this._done = false;
+
+    // Open a PTY pair for each stream so the child's isatty() returns true,
+    // while we still read stdout and stderr separately from the master sides.
+    const stdinPty = pty.open({ cols: 220, rows: 50 });
+    stdinPty._slave.destroy(); // prevent _slave from racing the child for stdin reads
+    const stdoutPty = pty.open({ cols: 220, rows: 50 });
+    const stderrPty = pty.open({ cols: 220, rows: 50 });
+    const { O_RDWR, O_NOCTTY } = fs.constants;
+    const stdinSlave = fs.openSync(stdinPty.ptsName, O_RDWR | O_NOCTTY);
+    const stdoutSlave = fs.openSync(stdoutPty.ptsName, O_RDWR | O_NOCTTY);
+    const stderrSlave = fs.openSync(stderrPty.ptsName, O_RDWR | O_NOCTTY);
+
+    this._stdinPty = stdinPty;
+
+    const emit = (event) => {
+      this._queue.push(event);
+      if (this._resolve) {
+        const r = this._resolve;
+        this._resolve = null;
+        r();
+      }
+    };
+
+    // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
+    stdinPty._socket.on("data", (d) =>
+      emit({ type: "send", cell_id, data: { stream: "stdout", text: d.toString() } }),
+    );
+    stdoutPty._socket.on("data", (d) =>
+      emit({ type: "send", cell_id, data: { stream: "stdout", text: d.toString() } }),
+    );
+    stderrPty._socket.on("data", (d) =>
+      emit({ type: "send", cell_id, data: { stream: "stderr", text: d.toString() } }),
+    );
+    // EIO means the slave side closed (process exited) — not a real error.
+    stdinPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
+    stdoutPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
+    stderrPty._socket.on("error", (e) => { if (e.code !== "EIO") emit(makeError(e, cell_id)); });
+
+    const child = spawn(cmd, args, {
+      stdio: [stdinSlave, stdoutSlave, stderrSlave],
+      env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
+    });
+
+    // Parent no longer needs the slave fds — child inherited them.
+    fs.closeSync(stdinSlave);
+    fs.closeSync(stdoutSlave);
+    fs.closeSync(stderrSlave);
+
+    const cleanup = () => {
+      stdinPty._socket.destroy();
+      stdoutPty._socket.destroy();
+      stderrPty._socket.destroy();
+    };
+
+    child.on("close", (return_code) => {
+      cleanup();
+      emit({ type: "close", cell_id, return_code: return_code ?? 0 });
+      this._done = true;
+    });
+    child.on("error", (err) => {
+      cleanup();
+      emit(makeError(err, cell_id));
+      emit({ type: "close", cell_id, return_code: 1 });
+      this._done = true;
+    });
+
+    this.pid = child.pid;
+    this._child = child;
+  }
+
+  writeStdin(text) {
+    return new Promise((resolve, reject) =>
+      fs.write(this._stdinPty._fd, text, (err) => (err ? reject(err) : resolve())),
+    );
+  }
+
+  closeStdin() {
+    this._stdinPty._socket.destroy();
+  }
+
+  kill() {
+    this._child.kill();
+  }
+
+  async *events() {
+    while (true) {
+      while (this._queue.length > 0) yield this._queue.shift();
+      if (this._done) break;
+      await new Promise((r) => {
+        this._resolve = r;
+      });
+    }
+  }
+}
+
 class Shell {
   constructor() {
     this._processes = new Map();
@@ -115,21 +215,16 @@ class Shell {
 
   async handle$input(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (proc)
-      await new Promise((resolve, reject) =>
-        fs.write(proc.stdinPty._fd, obj.text, (err) =>
-          err ? reject(err) : resolve(),
-        ),
-      );
+    if (proc) await proc.writeStdin(obj.text);
   }
 
   async handle$close_stdin(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (proc) proc.stdinPty._socket.destroy();
+    if (proc) proc.closeStdin();
   }
 
   async handle$shutdown(_obj) {
-    for (const { child } of this._processes.values()) child.kill();
+    for (const proc of this._processes.values()) proc.kill();
     this._shutdown = true;
   }
 
@@ -139,119 +234,14 @@ class Shell {
       throw new Error(`Process ${cell_id} already exists`);
 
     const [cmd, ...args] = [obj.command, ...(obj.args || [])];
+    const proc = new Process(cmd, args, cell_id);
+    this._processes.set(cell_id, proc);
 
-    // Open a PTY pair for each stream so the child's isatty() returns true,
-    // while we still read stdout and stderr separately from the master sides.
-    const stdinPty = pty.open({ cols: 220, rows: 50 });
-    stdinPty._slave.destroy(); // prevent _slave from racing the child for stdin reads
-    const stdoutPty = pty.open({ cols: 220, rows: 50 });
-    const stderrPty = pty.open({ cols: 220, rows: 50 });
-    const { O_RDWR, O_NOCTTY } = fs.constants;
-    const stdinSlave = fs.openSync(stdinPty.ptsName, O_RDWR | O_NOCTTY);
-    const stdoutSlave = fs.openSync(stdoutPty.ptsName, O_RDWR | O_NOCTTY);
-    const stderrSlave = fs.openSync(stderrPty.ptsName, O_RDWR | O_NOCTTY);
+    yield { type: "new", cell_id, mode: "auto", echo: obj.echo, process_id: proc.pid };
 
-    const events = [];
-    let resolve = null;
-    let done = false;
-
-    function push(value) {
-      events.push(value);
-      if (resolve) {
-        const r = resolve;
-        resolve = null;
-        r();
-      }
-    }
-
-    // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
-    stdinPty._socket.on("data", (d) =>
-      push({
-        type: "send",
-        cell_id,
-        data: { stream: "stdout", text: d.toString() },
-      }),
-    );
-    stdoutPty._socket.on("data", (d) =>
-      push({
-        type: "send",
-        cell_id,
-        data: { stream: "stdout", text: d.toString() },
-      }),
-    );
-    stderrPty._socket.on("data", (d) =>
-      push({
-        type: "send",
-        cell_id,
-        data: { stream: "stderr", text: d.toString() },
-      }),
-    );
-    // EIO means the slave side closed (process exited) — not a real error.
-    stdinPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") push(makeError(e, cell_id));
-    });
-    stdoutPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") push(makeError(e, cell_id));
-    });
-    stderrPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") push(makeError(e, cell_id));
-    });
-
-    const child = spawn(cmd, args, {
-      stdio: [stdinSlave, stdoutSlave, stderrSlave],
-      env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
-    });
-
-    // Parent no longer needs the slave fds — child inherited them.
-    fs.closeSync(stdinSlave);
-    fs.closeSync(stdoutSlave);
-    fs.closeSync(stderrSlave);
-
-    child.on("close", (return_code) => {
-      stdinPty._socket.destroy();
-      stdoutPty._socket.destroy();
-      stderrPty._socket.destroy();
-      this._processes.delete(cell_id);
-      push({ type: "close", cell_id, return_code: return_code ?? 0 });
-      done = true;
-      if (resolve) {
-        const r = resolve;
-        resolve = null;
-        r();
-      }
-    });
-    child.on("error", (err) => {
-      stdinPty._socket.destroy();
-      stdoutPty._socket.destroy();
-      stderrPty._socket.destroy();
-      this._processes.delete(cell_id);
-      push(makeError(err, cell_id));
-      push({ type: "close", cell_id, return_code: 1 });
-      done = true;
-      if (resolve) {
-        const r = resolve;
-        resolve = null;
-        r();
-      }
-    });
-
-    this._processes.set(cell_id, { child, stdinPty });
-
-    const startEvent = {
-      type: "new",
-      cell_id,
-      mode: "auto",
-      echo: obj.echo,
-      process_id: child.pid,
-    };
-    yield startEvent;
-
-    while (true) {
-      while (events.length > 0) yield events.shift();
-      if (done) break;
-      await new Promise((r) => {
-        resolve = r;
-      });
+    for await (const event of proc.events()) {
+      if (event.type === "close") this._processes.delete(cell_id);
+      yield event;
     }
   }
 }
