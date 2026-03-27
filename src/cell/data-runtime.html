@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: black; color: white; }
+    </style>
+  </head>
+  <body>
+    <script>
+    (function () {
+      var par = window.parent;
+
+      function reportHeight() {
+        par.postMessage({ _buche: "resize", height: document.body.scrollHeight }, "*");
+      }
+
+      new ResizeObserver(reportHeight).observe(document.body);
+
+      // innerHTML / insertAdjacentHTML don't execute scripts — re-create them so they run.
+      function runScripts(root) {
+        for (var s of Array.from(root.querySelectorAll("script"))) {
+          var ns = document.createElement("script");
+          for (var a of s.attributes) ns.setAttribute(a.name, a.value);
+          ns.textContent = s.textContent;
+          s.replaceWith(ns);
+        }
+      }
+
+      // Parse content into a detached div, activate scripts, then move nodes into
+      // the live DOM so scripts execute exactly once on insertion.
+      function apply(target, mode, content) {
+        var tmp = document.createElement("div");
+        tmp.innerHTML = content;
+        runScripts(tmp);
+        var nodes = Array.from(tmp.childNodes);
+        if (mode === "set") {
+          target.innerHTML = "";
+          target.append(...nodes);
+        } else if (mode === "replace") {
+          target.replaceWith(...nodes);
+        } else {
+          target.append(...nodes);
+        }
+      }
+
+      window.addEventListener("message", function (e) {
+        if (e.source !== par) return;
+        var msg = e.data;
+        if (!msg || msg._buche !== "op") return;
+        var mode = msg.mode || "append";
+        var targets = msg.selector
+          ? Array.from(document.querySelectorAll(msg.selector))
+          : [document.body];
+        for (var target of targets) apply(target, mode, msg.content);
+        reportHeight();
+      });
+
+      // API available to user scripts inside the iframe.
+      window.buche = (data) => {
+        par.postMessage({ _buche: "send", data: data }, "*");
+      };
+      window.buche.send = window.buche;
+
+      par.postMessage({ _buche: "ready" }, "*");
+    }());
+    </script>
+  </body>
+</html>

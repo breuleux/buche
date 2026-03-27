@@ -64,12 +64,12 @@ class Executor {
     const echo = instruction.echo
       ? this.prompt.takeEcho(instruction.cell_id)
       : null;
-    const sendInput = (text) =>
-      this.bridge.sendCommand({
-        type: "input",
-        cell_id: instruction.cell_id,
-        text,
-      });
+    const sendInput = (arg) =>
+      this.bridge.sendCommand(
+        typeof arg === "string"
+          ? { type: "input", cell_id: instruction.cell_id, text: arg }
+          : { type: "input", cell_id: instruction.cell_id, data: arg },
+      );
     const cell = new Cell(instruction, echo, HandlerClass, sendInput);
     buffer.appendChild(cell.node);
     this.cells.set(instruction.cell_id, cell);
