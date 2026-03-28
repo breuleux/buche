@@ -3,6 +3,9 @@ const { spawn } = require("child_process");
 const { randomUUID } = require("crypto");
 const fs = require("fs");
 const readline = require("readline");
+const os = require("os");
+const { sync: globSync } = require("glob");
+const bashParser = require("bash-parser");
 
 async function* merge(iterables) {
   const queue = [];
@@ -38,7 +41,9 @@ async function* merge(iterables) {
   while (true) {
     while (queue.length > 0) {
       const item = queue.shift();
-      if (!item.noop) yield item.value;
+      if (!item.noop) {
+        yield item.value;
+      }
     }
     if (outerDone && active === 0) break;
     await new Promise((r) => {
@@ -67,6 +72,82 @@ async function* withErrorCatch(iter, cell_id) {
     yield* iter;
   } catch (err) {
     yield makeError(err, cell_id);
+  }
+}
+
+class FeatureNotImplementedError extends Error {
+  constructor(feature) {
+    super(`Feature not implemented: ${feature}`);
+    this.code = "FeatureNotImplemented";
+  }
+}
+
+class ProcessBuilder {
+  constructor(shell) {
+    this._shell = shell;
+  }
+
+  async *runNode(node, cell_id, echo) {
+    switch (node.type) {
+      case "Command":
+        yield* this._runCommand(node, cell_id, echo);
+        break;
+      case "Pipeline":
+        throw new FeatureNotImplementedError("pipes (|)");
+      case "LogicalExpression":
+        throw new FeatureNotImplementedError(
+          `logical expressions (${node.op})`,
+        );
+      case "Subshell":
+        throw new FeatureNotImplementedError("subshells (...)");
+      case "For":
+        throw new FeatureNotImplementedError("for loops");
+      case "While":
+        throw new FeatureNotImplementedError("while loops");
+      case "Until":
+        throw new FeatureNotImplementedError("until loops");
+      case "If":
+        throw new FeatureNotImplementedError("if statements");
+      case "Case":
+        throw new FeatureNotImplementedError("case statements");
+      case "Function":
+        throw new FeatureNotImplementedError("function definitions");
+      default:
+        throw new Error(`Unknown AST node type: ${node.type}`);
+    }
+  }
+
+  async *_runCommand(node, cell_id, echo) {
+    if (!node.name) {
+      // Bare variable assignment — no process to run
+      return;
+    }
+
+    const cmd = node.name.text;
+    const args = [];
+
+    for (const item of node.suffix || []) {
+      if (item.type === "Redirect") {
+        // TODO: handle redirections
+        continue;
+      }
+      // Word — apply glob expansion if the text contains unquoted glob characters
+      for (const expanded of this._expandWord(item.text)) {
+        args.push(expanded);
+      }
+    }
+
+    yield* this._shell.handle$run({ command: cmd, args, cell_id, echo });
+  }
+
+  _expandWord(text) {
+    if (/[*?[]/.test(text)) {
+      // Normalize **.ext to **/*.ext so ** expands across directory levels
+      const pattern = text.replace(/\*\*(?!\/)/g, "**/*");
+      const results = globSync(pattern, { cwd: process.cwd(), dot: false });
+      if (results.length > 0) return results;
+    }
+    return [text];
   }
 }
 
@@ -211,6 +292,14 @@ class Shell {
   run(inputStream) {
     const self = this;
     async function* handlers() {
+      yield (async function* prompt() {
+        yield {
+          type: "new_prompt",
+          target_cell_id: null,
+          side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
+          tab_html: "buche",
+        };
+      })();
       for await (const obj of inputStream) {
         const handler = self[`handle$${obj.type}`];
         if (!handler) continue;
@@ -233,13 +322,29 @@ class Shell {
   }
 
   async *handle$parse(obj) {
-    const [command, ...args] = obj.text.trim().split(/\s+/);
-    yield* this.handle$run({
-      command,
-      args,
-      cell_id: obj.cell_id,
-      echo: obj.echo ?? true,
-    });
+    let ast;
+    try {
+      ast = bashParser(obj.text, {
+        resolveEnv: (name) => process.env[name] ?? "",
+        resolveHomeUser: (username) => {
+          if (!username) return os.homedir();
+          return os.platform() === "darwin"
+            ? `/Users/${username}`
+            : `/home/${username}`;
+        },
+        resolveParameter: (param) => process.env[param.parameter] ?? "",
+      });
+    } catch (err) {
+      throw new Error(`Parse error: ${err.message}`);
+    }
+
+    const builder = new ProcessBuilder(this);
+    let first = true;
+    for (const node of ast.commands) {
+      const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
+      first = false;
+      yield* builder.runNode(node, cell_id, obj.echo ?? true);
+    }
   }
 
   async handle$wait(obj) {

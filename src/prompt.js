@@ -1,12 +1,144 @@
 import { html } from "./utils.js";
 
-export class InputPrompt {
+const EDITOR_OPTIONS = {
+  value: "",
+  language: "plaintext",
+  theme: "vs-dark",
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  lineNumbers: "off",
+  renderLineHighlight: "none",
+  overviewRulerLanes: 0,
+  folding: false,
+  wordWrap: "on",
+  fontSize: 13,
+  fontFamily: "Consolas, Menlo, monospace",
+  padding: { top: 4, bottom: 4 },
+  lineHeight: 20,
+  quickSuggestions: false,
+  suggestOnTriggerCharacters: false,
+  acceptSuggestionOnEnter: "off",
+  tabCompletion: "off",
+  wordBasedSuggestions: "off",
+  parameterHints: { enabled: false },
+  suggest: { showWords: false },
+};
+
+class Prompt {
+  constructor({
+    sideHtml,
+    tabHtml,
+    targetCellId,
+    buche,
+    onAfterSubmit,
+    onPrev,
+    onNext,
+  }) {
+    this.targetCellId = targetCellId;
+    this._buche = buche;
+    this._onAfterSubmit = onAfterSubmit;
+    this._echoes = new Map();
+    this._editor = null;
+
+    this._sideHtml = sideHtml;
+
+    this.labelEl = document.createElement("div");
+    this.labelEl.className = "input-prompt";
+    this.labelEl.innerHTML = sideHtml;
+
+    this.editorEl = document.createElement("div");
+    this.editorEl.className = "prompt-editor";
+
+    // Wrapper holds label + editor, shown only when active.
+    this.el = document.createElement("div");
+    this.el.className = "prompt-wrapper";
+    this.el.appendChild(this.labelEl);
+    this.el.appendChild(this.editorEl);
+
+    this.tabEl = document.createElement("div");
+    this.tabEl.className = "prompt-tab";
+    this.tabEl.innerHTML = tabHtml;
+
+    this._onPrev = onPrev;
+    this._onNext = onNext;
+  }
+
+  init() {
+    this._editor = monaco.editor.create(this.editorEl, EDITOR_OPTIONS);
+
+    this._editor.addCommand(monaco.KeyCode.Enter, () => {
+      const value = this._editor.getValue().trim();
+      if (!value) return;
+      this._submit(value);
+    });
+
+    this._editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
+      () => this._onPrev(),
+    );
+    this._editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
+      () => this._onNext(),
+    );
+  }
+
+  _submit(value) {
+    const cell_id = crypto.randomUUID();
+    this._echoes.set(cell_id, this.echo());
+    if (this.targetCellId) {
+      this._buche.sendCommand({
+        type: "input",
+        cell_id: this.targetCellId,
+        text: value + "\n",
+      });
+    } else {
+      this._buche.sendCommand({ type: "parse", text: value, cell_id });
+    }
+    this._editor.setValue("");
+    this._onAfterSubmit(cell_id);
+  }
+
+  echo() {
+    const text = this._editor?.getValue() ?? "";
+    const label = document.createElement("span");
+    label.innerHTML = this._sideHtml;
+    return html`<pre class="cell-input">${label} ${text}</pre>`;
+  }
+
+  disable() {
+    this._editor?.updateOptions({ readOnly: true });
+  }
+  enable() {
+    this._editor?.updateOptions({ readOnly: false });
+  }
+  focus() {
+    this._editor?.focus();
+  }
+  layout() {
+    this._editor?.layout();
+  }
+
+  takeEcho(cell_id) {
+    const node = this._echoes.get(cell_id);
+    this._echoes.delete(cell_id);
+    return node;
+  }
+}
+
+export class PromptCollection {
   constructor(container, buche) {
     this._buche = buche;
-    this._echoes = new Map();
+    this._prompts = [];
+    this._activeIdx = 0;
+    this._container = container;
+    this._monacoReady = false;
+    this.onAfterSubmit = (_cell_id) => {};
+
+    this._tabBar = document.createElement("div");
+    this._tabBar.id = "prompt-tabs";
+    container.insertAdjacentElement("afterend", this._tabBar);
 
     const vsBase = "file://" + buche.vsBase;
-
     window.MonacoEnvironment = {
       getWorkerUrl(_moduleId, _label) {
         return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
@@ -20,77 +152,68 @@ export class InputPrompt {
     loaderScript.src = vsBase + "/loader.js";
     loaderScript.onload = () => {
       require.config({ paths: { vs: vsBase } });
-      require(["vs/editor/editor.main"], () => this._init(container));
+      require(["vs/editor/editor.main"], () => {
+        this._monacoReady = true;
+        for (const p of this._prompts) p.init();
+        if (this._prompts.length > 0) this._activate(0);
+      });
     };
     document.head.appendChild(loaderScript);
   }
 
-  onSubmit(value) {
-    const cell_id = crypto.randomUUID();
-    this._echoes.set(cell_id, this.echo());
-    this._buche.sendCommand({ type: "parse", text: value, cell_id });
-    this.onAfterSubmit(cell_id);
+  addPrompt({ side_html, tab_html, target_cell_id }) {
+    const prompt = new Prompt({
+      sideHtml: side_html,
+      tabHtml: tab_html,
+      targetCellId: target_cell_id,
+      buche: this._buche,
+      onAfterSubmit: (cell_id) => this.onAfterSubmit(cell_id),
+      onPrev: () => this._move(-1),
+      onNext: () => this._move(1),
+    });
+    this._container.appendChild(prompt.el);
+    this._tabBar.appendChild(prompt.tabEl);
+    this._prompts.push(prompt);
+    if (this._monacoReady) {
+      prompt.init();
+      if (this._prompts.length === 1) this._activate(0);
+    }
+    return prompt;
   }
 
-  // Override from outside to hook into submit events.
-  onAfterSubmit(_cell_id) {}
+  _activate(idx) {
+    const prev = this._prompts[this._activeIdx];
+    prev?.el.classList.remove("active");
+    prev?.tabEl.classList.remove("active");
+
+    this._activeIdx = idx;
+
+    const next = this._prompts[idx];
+    next.el.classList.add("active");
+    next.tabEl.classList.add("active");
+    next.layout();
+    next.focus();
+  }
+
+  _move(delta) {
+    const n = this._prompts.length;
+    this._activate((this._activeIdx + delta + n) % n);
+  }
+
+  get _active() {
+    return this._prompts[this._activeIdx];
+  }
 
   disable() {
-    this._editor?.updateOptions({ readOnly: true });
+    this._active?.disable();
   }
-
   enable() {
-    this._editor?.updateOptions({ readOnly: false });
+    this._active?.enable();
   }
-
-  takeEcho(cell_id) {
-    const node = this._echoes.get(cell_id);
-    this._echoes.delete(cell_id);
-    return node;
-  }
-
-  _init(container) {
-    this._editor = monaco.editor.create(container, {
-      value: "",
-      language: "plaintext",
-      theme: "vs-dark",
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      lineNumbers: "off",
-      renderLineHighlight: "none",
-      overviewRulerLanes: 0,
-      folding: false,
-      wordWrap: "on",
-      fontSize: 13,
-      fontFamily: "Consolas, Menlo, monospace",
-      padding: { top: 4, bottom: 4 },
-      lineHeight: 20,
-      quickSuggestions: false,
-      suggestOnTriggerCharacters: false,
-      acceptSuggestionOnEnter: "off",
-      tabCompletion: "off",
-      wordBasedSuggestions: "off",
-      parameterHints: { enabled: false },
-      suggest: { showWords: false },
-    });
-
-    this._editor.focus();
-
-    // Submit on Enter (Shift+Enter inserts a newline)
-    this._editor.addCommand(monaco.KeyCode.Enter, () => {
-      const value = this._editor.getValue().trim();
-      if (!value) return;
-      this.onSubmit(value);
-      this._editor.setValue("");
-    });
-  }
-
-  echo() {
-    const text = this._editor?.getValue() ?? "";
-    return html`<pre class="cell-input">&gt; ${text}</pre>`;
-  }
-
   focus() {
-    this._editor?.focus();
+    this._active?.focus();
+  }
+  takeEcho(cell_id) {
+    return this._active?.takeEcho(cell_id);
   }
 }

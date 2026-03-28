@@ -4,7 +4,7 @@ import { TextHandler } from "./cell/text.js";
 import { TermHandler } from "./cell/term.js";
 import { AutoHandler } from "./cell/auto.js";
 import { DataHandler } from "./cell/data.js";
-import { InputPrompt } from "./prompt.js";
+import { PromptCollection } from "./prompt.js";
 import "./scroll-fader.js";
 
 // ── Buffer protocol ─────────────────────────────────────────────────────
@@ -26,11 +26,11 @@ class Executor {
     this.cells = new Map();
     this._activeCell = null;
     this.bridge = bridge;
-    this.bridge.onInstruction((instruction) => executor.execute(instruction));
-    this.prompt = new InputPrompt(
-      document.getElementById("monaco-editor"),
+    this.prompt = new PromptCollection(
+      document.getElementById("input-container"),
       this.bridge,
     );
+    this.bridge.onInstruction((instruction) => this.execute(instruction));
     this.prompt.onAfterSubmit = (cell_id) => {
       this.prompt.disable();
       setTimeout(() => {
@@ -94,6 +94,10 @@ class Executor {
         this.prompt.focus();
       }
     }
+  }
+
+  handle$new_prompt(instruction) {
+    this.prompt.addPrompt(instruction);
   }
 
   handle$error(instruction) {
