@@ -321,32 +321,6 @@ class Shell {
     return merge(handlers());
   }
 
-  async *handle$parse(obj) {
-    let ast;
-    try {
-      ast = bashParser(obj.text, {
-        resolveEnv: (name) => process.env[name] ?? "",
-        resolveHomeUser: (username) => {
-          if (!username) return os.homedir();
-          return os.platform() === "darwin"
-            ? `/Users/${username}`
-            : `/home/${username}`;
-        },
-        resolveParameter: (param) => process.env[param.parameter] ?? "",
-      });
-    } catch (err) {
-      throw new Error(`Parse error: ${err.message}`);
-    }
-
-    const builder = new ProcessBuilder(this);
-    let first = true;
-    for (const node of ast.commands) {
-      const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
-      first = false;
-      yield* builder.runNode(node, cell_id, obj.echo ?? true);
-    }
-  }
-
   async handle$wait(obj) {
     await new Promise((r) => setTimeout(r, obj.seconds * 1000));
   }
@@ -372,11 +346,37 @@ class Shell {
   }
 
   async *handle$run(obj) {
+    if (obj.text !== undefined) {
+      let ast;
+      try {
+        ast = bashParser(obj.text, {
+          resolveEnv: (name) => process.env[name] ?? "",
+          resolveHomeUser: (username) => {
+            if (!username) return os.homedir();
+            return os.platform() === "darwin"
+              ? `/Users/${username}`
+              : `/home/${username}`;
+          },
+          resolveParameter: (param) => process.env[param.parameter] ?? "",
+        });
+      } catch (err) {
+        throw new Error(`Parse error: ${err.message}`);
+      }
+      const builder = new ProcessBuilder(this);
+      let first = true;
+      for (const node of ast.commands) {
+        const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
+        first = false;
+        yield* builder.runNode(node, cell_id, obj.echo ?? true);
+      }
+      return;
+    }
+
     const cell_id = obj.cell_id ?? randomUUID();
     if (this._processes.has(cell_id))
       throw new Error(`Process ${cell_id} already exists`);
 
-    const [cmd, ...args] = [obj.command, ...(obj.args || [])];
+    const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
     const proc = new Process(cmd, args, cell_id);
     this._processes.set(cell_id, proc);
 

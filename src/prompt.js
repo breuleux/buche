@@ -92,7 +92,7 @@ class Prompt {
         text: value + "\n",
       });
     } else {
-      this._buche.sendCommand({ type: "parse", text: value, cell_id });
+      this._buche.sendCommand({ type: "run", text: value, cell_id });
     }
     this._editor.setValue("");
     this._onAfterSubmit(cell_id);

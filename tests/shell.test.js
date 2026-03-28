@@ -82,27 +82,27 @@ describe("run", () => {
   });
 });
 
-describe("parse", () => {
+describe("run (text)", () => {
   test("runs the parsed command", async () => {
-    const out = await run({ type: "parse", text: "echo hello", cell_id: "p1" });
+    const out = await run({ type: "run", text: "echo hello", cell_id: "p1" });
     matchObject(out[0], { type: "new", cell_id: "p1" });
     const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
     assert.ok(stdout[0].text.includes("hello"));
   });
 
   test("uses provided cell_id", async () => {
-    const out = await run({ type: "parse", text: "true", cell_id: "my-id" });
+    const out = await run({ type: "run", text: "true", cell_id: "my-id" });
     matchObject(out[0], { type: "new", cell_id: "my-id" });
   });
 
   test("generates cell_id when null", async () => {
-    const out = await run({ type: "parse", text: "true", cell_id: null });
+    const out = await run({ type: "run", text: "true", cell_id: null });
     assert.strictEqual(out[0].type, "new");
     assert.strictEqual(typeof out[0].cell_id, "string");
   });
 
   test("handles multiple args", async () => {
-    const out = await run({ type: "parse", text: "echo foo bar baz", cell_id: "p1" });
+    const out = await run({ type: "run", text: "echo foo bar baz", cell_id: "p1" });
     const stdout = out.filter((e) => e.type === "send" && e.stream === "stdout");
     assert.ok(stdout[0].text.includes("foo bar baz"));
   });
