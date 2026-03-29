@@ -15,6 +15,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+	line-height: 1.1;
 }
 
 /* ── Buffer ──
@@ -43,10 +44,10 @@ scroll-fader#buffer-wrap .scroll-fader-inner {
 	display: flex;
 	flex-direction: column-reverse;
 }
-
+/* 
 #buffer-inner {
 	padding: 8px 12px;
-}
+} */
 
 .cell scroll-fader .scroll-fader-inner {
 	max-height: 600px;
@@ -88,7 +89,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 /* ── Monaco input ── */
 #input-container {
 	flex: 0 0 auto;
-	border-top: 1px solid #3c3c3c;
+	/* border-top: 1px solid #3c3c3c; */
 	display: flex;
 	align-items: center;
 }
@@ -122,8 +123,8 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 /* ── Prompt tabs ── */
 #prompt-tabs {
 	display: flex;
-	border-top: 1px solid #2a2a2a;
-	background: #1a1a1a;
+	/* border-top: 1px solid #2a2a2a;
+	background: #1a1a1a; */
 }
 
 .prompt-tab {
@@ -132,7 +133,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	color: #555;
 	cursor: default;
 	user-select: none;
-	border-right: 1px solid #2a2a2a;
+	/* border-right: 1px solid #2a2a2a; */
 }
 
 .prompt-tab.active {
@@ -144,7 +145,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 .cell {
 	position: relative;
 	padding-left: 16px;
-	margin-bottom: 8px;
+	/* margin-bottom: 8px; */
 	outline: none;
 	border-radius: 3px;
 }
@@ -153,9 +154,9 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	background: #232323;
 }
 
-.cell-header {
+/* .cell-header {
 	margin-bottom: 2px;
-}
+} */
 
 .cell-header .cell-input {
 	margin: 0;
@@ -164,7 +165,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 .cell-status {
 	position: absolute;
 	left: 2px;
-	top: 7px;
+	top: 5px;
 	width: 5px;
 	height: 5px;
 	border-radius: 50%;
@@ -199,7 +200,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 12px;
 	color: #555555;
-	padding: 2px 0;
+	/* padding: 2px 0; */
 	font-style: italic;
 }
 
@@ -225,7 +226,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	margin: 0;
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 13px;
-	line-height: 1.5;
+	/* line-height: 1.5; */
 	white-space: pre-wrap;
 	word-break: break-all;
 }
@@ -234,7 +235,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	margin: 0 0 2px 0;
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 13px;
-	line-height: 1.5;
+	/* line-height: 1.5; */
 	white-space: pre-wrap;
 	color: #569cd6;
 }
@@ -273,7 +274,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	margin: 0 0 4px 0;
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 13px;
-	line-height: 1.5;
+	/* line-height: 1.5; */
 	white-space: pre-wrap;
 	color: #f44747;
 }
@@ -281,25 +282,11 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 .cell-error .error-traceback {
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 12px;
-	line-height: 1.5;
+	/* line-height: 1.5; */
 	color: #858585;
 }
 
 .cell-error .error-traceback-line {
 	white-space: pre-wrap;
 	word-break: break-all;
-}
-
-/* ── Context / completions pane ── */
-#context-pane {
-	flex: 0 0 auto;
-	height: calc(5 * 1.4em + 8px); /* ~5 lines */
-	border-top: 1px solid #3c3c3c;
-	/* background: #252526; */
-	background: #1e1e1e;
-	color: #858585;
-	font-size: 13px;
-	line-height: 1.4;
-	padding: 4px 12px;
-	overflow: hidden;
 }
