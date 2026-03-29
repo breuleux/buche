@@ -189,6 +189,9 @@ export class PromptCollection {
       onPrev: () => this._move(-1),
       onNext: () => this._move(1),
     });
+    prompt.tabEl.addEventListener("click", () => {
+      this._activate(this._prompts.indexOf(prompt));
+    });
     this._container.appendChild(prompt.el);
     this._tabBar.appendChild(prompt.tabEl);
     this._prompts.push(prompt);
