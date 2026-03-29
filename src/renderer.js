@@ -1,10 +1,10 @@
-import { html } from "./utils.js";
-import { Cell } from "./cell/cell.js";
-import { TextHandler } from "./cell/text.js";
-import { TermHandler } from "./cell/term.js";
 import { AutoHandler } from "./cell/auto.js";
+import { Cell } from "./cell/cell.js";
 import { DataHandler } from "./cell/data.js";
+import { TermHandler } from "./cell/term.js";
+import { TextHandler } from "./cell/text.js";
 import { PromptCollection } from "./prompt.js";
+import { html } from "./utils.js";
 import "./scroll-fader.js";
 
 // ── Buffer protocol ─────────────────────────────────────────────────────
@@ -53,7 +53,9 @@ class Executor {
 
   execute(instruction) {
     const handler = this[`handle$${instruction.type}`];
-    if (handler) handler.call(this, instruction);
+    if (handler) {
+      handler.call(this, instruction);
+    }
   }
 
   handle$new(instruction) {
@@ -93,7 +95,9 @@ class Executor {
       if (this._activeCell === instruction.cell_id) {
         this._activeCell = null;
         this.prompt.enable();
-        if (isFocused) this.prompt.focus();
+        if (isFocused) {
+          this.prompt.focus();
+        }
       } else if (isFocused) {
         this.prompt.enable();
         this.prompt.focus();
@@ -118,4 +122,4 @@ class Executor {
   }
 }
 
-const executor = new Executor(window.buche);
+const _executor = new Executor(window.buche);

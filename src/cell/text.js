@@ -21,7 +21,9 @@ export class TextHandler {
     if (sendInput) {
       cellNode.addEventListener("keydown", (e) => {
         const text = keyToInput(e);
-        if (text === null) return;
+        if (text === null) {
+          return;
+        }
         e.preventDefault();
         sendInput(text);
       });
@@ -63,7 +65,9 @@ export class TextHandler {
       // Prune oldest rest lines to stay within REST_MAX
       while (this._restLines >= REST_MAX && this._restEl.firstChild) {
         // Don't remove the current partial-line element
-        if (this._restEl.firstChild === this._currentEl) break;
+        if (this._restEl.firstChild === this._currentEl) {
+          break;
+        }
         this._restEl.removeChild(this._restEl.firstChild);
         this._droppedLines++;
         this._restLines--;
@@ -87,7 +91,11 @@ export class TextHandler {
     const capacity = START_MAX - this._startLines + REST_MAX;
     let bufNewlines = 0;
     for (const { text } of this._buffer) {
-      for (let i = 0; i < text.length; i++) if (text[i] === "\n") bufNewlines++;
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === "\n") {
+          bufNewlines++;
+        }
+      }
     }
     if (bufNewlines > capacity) {
       let toDrop = bufNewlines - capacity;
@@ -95,15 +103,19 @@ export class TextHandler {
       while (toDrop > 0) {
         const entry = this._buffer[0];
         let count = 0;
-        for (let i = 0; i < entry.text.length; i++)
-          if (entry.text[i] === "\n") count++;
+        for (let i = 0; i < entry.text.length; i++) {
+          if (entry.text[i] === "\n") {
+            count++;
+          }
+        }
         if (count <= toDrop) {
           toDrop -= count;
           this._buffer.shift();
         } else {
           let idx = -1;
-          for (let i = 0; i < toDrop; i++)
+          for (let i = 0; i < toDrop; i++) {
             idx = entry.text.indexOf("\n", idx + 1);
+          }
           this._buffer[0] = {
             text: entry.text.slice(idx + 1),
             stream: entry.stream,
@@ -125,7 +137,9 @@ export class TextHandler {
     const activeEl =
       this._startLines < START_MAX ? this._startEl : this._restEl;
     this._currentEl = this.term.currentLineNode();
-    if (this._currentEl) activeEl.appendChild(this._currentEl);
+    if (this._currentEl) {
+      activeEl.appendChild(this._currentEl);
+    }
     activeEl.appendChild(this._cursorEl);
 
     if (this._droppedLines > 0) {

@@ -79,7 +79,9 @@ class Prompt {
 
     this._editor.addCommand(monaco.KeyCode.Enter, () => {
       const value = focusedPrompt?._editor.getValue().trim();
-      if (value) focusedPrompt._submit(value);
+      if (value) {
+        focusedPrompt._submit(value);
+      }
     });
 
     this._editor.addCommand(
@@ -149,7 +151,7 @@ export class PromptCollection {
     this._tabBar.id = "prompt-tabs";
     container.insertAdjacentElement("afterend", this._tabBar);
 
-    const vsBase = "file://" + buche.vsBase;
+    const vsBase = `file://${buche.vsBase}`;
     window.MonacoEnvironment = {
       getWorkerUrl(_moduleId, _label) {
         return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
@@ -160,13 +162,17 @@ export class PromptCollection {
     };
 
     const loaderScript = document.createElement("script");
-    loaderScript.src = vsBase + "/loader.js";
+    loaderScript.src = `${vsBase}/loader.js`;
     loaderScript.onload = () => {
       require.config({ paths: { vs: vsBase } });
       require(["vs/editor/editor.main"], () => {
         this._monacoReady = true;
-        for (const p of this._prompts) p.init();
-        if (this._prompts.length > 0) this._activate(0);
+        for (const p of this._prompts) {
+          p.init();
+        }
+        if (this._prompts.length > 0) {
+          this._activate(0);
+        }
       });
     };
     document.head.appendChild(loaderScript);
@@ -224,7 +230,9 @@ export class PromptCollection {
     this._active?.disable();
   }
   enable() {
-    for (const p of this._prompts) p.enable();
+    for (const p of this._prompts) {
+      p.enable();
+    }
   }
   focus() {
     this._active?.focus();

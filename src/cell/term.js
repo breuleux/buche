@@ -1,9 +1,9 @@
-import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
 import { html, keyToInput } from "../utils.js";
 
 export class TermHandler {
-  constructor(cellNode, instruction, sendInput) {
+  constructor(cellNode, _instruction, sendInput) {
     this._term = new Terminal({ scrollback: 1000, convertEol: false });
     this._fitAddon = new FitAddon();
     this._term.loadAddon(this._fitAddon);
@@ -20,7 +20,9 @@ export class TermHandler {
     if (sendInput) {
       cellNode.addEventListener("keydown", (e) => {
         const text = keyToInput(e);
-        if (text === null) return;
+        if (text === null) {
+          return;
+        }
         e.preventDefault();
         sendInput(text);
       });

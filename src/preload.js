@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const path = require("path");
+const path = require("node:path");
 
 const pending = [];
 let onInstructionCb = null;
@@ -16,7 +16,9 @@ contextBridge.exposeInMainWorld("buche", {
   vsBase: path.join(__dirname, "../node_modules/monaco-editor/min/vs"),
   onInstruction: (cb) => {
     onInstructionCb = cb;
-    for (const instruction of pending) cb(instruction);
+    for (const instruction of pending) {
+      cb(instruction);
+    }
     pending.length = 0;
   },
   sendCommand: (obj) => ipcRenderer.send("command", obj),

@@ -6,7 +6,9 @@ export class ScrollFader extends HTMLElement {
   }
 
   connectedCallback() {
-    if (this._initialized) return;
+    if (this._initialized) {
+      return;
+    }
     this._initialized = true;
 
     const top = document.createElement("div");

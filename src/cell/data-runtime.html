@@ -9,7 +9,7 @@
   </head>
   <body>
     <script>
-    (function () {
+    ((() => {
       var par = window.parent;
 
       function reportHeight() {
@@ -22,7 +22,7 @@
       function runScripts(root) {
         for (var s of Array.from(root.querySelectorAll("script"))) {
           var ns = document.createElement("script");
-          for (var a of s.attributes) ns.setAttribute(a.name, a.value);
+          for (var a of s.attributes) { ns.setAttribute(a.name, a.value); }
           ns.textContent = s.textContent;
           s.replaceWith(ns);
         }
@@ -45,15 +45,15 @@
         }
       }
 
-      window.addEventListener("message", function (e) {
-        if (e.source !== par) return;
+      window.addEventListener("message", (e) => {
+        if (e.source !== par) { return; }
         var msg = e.data;
-        if (!msg || msg._buche !== "op") return;
+        if (!msg || msg._buche !== "op") { return; }
         var mode = msg.mode || "append";
         var targets = msg.selector
           ? Array.from(document.querySelectorAll(msg.selector))
           : [document.body];
-        for (var target of targets) apply(target, mode, msg.content);
+        for (var target of targets) { apply(target, mode, msg.content); }
         reportHeight();
       });
 
@@ -64,7 +64,7 @@
       window.buche.send = window.buche;
 
       par.postMessage({ _buche: "ready" }, "*");
-    }());
+    })());
     </script>
   </body>
 </html>

@@ -1,9 +1,13 @@
 export function keyToInput(e) {
   if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
     const code = e.key.toUpperCase().charCodeAt(0) - 64;
-    if (code > 0 && code < 32) return String.fromCharCode(code);
+    if (code > 0 && code < 32) {
+      return String.fromCharCode(code);
+    }
   }
-  if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) return e.key;
+  if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+    return e.key;
+  }
   switch (e.key) {
     case "Enter":
       return "\n";
@@ -56,7 +60,9 @@ export function escapeHtml(s) {
  * join('; ', authors.map(a => html`<span>${a}</span>`))
  */
 export function join(separator, items) {
-  if (!items || items.length === 0) return [];
+  if (!items || items.length === 0) {
+    return [];
+  }
 
   const result = [];
   items.forEach((item, index) => {
@@ -263,7 +269,9 @@ export function showToast(message, type = "success") {
   const existing = Array.from(document.querySelectorAll(".toast")).find((t) =>
     t.textContent.includes(message),
   );
-  if (existing) return;
+  if (existing) {
+    return;
+  }
 
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;

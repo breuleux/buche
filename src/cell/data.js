@@ -13,25 +13,28 @@ export class DataHandler {
     this._iframe = document.createElement("iframe");
     this._iframe.style.cssText =
       "border:none;width:100%;display:block;height:0;";
-    this._iframe.src =
-      "data:text/html;charset=utf-8," + encodeURIComponent(RUNTIME);
+    this._iframe.src = `data:text/html;charset=utf-8,${encodeURIComponent(RUNTIME)}`;
     cellNode.appendChild(this._iframe);
 
     this._onMessage = (e) => {
       if (
         !this._iframe.contentWindow ||
         e.source !== this._iframe.contentWindow
-      )
+      ) {
         return;
+      }
       const msg = e.data;
-      if (!msg) return;
+      if (!msg) {
+        return;
+      }
       if (msg._buche === "ready") {
         this._ready = true;
-        for (const m of this._pending)
+        for (const m of this._pending) {
           this._iframe.contentWindow.postMessage(m, "*");
+        }
         this._pending = [];
       } else if (msg._buche === "resize") {
-        this._iframe.style.height = msg.height + "px";
+        this._iframe.style.height = `${msg.height}px`;
       } else if (msg._buche === "send" && sendInput) {
         sendInput(msg.data);
       }
@@ -40,9 +43,13 @@ export class DataHandler {
   }
 
   send(data) {
-    if (data.stream !== "dataout") return;
+    if (data.stream !== "dataout") {
+      return;
+    }
     const { type, content, mode, selector } = data.data;
-    if (type !== "html") return;
+    if (type !== "html") {
+      return;
+    }
     this._post({ _buche: "op", content, mode, selector });
   }
 

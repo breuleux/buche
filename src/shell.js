@@ -1,9 +1,9 @@
 const pty = require("node-pty");
-const { spawn } = require("child_process");
-const { randomUUID } = require("crypto");
-const fs = require("fs");
-const readline = require("readline");
-const os = require("os");
+const { spawn } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
+const fs = require("node:fs");
+const readline = require("node:readline");
+const os = require("node:os");
 const { sync: globSync } = require("glob");
 const bashParser = require("bash-parser");
 
@@ -26,7 +26,9 @@ async function* merge(iterables) {
     for await (const iter of iterables) {
       active++;
       async function drain() {
-        for await (const value of iter) push({ value });
+        for await (const value of iter) {
+          push({ value });
+        }
         active--;
         push({ noop: true });
       }
@@ -45,7 +47,9 @@ async function* merge(iterables) {
         yield item.value;
       }
     }
-    if (outerDone && active === 0) break;
+    if (outerDone && active === 0) {
+      break;
+    }
     await new Promise((r) => {
       notify = r;
     });
@@ -145,7 +149,9 @@ class ProcessBuilder {
       // Normalize **.ext to **/*.ext so ** expands across directory levels
       const pattern = text.replace(/\*\*(?!\/)/g, "**/*");
       const results = globSync(pattern, { cwd: process.cwd(), dot: false });
-      if (results.length > 0) return results;
+      if (results.length > 0) {
+        return results;
+      }
     }
     return [text];
   }
@@ -191,13 +197,19 @@ class Process {
     );
     // EIO means the slave side closed (process exited) — not a real error.
     stdinPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e, cell_id));
+      if (e.code !== "EIO") {
+        emit(makeError(e, cell_id));
+      }
     });
     stdoutPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e, cell_id));
+      if (e.code !== "EIO") {
+        emit(makeError(e, cell_id));
+      }
     });
     stderrPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e, cell_id));
+      if (e.code !== "EIO") {
+        emit(makeError(e, cell_id));
+      }
     });
 
     const child = spawn(cmd, args, {
@@ -230,10 +242,12 @@ class Process {
         }
         if (data.type && DIRECTIVE_TYPES.has(data.type)) {
           const transformed = { ...data };
-          if (transformed.cell_id != null)
+          if (transformed.cell_id != null) {
             transformed.cell_id = `${cell_id}.${transformed.cell_id}`;
-          if (transformed.target_cell_id != null)
+          }
+          if (transformed.target_cell_id != null) {
             transformed.target_cell_id = `${cell_id}.${transformed.target_cell_id}`;
+          }
           emit(transformed);
         } else {
           emit({ type: "send", cell_id, stream: "dataout", data });
@@ -274,7 +288,7 @@ class Process {
 
   writeDatain(json) {
     return new Promise((resolve, reject) =>
-      this._datain.write(JSON.stringify(json) + "\n", (err) =>
+      this._datain.write(`${JSON.stringify(json)}\n`, (err) =>
         err ? reject(err) : resolve(),
       ),
     );
@@ -290,8 +304,12 @@ class Process {
 
   async *events() {
     while (true) {
-      while (this._queue.length > 0) yield this._queue.shift();
-      if (this._done) break;
+      while (this._queue.length > 0) {
+        yield this._queue.shift();
+      }
+      if (this._done) {
+        break;
+      }
       await new Promise((r) => {
         this._resolve = r;
       });
@@ -327,7 +345,9 @@ class Shell {
           continue;
         }
         const handler = self[`handle$${obj.type}`];
-        if (!handler) continue;
+        if (!handler) {
+          continue;
+        }
         try {
           const result = handler.call(self, obj);
           if (result[Symbol.asyncIterator]) {
@@ -340,7 +360,9 @@ class Shell {
             yield makeError(err, obj.cell_id ?? null);
           })();
         }
-        if (self._shutdown) break;
+        if (self._shutdown) {
+          break;
+        }
       }
     }
     return merge(handlers());
@@ -352,7 +374,9 @@ class Shell {
 
   async handle$input(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (!proc) return;
+    if (!proc) {
+      return;
+    }
     if (obj.data !== undefined) {
       await proc.writeDatain(obj.data);
     } else {
@@ -362,11 +386,15 @@ class Shell {
 
   async handle$close_stdin(obj) {
     const proc = this._processes.get(obj.cell_id);
-    if (proc) proc.closeStdin();
+    if (proc) {
+      proc.closeStdin();
+    }
   }
 
   async handle$shutdown(_obj) {
-    for (const proc of this._processes.values()) proc.kill();
+    for (const proc of this._processes.values()) {
+      proc.kill();
+    }
     this._shutdown = true;
   }
 
@@ -377,7 +405,9 @@ class Shell {
         ast = bashParser(obj.text, {
           resolveEnv: (name) => process.env[name] ?? "",
           resolveHomeUser: (username) => {
-            if (!username) return os.homedir();
+            if (!username) {
+              return os.homedir();
+            }
             return os.platform() === "darwin"
               ? `/Users/${username}`
               : `/home/${username}`;
@@ -398,8 +428,9 @@ class Shell {
     }
 
     const cell_id = obj.cell_id ?? randomUUID();
-    if (this._processes.has(cell_id))
+    if (this._processes.has(cell_id)) {
       throw new Error(`Process ${cell_id} already exists`);
+    }
 
     const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
     const proc = new Process(cmd, args, cell_id);
@@ -414,8 +445,9 @@ class Shell {
     };
 
     for await (const event of proc.events()) {
-      if (event.type === "close" && event.cell_id === cell_id)
+      if (event.type === "close" && event.cell_id === cell_id) {
         this._processes.delete(cell_id);
+      }
       yield event;
     }
   }

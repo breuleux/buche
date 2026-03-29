@@ -1,5 +1,12 @@
 {
   "formatter": {
     "useEditorconfig": true
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "useBlockStatements": "error"
+      }
+    }
   }
 }

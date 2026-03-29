@@ -19,7 +19,9 @@ const C16 = [
 ];
 
 function c256(n) {
-  if (n < 16) return C16[n];
+  if (n < 16) {
+    return C16[n];
+  }
   if (n >= 232) {
     const v = Math.round(((n - 232) * 255) / 23);
     return `rgb(${v},${v},${v})`;
@@ -38,12 +40,24 @@ function makeSpan(text, streamClass, fg, bg, bold, italic, underline) {
   const span = document.createElement("span");
   span.className = `text-${streamClass}`;
   let style = "";
-  if (fg) style += `color:${fg};`;
-  if (bg) style += `background:${bg};`;
-  if (bold) style += "font-weight:bold;";
-  if (italic) style += "font-style:italic;";
-  if (underline) style += "text-decoration:underline;";
-  if (style) span.style.cssText = style;
+  if (fg) {
+    style += `color:${fg};`;
+  }
+  if (bg) {
+    style += `background:${bg};`;
+  }
+  if (bold) {
+    style += "font-weight:bold;";
+  }
+  if (italic) {
+    style += "font-style:italic;";
+  }
+  if (underline) {
+    style += "text-decoration:underline;";
+  }
+  if (style) {
+    span.style.cssText = style;
+  }
   span.textContent = text;
   return span;
 }
@@ -164,7 +178,9 @@ export class TermBuffer {
     while (i < cells.length) {
       const c0 = cells[i];
       let j = i + 1;
-      while (j < cells.length && stylesEq(cells[j], c0)) j++;
+      while (j < cells.length && stylesEq(cells[j], c0)) {
+        j++;
+      }
       const text = cells
         .slice(i, j)
         .map((c) => c.char)
@@ -187,22 +203,28 @@ export class TermBuffer {
 
   // Return a <span> wrapping the current partial line (non-destructive).
   currentLineNode() {
-    if (this._cells.length === 0) return null;
+    if (this._cells.length === 0) {
+      return null;
+    }
     const span = document.createElement("span");
     const frag = this._cellsToFrag();
-    while (frag.firstChild) span.appendChild(frag.firstChild);
+    while (frag.firstChild) {
+      span.appendChild(frag.firstChild);
+    }
     return span;
   }
 
   _handleCSI(params, cmd) {
     if (cmd === "m") {
       const codes = params === "" ? [0] : params.split(";").map(Number);
-      for (let i = 0; i < codes.length; i++) i += this._apply(codes, i);
+      for (let i = 0; i < codes.length; i++) {
+        i += this._apply(codes, i);
+      }
     } else if (cmd === "K") {
-      const n = parseInt(params) || 0;
-      if (n === 0)
+      const n = parseInt(params, 10) || 0;
+      if (n === 0) {
         this._cells.splice(this._col); // erase cursor→EOL
-      else if (n === 1) {
+      } else if (n === 1) {
         this._cells.splice(0, this._col);
         this._col = 0;
       } // erase BOL→cursor
@@ -224,7 +246,9 @@ export class TermBuffer {
     // Hold back any trailing incomplete escape sequence.
     const tail = INCOMPLETE_RE.exec(input);
     const src = tail ? input.slice(0, tail.index) : input;
-    if (tail) this._esc = tail[0];
+    if (tail) {
+      this._esc = tail[0];
+    }
 
     const lines = [];
     let i = 0;
@@ -248,18 +272,24 @@ export class TermBuffer {
       } else if (ch === "\n") {
         const line = document.createElement("span");
         const frag = this._cellsToFrag();
-        while (frag.firstChild) line.appendChild(frag.firstChild);
+        while (frag.firstChild) {
+          line.appendChild(frag.firstChild);
+        }
         line.appendChild(document.createTextNode("\n"));
         lines.push(line);
         this._cells = [];
         this._col = 0;
         i++;
       } else if (ch === "\b") {
-        if (this._col > 0) this._col--;
+        if (this._col > 0) {
+          this._col--;
+        }
         i++;
       } else if (ch === "\t") {
         const next = (Math.floor(this._col / 8) + 1) * 8;
-        while (this._col < next) this._put(" ", streamClass);
+        while (this._col < next) {
+          this._put(" ", streamClass);
+        }
         i++;
       } else if (ch >= " ") {
         this._put(ch, streamClass);
