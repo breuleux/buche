@@ -212,6 +212,13 @@ class Process {
 
     this._datain = child.stdio[3];
 
+    const DIRECTIVE_TYPES = new Set([
+      "new",
+      "send",
+      "close",
+      "new_prompt",
+      "error",
+    ]);
     readline
       .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
       .on("line", (line) => {
@@ -221,7 +228,16 @@ class Process {
         } catch {
           return;
         }
-        emit({ type: "send", cell_id, stream: "dataout", data });
+        if (data.type && DIRECTIVE_TYPES.has(data.type)) {
+          const transformed = { ...data };
+          if (transformed.cell_id != null)
+            transformed.cell_id = `${cell_id}.${transformed.cell_id}`;
+          if (transformed.target_cell_id != null)
+            transformed.target_cell_id = `${cell_id}.${transformed.target_cell_id}`;
+          emit(transformed);
+        } else {
+          emit({ type: "send", cell_id, stream: "dataout", data });
+        }
       });
 
     const cleanup = () => {
@@ -298,9 +314,18 @@ class Shell {
           target_cell_id: null,
           side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           tab_html: "buche",
+          language: "shell",
         };
       })();
       for await (const obj of inputStream) {
+        if (obj.cell_id?.includes(".")) {
+          const dot = obj.cell_id.indexOf(".");
+          const proc = self._processes.get(obj.cell_id.slice(0, dot));
+          if (proc) {
+            proc.writeDatain({ ...obj, cell_id: obj.cell_id.slice(dot + 1) });
+          }
+          continue;
+        }
         const handler = self[`handle$${obj.type}`];
         if (!handler) continue;
         try {
@@ -389,7 +414,8 @@ class Shell {
     };
 
     for await (const event of proc.events()) {
-      if (event.type === "close") this._processes.delete(cell_id);
+      if (event.type === "close" && event.cell_id === cell_id)
+        this._processes.delete(cell_id);
       yield event;
     }
   }

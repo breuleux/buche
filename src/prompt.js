@@ -1,5 +1,7 @@
 import { html } from "./utils.js";
 
+let focusedPrompt = null;
+
 const EDITOR_OPTIONS = {
   value: "",
   language: "plaintext",
@@ -29,6 +31,7 @@ class Prompt {
     sideHtml,
     tabHtml,
     targetCellId,
+    language,
     buche,
     onAfterSubmit,
     onPrev,
@@ -39,6 +42,7 @@ class Prompt {
     this._onAfterSubmit = onAfterSubmit;
     this._echoes = new Map();
     this._editor = null;
+    this._language = language ?? "plaintext";
 
     this._sideHtml = sideHtml;
 
@@ -64,36 +68,43 @@ class Prompt {
   }
 
   init() {
-    this._editor = monaco.editor.create(this.editorEl, EDITOR_OPTIONS);
+    this._editor = monaco.editor.create(this.editorEl, {
+      ...EDITOR_OPTIONS,
+      language: this._language,
+    });
+
+    this._editor.onDidFocusEditorWidget(() => {
+      focusedPrompt = this;
+    });
 
     this._editor.addCommand(monaco.KeyCode.Enter, () => {
-      const value = this._editor.getValue().trim();
-      if (!value) return;
-      this._submit(value);
+      const value = focusedPrompt?._editor.getValue().trim();
+      if (value) focusedPrompt._submit(value);
     });
 
     this._editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
-      () => this._onPrev(),
+      () => focusedPrompt?._onPrev(),
     );
     this._editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
-      () => this._onNext(),
+      () => focusedPrompt?._onNext(),
     );
   }
 
   _submit(value) {
-    const cell_id = crypto.randomUUID();
-    this._echoes.set(cell_id, this.echo());
-    if (this.targetCellId) {
-      this._buche.sendCommand({
-        type: "input",
-        cell_id: this.targetCellId,
-        text: value + "\n",
-      });
+    let cell_id;
+    if (this.targetCellId?.includes(".")) {
+      const prefix = this.targetCellId.slice(
+        0,
+        this.targetCellId.lastIndexOf("."),
+      );
+      cell_id = `${prefix}.${crypto.randomUUID()}`;
     } else {
-      this._buche.sendCommand({ type: "run", text: value, cell_id });
+      cell_id = crypto.randomUUID();
     }
+    this._echoes.set(cell_id, this.echo());
+    this._buche.sendCommand({ type: "run", text: value, cell_id });
     this._editor.setValue("");
     this._onAfterSubmit(cell_id);
   }
@@ -161,11 +172,12 @@ export class PromptCollection {
     document.head.appendChild(loaderScript);
   }
 
-  addPrompt({ side_html, tab_html, target_cell_id }) {
+  addPrompt({ side_html, tab_html, target_cell_id, language }) {
     const prompt = new Prompt({
       sideHtml: side_html,
       tabHtml: tab_html,
       targetCellId: target_cell_id,
+      language,
       buche: this._buche,
       onAfterSubmit: (cell_id) => this.onAfterSubmit(cell_id),
       onPrev: () => this._move(-1),
@@ -176,7 +188,7 @@ export class PromptCollection {
     this._prompts.push(prompt);
     if (this._monacoReady) {
       prompt.init();
-      if (this._prompts.length === 1) this._activate(0);
+      this._activate(this._prompts.length - 1);
     }
     return prompt;
   }
@@ -204,11 +216,15 @@ export class PromptCollection {
     return this._prompts[this._activeIdx];
   }
 
+  get activeIdx() {
+    return this._activeIdx;
+  }
+
   disable() {
     this._active?.disable();
   }
   enable() {
-    this._active?.enable();
+    for (const p of this._prompts) p.enable();
   }
   focus() {
     this._active?.focus();

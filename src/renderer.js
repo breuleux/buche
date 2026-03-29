@@ -33,8 +33,13 @@ class Executor {
     this.bridge.onInstruction((instruction) => this.execute(instruction));
     this.prompt.onAfterSubmit = (cell_id) => {
       this.prompt.disable();
+      const idxAtSubmit = this.prompt.activeIdx;
       setTimeout(() => {
         this.prompt.enable();
+        if (this.prompt.activeIdx !== idxAtSubmit) {
+          this.prompt.focus();
+          return;
+        }
         const cell = this.cells.get(cell_id);
         if (cell) {
           this._activeCell = cell_id;
