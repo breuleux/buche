@@ -321,6 +321,7 @@ class Process {
 class Shell {
   constructor() {
     this._processes = new Map();
+    this._vars = new Map(); // non-exported shell variables
     this._shutdown = false;
   }
 
@@ -369,6 +370,19 @@ class Shell {
     return merge(handlers());
   }
 
+  async handle$cd(obj) {
+    process.chdir(obj.path);
+  }
+
+  async handle$set(obj) {
+    if (obj.export) {
+      process.env[obj.name] = obj.value;
+      this._vars.delete(obj.name);
+    } else {
+      this._vars.set(obj.name, obj.value);
+    }
+  }
+
   async handle$wait(obj) {
     await new Promise((r) => setTimeout(r, obj.seconds * 1000));
   }
@@ -404,7 +418,8 @@ class Shell {
       let ast;
       try {
         ast = bashParser(obj.text, {
-          resolveEnv: (name) => process.env[name] ?? "",
+          resolveEnv: (name) =>
+            this._vars.get(name) ?? process.env[name] ?? "",
           resolveHomeUser: (username) => {
             if (!username) {
               return os.homedir();
@@ -413,7 +428,10 @@ class Shell {
               ? `/Users/${username}`
               : `/home/${username}`;
           },
-          resolveParameter: (param) => process.env[param.parameter] ?? "",
+          resolveParameter: (param) =>
+            this._vars.get(param.parameter) ??
+            process.env[param.parameter] ??
+            "",
         });
       } catch (err) {
         throw new Error(`Parse error: ${err.message}`);
