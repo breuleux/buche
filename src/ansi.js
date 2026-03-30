@@ -86,6 +86,7 @@ export class TermBuffer {
     this._esc = ""; // pending incomplete escape sequence
     this._cells = []; // current line: [{char, fg, bg, bold, italic, underline, stream}]
     this._col = 0; // cursor column
+    this._cursorUpDebt = 0; // pending cursor-up moves not yet offset by \n
   }
 
   resetStyle() {
@@ -232,6 +233,15 @@ export class TermBuffer {
         this._cells = [];
         this._col = 0;
       } // erase entire line
+    } else if (cmd === "A") {
+      this._cursorUpDebt += parseInt(params, 10) || 1;
+    } else if (cmd === "C") {
+      this._col = Math.min(
+        this._cells.length,
+        this._col + (parseInt(params, 10) || 1),
+      );
+    } else if (cmd === "D") {
+      this._col = Math.max(0, this._col - (parseInt(params, 10) || 1));
     }
     // Other sequences (cursor movement, screen ops) ignored for now.
   }
@@ -270,16 +280,22 @@ export class TermBuffer {
         this._col = 0;
         i++;
       } else if (ch === "\n") {
-        const line = document.createElement("span");
-        const frag = this._cellsToFrag();
-        while (frag.firstChild) {
-          line.appendChild(frag.firstChild);
+        if (this._cursorUpDebt > 0 && this._cells.length === 0) {
+          this._cursorUpDebt--;
+          i++;
+        } else {
+          this._cursorUpDebt = 0;
+          const line = document.createElement("span");
+          const frag = this._cellsToFrag();
+          while (frag.firstChild) {
+            line.appendChild(frag.firstChild);
+          }
+          line.appendChild(document.createTextNode("\n"));
+          lines.push(line);
+          this._cells = [];
+          this._col = 0;
+          i++;
         }
-        line.appendChild(document.createTextNode("\n"));
-        lines.push(line);
-        this._cells = [];
-        this._col = 0;
-        i++;
       } else if (ch === "\b") {
         if (this._col > 0) {
           this._col--;
