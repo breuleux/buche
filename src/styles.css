@@ -91,7 +91,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	flex: 0 0 auto;
 	/* border-top: 1px solid #3c3c3c; */
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 }
 
 .prompt-wrapper {
@@ -99,6 +99,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	flex: 1 1 auto;
 	min-width: 0;
 	align-items: center;
+	padding-left: 16px;
 }
 
 .prompt-wrapper.active {
@@ -106,18 +107,19 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 
 .input-prompt {
-	padding: 0 8px;
+	padding-right: 8px;
 	color: #569cd6;
 	font-size: 13px;
-	line-height: 28px;
+	line-height: 20px;
 	user-select: none;
 	flex: 0 0 auto;
+	align-self: flex-start;
 }
 
 .prompt-editor {
 	flex: 1 1 auto;
 	min-width: 0;
-	height: 28px;
+	min-height: 20px;
 }
 
 /* ── Prompt tabs ── */
@@ -164,8 +166,8 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 
 .cell-status {
 	position: absolute;
-	left: 2px;
-	top: 5px;
+	left: 6px;
+	top: 8px;
 	width: 5px;
 	height: 5px;
 	border-radius: 50%;
@@ -232,12 +234,25 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 
 .cell-input {
+	display: flex;
+	align-items: flex-start;
 	margin: 0 0 2px 0;
 	font-family: "Consolas", "Menlo", monospace;
 	font-size: 13px;
-	/* line-height: 1.5; */
-	white-space: pre-wrap;
 	color: #569cd6;
+}
+
+.cell-input-label {
+	flex: 0 0 auto;
+	padding-right: 8px;
+	line-height: 20px;
+}
+
+.cell-input-body {
+	flex: 1 1 auto;
+	margin: 0;
+	white-space: pre-wrap;
+	line-height: 20px;
 }
 
 .text-stdout {

@@ -15,7 +15,7 @@ const EDITOR_OPTIONS = {
   wordWrap: "on",
   fontSize: 13,
   fontFamily: "Consolas, Menlo, monospace",
-  padding: { top: 4, bottom: 4 },
+  padding: { top: 0, bottom: 0 },
   lineHeight: 20,
   quickSuggestions: false,
   suggestOnTriggerCharacters: false,
@@ -24,6 +24,10 @@ const EDITOR_OPTIONS = {
   wordBasedSuggestions: "off",
   parameterHints: { enabled: false },
   suggest: { showWords: false },
+  glyphMargin: false,
+  lineDecorationsWidth: 0,
+  lineNumbersMinChars: 0,
+  scrollbar: { vertical: "hidden", horizontal: "hidden", alwaysConsumeMouseWheel: false },
 };
 
 class Prompt {
@@ -84,6 +88,10 @@ class Prompt {
       }
     });
 
+    this._editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+      focusedPrompt?._editor.trigger("keyboard", "type", { text: "\n" });
+    });
+
     this._editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
       () => focusedPrompt?._onPrev(),
@@ -92,6 +100,14 @@ class Prompt {
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
       () => focusedPrompt?._onNext(),
     );
+
+    const updateHeight = () => {
+      const height = this._editor.getContentHeight();
+      this.editorEl.style.height = `${height}px`;
+      this._editor.layout();
+    };
+    this._editor.onDidContentSizeChange(updateHeight);
+    updateHeight();
   }
 
   _submit(value) {
@@ -113,9 +129,16 @@ class Prompt {
 
   echo() {
     const text = this._editor?.getValue() ?? "";
-    const label = document.createElement("span");
+    const label = document.createElement("div");
+    label.className = "cell-input-label";
     label.innerHTML = this._sideHtml;
-    return html`<pre class="cell-input">${label} ${text}</pre>`;
+    const body = document.createElement("pre");
+    body.className = "cell-input-body";
+    body.textContent = text;
+    monaco.editor.colorize(text, this._language, {}).then((highlighted) => {
+      body.innerHTML = highlighted;
+    });
+    return html`<div class="cell-input">${label}${body}</div>`;
   }
 
   disable() {
