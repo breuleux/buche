@@ -123,7 +123,11 @@ class ProcessBuilder {
 
   async *_runCommand(node, cell_id, echo) {
     if (!node.name) {
-      // Bare variable assignment — no process to run
+      for (const item of node.prefix || []) {
+        if (item.type === "AssignmentWord") {
+          yield* this._shell.handle$run({ command: "set", args: [item.text], cell_id, echo });
+        }
+      }
       return;
     }
 
@@ -321,6 +325,22 @@ class Process {
 const BUILTINS = {
   async *cd(args, _cell_id) {
     yield { $command: { type: "cd", path: args[0] ?? os.homedir() } };
+  },
+  async *set(args, _cell_id) {
+    for (const arg of args) {
+      const eq = arg.indexOf("=");
+      if (eq !== -1) {
+        yield { $command: { type: "set", name: arg.slice(0, eq), value: arg.slice(eq + 1), export: false } };
+      }
+    }
+  },
+  async *export(args, _cell_id) {
+    for (const arg of args) {
+      const eq = arg.indexOf("=");
+      if (eq !== -1) {
+        yield { $command: { type: "set", name: arg.slice(0, eq), value: arg.slice(eq + 1), export: true } };
+      }
+    }
   },
 };
 
