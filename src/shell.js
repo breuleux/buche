@@ -318,11 +318,18 @@ class Process {
   }
 }
 
+const BUILTINS = {
+  async *cd(args, _cell_id) {
+    yield { $command: { type: "cd", path: args[0] ?? os.homedir() } };
+  },
+};
+
 class Shell {
   constructor() {
     this._processes = new Map();
     this._vars = new Map(); // non-exported shell variables
     this._shutdown = false;
+    this._builtins = BUILTINS;
   }
 
   run(inputStream) {
@@ -418,8 +425,7 @@ class Shell {
       let ast;
       try {
         ast = bashParser(obj.text, {
-          resolveEnv: (name) =>
-            this._vars.get(name) ?? process.env[name] ?? "",
+          resolveEnv: (name) => this._vars.get(name) ?? process.env[name] ?? "",
           resolveHomeUser: (username) => {
             if (!username) {
               return os.homedir();
@@ -447,11 +453,25 @@ class Shell {
     }
 
     const cell_id = obj.cell_id ?? randomUUID();
+    const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
+
+    if (cmd in this._builtins) {
+      yield { type: "new", cell_id, mode: "auto", echo: obj.echo };
+      let return_code = 0;
+      try {
+        yield* this._runBuiltin(cmd, args, cell_id);
+      } catch (err) {
+        yield makeError(err, cell_id);
+        return_code = 1;
+      }
+      yield { type: "close", cell_id, return_code };
+      return;
+    }
+
     if (this._processes.has(cell_id)) {
       throw new Error(`Process ${cell_id} already exists`);
     }
 
-    const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
     const proc = new Process(cmd, args, cell_id);
     this._processes.set(cell_id, proc);
 
@@ -467,7 +487,38 @@ class Shell {
       if (event.type === "close" && event.cell_id === cell_id) {
         this._processes.delete(cell_id);
       }
-      yield event;
+      if (
+        event.type === "send" &&
+        event.stream === "dataout" &&
+        event.data.$command != null
+      ) {
+        yield* this._dispatchCommand(event.data.$command);
+      } else {
+        yield event;
+      }
+    }
+  }
+
+  async *_runBuiltin(name, args, cell_id) {
+    for await (const item of this._builtins[name](args, cell_id)) {
+      if (item.$command != null) {
+        yield* this._dispatchCommand(item.$command);
+      } else {
+        yield item;
+      }
+    }
+  }
+
+  async *_dispatchCommand(obj) {
+    const handler = this[`handle$${obj.type}`];
+    if (!handler) {
+      return;
+    }
+    const result = handler.call(this, obj);
+    if (result && result[Symbol.asyncIterator]) {
+      yield* withErrorCatch(result, obj.cell_id ?? null);
+    } else {
+      await result;
     }
   }
 }
