@@ -125,7 +125,12 @@ class ProcessBuilder {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
-          yield* this._shell.handle$run({ command: "set", args: [item.text], cell_id, echo });
+          yield* this._shell.handle$run({
+            command: "set",
+            args: [item.text],
+            cell_id,
+            echo,
+          });
         }
       }
       return;
@@ -248,10 +253,16 @@ class Process {
         if (data.type && DIRECTIVE_TYPES.has(data.type)) {
           const transformed = { ...data };
           if (transformed.cell_id != null) {
-            transformed.cell_id = `${cell_id}.${transformed.cell_id}`;
+            transformed.cell_id =
+              transformed.cell_id === "parent"
+                ? null
+                : `${cell_id}.${transformed.cell_id}`;
           }
           if (transformed.target_cell_id != null) {
-            transformed.target_cell_id = `${cell_id}.${transformed.target_cell_id}`;
+            transformed.target_cell_id =
+              transformed.target_cell_id === "parent"
+                ? null
+                : `${cell_id}.${transformed.target_cell_id}`;
           }
           emit(transformed);
         } else {
@@ -330,7 +341,14 @@ const BUILTINS = {
     for (const arg of args) {
       const eq = arg.indexOf("=");
       if (eq !== -1) {
-        yield { $command: { type: "set", name: arg.slice(0, eq), value: arg.slice(eq + 1), export: false } };
+        yield {
+          $command: {
+            type: "set",
+            name: arg.slice(0, eq),
+            value: arg.slice(eq + 1),
+            export: false,
+          },
+        };
       }
     }
   },
@@ -338,8 +356,34 @@ const BUILTINS = {
     for (const arg of args) {
       const eq = arg.indexOf("=");
       if (eq !== -1) {
-        yield { $command: { type: "set", name: arg.slice(0, eq), value: arg.slice(eq + 1), export: true } };
+        yield {
+          $command: {
+            type: "set",
+            name: arg.slice(0, eq),
+            value: arg.slice(eq + 1),
+            export: true,
+          },
+        };
       }
+    }
+  },
+  async *control(args, _cell_id) {
+    const [subcommand, name, ...rest] = args;
+    if (subcommand === "set") {
+      let restartMs = null;
+      let cmdArgs = rest;
+      if (rest[0]?.startsWith("-t")) {
+        restartMs = parseInt(rest[0].slice(2), 10);
+        cmdArgs = rest.slice(1);
+      }
+      const [cmd, ...procArgs] = cmdArgs;
+      yield {
+        $command: { type: "control_set", name, cmd, args: procArgs, restartMs },
+      };
+    } else if (subcommand === "enable") {
+      yield { $command: { type: "control_enable", name } };
+    } else if (subcommand === "disable") {
+      yield { $command: { type: "control_disable", name } };
     }
   },
 };
@@ -347,13 +391,49 @@ const BUILTINS = {
 class Shell {
   constructor() {
     this._processes = new Map();
+    this._controls = new Map();
     this._vars = new Map(); // non-exported shell variables
     this._shutdown = false;
     this._builtins = BUILTINS;
+    this._emitControlEvent = () => {};
   }
 
   run(inputStream) {
     const self = this;
+
+    const controlQueue = [];
+    let controlNotify = null;
+    let controlDone = false;
+
+    self._emitControlEvent = function (event) {
+      controlQueue.push(event);
+      if (controlNotify) {
+        const r = controlNotify;
+        controlNotify = null;
+        r();
+      }
+    };
+
+    async function* controlEvents() {
+      while (true) {
+        while (controlQueue.length > 0) {
+          yield controlQueue.shift();
+        }
+        if (controlDone) {
+          break;
+        }
+        await new Promise((r) => {
+          controlNotify = r;
+        });
+      }
+    }
+
+    for (const [name, control] of self._controls) {
+      if (control.enabled) {
+        self._runControlLoop(name);
+      }
+    }
+
     async function* handlers() {
       yield (async function* prompt() {
         yield {
@@ -393,18 +473,42 @@ class Shell {
           break;
         }
       }
+      controlDone = true;
+      if (controlNotify) {
+        const r = controlNotify;
+        controlNotify = null;
+        r();
+      }
     }
-    return merge(handlers());
+
+    async function* allStreams() {
+      yield controlEvents();
+      yield* handlers();
+    }
+
+    return merge(allStreams());
+  }
+
+  _notifyControls(event) {
+    for (const control of this._controls.values()) {
+      control._proc?.writeDatain(event);
+    }
   }
 
   async handle$cd(obj) {
     process.chdir(obj.path);
+    this._notifyControls({ type: "cwd_changed", cwd: process.cwd() });
   }
 
   async handle$set(obj) {
     if (obj.export) {
       process.env[obj.name] = obj.value;
       this._vars.delete(obj.name);
+      this._notifyControls({
+        type: "env_changed",
+        name: obj.name,
+        value: obj.value,
+      });
     } else {
       this._vars.set(obj.name, obj.value);
     }
@@ -437,10 +541,79 @@ class Shell {
     for (const proc of this._processes.values()) {
       proc.kill();
     }
+    for (const control of this._controls.values()) {
+      control.enabled = false;
+      control._proc?.kill();
+    }
     this._shutdown = true;
   }
 
+  handle$control_set(obj) {
+    const control = {
+      cmd: obj.cmd,
+      args: obj.args ?? [],
+      restartMs: obj.restartMs ?? null,
+      enabled: true,
+      _proc: null,
+    };
+    this._controls.set(obj.name, control);
+    this._runControlLoop(obj.name);
+  }
+
+  handle$control_enable(obj) {
+    const control = this._controls.get(obj.name);
+    if (control && !control.enabled) {
+      control.enabled = true;
+      this._runControlLoop(obj.name);
+    }
+  }
+
+  handle$control_disable(obj) {
+    const control = this._controls.get(obj.name);
+    if (control) {
+      control.enabled = false;
+      control._proc?.kill();
+    }
+  }
+
+  async _runControlLoop(name) {
+    const control = this._controls.get(name);
+    while (control.enabled) {
+      const cellId = `control.${name}`;
+      const proc = new Process(control.cmd, control.args, cellId);
+      control._proc = proc;
+      for await (const event of proc.events()) {
+        if (
+          event.type === "send" &&
+          event.stream === "dataout" &&
+          event.data.$command != null
+        ) {
+          for await (const result of this._dispatchCommand(
+            event.data.$command,
+          )) {
+            this._emitControlEvent(result);
+          }
+        } else {
+          this._emitControlEvent(event);
+        }
+      }
+      control._proc = null;
+      if (control.restartMs == null || !control.enabled) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, control.restartMs));
+    }
+  }
+
   async *handle$run(obj) {
+    this._notifyControls({
+      type: "command_run",
+      text: obj.text,
+      command: obj.command,
+      args: obj.args,
+      parts: obj.parts,
+      cell_id: obj.cell_id,
+    });
     if (obj.text !== undefined) {
       let ast;
       try {
