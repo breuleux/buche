@@ -333,6 +333,143 @@ class Process {
   }
 }
 
+function shellHighlight(text) {
+  // Tokenize: quoted strings, variable expansions, operators, words
+  const tokenRe =
+    /('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_][A-Za-z0-9_]*|&&|\|\||>>|2>|[|;&<>]|\S+)/g;
+  const ranges = [];
+  let state = "cmd"; // "cmd" | "arg" | "redir-target"
+  let match;
+
+  while ((match = tokenRe.exec(text)) !== null) {
+    const token = match[0];
+    const start = match.index;
+    const end = start + token.length;
+
+    if (state === "redir-target") {
+      ranges.push({ start, end, cls: "sh-arg" });
+      state = "arg";
+      continue;
+    }
+
+    if (
+      token === "&&" ||
+      token === "||" ||
+      token === "|" ||
+      token === ";" ||
+      token === "&"
+    ) {
+      ranges.push({ start, end, cls: "sh-op" });
+      state = "cmd";
+    } else if (
+      token === ">" ||
+      token === "<" ||
+      token === ">>" ||
+      token === "2>"
+    ) {
+      ranges.push({ start, end, cls: "sh-redirect" });
+      state = "redir-target";
+    } else if (token.startsWith("'") || token.startsWith('"')) {
+      ranges.push({ start, end, cls: "sh-string" });
+      if (state === "cmd") {
+        state = "arg";
+      }
+    } else if (token.startsWith("$(")) {
+      ranges.push({ start, end, cls: "sh-subshell" });
+      state = "arg";
+    } else if (token.startsWith("$")) {
+      ranges.push({ start, end, cls: "sh-var" });
+    } else if (state === "cmd") {
+      ranges.push({ start, end, cls: "sh-cmd" });
+      state = "arg";
+    } else if (token.startsWith("-")) {
+      ranges.push({ start, end, cls: "sh-flag" });
+    } else {
+      ranges.push({ start, end, cls: "sh-arg" });
+    }
+
+    // Overlapping: variable refs inside double-quoted strings and plain words
+    const scanInner = token.startsWith('"')
+      ? token.slice(1, -1)
+      : !token.startsWith("'") && !token.startsWith("$")
+        ? token
+        : null;
+    if (scanInner) {
+      const offset = token.startsWith('"') ? 1 : 0;
+      const varRe = /\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*/g;
+      let vm;
+      while ((vm = varRe.exec(scanInner)) !== null) {
+        ranges.push({
+          start: start + offset + vm.index,
+          end: start + offset + vm.index + vm[0].length,
+          cls: "sh-var",
+        });
+      }
+    }
+  }
+
+  return ranges;
+}
+
+async function shellComplete(text, position, builtins) {
+  const left = text.slice(0, position);
+  const prefix = /(\S*)$/.exec(left)?.[1] ?? "";
+  const beforePrefix = left.slice(0, left.length - prefix.length);
+  const isCommandPos = /(?:^|[|&;])\s*$/.test(beforePrefix);
+
+  if (isCommandPos) {
+    const completions = [];
+    for (const name of Object.keys(builtins)) {
+      if (name.startsWith(prefix)) {
+        completions.push({ value: name, kind: "builtin" });
+      }
+    }
+    const seen = new Set(completions.map((c) => c.value));
+    const pathDirs = (process.env.PATH || "").split(":").filter(Boolean);
+    const perDir = await Promise.all(
+      pathDirs.map(async (dir) => {
+        try {
+          return await fs.promises.readdir(dir);
+        } catch {
+          return [];
+        }
+      }),
+    );
+    for (const files of perDir) {
+      for (const f of files) {
+        if (f.startsWith(prefix) && !seen.has(f)) {
+          completions.push({ value: f, kind: "executable" });
+          seen.add(f);
+        }
+      }
+    }
+    completions.sort((a, b) => {
+      if (a.kind !== b.kind) {
+        return a.kind === "builtin" ? -1 : 1;
+      }
+      return a.value.localeCompare(b.value);
+    });
+    return completions;
+  }
+
+  // File/directory completions
+  const results = globSync((prefix || "") + "*", {
+    cwd: process.cwd(),
+    dot: prefix.startsWith("."),
+    mark: true,
+  });
+  results.sort((a, b) => {
+    if (a.endsWith("/") !== b.endsWith("/")) {
+      return a.endsWith("/") ? -1 : 1;
+    }
+    return a.localeCompare(b);
+  });
+  return results.map((value) => ({
+    value,
+    kind: value.endsWith("/") ? "directory" : "file",
+  }));
+}
+
 const BUILTINS = {
   async *cd(args, _cell_id) {
     yield { $command: { type: "cd", path: args[0] ?? os.homedir() } };
@@ -405,7 +542,7 @@ class Shell {
     let controlNotify = null;
     let controlDone = false;
 
-    self._emitControlEvent = function (event) {
+    self._emitControlEvent = (event) => {
       controlQueue.push(event);
       if (controlNotify) {
         const r = controlNotify;
@@ -441,7 +578,7 @@ class Shell {
           target_cell_id: null,
           side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           tab_html: "buche",
-          language: "shell",
+          // language: "shell",
         };
       })();
       for await (const obj of inputStream) {
@@ -511,6 +648,15 @@ class Shell {
       });
     } else {
       this._vars.set(obj.name, obj.value);
+    }
+  }
+
+  async *handle$parse(obj) {
+    const { text, position, want_completions, request_id } = obj;
+    yield { type: "highlight", request_id, ranges: shellHighlight(text) };
+    if (want_completions) {
+      const completions = await shellComplete(text, position, this._builtins);
+      yield { type: "complete", request_id, completions };
     }
   }
 

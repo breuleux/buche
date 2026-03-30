@@ -255,6 +255,34 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	line-height: 20px;
 }
 
+/* ── Shell syntax highlighting (Monaco inline decorations) ── */
+.sh-cmd {
+	color: #dcdcaa !important;
+	font-weight: bold;
+}
+.sh-flag {
+	color: #9cdcfe !important;
+}
+.sh-arg {
+	color: #d4d4d4 !important;
+}
+.sh-op {
+	color: #d4d4d4 !important;
+	font-weight: bold;
+}
+.sh-redirect {
+	color: #c586c0 !important;
+}
+.sh-string {
+	color: #ce9178 !important;
+}
+.sh-var {
+	color: #4ec9b0 !important;
+}
+.sh-subshell {
+	color: #c586c0 !important;
+}
+
 .text-stdout {
 	color: #d4d4d4;
 }

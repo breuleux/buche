@@ -2,6 +2,38 @@ import { html } from "./utils.js";
 
 let focusedPrompt = null;
 
+function applyRangesToText(text, ranges) {
+  const points = new Set([0, text.length]);
+  for (const { start, end } of ranges) {
+    if (start >= 0 && start <= text.length) {
+      points.add(start);
+    }
+    if (end >= 0 && end <= text.length) {
+      points.add(end);
+    }
+  }
+  const boundaries = [...points].sort((a, b) => a - b);
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const s = boundaries[i];
+    const e = boundaries[i + 1];
+    const seg = text.slice(s, e);
+    if (!seg) {
+      continue;
+    }
+    const classes = ranges
+      .filter((r) => r.start <= s && r.end >= e)
+      .map((r) => r.cls);
+    const span = document.createElement("span");
+    span.textContent = seg;
+    if (classes.length > 0) {
+      span.className = classes.join(" ");
+    }
+    frag.appendChild(span);
+  }
+  return frag;
+}
+
 const EDITOR_OPTIONS = {
   value: "",
   language: "plaintext",
@@ -27,7 +59,11 @@ const EDITOR_OPTIONS = {
   glyphMargin: false,
   lineDecorationsWidth: 0,
   lineNumbersMinChars: 0,
-  scrollbar: { vertical: "hidden", horizontal: "hidden", alwaysConsumeMouseWheel: false },
+  scrollbar: {
+    vertical: "hidden",
+    horizontal: "hidden",
+    alwaysConsumeMouseWheel: false,
+  },
 };
 
 class Prompt {
@@ -40,12 +76,16 @@ class Prompt {
     onAfterSubmit,
     onPrev,
     onNext,
+    onParseRequest,
   }) {
     this.targetCellId = targetCellId;
     this._buche = buche;
     this._onAfterSubmit = onAfterSubmit;
+    this._onParseRequest = onParseRequest;
     this._echoes = new Map();
     this._editor = null;
+    this._decorations = null;
+    this._highlightRanges = [];
     this._language = language ?? "plaintext";
 
     this._sideHtml = sideHtml;
@@ -108,6 +148,44 @@ class Prompt {
     };
     this._editor.onDidContentSizeChange(updateHeight);
     updateHeight();
+
+    this._decorations = this._editor.createDecorationsCollection([]);
+
+    if (this._onParseRequest) {
+      this._editor.onDidChangeModelContent(() => {
+        const text = this._editor.getValue();
+        const pos = this._editor.getPosition();
+        const position = pos
+          ? this._editor.getModel().getOffsetAt(pos)
+          : text.length;
+        const request_id = crypto.randomUUID();
+        this._onParseRequest(request_id);
+        this._buche.sendCommand({
+          type: "parse",
+          text,
+          position,
+          want_completions: false,
+          request_id,
+        });
+      });
+    }
+  }
+
+  applyHighlight(ranges) {
+    this._highlightRanges = ranges;
+    if (!this._editor) {
+      return;
+    }
+    const model = this._editor.getModel();
+    this._decorations.set(
+      ranges.map(({ start, end, cls }) => ({
+        range: monaco.Range.fromPositions(
+          model.getPositionAt(start),
+          model.getPositionAt(end),
+        ),
+        options: { inlineClassName: cls },
+      })),
+    );
   }
 
   _submit(value) {
@@ -134,10 +212,7 @@ class Prompt {
     label.innerHTML = this._sideHtml;
     const body = document.createElement("pre");
     body.className = "cell-input-body";
-    body.textContent = text;
-    monaco.editor.colorize(text, this._language, {}).then((highlighted) => {
-      body.innerHTML = highlighted;
-    });
+    body.appendChild(applyRangesToText(text, this._highlightRanges));
     return html`<div class="cell-input">${label}${body}</div>`;
   }
 
@@ -174,6 +249,7 @@ export class PromptCollection {
     this._container = container;
     this._monacoReady = false;
     this.onAfterSubmit = (_cell_id) => {};
+    this._parseRequests = new Map();
 
     this._tabBar = document.createElement("div");
     this._tabBar.id = "prompt-tabs";
@@ -207,7 +283,10 @@ export class PromptCollection {
   }
 
   addPrompt({ side_html, tab_html, target_cell_id, language }) {
-    const prompt = new Prompt({
+    let prompt;
+    const onParseRequest = (request_id) =>
+      this._parseRequests.set(request_id, prompt);
+    prompt = new Prompt({
       sideHtml: side_html,
       tabHtml: tab_html,
       targetCellId: target_cell_id,
@@ -216,6 +295,7 @@ export class PromptCollection {
       onAfterSubmit: (cell_id) => this.onAfterSubmit(cell_id),
       onPrev: () => this._move(-1),
       onNext: () => this._move(1),
+      onParseRequest,
     });
     prompt.tabEl.addEventListener("click", () => {
       this._activate(this._prompts.indexOf(prompt));
@@ -277,5 +357,14 @@ export class PromptCollection {
     if (prompt) {
       prompt.setSideHtml(side_html);
     }
+  }
+
+  applyHighlight({ request_id, ranges }) {
+    const prompt = this._parseRequests.get(request_id);
+    if (!prompt) {
+      return;
+    }
+    this._parseRequests.delete(request_id);
+    prompt.applyHighlight(ranges);
   }
 }

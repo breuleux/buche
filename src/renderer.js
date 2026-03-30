@@ -113,6 +113,11 @@ class Executor {
     this.prompt.setPrompt(instruction);
   }
 
+  handle$highlight(instruction) {
+    console.log(instruction);
+    this.prompt.applyHighlight(instruction);
+  }
+
   handle$error(instruction) {
     const traceback = (instruction.traceback || []).map(
       (line) => html`<div class="error-traceback-line">${line}</div>`,
