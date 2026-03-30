@@ -229,6 +229,7 @@ class Process {
       "send",
       "close",
       "new_prompt",
+      "set_prompt",
       "error",
     ]);
     readline

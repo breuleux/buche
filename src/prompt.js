@@ -131,6 +131,11 @@ class Prompt {
     this._editor?.layout();
   }
 
+  setSideHtml(html) {
+    this._sideHtml = html;
+    this.labelEl.innerHTML = html;
+  }
+
   takeEcho(cell_id) {
     const node = this._echoes.get(cell_id);
     this._echoes.delete(cell_id);
@@ -242,5 +247,12 @@ export class PromptCollection {
   }
   takeEcho(cell_id) {
     return this._active?.takeEcho(cell_id);
+  }
+
+  setPrompt({ target_cell_id, side_html }) {
+    const prompt = this._prompts.find((p) => p.targetCellId === target_cell_id);
+    if (prompt) {
+      prompt.setSideHtml(side_html);
+    }
   }
 }

@@ -109,6 +109,10 @@ class Executor {
     this.prompt.addPrompt(instruction);
   }
 
+  handle$set_prompt(instruction) {
+    this.prompt.setPrompt(instruction);
+  }
+
   handle$error(instruction) {
     const traceback = (instruction.traceback || []).map(
       (line) => html`<div class="error-traceback-line">${line}</div>`,
