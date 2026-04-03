@@ -168,23 +168,25 @@ class ProcessBuilder {
 }
 
 class Process {
-  constructor(cmd, args, cell_id) {
+  constructor(cmd, args, cell_id, cols) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
 
     // Open a PTY pair for each stream so the child's isatty() returns true,
     // while we still read stdout and stderr separately from the master sides.
-    const stdinPty = pty.open({ cols: 220, rows: 50 });
+    const stdinPty = pty.open({ cols, rows: 50 });
     stdinPty._slave.destroy(); // prevent _slave from racing the child for stdin reads
-    const stdoutPty = pty.open({ cols: 220, rows: 50 });
-    const stderrPty = pty.open({ cols: 220, rows: 50 });
+    const stdoutPty = pty.open({ cols, rows: 50 });
+    const stderrPty = pty.open({ cols, rows: 50 });
     const { O_RDWR, O_NOCTTY } = fs.constants;
     const stdinSlave = fs.openSync(stdinPty.ptsName, O_RDWR | O_NOCTTY);
     const stdoutSlave = fs.openSync(stdoutPty.ptsName, O_RDWR | O_NOCTTY);
     const stderrSlave = fs.openSync(stderrPty.ptsName, O_RDWR | O_NOCTTY);
 
     this._stdinPty = stdinPty;
+    this._stdoutPty = stdoutPty;
+    this._stderrPty = stderrPty;
 
     const emit = (event) => {
       this._queue.push(event);
@@ -293,6 +295,12 @@ class Process {
 
     this.pid = child.pid;
     this._child = child;
+  }
+
+  resize(cols) {
+    pty.native.resize(this._stdinPty._fd, cols, 50);
+    pty.native.resize(this._stdoutPty._fd, cols, 50);
+    pty.native.resize(this._stderrPty._fd, cols, 50);
   }
 
   writeStdin(text) {
@@ -556,6 +564,7 @@ class Shell {
     this._shutdown = false;
     this._builtins = BUILTINS;
     this._emitControlEvent = () => {};
+    this._cols = 230;
   }
 
   run(inputStream) {
@@ -619,7 +628,7 @@ class Shell {
         }
         try {
           const result = handler.call(self, obj);
-          if (result[Symbol.asyncIterator]) {
+          if (result && result[Symbol.asyncIterator]) {
             yield withErrorCatch(result, obj.cell_id ?? null);
           } else {
             await result;
@@ -706,6 +715,13 @@ class Shell {
     }
   }
 
+  handle$resize(obj) {
+    this._cols = obj.cols;
+    for (const proc of this._processes.values()) {
+      proc.resize(obj.cols);
+    }
+  }
+
   async handle$shutdown(_obj) {
     for (const proc of this._processes.values()) {
       proc.kill();
@@ -749,7 +765,7 @@ class Shell {
     const control = this._controls.get(name);
     while (control.enabled) {
       const cellId = `control.${name}`;
-      const proc = new Process(control.cmd, control.args, cellId);
+      const proc = new Process(control.cmd, control.args, cellId, this._cols);
       control._proc = proc;
       for await (const event of proc.events()) {
         if (
@@ -834,7 +850,7 @@ class Shell {
       throw new Error(`Process ${cell_id} already exists`);
     }
 
-    const proc = new Process(cmd, args, cell_id);
+    const proc = new Process(cmd, args, cell_id, this._cols);
     this._processes.set(cell_id, proc);
 
     yield {

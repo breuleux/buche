@@ -4,7 +4,7 @@ import { html, keyToInput } from "../utils.js";
 
 export class TermHandler {
   constructor(cellNode, _instruction, sendInput) {
-    this._term = new Terminal({ scrollback: 1000, convertEol: false });
+    this._term = new Terminal({ scrollback: 1000, convertEol: false, fontFamily: '"Consolas", "Menlo", monospace', fontSize: 13 });
     this._fitAddon = new FitAddon();
     this._term.loadAddon(this._fitAddon);
 

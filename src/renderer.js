@@ -14,6 +14,26 @@ const buffer = document.createElement("div");
 buffer.id = "buffer-inner";
 bufferWrap.inner.appendChild(buffer);
 
+// ── Terminal width tracking ──────────────────────────────────────────────
+// Measure char width once using canvas (same font as the UI), then derive
+// cols from the buffer container width on every resize.
+{
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.font = "13px Consolas, Menlo, monospace";
+  const charWidth = ctx.measureText("M").width;
+  const CELL_PADDING = 16; // .cell padding-left in styles.css
+
+  const sendResize = () => {
+    const width = bufferWrap.clientWidth;
+    if (width > 0) {
+      const cols = Math.max(1, Math.floor((width - CELL_PADDING) / charWidth));
+      window.buche.sendCommand({ type: "resize", cols });
+    }
+  };
+  new ResizeObserver(sendResize).observe(bufferWrap);
+  sendResize();
+}
+
 const cellHandlers = {
   text: TextHandler,
   term: TermHandler,
