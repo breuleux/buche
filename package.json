@@ -2,7 +2,7 @@
   "name": "buche",
   "version": "0.1.0",
   "description": "A terminal-like electron app",
-  "main": "main.js",
+  "main": "src/main.js",
   "bin": {
     "buche": "bin/buche.js"
   },

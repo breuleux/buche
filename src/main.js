@@ -2,9 +2,10 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { Shell } = require("./src/shell");
+const { Shell } = require("./shell/runner");
 
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
+const termdir = path.join(__dirname, "terminal");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -14,11 +15,11 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      preload: path.join(__dirname, "src", "preload.js"),
+      preload: path.join(termdir, "preload.js"),
     },
   });
 
-  win.loadFile("src/index.html");
+  win.loadFile(path.join(termdir, "index.html"));
 
   if (args.devtools) {
     win.webContents.openDevTools({ mode: "right" });
