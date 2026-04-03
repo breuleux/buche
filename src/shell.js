@@ -343,15 +343,23 @@ class Process {
 }
 
 function cmdExists(cmd, builtins) {
-  if (cmd in builtins) { return true; }
-  if (path.isAbsolute(cmd)) { return fs.existsSync(cmd); }
+  if (cmd in builtins) {
+    return true;
+  }
+  if (path.isAbsolute(cmd)) {
+    return fs.existsSync(cmd);
+  }
   const dirs = (process.env.PATH || "").split(":").filter(Boolean);
   return dirs.some((dir) => fs.existsSync(path.join(dir, cmd)));
 }
 
 function fsPathExists(arg) {
-  if (!arg || arg.startsWith("-")) { return false; }
-  const expanded = arg.startsWith("~") ? path.join(os.homedir(), arg.slice(1)) : arg;
+  if (!arg || arg.startsWith("-")) {
+    return false;
+  }
+  const expanded = arg.startsWith("~")
+    ? path.join(os.homedir(), arg.slice(1))
+    : arg;
   return fs.existsSync(path.resolve(process.cwd(), expanded));
 }
 
@@ -685,7 +693,11 @@ class Shell {
 
   async *handle$parse(obj) {
     const { text, position, want_completions, request_id } = obj;
-    yield { type: "highlight", request_id, ranges: shellHighlight(text, this._builtins) };
+    yield {
+      type: "highlight",
+      request_id,
+      ranges: shellHighlight(text, this._builtins),
+    };
     if (want_completions) {
       const completions = await shellComplete(text, position, this._builtins);
       yield { type: "complete", request_id, completions };
