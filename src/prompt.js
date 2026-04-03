@@ -166,6 +166,7 @@ class Prompt {
           position,
           want_completions: false,
           request_id,
+          cell_id: this.targetCellId,
         });
       });
     }
@@ -212,7 +213,14 @@ class Prompt {
     label.innerHTML = this._sideHtml;
     const body = document.createElement("pre");
     body.className = "cell-input-body";
-    body.appendChild(applyRangesToText(text, this._highlightRanges));
+    if (this._highlightRanges.length > 0) {
+      body.appendChild(applyRangesToText(text, this._highlightRanges));
+    } else {
+      body.textContent = text;
+      monaco.editor.colorize(text, this._language, {}).then((highlighted) => {
+        body.innerHTML = highlighted;
+      });
+    }
     return html`<div class="cell-input">${label}${body}</div>`;
   }
 

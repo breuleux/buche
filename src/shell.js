@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const readline = require("node:readline");
 const os = require("node:os");
+const path = require("node:path");
 const { sync: globSync } = require("glob");
 const bashParser = require("bash-parser");
 
@@ -333,7 +334,20 @@ class Process {
   }
 }
 
-function shellHighlight(text) {
+function cmdExists(cmd, builtins) {
+  if (cmd in builtins) { return true; }
+  if (path.isAbsolute(cmd)) { return fs.existsSync(cmd); }
+  const dirs = (process.env.PATH || "").split(":").filter(Boolean);
+  return dirs.some((dir) => fs.existsSync(path.join(dir, cmd)));
+}
+
+function fsPathExists(arg) {
+  if (!arg || arg.startsWith("-")) { return false; }
+  const expanded = arg.startsWith("~") ? path.join(os.homedir(), arg.slice(1)) : arg;
+  return fs.existsSync(path.resolve(process.cwd(), expanded));
+}
+
+function shellHighlight(text, builtins) {
   // Tokenize: quoted strings, variable expansions, operators, words
   const tokenRe =
     /('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_][A-Za-z0-9_]*|&&|\|\||>>|2>|[|;&<>]|\S+)/g;
@@ -405,6 +419,15 @@ function shellHighlight(text) {
           cls: "sh-var",
         });
       }
+    }
+  }
+
+  for (const { start, end, cls } of [...ranges]) {
+    const token = text.slice(start, end);
+    if (cls === "sh-cmd" && !cmdExists(token, builtins)) {
+      ranges.push({ start, end, cls: "sh-invalid" });
+    } else if (cls === "sh-arg" && fsPathExists(token)) {
+      ranges.push({ start, end, cls: "sh-path" });
     }
   }
 
@@ -653,7 +676,7 @@ class Shell {
 
   async *handle$parse(obj) {
     const { text, position, want_completions, request_id } = obj;
-    yield { type: "highlight", request_id, ranges: shellHighlight(text) };
+    yield { type: "highlight", request_id, ranges: shellHighlight(text, this._builtins) };
     if (want_completions) {
       const completions = await shellComplete(text, position, this._builtins);
       yield { type: "complete", request_id, completions };

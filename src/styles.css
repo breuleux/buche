@@ -282,6 +282,12 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 .sh-subshell {
 	color: #c586c0 !important;
 }
+.sh-invalid {
+	color: #f44747 !important;
+}
+.sh-path {
+	text-decoration: underline;
+}
 
 .text-stdout {
 	color: #d4d4d4;
