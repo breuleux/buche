@@ -4,33 +4,6 @@ const fs = require("fs");
 const os = require("os");
 const { Shell } = require("./src/shell");
 
-const historyFile = path.join(
-  os.homedir(),
-  ".config",
-  "buche",
-  "history.jsonl",
-);
-
-function loadHistory() {
-  try {
-    return fs
-      .readFileSync(historyFile, "utf8")
-      .split("\n")
-      .filter((l) => l.trim())
-      .map((l) => JSON.parse(l).text);
-  } catch {
-    return [];
-  }
-}
-
-function appendHistory(text) {
-  fs.mkdirSync(path.dirname(historyFile), { recursive: true });
-  fs.appendFileSync(historyFile, JSON.stringify({ text }) + "\n");
-}
-
-ipcMain.handle("history:get", () => loadHistory());
-ipcMain.on("history:add", (_event, text) => appendHistory(text));
-
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
 
 function createWindow() {
