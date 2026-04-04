@@ -343,15 +343,29 @@ class Process {
   }
 }
 
+function isExecutable(filePath) {
+  try {
+    return (
+      fs.statSync(filePath).isFile() &&
+      (fs.accessSync(filePath, fs.constants.X_OK), true)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function cmdExists(cmd, builtins) {
   if (cmd in builtins) {
     return true;
   }
-  if (path.isAbsolute(cmd)) {
-    return fs.existsSync(cmd);
+  if (cmd.includes("/")) {
+    const resolved = path.isAbsolute(cmd)
+      ? cmd
+      : path.resolve(process.cwd(), cmd);
+    return isExecutable(resolved);
   }
   const dirs = (process.env.PATH || "").split(":").filter(Boolean);
-  return dirs.some((dir) => fs.existsSync(path.join(dir, cmd)));
+  return dirs.some((dir) => isExecutable(path.join(dir, cmd)));
 }
 
 function fsPathExists(arg) {
