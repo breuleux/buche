@@ -2,6 +2,7 @@ import { html } from "./utils.js";
 import { History } from "./history.js";
 
 let focusedPrompt = null;
+let lastEditWasDeletion = false;
 
 function applyRangesToText(text, ranges) {
   const points = new Set([0, text.length]);
@@ -57,6 +58,7 @@ const EDITOR_OPTIONS = {
   wordBasedSuggestions: "off",
   parameterHints: { enabled: false },
   suggest: { showWords: false },
+  inlineSuggest: { enabled: true },
   glyphMargin: false,
   lineDecorationsWidth: 0,
   lineNumbersMinChars: 0,
@@ -136,6 +138,30 @@ function _editorCommands() {
         focusedPrompt?._promptCollection._history?.next(focusedPrompt);
       },
     },
+
+    acceptHistorySuggestion: {
+      trigger: monaco.KeyCode.RightArrow,
+      run() {
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        const model = editor.getModel();
+        const pos = editor.getPosition();
+        const atEnd =
+          pos &&
+          model &&
+          pos.lineNumber === model.getLineCount() &&
+          pos.column > model.getLineLength(pos.lineNumber);
+        if (atEnd) {
+          editor.trigger(
+            "keyboard",
+            "editor.action.inlineSuggest.commit",
+            null,
+          );
+        } else {
+          editor.trigger("keyboard", "cursorRight", null);
+        }
+      },
+    },
   };
 }
 
@@ -202,7 +228,12 @@ class Prompt {
     this._decorations = this._editor.createDecorationsCollection([]);
 
     this._editor.onDidChangeModelContent((e) => {
-      if (!e.isFlush) this._promptCollection._history?.cancelNavigation();
+      if (!e.isFlush) {
+        this._promptCollection._history?.cancelNavigation();
+        lastEditWasDeletion = e.changes.some(
+          (c) => c.rangeLength > 0 && c.text === "",
+        );
+      }
     });
 
     this._editor.onDidChangeModelContent(() => {
@@ -366,6 +397,7 @@ export class PromptCollection {
       require.config({ paths: { vs: vsBase } });
       require(["vs/editor/editor.main"], () => {
         this._monacoReady = true;
+        this._registerHistoryCompletions();
         for (const p of this._prompts) {
           p.init();
         }
@@ -375,6 +407,39 @@ export class PromptCollection {
       });
     };
     document.head.appendChild(loaderScript);
+  }
+
+  _registerHistoryCompletions() {
+    const history = this._history;
+    monaco.languages.registerInlineCompletionsProvider("*", {
+      provideInlineCompletions(model, position, _context, _token) {
+        const text = model.getValue();
+        const offset = model.getOffsetAt(position);
+        if (!text || offset !== text.length || lastEditWasDeletion)
+          return { items: [] };
+        const entries = history._entries;
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const { text: entryText } = entries[i];
+          if (entryText.startsWith(text) && entryText.length > text.length) {
+            return {
+              items: [
+                {
+                  insertText: entryText.slice(text.length),
+                  range: new monaco.Range(
+                    position.lineNumber,
+                    position.column,
+                    position.lineNumber,
+                    position.column,
+                  ),
+                },
+              ],
+            };
+          }
+        }
+        return { items: [] };
+      },
+      freeInlineCompletions() {},
+    });
   }
 
   addPrompt({ side_html, tab_html, tag, target_cell_id, language }) {
