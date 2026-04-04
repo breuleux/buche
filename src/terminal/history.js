@@ -6,7 +6,8 @@ export class History {
     this._buche = buche;
     this._entries = [];
     this._idx = -1; // -1 = not navigating
-    this._draft = null; // { text: string, prompt: Prompt }
+    this._drafts = null; // Map<Prompt, string> — saved texts for all prompts at nav start
+    this._draftActive = null; // Prompt that was active when navigation started
     this._getPrompts = getPrompts;
     this._getActive = getActive;
     this._activate = activate;
@@ -19,14 +20,10 @@ export class History {
   // Append an entry, skipping consecutive duplicates. Resets navigation.
   push(entry) {
     this._idx = -1;
-    this._draft = null;
+    this._drafts = null;
+    this._draftActive = null;
     const last = this._entries[this._entries.length - 1];
-    if (
-      !last ||
-      last.text !== entry.text ||
-      last.tag !== entry.tag ||
-      last.target_cell_id !== entry.target_cell_id
-    ) {
+    if (!last || last.text !== entry.text || last.tag !== entry.tag) {
       this._entries.push(entry);
       this._buche.history.add(entry);
     }
@@ -35,7 +32,8 @@ export class History {
   // Reset navigation state without appending (called on free-form user input).
   cancelNavigation() {
     this._idx = -1;
-    this._draft = null;
+    this._drafts = null;
+    this._draftActive = null;
   }
 
   // For Up/Down: find the first prompt that an entry would activate.
@@ -53,8 +51,7 @@ export class History {
   }
 
   // For Alt+Up/Down: check whether a specific prompt matches an entry directly,
-  // without searching — fixes the bug where _findPromptFor always returns the
-  // first prompt when multiple prompts share the same tag.
+  // without searching
   _resolvePromptFor(entry, forPrompt) {
     if (
       entry.target_cell_id !== null &&
@@ -73,8 +70,8 @@ export class History {
   // forPrompt=p (Alt+Up): only matches entries that belong to p.
   prev(forPrompt = null) {
     if (this._idx === -1) {
-      const active = this._getActive();
-      this._draft = { text: active?.getValue() ?? "", prompt: active };
+      this._drafts = new Map(this._getPrompts().map((p) => [p, p.getValue()]));
+      this._draftActive = this._getActive();
       this._idx = this._entries.length;
     }
     for (let i = this._idx - 1; i >= 0; i--) {
@@ -108,13 +105,19 @@ export class History {
         return;
       }
     }
-    // Past the newest entry — restore the draft.
-    const { _draft: draft } = this;
+    // Past the newest entry — restore the drafts.
+    const drafts = this._drafts;
+    const draftActive = this._draftActive;
     this._idx = -1;
-    this._draft = null;
-    if (draft?.prompt) {
-      this._activate(draft.prompt);
-      draft.prompt.setValue(draft.text);
+    this._drafts = null;
+    this._draftActive = null;
+    if (drafts) {
+      for (const [prompt, text] of drafts) {
+        prompt.setValue(text);
+      }
+    }
+    if (draftActive) {
+      this._activate(draftActive);
     }
   }
 }

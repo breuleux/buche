@@ -74,19 +74,11 @@ class Prompt {
     tag,
     targetCellId,
     language,
-    buche,
-    onAfterSubmit,
-    onPrev,
-    onNext,
-    onParseRequest,
-    history,
+    promptCollection,
   }) {
     this.tag = tag;
     this.targetCellId = targetCellId;
-    this._buche = buche;
-    this._onAfterSubmit = onAfterSubmit;
-    this._onParseRequest = onParseRequest;
-    this._history = history ?? null;
+    this._promptCollection = promptCollection;
     this._echoes = new Map();
     this._editor = null;
     this._decorations = null;
@@ -111,9 +103,6 @@ class Prompt {
     this.tabEl = document.createElement("div");
     this.tabEl.className = "prompt-tab";
     this.tabEl.innerHTML = tabHtml;
-
-    this._onPrev = onPrev;
-    this._onNext = onNext;
   }
 
   init() {
@@ -139,16 +128,16 @@ class Prompt {
 
     this._editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
-      () => focusedPrompt?._onPrev(),
+      () => focusedPrompt?._promptCollection._move(-1),
     );
     this._editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
-      () => focusedPrompt?._onNext(),
+      () => focusedPrompt?._promptCollection._move(1),
     );
 
     this._editor.addCommand(monaco.KeyCode.UpArrow, () => {
       if (focusedPrompt?._editor.getPosition()?.lineNumber === 1) {
-        focusedPrompt._history?.prev();
+        focusedPrompt._promptCollection._history?.prev();
       } else {
         focusedPrompt?._editor.trigger("keyboard", "cursorUp", null);
       }
@@ -159,19 +148,19 @@ class Prompt {
         editor?.getPosition()?.lineNumber ===
         editor?.getModel()?.getLineCount();
       if (atLastLine) {
-        focusedPrompt._history?.next();
+        focusedPrompt._promptCollection._history?.next();
       } else {
         editor?.trigger("keyboard", "cursorDown", null);
       }
     });
 
     this._editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
-      focusedPrompt?._history?.prev(focusedPrompt);
+      focusedPrompt?._promptCollection._history?.prev(focusedPrompt);
     });
     this._editor.addCommand(
       monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
       () => {
-        focusedPrompt?._history?.next(focusedPrompt);
+        focusedPrompt?._promptCollection._history?.next(focusedPrompt);
       },
     );
 
@@ -186,28 +175,26 @@ class Prompt {
     this._decorations = this._editor.createDecorationsCollection([]);
 
     this._editor.onDidChangeModelContent((e) => {
-      if (!e.isFlush) this._history?.cancelNavigation();
+      if (!e.isFlush) this._promptCollection._history?.cancelNavigation();
     });
 
-    if (this._onParseRequest) {
-      this._editor.onDidChangeModelContent(() => {
-        const text = this._editor.getValue();
-        const pos = this._editor.getPosition();
-        const position = pos
-          ? this._editor.getModel().getOffsetAt(pos)
-          : text.length;
-        const request_id = crypto.randomUUID();
-        this._onParseRequest(request_id);
-        this._buche.sendCommand({
-          type: "parse",
-          text,
-          position,
-          want_completions: false,
-          request_id,
-          cell_id: this.targetCellId,
-        });
+    this._editor.onDidChangeModelContent(() => {
+      const text = this._editor.getValue();
+      const pos = this._editor.getPosition();
+      const position = pos
+        ? this._editor.getModel().getOffsetAt(pos)
+        : text.length;
+      const request_id = crypto.randomUUID();
+      this._promptCollection._parseRequests.set(request_id, this);
+      this._promptCollection._buche.sendCommand({
+        type: "parse",
+        text,
+        position,
+        want_completions: false,
+        request_id,
+        cell_id: this.targetCellId,
       });
-    }
+    });
   }
 
   applyHighlight(ranges) {
@@ -238,15 +225,19 @@ class Prompt {
     } else {
       cell_id = crypto.randomUUID();
     }
-    this._history?.push({
+    this._promptCollection._history?.push({
       text: value,
       tag: this.tag,
       target_cell_id: this.targetCellId,
     });
     this._echoes.set(cell_id, this.echo());
-    this._buche.sendCommand({ type: "run", text: value, cell_id });
+    this._promptCollection._buche.sendCommand({
+      type: "run",
+      text: value,
+      cell_id,
+    });
     this._editor.setValue("");
-    this._onAfterSubmit(cell_id);
+    this._promptCollection.onAfterSubmit(cell_id);
   }
 
   getValue() {
@@ -360,21 +351,13 @@ export class PromptCollection {
   }
 
   addPrompt({ side_html, tab_html, tag, target_cell_id, language }) {
-    let prompt;
-    const onParseRequest = (request_id) =>
-      this._parseRequests.set(request_id, prompt);
-    prompt = new Prompt({
+    const prompt = new Prompt({
       sideHtml: side_html,
       tabHtml: tab_html,
       tag,
       targetCellId: target_cell_id,
       language,
-      buche: this._buche,
-      onAfterSubmit: (cell_id) => this.onAfterSubmit(cell_id),
-      onPrev: () => this._move(-1),
-      onNext: () => this._move(1),
-      onParseRequest,
-      history: this._history,
+      promptCollection: this,
     });
     prompt.tabEl.addEventListener("click", () => {
       this._activate(this._prompts.indexOf(prompt));
