@@ -67,6 +67,78 @@ const EDITOR_OPTIONS = {
   },
 };
 
+function _editorCommands() {
+  return {
+    submit: {
+      trigger: monaco.KeyCode.Enter,
+      run() {
+        const value = focusedPrompt?._editor.getValue().trim();
+        if (value) {
+          focusedPrompt._submit(value);
+        }
+      },
+    },
+
+    newline: {
+      trigger: monaco.KeyMod.Shift | monaco.KeyCode.Enter,
+      run() {
+        focusedPrompt?._editor.trigger("keyboard", "type", { text: "\n" });
+      },
+    },
+
+    prevPrompt: {
+      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
+      run() {
+        focusedPrompt?._promptCollection._move(-1);
+      },
+    },
+    nextPrompt: {
+      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
+      run() {
+        focusedPrompt?._promptCollection._move(1);
+      },
+    },
+
+    prevHistory: {
+      trigger: monaco.KeyCode.UpArrow,
+      run() {
+        if (focusedPrompt?._editor.getPosition()?.lineNumber === 1) {
+          focusedPrompt._promptCollection._history?.prev();
+        } else {
+          focusedPrompt?._editor.trigger("keyboard", "cursorUp", null);
+        }
+      },
+    },
+    nextHistory: {
+      trigger: monaco.KeyCode.DownArrow,
+      run() {
+        const editor = focusedPrompt?._editor;
+        const atLastLine =
+          editor?.getPosition()?.lineNumber ===
+          editor?.getModel()?.getLineCount();
+        if (atLastLine) {
+          focusedPrompt._promptCollection._history?.next();
+        } else {
+          editor?.trigger("keyboard", "cursorDown", null);
+        }
+      },
+    },
+
+    prevHistorySpecific: {
+      trigger: monaco.KeyMod.Alt | monaco.KeyCode.UpArrow,
+      run() {
+        focusedPrompt?._promptCollection._history?.prev(focusedPrompt);
+      },
+    },
+    nextHistorySpecific: {
+      trigger: monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
+      run() {
+        focusedPrompt?._promptCollection._history?.next(focusedPrompt);
+      },
+    },
+  };
+}
+
 class Prompt {
   constructor({
     sideHtml,
@@ -115,54 +187,9 @@ class Prompt {
       focusedPrompt = this;
     });
 
-    this._editor.addCommand(monaco.KeyCode.Enter, () => {
-      const value = focusedPrompt?._editor.getValue().trim();
-      if (value) {
-        focusedPrompt._submit(value);
-      }
-    });
-
-    this._editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
-      focusedPrompt?._editor.trigger("keyboard", "type", { text: "\n" });
-    });
-
-    this._editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
-      () => focusedPrompt?._promptCollection._move(-1),
-    );
-    this._editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
-      () => focusedPrompt?._promptCollection._move(1),
-    );
-
-    this._editor.addCommand(monaco.KeyCode.UpArrow, () => {
-      if (focusedPrompt?._editor.getPosition()?.lineNumber === 1) {
-        focusedPrompt._promptCollection._history?.prev();
-      } else {
-        focusedPrompt?._editor.trigger("keyboard", "cursorUp", null);
-      }
-    });
-    this._editor.addCommand(monaco.KeyCode.DownArrow, () => {
-      const editor = focusedPrompt?._editor;
-      const atLastLine =
-        editor?.getPosition()?.lineNumber ===
-        editor?.getModel()?.getLineCount();
-      if (atLastLine) {
-        focusedPrompt._promptCollection._history?.next();
-      } else {
-        editor?.trigger("keyboard", "cursorDown", null);
-      }
-    });
-
-    this._editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
-      focusedPrompt?._promptCollection._history?.prev(focusedPrompt);
-    });
-    this._editor.addCommand(
-      monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
-      () => {
-        focusedPrompt?._promptCollection._history?.next(focusedPrompt);
-      },
-    );
+    for (let spec of Object.values(_editorCommands())) {
+      this._editor.addCommand(spec.trigger, spec.run);
+    }
 
     const updateHeight = () => {
       const height = this._editor.getContentHeight();
