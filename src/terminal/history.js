@@ -68,7 +68,8 @@ export class History {
   // Navigate to the previous matching entry.
   // forPrompt=null (Up): finds any matching prompt, may switch tabs.
   // forPrompt=p (Alt+Up): only matches entries that belong to p.
-  prev(forPrompt = null) {
+  // filter: if set, only entries whose text includes filter are considered.
+  prev(forPrompt = null, filter = null) {
     if (this._idx === -1) {
       this._drafts = new Map(this._getPrompts().map((p) => [p, p.getValue()]));
       this._draftActive = this._getActive();
@@ -76,6 +77,7 @@ export class History {
     }
     for (let i = this._idx - 1; i >= 0; i--) {
       const entry = this._entries[i];
+      if (filter && !entry.text.includes(filter)) continue;
       const prompt = forPrompt
         ? this._resolvePromptFor(entry, forPrompt)
         : this._findPromptFor(entry);
@@ -83,6 +85,7 @@ export class History {
         this._idx = i;
         this._activate(prompt);
         prompt.setValue(entry.text);
+        prompt.selectSubstring(filter);
         return;
       }
     }
@@ -91,10 +94,12 @@ export class History {
   // Navigate to the next matching entry, restoring the draft when past the end.
   // forPrompt=null (Down): finds any matching prompt, may switch tabs.
   // forPrompt=p (Alt+Down): only matches entries that belong to p.
-  next(forPrompt = null) {
+  // filter: if set, only entries whose text includes filter are considered.
+  next(forPrompt = null, filter = null) {
     if (this._idx === -1) return;
     for (let i = this._idx + 1; i < this._entries.length; i++) {
       const entry = this._entries[i];
+      if (filter && !entry.text.includes(filter)) continue;
       const prompt = forPrompt
         ? this._resolvePromptFor(entry, forPrompt)
         : this._findPromptFor(entry);
@@ -102,6 +107,7 @@ export class History {
         this._idx = i;
         this._activate(prompt);
         prompt.setValue(entry.text);
+        prompt.selectSubstring(filter);
         return;
       }
     }

@@ -69,6 +69,27 @@ const EDITOR_OPTIONS = {
   },
 };
 
+function _getHistoryFilter(editor, isDraft) {
+  const sel = editor.getSelection();
+  if (sel && !sel.isEmpty()) {
+    return editor.getModel().getValueInRange(sel);
+  }
+  if (isDraft) {
+    const model = editor.getModel();
+    const pos = editor.getPosition();
+    if (pos && model) {
+      const lastLine = model.getLineCount();
+      if (
+        pos.lineNumber === lastLine &&
+        pos.column > model.getLineLength(lastLine)
+      ) {
+        return editor.getValue() || null;
+      }
+    }
+  }
+  return null;
+}
+
 function _editorCommands() {
   return {
     submit: {
@@ -104,10 +125,13 @@ function _editorCommands() {
     prevHistory: {
       trigger: monaco.KeyCode.UpArrow,
       run() {
-        if (focusedPrompt?._editor.getPosition()?.lineNumber === 1) {
-          focusedPrompt._promptCollection._history?.prev();
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        if (editor.getPosition()?.lineNumber === 1) {
+          const history = focusedPrompt._promptCollection._history;
+          history?.prev(null, _getHistoryFilter(editor, history._idx === -1));
         } else {
-          focusedPrompt?._editor.trigger("keyboard", "cursorUp", null);
+          editor.trigger("keyboard", "cursorUp", null);
         }
       },
     },
@@ -115,13 +139,15 @@ function _editorCommands() {
       trigger: monaco.KeyCode.DownArrow,
       run() {
         const editor = focusedPrompt?._editor;
+        if (!editor) return;
         const atLastLine =
-          editor?.getPosition()?.lineNumber ===
-          editor?.getModel()?.getLineCount();
+          editor.getPosition()?.lineNumber ===
+          editor.getModel()?.getLineCount();
         if (atLastLine) {
-          focusedPrompt._promptCollection._history?.next();
+          const history = focusedPrompt._promptCollection._history;
+          history?.next(null, _getHistoryFilter(editor, history._idx === -1));
         } else {
-          editor?.trigger("keyboard", "cursorDown", null);
+          editor.trigger("keyboard", "cursorDown", null);
         }
       },
     },
@@ -129,13 +155,25 @@ function _editorCommands() {
     prevHistorySpecific: {
       trigger: monaco.KeyMod.Alt | monaco.KeyCode.UpArrow,
       run() {
-        focusedPrompt?._promptCollection._history?.prev(focusedPrompt);
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        const history = focusedPrompt._promptCollection._history;
+        history?.prev(
+          focusedPrompt,
+          _getHistoryFilter(editor, history._idx === -1),
+        );
       },
     },
     nextHistorySpecific: {
       trigger: monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
       run() {
-        focusedPrompt?._promptCollection._history?.next(focusedPrompt);
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        const history = focusedPrompt._promptCollection._history;
+        history?.next(
+          focusedPrompt,
+          _getHistoryFilter(editor, history._idx === -1),
+        );
       },
     },
 
@@ -349,6 +387,24 @@ class Prompt {
   setSideHtml(html) {
     this._sideHtml = html;
     this.labelEl.innerHTML = html;
+  }
+
+  selectSubstring(needle) {
+    if (!this._editor || !needle) return;
+    const text = this._editor.getValue();
+    const idx = text.indexOf(needle);
+    if (idx === -1) return;
+    const model = this._editor.getModel();
+    const start = model.getPositionAt(idx);
+    const end = model.getPositionAt(idx + needle.length);
+    this._editor.setSelection(
+      new monaco.Range(
+        start.lineNumber,
+        start.column,
+        end.lineNumber,
+        end.column,
+      ),
+    );
   }
 
   takeEcho(cell_id) {
