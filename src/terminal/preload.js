@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld("buche", {
     pending.length = 0;
   },
   sendCommand: (obj) => ipcRenderer.send("command", obj),
+  history: {
+    get: () => ipcRenderer.invoke("history:get"),
+    add: (entry) => ipcRenderer.send("history:add", entry),
+  },
 });

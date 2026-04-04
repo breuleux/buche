@@ -1,4 +1,5 @@
 import { html } from "./utils.js";
+import { History } from "./history.js";
 
 let focusedPrompt = null;
 
@@ -70,6 +71,7 @@ class Prompt {
   constructor({
     sideHtml,
     tabHtml,
+    tag,
     targetCellId,
     language,
     buche,
@@ -77,11 +79,14 @@ class Prompt {
     onPrev,
     onNext,
     onParseRequest,
+    history,
   }) {
+    this.tag = tag;
     this.targetCellId = targetCellId;
     this._buche = buche;
     this._onAfterSubmit = onAfterSubmit;
     this._onParseRequest = onParseRequest;
+    this._history = history ?? null;
     this._echoes = new Map();
     this._editor = null;
     this._decorations = null;
@@ -141,6 +146,35 @@ class Prompt {
       () => focusedPrompt?._onNext(),
     );
 
+    this._editor.addCommand(monaco.KeyCode.UpArrow, () => {
+      if (focusedPrompt?._editor.getPosition()?.lineNumber === 1) {
+        focusedPrompt._history?.prev();
+      } else {
+        focusedPrompt?._editor.trigger("keyboard", "cursorUp", null);
+      }
+    });
+    this._editor.addCommand(monaco.KeyCode.DownArrow, () => {
+      const editor = focusedPrompt?._editor;
+      const atLastLine =
+        editor?.getPosition()?.lineNumber ===
+        editor?.getModel()?.getLineCount();
+      if (atLastLine) {
+        focusedPrompt._history?.next();
+      } else {
+        editor?.trigger("keyboard", "cursorDown", null);
+      }
+    });
+
+    this._editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
+      focusedPrompt?._history?.prev(focusedPrompt);
+    });
+    this._editor.addCommand(
+      monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
+      () => {
+        focusedPrompt?._history?.next(focusedPrompt);
+      },
+    );
+
     const updateHeight = () => {
       const height = this._editor.getContentHeight();
       this.editorEl.style.height = `${height}px`;
@@ -150,6 +184,10 @@ class Prompt {
     updateHeight();
 
     this._decorations = this._editor.createDecorationsCollection([]);
+
+    this._editor.onDidChangeModelContent((e) => {
+      if (!e.isFlush) this._history?.cancelNavigation();
+    });
 
     if (this._onParseRequest) {
       this._editor.onDidChangeModelContent(() => {
@@ -200,10 +238,32 @@ class Prompt {
     } else {
       cell_id = crypto.randomUUID();
     }
+    this._history?.push({
+      text: value,
+      tag: this.tag,
+      target_cell_id: this.targetCellId,
+    });
     this._echoes.set(cell_id, this.echo());
     this._buche.sendCommand({ type: "run", text: value, cell_id });
     this._editor.setValue("");
     this._onAfterSubmit(cell_id);
+  }
+
+  getValue() {
+    return this._editor?.getValue() ?? "";
+  }
+
+  setValue(text) {
+    if (!this._editor) return;
+    this._editor.setValue(text);
+    const model = this._editor.getModel();
+    if (model) {
+      const lastLine = model.getLineCount();
+      this._editor.setPosition({
+        lineNumber: lastLine,
+        column: model.getLineLength(lastLine) + 1,
+      });
+    }
   }
 
   echo() {
@@ -258,6 +318,15 @@ export class PromptCollection {
     this._monacoReady = false;
     this.onAfterSubmit = (_cell_id) => {};
     this._parseRequests = new Map();
+    this._history = new History({
+      buche,
+      getPrompts: () => this._prompts,
+      getActive: () => this._active,
+      activate: (prompt) => {
+        const idx = this._prompts.indexOf(prompt);
+        if (idx !== -1) this._activate(idx);
+      },
+    });
 
     this._tabBar = document.createElement("div");
     this._tabBar.id = "prompt-tabs";
@@ -290,13 +359,14 @@ export class PromptCollection {
     document.head.appendChild(loaderScript);
   }
 
-  addPrompt({ side_html, tab_html, target_cell_id, language }) {
+  addPrompt({ side_html, tab_html, tag, target_cell_id, language }) {
     let prompt;
     const onParseRequest = (request_id) =>
       this._parseRequests.set(request_id, prompt);
     prompt = new Prompt({
       sideHtml: side_html,
       tabHtml: tab_html,
+      tag,
       targetCellId: target_cell_id,
       language,
       buche: this._buche,
@@ -304,6 +374,7 @@ export class PromptCollection {
       onPrev: () => this._move(-1),
       onNext: () => this._move(1),
       onParseRequest,
+      history: this._history,
     });
     prompt.tabEl.addEventListener("click", () => {
       this._activate(this._prompts.indexOf(prompt));

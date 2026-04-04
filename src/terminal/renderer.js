@@ -134,7 +134,6 @@ class Executor {
   }
 
   handle$highlight(instruction) {
-    console.log(instruction);
     this.prompt.applyHighlight(instruction);
   }
 

@@ -7,6 +7,33 @@ const { Shell } = require("./shell/runner");
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
 const termdir = path.join(__dirname, "terminal");
 
+const HISTORY_FILE = path.join(
+  os.homedir(),
+  ".config",
+  "buche",
+  "history.jsonl",
+);
+
+function loadHistory() {
+  try {
+    return fs
+      .readFileSync(HISTORY_FILE, "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l));
+  } catch {
+    return [];
+  }
+}
+
+function appendHistory(entry) {
+  fs.mkdirSync(path.dirname(HISTORY_FILE), { recursive: true });
+  fs.appendFileSync(HISTORY_FILE, JSON.stringify(entry) + "\n");
+}
+
+ipcMain.handle("history:get", () => loadHistory());
+ipcMain.on("history:add", (_event, entry) => appendHistory(entry));
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,

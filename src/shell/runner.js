@@ -634,6 +634,7 @@ class Shell {
           target_cell_id: null,
           side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           tab_html: "buche",
+          tag: "buche",
           // language: "shell",
         };
       })();
