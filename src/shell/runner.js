@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { sync: globSync } = require("glob");
 const bashParser = require("bash-parser");
+const { loadConfig } = require("./config");
 
 async function* merge(iterables) {
   const queue = [];
@@ -612,7 +613,8 @@ class Shell {
     }
 
     async function* handlers() {
-      yield (async function* prompt() {
+      yield (async function* init() {
+        yield* self._applyConfig();
         yield {
           type: "new_prompt",
           target_cell_id: null,
@@ -672,9 +674,49 @@ class Shell {
     }
   }
 
-  async handle$cd(obj) {
+  async *_applyConfig() {
+    const { env, control, interface: iface } = loadConfig(process.cwd());
+
+    // Apply env vars
+    for (const [name, { value, export: isExport }] of env) {
+      if (isExport) {
+        process.env[name] = value;
+        this._vars.delete(name);
+      } else {
+        this._vars.set(name, value);
+      }
+      this._notifyControls({ type: "env_changed", name, value });
+    }
+
+    // Reconcile control processes: terminate those that disappeared or changed,
+    // start those that are new. Leave unchanged entries alone.
+    for (const [name, ctrl] of this._controls) {
+      const desired = control.get(name);
+      const same =
+        desired &&
+        desired.cmd === ctrl.cmd &&
+        desired.args.join("\0") === ctrl.args.join("\0");
+      if (!same) {
+        ctrl.enabled = false;
+        ctrl._proc?.kill();
+        this._controls.delete(name);
+      }
+    }
+    for (const [name, { cmd, args }] of control) {
+      if (!this._controls.has(name)) {
+        const ctrl = { cmd, args, restartMs: null, enabled: true, _proc: null };
+        this._controls.set(name, ctrl);
+        this._runControlLoop(name);
+      }
+    }
+
+    yield { type: "configure", interface: iface ?? {} };
+  }
+
+  async *handle$cd(obj) {
     process.chdir(obj.path);
     this._notifyControls({ type: "cwd_changed", cwd: process.cwd() });
+    yield* this._applyConfig();
   }
 
   async handle$set(obj) {
