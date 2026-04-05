@@ -308,9 +308,30 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 .cursor-active {
 	background: #fff;
+	animation: cursor-fade-blink 1.2s ease-in-out infinite;
 }
 .cursor-hidden {
 	display: none;
+}
+@keyframes cursor-fade-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
+
+.cursor.cursor-empty-line {
+	width: 0.7ch;
+	height: 5px;
+	vertical-align: bottom;
+	position: absolute;
+	bottom: -2px;
+	left: 16px;
+	/* clip-path: polygon(0 0, 100% 0, 50% 100%); */
+	animation: cursor-fade-blink 1.2s ease-in-out infinite;
 }
 
 /* ── Error cells ── */

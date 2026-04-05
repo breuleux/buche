@@ -42,10 +42,22 @@ export class TextHandler {
     fader.inner.appendChild(this._restEl);
     fader.inner.appendChild(this._marker);
     fader.inner.appendChild(this._startEl);
+
+    this._cursorEl.classList.add("cursor-empty-line");
+    this.cellNode.appendChild(this._cursorEl);
   }
 
   setCursorState(state) {
-    this._cursorEl.className = `cursor cursor-${state}`;
+    if (state === "hidden") {
+      this._cursorEl.remove();
+      return;
+    }
+    this._cursorEl.classList.remove(
+      "cursor-active",
+      "cursor-inactive",
+      "cursor-hidden",
+    );
+    this._cursorEl.classList.add(`cursor-${state}`);
   }
 
   send(data) {
@@ -139,8 +151,17 @@ export class TextHandler {
     this._currentEl = this.term.currentLineNode();
     if (this._currentEl) {
       activeEl.appendChild(this._currentEl);
+      activeEl.appendChild(this._cursorEl);
+      this._cursorEl.classList.remove("cursor-empty-line");
+    } else {
+      // Cursor is on a new empty line. Place it directly in the pre as an
+      // absolutely-positioned element so it doesn't contribute to line layout.
+      // If the last completed span is itself empty (only \n), scrunch it so
+      // its \n doesn't create a phantom empty line box; for non-empty spans
+      // a trailing \n with no normal-flow content after it creates no extra line.
+      this.cellNode.appendChild(this._cursorEl);
+      this._cursorEl.classList.add("cursor-empty-line");
     }
-    activeEl.appendChild(this._cursorEl);
 
     if (this._droppedLines > 0) {
       this._marker.innerHTML = `<div>${this._droppedLines} lines dropped</div>`;
