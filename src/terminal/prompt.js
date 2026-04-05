@@ -177,6 +177,30 @@ function _editorCommands() {
       },
     },
 
+    deleteWordLeft: {
+      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyW,
+      run() {
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        const model = editor.getModel();
+        const pos = editor.getPosition();
+        if (!model || !pos) return;
+        const offset = model.getOffsetAt(pos);
+        const text = model.getValue();
+        let i = offset;
+        while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) i--;
+        while (i > 0 && text[i - 1] !== " " && text[i - 1] !== "\t" && text[i - 1] !== "\n") i--;
+        if (i === offset) return;
+        const startPos = model.getPositionAt(i);
+        editor.executeEdits("ctrl-w", [
+          {
+            range: new monaco.Range(startPos.lineNumber, startPos.column, pos.lineNumber, pos.column),
+            text: "",
+          },
+        ]);
+      },
+    },
+
     acceptHistorySuggestion: {
       trigger: monaco.KeyCode.RightArrow,
       run() {
