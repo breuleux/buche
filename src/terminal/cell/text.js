@@ -148,17 +148,11 @@ export class TextHandler {
     // Re-append the current partial line and cursor at the end.
     const activeEl =
       this._startLines < START_MAX ? this._startEl : this._restEl;
-    this._currentEl = this.term.currentLineNode();
+    this._currentEl = this.term.currentLineNode(this._cursorEl);
     if (this._currentEl) {
       activeEl.appendChild(this._currentEl);
-      activeEl.appendChild(this._cursorEl);
       this._cursorEl.classList.remove("cursor-empty-line");
     } else {
-      // Cursor is on a new empty line. Place it directly in the pre as an
-      // absolutely-positioned element so it doesn't contribute to line layout.
-      // If the last completed span is itself empty (only \n), scrunch it so
-      // its \n doesn't create a phantom empty line box; for non-empty spans
-      // a trailing \n with no normal-flow content after it creates no extra line.
       this.cellNode.appendChild(this._cursorEl);
       this._cursorEl.classList.add("cursor-empty-line");
     }

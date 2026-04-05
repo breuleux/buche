@@ -171,15 +171,15 @@ export class TermBuffer {
     this._col++;
   }
 
-  // Convert current cells to a DocumentFragment of styled spans.
-  _cellsToFrag() {
+  // Convert a slice of cells to a DocumentFragment of styled spans.
+  _cellsToFrag(start = 0, end = this._cells.length) {
     const frag = document.createDocumentFragment();
     const cells = this._cells;
-    let i = 0;
-    while (i < cells.length) {
+    let i = start;
+    while (i < end) {
       const c0 = cells[i];
       let j = i + 1;
-      while (j < cells.length && stylesEq(cells[j], c0)) {
+      while (j < end && stylesEq(cells[j], c0)) {
         j++;
       }
       const text = cells
@@ -203,14 +203,24 @@ export class TermBuffer {
   }
 
   // Return a <span> wrapping the current partial line (non-destructive).
-  currentLineNode() {
+  // If cursorEl is provided, it is inserted at the current cursor column
+  // so the cursor appears at the correct position within the line.
+  currentLineNode(cursorEl = null) {
     if (this._cells.length === 0) {
       return null;
     }
     const span = document.createElement("span");
-    const frag = this._cellsToFrag();
-    while (frag.firstChild) {
-      span.appendChild(frag.firstChild);
+    const col = this._col;
+    if (col > 0) {
+      const frag = this._cellsToFrag(0, col);
+      while (frag.firstChild) span.appendChild(frag.firstChild);
+    }
+    if (cursorEl) {
+      span.appendChild(cursorEl);
+    }
+    if (col < this._cells.length) {
+      const frag = this._cellsToFrag(col, this._cells.length);
+      while (frag.firstChild) span.appendChild(frag.firstChild);
     }
     return span;
   }
