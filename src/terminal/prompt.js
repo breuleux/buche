@@ -189,12 +189,23 @@ function _editorCommands() {
         const text = model.getValue();
         let i = offset;
         while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) i--;
-        while (i > 0 && text[i - 1] !== " " && text[i - 1] !== "\t" && text[i - 1] !== "\n") i--;
+        while (
+          i > 0 &&
+          text[i - 1] !== " " &&
+          text[i - 1] !== "\t" &&
+          text[i - 1] !== "\n"
+        )
+          i--;
         if (i === offset) return;
         const startPos = model.getPositionAt(i);
         editor.executeEdits("ctrl-w", [
           {
-            range: new monaco.Range(startPos.lineNumber, startPos.column, pos.lineNumber, pos.column),
+            range: new monaco.Range(
+              startPos.lineNumber,
+              startPos.column,
+              pos.lineNumber,
+              pos.column,
+            ),
             text: "",
           },
         ]);
@@ -357,7 +368,6 @@ class Prompt {
       cell_id,
     });
     this._editor.setValue("");
-    this._promptCollection.onAfterSubmit(cell_id);
   }
 
   getValue() {
@@ -445,7 +455,6 @@ export class PromptCollection {
     this._activeIdx = 0;
     this._container = container;
     this._monacoReady = false;
-    this.onAfterSubmit = (_cell_id) => {};
     this._parseRequests = new Map();
     this._history = new History({
       buche,

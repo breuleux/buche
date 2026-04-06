@@ -93,10 +93,10 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, cell_id, echo) {
+  async *runNode(node, cell_id, echo, background = false) {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, cell_id, echo);
+        yield* this._runCommand(node, cell_id, echo, background);
         break;
       case "Pipeline":
         throw new FeatureNotImplementedError("pipes (|)");
@@ -123,7 +123,7 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, cell_id, echo) {
+  async *_runCommand(node, cell_id, echo, background = false) {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
@@ -152,7 +152,13 @@ class ProcessBuilder {
       }
     }
 
-    yield* this._shell.handle$run({ command: cmd, args, cell_id, echo });
+    yield* this._shell.handle$run({
+      command: cmd,
+      args,
+      cell_id,
+      echo,
+      background,
+    });
   }
 
   _expandWord(text) {
@@ -894,7 +900,8 @@ class Shell {
       for (const node of ast.commands) {
         const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
         first = false;
-        yield* builder.runNode(node, cell_id, obj.echo ?? true);
+        const background = node.async === true;
+        yield* builder.runNode(node, cell_id, obj.echo ?? true, background);
       }
       return;
     }
@@ -903,7 +910,13 @@ class Shell {
     const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
 
     if (cmd in this._builtins) {
-      yield { type: "new", cell_id, mode: "auto", echo: obj.echo };
+      yield {
+        type: "new",
+        cell_id,
+        mode: "auto",
+        echo: obj.echo,
+        background: obj.background ?? false,
+      };
       let return_code = 0;
       try {
         yield* this._runBuiltin(cmd, args, cell_id);
@@ -927,6 +940,7 @@ class Shell {
       cell_id,
       mode: "auto",
       echo: obj.echo,
+      background: obj.background ?? false,
       process_id: proc.pid,
     };
 

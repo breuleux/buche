@@ -51,24 +51,6 @@ class Executor {
       this.bridge,
     );
     this.bridge.onInstruction((instruction) => this.execute(instruction));
-    this.prompt.onAfterSubmit = (cell_id) => {
-      this.prompt.disable();
-      const idxAtSubmit = this.prompt.activeIdx;
-      setTimeout(() => {
-        this.prompt.enable();
-        if (this.prompt.activeIdx !== idxAtSubmit) {
-          this.prompt.focus();
-          return;
-        }
-        const cell = this.cells.get(cell_id);
-        if (cell) {
-          this._activeCell = cell_id;
-          cell.node.focus();
-        } else {
-          this.prompt.focus();
-        }
-      }, 50);
-    };
   }
 
   execute(instruction) {
@@ -97,9 +79,25 @@ class Executor {
           ? { type: "input", cell_id: instruction.cell_id, text: arg }
           : { type: "input", cell_id: instruction.cell_id, data: arg },
       );
-    const cell = new Cell(instruction, echo, HandlerClass, sendInput);
+    const onBackground = () => {
+      this._activeCell = null;
+      this.prompt.enable();
+      this.prompt.focus();
+    };
+    const cell = new Cell(
+      instruction,
+      echo,
+      HandlerClass,
+      sendInput,
+      onBackground,
+    );
     buffer.appendChild(cell.node);
     this.cells.set(instruction.cell_id, cell);
+    if (!instruction.background) {
+      this._activeCell = instruction.cell_id;
+      this.prompt.disable();
+      cell.node.focus();
+    }
   }
 
   handle$send(instruction) {
@@ -127,6 +125,8 @@ class Executor {
 
   handle$new_prompt(instruction) {
     this.prompt.addPrompt(instruction);
+    this.prompt.enable();
+    this.prompt.focus();
   }
 
   handle$set_prompt(instruction) {
