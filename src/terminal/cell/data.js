@@ -12,7 +12,7 @@ export class DataHandler {
 
     this._iframe = document.createElement("iframe");
     this._iframe.style.cssText =
-      "border:none;width:100%;display:block;height:0;";
+      "border:none;width:100%;display:block;height:0;max-height:600px;";
     this._iframe.src = `data:text/html;charset=utf-8,${encodeURIComponent(RUNTIME)}`;
     cellNode.appendChild(this._iframe);
 

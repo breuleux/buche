@@ -55,6 +55,8 @@
           : [document.body];
         for (var target of targets) { apply(target, mode, msg.content); }
         reportHeight();
+        var pf = document.getElementById("prime-focus");
+        if (pf) { pf.focus(); }
       });
 
       // API available to user scripts inside the iframe.
