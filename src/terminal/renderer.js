@@ -81,7 +81,6 @@ class Executor {
       );
     const onBackground = () => {
       this._activeCell = null;
-      this.prompt.enable();
       this.prompt.focus();
     };
     const cell = new Cell(
@@ -95,7 +94,6 @@ class Executor {
     this.cells.set(instruction.cell_id, cell);
     if (!instruction.background) {
       this._activeCell = instruction.cell_id;
-      this.prompt.disable();
       cell.node.focus();
     }
   }
@@ -112,12 +110,10 @@ class Executor {
       this.cells.delete(instruction.cell_id);
       if (this._activeCell === instruction.cell_id) {
         this._activeCell = null;
-        this.prompt.enable();
         if (isFocused) {
           this.prompt.focus();
         }
       } else if (isFocused) {
-        this.prompt.enable();
         this.prompt.focus();
       }
     }
@@ -125,7 +121,6 @@ class Executor {
 
   handle$new_prompt(instruction) {
     this.prompt.addPrompt(instruction);
-    this.prompt.enable();
     this.prompt.focus();
   }
 
