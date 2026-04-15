@@ -177,6 +177,18 @@ function _editorCommands() {
       },
     },
 
+    close: {
+      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyD,
+      run() {
+        const prompt = focusedPrompt;
+        if (!prompt) return;
+        prompt._promptCollection._buche.sendCommand({
+          type: "close",
+          cell_id: prompt.targetCellId,
+        });
+      },
+    },
+
     deleteWordLeft: {
       trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyW,
       run() {

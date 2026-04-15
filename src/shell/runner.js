@@ -268,6 +268,9 @@ class Process {
                 ? null
                 : `${cell_id}.${transformed.cell_id}`;
           }
+          else if (transformed.cell_id === null) {
+            transformed.cell_id = cell_id;
+          }
           if (transformed.target_cell_id != null) {
             transformed.target_cell_id =
               transformed.target_cell_id === "parent"
@@ -326,8 +329,9 @@ class Process {
     );
   }
 
-  closeStdin() {
+  close() {
     this._stdinPty._socket.destroy();
+    this._datain.destroy();
   }
 
   kill() {
@@ -783,10 +787,14 @@ class Shell {
     }
   }
 
-  async handle$close_stdin(obj) {
+  async handle$close(obj) {
+    if (obj.cell_id == null) {
+      this._shutdown = true;
+      return;
+    }
     const proc = this._processes.get(obj.cell_id);
     if (proc) {
-      proc.closeStdin();
+      proc.close();
     }
   }
 
