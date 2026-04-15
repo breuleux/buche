@@ -154,7 +154,7 @@ function mergeConfigs(entries) {
         const parsed = parseEnvEntry(raw);
         if (!parsed) continue;
         if (parsed.append) {
-          const current = env.get(name)?.value ?? "";
+          const current = env.get(name)?.value ?? process.env[name] ?? "";
           const joined = current
             ? `${current}${parsed.separator}${parsed.value}`
             : parsed.value;
