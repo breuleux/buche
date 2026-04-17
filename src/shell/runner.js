@@ -232,7 +232,7 @@ class Process {
     });
 
     const child = spawn(cmd, args, {
-      stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe"],
+      stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe", "pipe"],
       env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
     });
 
@@ -242,15 +242,37 @@ class Process {
     fs.closeSync(stderrSlave);
 
     this._datain = child.stdio[3];
+    this._control = child.stdio[5];
 
-    const DIRECTIVE_TYPES = new Set([
-      "new",
-      "send",
-      "close",
-      "new_prompt",
-      "set_prompt",
-      "error",
-    ]);
+    // fd5: control channel (full duplex) — directives from child to shell
+    readline
+      .createInterface({ input: child.stdio[5], crlfDelay: Infinity })
+      .on("line", (line) => {
+        let data;
+        try {
+          data = JSON.parse(line);
+        } catch {
+          return;
+        }
+        const transformed = { ...data };
+        if (transformed.cell_id != null) {
+          transformed.cell_id =
+            transformed.cell_id === "parent"
+              ? null
+              : `${cell_id}.${transformed.cell_id}`;
+        } else if (transformed.cell_id === null) {
+          transformed.cell_id = cell_id;
+        }
+        if (transformed.target_cell_id != null) {
+          transformed.target_cell_id =
+            transformed.target_cell_id === "parent"
+              ? null
+              : `${cell_id}.${transformed.target_cell_id}`;
+        }
+        emit(transformed);
+      });
+
+    // fd4: data channel — arbitrary JSON objects sent to the renderer
     readline
       .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
       .on("line", (line) => {
@@ -260,27 +282,7 @@ class Process {
         } catch {
           return;
         }
-        if (data.type && DIRECTIVE_TYPES.has(data.type)) {
-          const transformed = { ...data };
-          if (transformed.cell_id != null) {
-            transformed.cell_id =
-              transformed.cell_id === "parent"
-                ? null
-                : `${cell_id}.${transformed.cell_id}`;
-          }
-          else if (transformed.cell_id === null) {
-            transformed.cell_id = cell_id;
-          }
-          if (transformed.target_cell_id != null) {
-            transformed.target_cell_id =
-              transformed.target_cell_id === "parent"
-                ? null
-                : `${cell_id}.${transformed.target_cell_id}`;
-          }
-          emit(transformed);
-        } else {
-          emit({ type: "send", cell_id, stream: "dataout", data });
-        }
+        emit({ type: "send", cell_id, stream: "dataout", data });
       });
 
     const cleanup = () => {
@@ -289,6 +291,7 @@ class Process {
       stderrPty._socket.destroy();
       child.stdio[3].destroy();
       child.stdio[4].destroy();
+      child.stdio[5].destroy();
     };
 
     child.on("close", (return_code) => {
@@ -329,9 +332,18 @@ class Process {
     );
   }
 
+  writeControl(json) {
+    return new Promise((resolve, reject) =>
+      this._control.write(`${JSON.stringify(json)}\n`, (err) =>
+        err ? reject(err) : resolve(),
+      ),
+    );
+  }
+
   close() {
     this._stdinPty._socket.destroy();
     this._datain.destroy();
+    this._control.destroy();
   }
 
   kill() {
@@ -695,7 +707,7 @@ class Shell {
 
   _notifyControls(event) {
     for (const control of this._controls.values()) {
-      control._proc?.writeDatain(event);
+      control._proc?.writeControl(event);
     }
   }
 
