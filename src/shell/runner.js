@@ -62,6 +62,7 @@ async function* merge(iterables) {
 function makeError(err, cell_id = null) {
   return {
     type: "error",
+    target: "terminal",
     error_type: err.code ?? err.constructor.name,
     message: err.message,
     traceback: err.stack
@@ -207,13 +208,31 @@ class Process {
 
     // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
     stdinPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, stream: "stdout", text: d.toString() }),
+      emit({
+        type: "send",
+        target: "terminal",
+        cell_id,
+        stream: "stdout",
+        text: d.toString(),
+      }),
     );
     stdoutPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, stream: "stdout", text: d.toString() }),
+      emit({
+        type: "send",
+        target: "terminal",
+        cell_id,
+        stream: "stdout",
+        text: d.toString(),
+      }),
     );
     stderrPty._socket.on("data", (d) =>
-      emit({ type: "send", cell_id, stream: "stderr", text: d.toString() }),
+      emit({
+        type: "send",
+        target: "terminal",
+        cell_id,
+        stream: "stderr",
+        text: d.toString(),
+      }),
     );
     // EIO means the slave side closed (process exited) — not a real error.
     stdinPty._socket.on("error", (e) => {
@@ -255,7 +274,7 @@ class Process {
         } catch {
           return;
         }
-        const transformed = { ...data };
+        const transformed = { target: "terminal", ...data };
         if (transformed.cell_id != null) {
           transformed.cell_id =
             transformed.cell_id === "parent"
@@ -283,7 +302,13 @@ class Process {
         } catch {
           return;
         }
-        emit({ type: "send", cell_id, stream: "dataout", data });
+        emit({
+          type: "send",
+          target: "terminal",
+          cell_id,
+          stream: "dataout",
+          data,
+        });
       });
 
     const cleanup = () => {
@@ -297,13 +322,18 @@ class Process {
 
     child.on("close", (return_code) => {
       cleanup();
-      emit({ type: "close", cell_id, return_code: return_code ?? 0 });
+      emit({
+        type: "close",
+        target: "terminal",
+        cell_id,
+        return_code: return_code ?? 0,
+      });
       this._done = true;
     });
     child.on("error", (err) => {
       cleanup();
       emit(makeError(err, cell_id));
-      emit({ type: "close", cell_id, return_code: 1 });
+      emit({ type: "close", target: "terminal", cell_id, return_code: 1 });
       this._done = true;
     });
 
@@ -599,6 +629,7 @@ class Shell {
         yield* self._applyConfig();
         yield {
           type: "new_prompt",
+          target: "terminal",
           target_cell_id: null,
           side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           tab_html: "buche",
@@ -648,7 +679,21 @@ class Shell {
       yield* handlers();
     }
 
-    return merge(allStreams());
+    async function* routed() {
+      for await (const instruction of merge(allStreams())) {
+        if (instruction.target === "shell") {
+          self._handleShellInstruction(instruction);
+        } else {
+          yield instruction;
+        }
+      }
+    }
+
+    return routed();
+  }
+
+  _handleShellInstruction(_instruction) {
+    // nothing for now
   }
 
   _notifyControls(event) {
@@ -693,7 +738,7 @@ class Shell {
       }
     }
 
-    yield { type: "configure", interface: iface ?? {} };
+    yield { type: "configure", target: "shell", interface: iface ?? {} };
   }
 
   async *handle$cd(obj) {
@@ -720,6 +765,7 @@ class Shell {
     const { text, position, want_completions, request_id } = obj;
     yield {
       type: "highlight",
+      target: "terminal",
       request_id,
       ranges: shellHighlight(text, this._builtins),
     };
@@ -809,16 +855,8 @@ class Shell {
       const proc = new Process(control.cmd, control.args, cellId, this._cols);
       control._proc = proc;
       for await (const event of proc.events()) {
-        if (
-          event.type === "send" &&
-          event.stream === "dataout" &&
-          event.data.$command != null
-        ) {
-          for await (const result of this._dispatchCommand(
-            event.data.$command,
-          )) {
-            this._emitControlEvent(result);
-          }
+        if (event.target === "shell") {
+          this._emitControlEvent({ ...event, control: true });
         } else {
           this._emitControlEvent(event);
         }
@@ -878,6 +916,7 @@ class Shell {
     if (cmd in this._builtins) {
       yield {
         type: "new",
+        target: "terminal",
         cell_id,
         mode: "auto",
         echo: obj.echo,
@@ -890,7 +929,7 @@ class Shell {
         yield makeError(err, cell_id);
         return_code = 1;
       }
-      yield { type: "close", cell_id, return_code };
+      yield { type: "close", target: "terminal", cell_id, return_code };
       return;
     }
 
@@ -903,6 +942,7 @@ class Shell {
 
     yield {
       type: "new",
+      target: "terminal",
       cell_id,
       mode: "auto",
       echo: obj.echo,
@@ -914,25 +954,13 @@ class Shell {
       if (event.type === "close" && event.cell_id === cell_id) {
         this._processes.delete(cell_id);
       }
-      if (
-        event.type === "send" &&
-        event.stream === "dataout" &&
-        event.data.$command != null
-      ) {
-        yield* this._dispatchCommand(event.data.$command);
-      } else {
-        yield event;
-      }
+      yield event;
     }
   }
 
   async *_runBuiltin(name, args, cell_id) {
     for await (const item of this._builtins[name](args, cell_id)) {
-      if (item.$command != null) {
-        yield* this._dispatchCommand(item.$command);
-      } else {
-        yield item;
-      }
+      yield* this._dispatchCommand(item);
     }
   }
 
