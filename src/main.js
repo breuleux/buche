@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { Shell } = require("./shell/runner");
+const readline = require("readline");
+const { spawn } = require("child_process");
 
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
 const termdir = path.join(__dirname, "terminal");
@@ -52,9 +53,16 @@ function createWindow() {
     win.webContents.openDevTools({ mode: "right" });
   }
 
-  const shell = new Shell();
-  const inputQueue = [];
-  let inputResolve = null;
+  const cqBin = path.join(__dirname, "..", "bin", "cq.js");
+  const cq = spawn(process.execPath, [cqBin], {
+    stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "pipe"],
+    env: { ...process.env, BUCHE_CONTROL_FD: "5" },
+  });
+
+  cq.stdout.pipe(process.stdout);
+  cq.stderr.pipe(process.stderr);
+
+  const fd5 = cq.stdio[5];
 
   let recordLastTime = null;
   if (args.record) {
@@ -77,35 +85,27 @@ function createWindow() {
     fs.appendFileSync(args.record, JSON.stringify(obj) + "\n");
   }
 
-  ipcMain.on("command", (_event, obj) => {
-    recordCommand(obj);
-    inputQueue.push(obj);
-    if (inputResolve) {
-      const r = inputResolve;
-      inputResolve = null;
-      r();
-    }
-  });
-
-  async function* shellInput() {
-    while (true) {
-      while (inputQueue.length > 0) yield inputQueue.shift();
-      await new Promise((r) => {
-        inputResolve = r;
-      });
-    }
+  function sendToShell(obj) {
+    fd5.write(`${JSON.stringify(obj)}\n`);
   }
 
+  ipcMain.on("command", (_event, obj) => {
+    recordCommand(obj);
+    sendToShell(obj);
+  });
+
   if (args.startCommand) {
-    inputQueue.push({ type: "parse", text: args.startCommand });
+    sendToShell({ type: "parse", text: args.startCommand });
   }
 
   win.webContents.once("did-finish-load", () => {
-    (async () => {
-      for await (const instruction of shell.run(shellInput())) {
-        win.webContents.send("instruction", instruction);
-      }
-    })();
+    readline
+      .createInterface({ input: fd5, crlfDelay: Infinity })
+      .on("line", (line) => {
+        try {
+          win.webContents.send("instruction", JSON.parse(line));
+        } catch {}
+      });
   });
 
   if (args.replay) {

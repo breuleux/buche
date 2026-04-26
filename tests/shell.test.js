@@ -1,7 +1,7 @@
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
 const { execSync } = require("node:child_process");
-const { Shell } = require("../src/shell");
+const { Shell } = require("../src/shell/runner");
 
 function matchObject(actual, expected) {
   for (const [key, val] of Object.entries(expected)) {
