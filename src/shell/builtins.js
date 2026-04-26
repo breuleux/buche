@@ -1,4 +1,4 @@
-export const BUILTINS = {
+const BUILTINS = {
   async *cd(args, _cell_id) {
     yield { type: "cd", path: args[0] ?? os.homedir() };
   },
@@ -46,3 +46,5 @@ export const BUILTINS = {
     }
   },
 };
+
+module.exports = { BUILTINS };

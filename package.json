@@ -4,7 +4,8 @@
   "description": "A terminal-like electron app",
   "main": "src/main.js",
   "bin": {
-    "buche": "bin/buche.js"
+    "buche": "bin/buche.js",
+    "cq": "bin/cq.js"
   },
   "scripts": {
     "start": "electron .",

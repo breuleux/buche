@@ -253,7 +253,12 @@ class Process {
 
     const child = spawn(cmd, args, {
       stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe", "pipe"],
-      env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
+      env: {
+        ...process.env,
+        TERM: "xterm-256color",
+        COLORTERM: "truecolor",
+        BUCHE_CONTROL_FD: "5",
+      },
     });
 
     // Parent no longer needs the slave fds — child inherited them.
