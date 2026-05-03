@@ -70,9 +70,12 @@ class Executor {
       console.error("Unknown mode:", instruction.mode);
       return;
     }
-    const echo = instruction.echo
-      ? this.prompt.takeEcho(instruction.cell_id)
-      : null;
+    let echo = null;
+    if (instruction.echo_html) {
+      const div = document.createElement("div");
+      div.innerHTML = instruction.echo_html;
+      echo = div.firstChild;
+    }
     const sendInput = (arg) =>
       this.bridge.sendCommand(
         typeof arg === "string"
@@ -119,7 +122,7 @@ class Executor {
     }
   }
 
-  handle$new_prompt(instruction) {
+  handle$prompt(instruction) {
     this.prompt.addPrompt(instruction);
     this.prompt.focus();
   }

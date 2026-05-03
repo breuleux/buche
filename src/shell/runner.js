@@ -95,10 +95,10 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, cell_id, echo, background = false) {
+  async *runNode(node, cell_id, echo_html, prompt_id, background = false) {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, cell_id, echo, background);
+        yield* this._runCommand(node, cell_id, echo_html, prompt_id, background);
         break;
       case "Pipeline":
         throw new FeatureNotImplementedError("pipes (|)");
@@ -125,7 +125,7 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, cell_id, echo, background = false) {
+  async *_runCommand(node, cell_id, echo_html, prompt_id, background = false) {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
@@ -133,7 +133,6 @@ class ProcessBuilder {
             command: "set",
             args: [item.text],
             cell_id,
-            echo,
           });
         }
       }
@@ -158,7 +157,8 @@ class ProcessBuilder {
       command: cmd,
       args,
       cell_id,
-      echo,
+      echo_html,
+      prompt_id,
       background,
     });
   }
@@ -288,11 +288,11 @@ class Process {
         } else if (transformed.cell_id === null) {
           transformed.cell_id = cell_id;
         }
-        if (transformed.target_cell_id != null) {
-          transformed.target_cell_id =
-            transformed.target_cell_id === "parent"
+        if (transformed.prompt_id != null) {
+          transformed.prompt_id =
+            transformed.prompt_id === "parent"
               ? null
-              : `${cell_id}.${transformed.target_cell_id}`;
+              : `${cell_id}.${transformed.prompt_id}`;
         }
         emit(transformed);
       });
@@ -633,21 +633,31 @@ class Shell {
       yield (async function* init() {
         yield* self._applyConfig();
         yield {
-          type: "new_prompt",
+          type: "prompt",
           target: "terminal",
-          target_cell_id: null,
-          side_html: "<span style='color:#569cd6;'>&gt;&gt;</span>",
-          tab_html: "buche",
-          tag: "buche",
-          // language: "shell",
+          prompt_id: "cq",
+          prompt: "<span style='color:#569cd6;'>&gt;&gt;</span>",
+          name: "cq",
+          tag: "cq",
+          language: null,
         };
       })();
       for await (const obj of inputStream) {
+        // Forward to sub-process by dotted cell_id (e.g. input to a nested cell)
         if (obj.cell_id?.includes(".")) {
           const dot = obj.cell_id.indexOf(".");
           const proc = self._processes.get(obj.cell_id.slice(0, dot));
           if (proc) {
             proc.writeDatain({ ...obj, cell_id: obj.cell_id.slice(dot + 1) });
+          }
+          continue;
+        }
+        // Forward run/parse to sub-process by dotted prompt_id
+        if (obj.prompt_id?.includes(".")) {
+          const dot = obj.prompt_id.indexOf(".");
+          const proc = self._processes.get(obj.prompt_id.slice(0, dot));
+          if (proc) {
+            proc.writeDatain(obj);
           }
           continue;
         }
@@ -908,14 +918,18 @@ class Shell {
       let first = true;
       for (const node of ast.commands) {
         const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
+        const echo_html = first ? (obj.echo_html ?? null) : null;
+        const prompt_id = first ? (obj.prompt_id ?? null) : null;
         first = false;
         const background = node.async === true;
-        yield* builder.runNode(node, cell_id, obj.echo ?? true, background);
+        yield* builder.runNode(node, cell_id, echo_html, prompt_id, background);
       }
       return;
     }
 
     const cell_id = obj.cell_id ?? randomUUID();
+    const echo_html = obj.echo_html ?? null;
+    const prompt_id = obj.prompt_id ?? null;
     const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
 
     if (cmd in this._builtins) {
@@ -923,8 +937,9 @@ class Shell {
         type: "new",
         target: "terminal",
         cell_id,
+        prompt_id,
+        echo_html,
         mode: "auto",
-        echo: obj.echo,
         background: obj.background ?? false,
       };
       let return_code = 0;
@@ -949,8 +964,9 @@ class Shell {
       type: "new",
       target: "terminal",
       cell_id,
+      prompt_id,
+      echo_html,
       mode: "auto",
-      echo: obj.echo,
       background: obj.background ?? false,
       process_id: proc.pid,
     };

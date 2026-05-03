@@ -182,10 +182,12 @@ function _editorCommands() {
       run() {
         const prompt = focusedPrompt;
         if (!prompt) return;
-        prompt._promptCollection._buche.sendCommand({
-          type: "close",
-          cell_id: prompt.targetCellId,
-        });
+        // Derive cell_id from prompt_id: "CELL_ID.xyz" → close CELL_ID; no dot → null (shutdown)
+        const pid = prompt.promptId;
+        const cell_id = pid?.includes(".")
+          ? pid.slice(0, pid.indexOf("."))
+          : null;
+        prompt._promptCollection._buche.sendCommand({ type: "close", cell_id });
       },
     },
 
@@ -251,28 +253,20 @@ function _editorCommands() {
 }
 
 class Prompt {
-  constructor({
-    sideHtml,
-    tabHtml,
-    tag,
-    targetCellId,
-    language,
-    promptCollection,
-  }) {
+  constructor({ promptHtml, name, tag, promptId, language, promptCollection }) {
     this.tag = tag;
-    this.targetCellId = targetCellId;
+    this.promptId = promptId;
     this._promptCollection = promptCollection;
-    this._echoes = new Map();
     this._editor = null;
     this._decorations = null;
     this._highlightRanges = [];
     this._language = language ?? "plaintext";
 
-    this._sideHtml = sideHtml;
+    this._promptHtml = promptHtml;
 
     this.labelEl = document.createElement("div");
     this.labelEl.className = "input-prompt";
-    this.labelEl.innerHTML = sideHtml;
+    this.labelEl.innerHTML = promptHtml;
 
     this.editorEl = document.createElement("div");
     this.editorEl.className = "prompt-editor";
@@ -285,7 +279,7 @@ class Prompt {
 
     this.tabEl = document.createElement("div");
     this.tabEl.className = "prompt-tab";
-    this.tabEl.innerHTML = tabHtml;
+    this.tabEl.textContent = name;
   }
 
   init() {
@@ -335,7 +329,7 @@ class Prompt {
         position,
         want_completions: false,
         request_id,
-        cell_id: this.targetCellId,
+        prompt_id: this.promptId,
       });
     });
   }
@@ -358,26 +352,18 @@ class Prompt {
   }
 
   _submit(value) {
-    let cell_id;
-    if (this.targetCellId?.includes(".")) {
-      const prefix = this.targetCellId.slice(
-        0,
-        this.targetCellId.lastIndexOf("."),
-      );
-      cell_id = `${prefix}.${crypto.randomUUID()}`;
-    } else {
-      cell_id = crypto.randomUUID();
-    }
+    const echoNode = this.echo();
+    const echo_html = echoNode.outerHTML;
     this._promptCollection._history?.push({
       text: value,
       tag: this.tag,
-      target_cell_id: this.targetCellId,
+      prompt_id: this.promptId,
     });
-    this._echoes.set(cell_id, this.echo());
     this._promptCollection._buche.sendCommand({
       type: "run",
       text: value,
-      cell_id,
+      prompt_id: this.promptId,
+      echo_html,
     });
     this._editor.setValue("");
   }
@@ -403,7 +389,7 @@ class Prompt {
     const text = this._editor?.getValue() ?? "";
     const label = document.createElement("div");
     label.className = "cell-input-label";
-    label.innerHTML = this._sideHtml;
+    label.innerHTML = this._promptHtml;
     const body = document.createElement("pre");
     body.className = "cell-input-body";
     if (this._highlightRanges.length > 0) {
@@ -430,9 +416,9 @@ class Prompt {
     this._editor?.layout();
   }
 
-  setSideHtml(html) {
-    this._sideHtml = html;
-    this.labelEl.innerHTML = html;
+  setPromptHtml(promptHtml) {
+    this._promptHtml = promptHtml;
+    this.labelEl.innerHTML = promptHtml;
   }
 
   selectSubstring(needle) {
@@ -451,12 +437,6 @@ class Prompt {
         end.column,
       ),
     );
-  }
-
-  takeEcho(cell_id) {
-    const node = this._echoes.get(cell_id);
-    this._echoes.delete(cell_id);
-    return node;
   }
 }
 
@@ -543,26 +523,26 @@ export class PromptCollection {
     });
   }
 
-  addPrompt({ side_html, tab_html, tag, target_cell_id, language }) {
-    const prompt = new Prompt({
-      sideHtml: side_html,
-      tabHtml: tab_html,
+  addPrompt({ prompt_id, prompt, name, tag, language }) {
+    const p = new Prompt({
+      promptHtml: prompt,
+      name,
       tag,
-      targetCellId: target_cell_id,
+      promptId: prompt_id,
       language,
       promptCollection: this,
     });
-    prompt.tabEl.addEventListener("click", () => {
-      this._activate(this._prompts.indexOf(prompt));
+    p.tabEl.addEventListener("click", () => {
+      this._activate(this._prompts.indexOf(p));
     });
-    this._container.appendChild(prompt.el);
-    this._tabBar.appendChild(prompt.tabEl);
-    this._prompts.push(prompt);
+    this._container.appendChild(p.el);
+    this._tabBar.appendChild(p.tabEl);
+    this._prompts.push(p);
     if (this._monacoReady) {
-      prompt.init();
+      p.init();
       this._activate(this._prompts.length - 1);
     }
-    return prompt;
+    return p;
   }
 
   _activate(idx) {
@@ -603,14 +583,11 @@ export class PromptCollection {
   focus() {
     this._active?.focus();
   }
-  takeEcho(cell_id) {
-    return this._active?.takeEcho(cell_id);
-  }
 
-  setPrompt({ target_cell_id, side_html }) {
-    const prompt = this._prompts.find((p) => p.targetCellId === target_cell_id);
-    if (prompt) {
-      prompt.setSideHtml(side_html);
+  setPrompt({ prompt_id, prompt }) {
+    const p = this._prompts.find((p) => p.promptId === prompt_id);
+    if (p) {
+      p.setPromptHtml(prompt);
     }
   }
 
