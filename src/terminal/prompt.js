@@ -182,12 +182,10 @@ function _editorCommands() {
       run() {
         const prompt = focusedPrompt;
         if (!prompt) return;
-        // Derive cell_id from prompt_id: "CELL_ID.xyz" → close CELL_ID; no dot → null (shutdown)
-        const pid = prompt.promptId;
-        const cell_id = pid?.includes(".")
-          ? pid.slice(0, pid.indexOf("."))
-          : null;
-        prompt._promptCollection._buche.sendCommand({ type: "close", cell_id });
+        prompt._promptCollection._buche.sendCommand({
+          type: "prompt_close",
+          process_id: prompt.processId,
+        });
       },
     },
 
@@ -253,9 +251,18 @@ function _editorCommands() {
 }
 
 class Prompt {
-  constructor({ promptHtml, name, tag, promptId, language, promptCollection }) {
+  constructor({
+    promptHtml,
+    name,
+    tag,
+    processId,
+    promptName,
+    language,
+    promptCollection,
+  }) {
     this.tag = tag;
-    this.promptId = promptId;
+    this.processId = processId;
+    this.promptName = promptName;
     this._promptCollection = promptCollection;
     this._editor = null;
     this._decorations = null;
@@ -329,7 +336,8 @@ class Prompt {
         position,
         want_completions: false,
         request_id,
-        prompt_id: this.promptId,
+        process_id: this.processId,
+        prompt_name: this.promptName,
       });
     });
   }
@@ -357,12 +365,14 @@ class Prompt {
     this._promptCollection._history?.push({
       text: value,
       tag: this.tag,
-      prompt_id: this.promptId,
+      process_id: this.processId,
+      prompt_name: this.promptName,
     });
     this._promptCollection._buche.sendCommand({
-      type: "run",
+      type: "prompt_submit",
       text: value,
-      prompt_id: this.promptId,
+      process_id: this.processId,
+      prompt_name: this.promptName,
       echo_html,
     });
     this._editor.setValue("");
@@ -523,12 +533,13 @@ export class PromptCollection {
     });
   }
 
-  addPrompt({ prompt_id, prompt, name, tag, language }) {
+  addPrompt({ process_id, prompt_name, prompt, name, tag, language }) {
     const p = new Prompt({
       promptHtml: prompt,
       name,
       tag,
-      promptId: prompt_id,
+      processId: process_id,
+      promptName: prompt_name,
       language,
       promptCollection: this,
     });
@@ -584,8 +595,24 @@ export class PromptCollection {
     this._active?.focus();
   }
 
-  setPrompt({ prompt_id, prompt }) {
-    const p = this._prompts.find((p) => p.promptId === prompt_id);
+  removePromptsByProcess(process_id) {
+    const toRemove = this._prompts.filter((p) => p.processId === process_id);
+    for (const p of toRemove) {
+      p.el.remove();
+      p.tabEl.remove();
+    }
+    const before = this._activeIdx;
+    this._prompts = this._prompts.filter((p) => p.processId !== process_id);
+    if (this._prompts.length > 0) {
+      this._activeIdx = Math.min(before, this._prompts.length - 1);
+      this._activate(this._activeIdx);
+    }
+  }
+
+  setPrompt({ process_id, prompt_name, prompt }) {
+    const p = this._prompts.find(
+      (p) => p.processId === process_id && p.promptName === prompt_name,
+    );
     if (p) {
       p.setPromptHtml(prompt);
     }

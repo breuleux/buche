@@ -1,6 +1,5 @@
 const pty = require("node-pty");
 const { spawn } = require("node:child_process");
-const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const readline = require("node:readline");
 const os = require("node:os");
@@ -59,7 +58,7 @@ async function* merge(iterables) {
   }
 }
 
-function makeError(err, cell_id = null) {
+function makeError(err, process_id = null, cell_name = null) {
   return {
     type: "error",
     target: "terminal",
@@ -71,15 +70,16 @@ function makeError(err, cell_id = null) {
           .slice(1)
           .map((s) => s.trim())
       : [],
-    cell_id,
+    process_id,
+    cell_name,
   };
 }
 
-async function* withErrorCatch(iter, cell_id) {
+async function* withErrorCatch(iter, process_id, cell_name) {
   try {
     yield* iter;
   } catch (err) {
-    yield makeError(err, cell_id);
+    yield makeError(err, process_id, cell_name);
   }
 }
 
@@ -95,10 +95,10 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, cell_id, echo_html, prompt_id, background = false) {
+  async *runNode(node, echo_html, prompt_name, background = false) {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, cell_id, echo_html, prompt_id, background);
+        yield* this._runCommand(node, echo_html, prompt_name, background);
         break;
       case "Pipeline":
         throw new FeatureNotImplementedError("pipes (|)");
@@ -125,14 +125,13 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, cell_id, echo_html, prompt_id, background = false) {
+  async *_runCommand(node, echo_html, prompt_name, background = false) {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
-          yield* this._shell.handle$run({
+          yield* this._shell.handle$prompt_submit({
             command: "set",
             args: [item.text],
-            cell_id,
           });
         }
       }
@@ -153,12 +152,11 @@ class ProcessBuilder {
       }
     }
 
-    yield* this._shell.handle$run({
+    yield* this._shell.handle$prompt_submit({
       command: cmd,
       args,
-      cell_id,
       echo_html,
-      prompt_id,
+      prompt_name,
       background,
     });
   }
@@ -177,7 +175,7 @@ class ProcessBuilder {
 }
 
 class Process {
-  constructor(cmd, args, cell_id, cols) {
+  constructor(cmd, args, processId, cols) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
@@ -197,60 +195,6 @@ class Process {
     this._stdoutPty = stdoutPty;
     this._stderrPty = stderrPty;
 
-    const emit = (event) => {
-      this._queue.push(event);
-      if (this._resolve) {
-        const r = this._resolve;
-        this._resolve = null;
-        r();
-      }
-    };
-
-    // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
-    stdinPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        target: "terminal",
-        cell_id,
-        stream: "stdout",
-        text: d.toString(),
-      }),
-    );
-    stdoutPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        target: "terminal",
-        cell_id,
-        stream: "stdout",
-        text: d.toString(),
-      }),
-    );
-    stderrPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        target: "terminal",
-        cell_id,
-        stream: "stderr",
-        text: d.toString(),
-      }),
-    );
-    // EIO means the slave side closed (process exited) — not a real error.
-    stdinPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, cell_id));
-      }
-    });
-    stdoutPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, cell_id));
-      }
-    });
-    stderrPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, cell_id));
-      }
-    });
-
     const child = spawn(cmd, args, {
       stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe", "pipe"],
       env: {
@@ -266,8 +210,68 @@ class Process {
     fs.closeSync(stdoutSlave);
     fs.closeSync(stderrSlave);
 
+    this.pid = child.pid;
+    this.processId = processId;
     this._datain = child.stdio[3];
     this._control = child.stdio[5];
+    this._child = child;
+
+    const emit = (event) => {
+      this._queue.push(event);
+      if (this._resolve) {
+        const r = this._resolve;
+        this._resolve = null;
+        r();
+      }
+    };
+
+    // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
+    stdinPty._socket.on("data", (d) =>
+      emit({
+        type: "send",
+        target: "terminal",
+        process_id: processId,
+        cell_name: "main",
+        stream: "stdout",
+        text: d.toString(),
+      }),
+    );
+    stdoutPty._socket.on("data", (d) =>
+      emit({
+        type: "send",
+        target: "terminal",
+        process_id: processId,
+        cell_name: "main",
+        stream: "stdout",
+        text: d.toString(),
+      }),
+    );
+    stderrPty._socket.on("data", (d) =>
+      emit({
+        type: "send",
+        target: "terminal",
+        process_id: processId,
+        cell_name: "main",
+        stream: "stderr",
+        text: d.toString(),
+      }),
+    );
+    // EIO means the slave side closed (process exited) — not a real error.
+    stdinPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") {
+        emit(makeError(e, processId, "main"));
+      }
+    });
+    stdoutPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") {
+        emit(makeError(e, processId, "main"));
+      }
+    });
+    stderrPty._socket.on("error", (e) => {
+      if (e.code !== "EIO") {
+        emit(makeError(e, processId, "main"));
+      }
+    });
 
     // fd5: control channel (full duplex) — directives from child to shell
     readline
@@ -279,21 +283,11 @@ class Process {
         } catch {
           return;
         }
-        const transformed = { target: "terminal", ...data };
-        if (transformed.cell_id != null) {
-          transformed.cell_id =
-            transformed.cell_id === "parent"
-              ? null
-              : `${cell_id}.${transformed.cell_id}`;
-        } else if (transformed.cell_id === null) {
-          transformed.cell_id = cell_id;
-        }
-        if (transformed.prompt_id != null) {
-          transformed.prompt_id =
-            transformed.prompt_id === "parent"
-              ? null
-              : `${cell_id}.${transformed.prompt_id}`;
-        }
+        // const transformed = { target: "terminal", ...data };
+        const transformed = { ...data };
+        // Prefix process_id from subprocess: "abc" → "processId.abc"; absent/"main" → processId
+        const subId = transformed.process_id ?? "main";
+        transformed.process_id = `${processId}.${subId}`;
         emit(transformed);
       });
 
@@ -310,7 +304,8 @@ class Process {
         emit({
           type: "send",
           target: "terminal",
-          cell_id,
+          process_id: processId,
+          cell_name: "main",
           stream: "dataout",
           data,
         });
@@ -328,22 +323,24 @@ class Process {
     child.on("close", (return_code) => {
       cleanup();
       emit({
-        type: "close",
+        type: "process_close",
         target: "terminal",
-        cell_id,
+        process_id: processId,
         return_code: return_code ?? 0,
       });
       this._done = true;
     });
     child.on("error", (err) => {
       cleanup();
-      emit(makeError(err, cell_id));
-      emit({ type: "close", target: "terminal", cell_id, return_code: 1 });
+      emit(makeError(err, processId, "main"));
+      emit({
+        type: "process_close",
+        target: "terminal",
+        process_id: processId,
+        return_code: 1,
+      });
       this._done = true;
     });
-
-    this.pid = child.pid;
-    this._child = child;
   }
 
   resize(cols) {
@@ -591,6 +588,11 @@ class Shell {
     this._builtins = BUILTINS;
     this._emitControlEvent = () => {};
     this._cols = 230;
+    this._nextProcessId = 0;
+  }
+
+  _generateProcessId() {
+    return String(++this._nextProcessId);
   }
 
   run(inputStream) {
@@ -633,9 +635,10 @@ class Shell {
       yield (async function* init() {
         yield* self._applyConfig();
         yield {
-          type: "prompt",
+          type: "prompt_create",
           target: "terminal",
-          prompt_id: "cq",
+          process_id: "main",
+          prompt_name: "cq",
           prompt: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           name: "cq",
           tag: "cq",
@@ -643,21 +646,15 @@ class Shell {
         };
       })();
       for await (const obj of inputStream) {
-        // Forward to sub-process by dotted cell_id (e.g. input to a nested cell)
-        if (obj.cell_id?.includes(".")) {
-          const dot = obj.cell_id.indexOf(".");
-          const proc = self._processes.get(obj.cell_id.slice(0, dot));
+        // Forward to sub-process by dotted process_id
+        if (obj.process_id?.includes(".")) {
+          const dot = obj.process_id.indexOf(".");
+          const proc = self._processes.get(obj.process_id.slice(0, dot));
           if (proc) {
-            proc.writeDatain({ ...obj, cell_id: obj.cell_id.slice(dot + 1) });
-          }
-          continue;
-        }
-        // Forward run/parse to sub-process by dotted prompt_id
-        if (obj.prompt_id?.includes(".")) {
-          const dot = obj.prompt_id.indexOf(".");
-          const proc = self._processes.get(obj.prompt_id.slice(0, dot));
-          if (proc) {
-            proc.writeDatain(obj);
+            proc.writeControl({
+              ...obj,
+              process_id: obj.process_id.slice(dot + 1),
+            });
           }
           continue;
         }
@@ -668,13 +665,13 @@ class Shell {
         try {
           const result = handler.call(self, obj);
           if (result && result[Symbol.asyncIterator]) {
-            yield withErrorCatch(result, obj.cell_id ?? null);
+            yield withErrorCatch(result, obj.process_id ?? null, null);
           } else {
             await result;
           }
         } catch (err) {
           yield (async function* singleError() {
-            yield makeError(err, obj.cell_id ?? null);
+            yield makeError(err, obj.process_id ?? null, null);
           })();
         }
         if (self._shutdown) {
@@ -795,7 +792,7 @@ class Shell {
   }
 
   async handle$input(obj) {
-    const proc = this._processes.get(obj.cell_id);
+    const proc = this._processes.get(obj.process_id);
     if (!proc) {
       return;
     }
@@ -807,14 +804,11 @@ class Shell {
   }
 
   async handle$close(obj) {
-    if (obj.cell_id == null) {
+    if (!obj.process_id) {
       this._shutdown = true;
       return;
     }
-    const proc = this._processes.get(obj.cell_id);
-    if (proc) {
-      proc.close();
-    }
+    this._processes.get(obj.process_id)?.close();
   }
 
   handle$resize(obj) {
@@ -866,8 +860,13 @@ class Shell {
   async _runControlLoop(name) {
     const control = this._controls.get(name);
     while (control.enabled) {
-      const cellId = `control.${name}`;
-      const proc = new Process(control.cmd, control.args, cellId, this._cols);
+      const processId = this._generateProcessId();
+      const proc = new Process(
+        control.cmd,
+        control.args,
+        processId,
+        this._cols,
+      );
       control._proc = proc;
       for await (const event of proc.events()) {
         if (event.target === "shell") {
@@ -884,14 +883,15 @@ class Shell {
     }
   }
 
-  async *handle$run(obj) {
+  async *handle$prompt_submit(obj) {
     this._notifyControls({
       type: "command_run",
       text: obj.text,
       command: obj.command,
       args: obj.args,
       parts: obj.parts,
-      cell_id: obj.cell_id,
+      process_id: obj.process_id,
+      prompt_name: obj.prompt_name,
     });
     if (obj.text !== undefined) {
       let ast;
@@ -917,70 +917,83 @@ class Shell {
       const builder = new ProcessBuilder(this);
       let first = true;
       for (const node of ast.commands) {
-        const cell_id = first ? (obj.cell_id ?? randomUUID()) : randomUUID();
         const echo_html = first ? (obj.echo_html ?? null) : null;
-        const prompt_id = first ? (obj.prompt_id ?? null) : null;
+        const prompt_name = first ? (obj.prompt_name ?? null) : null;
         first = false;
         const background = node.async === true;
-        yield* builder.runNode(node, cell_id, echo_html, prompt_id, background);
+        yield* builder.runNode(node, echo_html, prompt_name, background);
       }
       return;
     }
 
-    const cell_id = obj.cell_id ?? randomUUID();
     const echo_html = obj.echo_html ?? null;
-    const prompt_id = obj.prompt_id ?? null;
+    const prompt_name = obj.prompt_name ?? null;
     const [cmd, ...args] = obj.parts ?? [obj.command, ...(obj.args || [])];
 
     if (cmd in this._builtins) {
+      const processId = this._generateProcessId();
       yield {
-        type: "new",
+        type: "cell_create",
         target: "terminal",
-        cell_id,
-        prompt_id,
+        process_id: processId,
+        cell_name: "main",
+        prompt_name,
         echo_html,
         mode: "auto",
         background: obj.background ?? false,
       };
       let return_code = 0;
       try {
-        yield* this._runBuiltin(cmd, args, cell_id);
+        yield* this._runBuiltin(cmd, args, processId);
       } catch (err) {
-        yield makeError(err, cell_id);
+        yield makeError(err, processId, "main");
         return_code = 1;
       }
-      yield { type: "close", target: "terminal", cell_id, return_code };
+      // yield { type: "cell_close", target: "terminal", process_id: processId, cell_name: "main", return_code };
+      yield {
+        type: "process_close",
+        target: "terminal",
+        process_id: processId,
+        return_code,
+      };
       return;
     }
 
-    if (this._processes.has(cell_id)) {
-      throw new Error(`Process ${cell_id} already exists`);
-    }
-
-    const proc = new Process(cmd, args, cell_id, this._cols);
-    this._processes.set(cell_id, proc);
+    const processId = this._generateProcessId();
+    const proc = new Process(cmd, args, processId, this._cols);
+    this._processes.set(processId, proc);
 
     yield {
-      type: "new",
+      type: "cell_create",
       target: "terminal",
-      cell_id,
-      prompt_id,
+      process_id: processId,
+      cell_name: "main",
+      prompt_name,
       echo_html,
       mode: "auto",
       background: obj.background ?? false,
-      process_id: proc.pid,
+      pid: proc.pid,
     };
 
     for await (const event of proc.events()) {
-      if (event.type === "close" && event.cell_id === cell_id) {
-        this._processes.delete(cell_id);
+      if (event.type === "process_close" && event.process_id === processId) {
+        this._processes.delete(processId);
       }
       yield event;
     }
   }
 
-  async *_runBuiltin(name, args, cell_id) {
-    for await (const item of this._builtins[name](args, cell_id)) {
+  handle$prompt_close(obj) {
+    const proc = this._processes.get(obj.process_id);
+    if (proc) {
+      proc.kill();
+    } else {
+      this._shutdown = true;
+    }
+  }
+
+  async *_runBuiltin(name, args, processId) {
+    for await (const item of this._builtins[name](args, processId)) {
       yield* this._dispatchCommand(item);
     }
   }
@@ -992,7 +1005,7 @@ class Shell {
     }
     const result = handler.call(this, obj);
     if (result && result[Symbol.asyncIterator]) {
-      yield* withErrorCatch(result, obj.cell_id ?? null);
+      yield* withErrorCatch(result, obj.process_id ?? null, null);
     } else {
       await result;
     }

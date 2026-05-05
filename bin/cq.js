@@ -14,23 +14,12 @@ const cli = program.opts();
 async function main() {
   const shell = new Shell();
 
-  if (cli.c) {
-    async function* singleCommand() {
-      yield { type: "run", text: cli.c, echo: false };
-    }
-    for await (const event of shell.run(singleCommand())) {
-      process.stdout.write(`${JSON.stringify(event)}\n`);
-    }
-    process.exit(0);
-    return;
-  }
-
-  let inputStream;
-  let writeLine;
-
   const controlFd = process.env.BUCHE_CONTROL_FD
     ? parseInt(process.env.BUCHE_CONTROL_FD, 10)
     : null;
+
+  let inputStream;
+  let writeLine;
 
   if (controlFd != null) {
     const sock = new net.Socket({ fd: controlFd });
@@ -56,6 +45,17 @@ async function main() {
       }
     })();
     writeLine = (line) => process.stdout.write(`${line}\n`);
+  }
+
+  if (cli.c) {
+    async function* singleCommand() {
+      yield { type: "prompt_submit", text: cli.c };
+    }
+    for await (const event of shell.run(singleCommand())) {
+      writeLine(JSON.stringify(event));
+    }
+    process.exit(0);
+    return;
   }
 
   for await (const event of shell.run(inputStream)) {

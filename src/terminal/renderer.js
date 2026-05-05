@@ -53,6 +53,10 @@ class Executor {
     this.bridge.onInstruction((instruction) => this.execute(instruction));
   }
 
+  _cellKey(process_id, cell_name) {
+    return `${process_id}:${cell_name}`;
+  }
+
   execute(instruction) {
     const handler = this[`handle$${instruction.type}`];
     if (handler) {
@@ -60,9 +64,10 @@ class Executor {
     }
   }
 
-  handle$new(instruction) {
-    if (this.cells.has(instruction.cell_id)) {
-      console.error("Cell already exists:", instruction.cell_id);
+  handle$cell_create(instruction) {
+    const key = this._cellKey(instruction.process_id, instruction.cell_name);
+    if (this.cells.has(key)) {
+      console.error("Cell already exists:", key);
       return;
     }
     const HandlerClass = cellHandlers[instruction.mode];
@@ -79,8 +84,8 @@ class Executor {
     const sendInput = (arg) =>
       this.bridge.sendCommand(
         typeof arg === "string"
-          ? { type: "input", cell_id: instruction.cell_id, text: arg }
-          : { type: "input", cell_id: instruction.cell_id, data: arg },
+          ? { type: "input", process_id: instruction.process_id, text: arg }
+          : { type: "input", process_id: instruction.process_id, data: arg },
       );
     const onBackground = () => {
       this._activeCell = null;
@@ -94,24 +99,27 @@ class Executor {
       onBackground,
     );
     buffer.appendChild(cell.node);
-    this.cells.set(instruction.cell_id, cell);
+    this.cells.set(key, cell);
     if (!instruction.background) {
-      this._activeCell = instruction.cell_id;
+      this._activeCell = key;
       cell.node.focus();
     }
   }
 
   handle$send(instruction) {
-    this.cells.get(instruction.cell_id)?.send(instruction);
+    this.cells
+      .get(this._cellKey(instruction.process_id, instruction.cell_name))
+      ?.send(instruction);
   }
 
-  handle$close(instruction) {
-    const cell = this.cells.get(instruction.cell_id);
+  handle$cell_close(instruction) {
+    const key = this._cellKey(instruction.process_id, instruction.cell_name);
+    const cell = this.cells.get(key);
     if (cell) {
       const isFocused = cell.node === document.activeElement;
       cell.close(instruction.return_code);
-      this.cells.delete(instruction.cell_id);
-      if (this._activeCell === instruction.cell_id) {
+      this.cells.delete(key);
+      if (this._activeCell === key) {
         this._activeCell = null;
         if (isFocused) {
           this.prompt.focus();
@@ -122,7 +130,24 @@ class Executor {
     }
   }
 
-  handle$prompt(instruction) {
+  handle$process_close(instruction) {
+    const { process_id } = instruction;
+    let anyFocused = false;
+    for (const [key, cell] of [...this.cells]) {
+      if (key.startsWith(`${process_id}:`)) {
+        if (cell.node === document.activeElement) anyFocused = true;
+        cell.close(instruction.return_code);
+        this.cells.delete(key);
+        if (this._activeCell === key) this._activeCell = null;
+      }
+    }
+    this.prompt.removePromptsByProcess(process_id);
+    if (anyFocused || this._activeCell === null) {
+      this.prompt.focus();
+    }
+  }
+
+  handle$prompt_create(instruction) {
     this.prompt.addPrompt(instruction);
     this.prompt.focus();
   }
