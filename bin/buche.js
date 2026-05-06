@@ -10,7 +10,7 @@ program
   .option("--debug", "open DevTools on launch")
   .option("--replay <file>", "replay a JSONL instruction file")
   .option("--record <file>", "record shell instructions to a JSONL file")
-  .option("--start-command <cmd>", "run a shell command automatically on startup");
+  .option("-c <cmd>", "spawn this command as the terminal driver instead of cq");
 
 program.parse();
 const cli = program.opts();
@@ -19,7 +19,7 @@ const opts = {
   devtools: cli.debug ?? false,
   replay: cli.replay ?? null,
   record: cli.record ?? null,
-  startCommand: cli.startCommand ?? null,
+  command: cli.c ?? null,
 };
 
 const child = spawn(electron, [appDir], {

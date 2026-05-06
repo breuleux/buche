@@ -54,7 +54,11 @@ function createWindow() {
   }
 
   const cqBin = path.join(__dirname, "..", "bin", "cq.js");
-  const cq = spawn(process.execPath, [cqBin], {
+  const [driverCmd, driverArgs, driverOpts] = args.command
+    ? [args.command, [], { shell: true }]
+    : [process.execPath, [cqBin], {}];
+  const cq = spawn(driverCmd, driverArgs, {
+    ...driverOpts,
     stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "pipe"],
     env: { ...process.env, BUCHE_CONTROL_FD: "5" },
   });
@@ -93,10 +97,6 @@ function createWindow() {
     recordCommand(obj);
     sendToShell(obj);
   });
-
-  if (args.startCommand) {
-    sendToShell({ type: "parse", text: args.startCommand });
-  }
 
   win.webContents.once("did-finish-load", () => {
     readline

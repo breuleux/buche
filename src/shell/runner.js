@@ -286,8 +286,16 @@ class Process {
         // const transformed = { target: "terminal", ...data };
         const transformed = { ...data };
         // Prefix process_id from subprocess: "abc" → "processId.abc"; absent/"main" → processId
-        const subId = transformed.process_id ?? "main";
-        transformed.process_id = `${processId}.${subId}`;
+
+        if (
+          transformed.process_id !== undefined &&
+          transformed.process_id !== null
+        ) {
+          transformed.process_id = `${processId}.${subId}`;
+        } else {
+          transformed.process_id = processId;
+        }
+
         emit(transformed);
       });
 
@@ -647,6 +655,23 @@ class Shell {
       })();
       for await (const obj of inputStream) {
         // Forward to sub-process by dotted process_id
+        let procid = obj.process_id;
+        let subproc = null;
+        if (procid && procid !== "main") {
+          if (procid?.includes(".")) {
+            const dot = procid.indexOf(".");
+            procid = procid.slice(0, dot);
+            subproc = proc.slice(dot + 1);
+          }
+          const proc = self._processes.get(procid);
+          if (proc) {
+            proc.writeControl({
+              ...obj,
+              process_id: subproc,
+            });
+          }
+          continue;
+        }
         if (obj.process_id?.includes(".")) {
           const dot = obj.process_id.indexOf(".");
           const proc = self._processes.get(obj.process_id.slice(0, dot));
