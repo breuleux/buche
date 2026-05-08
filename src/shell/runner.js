@@ -58,10 +58,10 @@ async function* merge(iterables) {
   }
 }
 
-function makeError(err, process_id = null, cell_name = null) {
+function makeError(err) {
   return {
     type: "error",
-    target: "terminal",
+    to: { target: "terminal" },
     error_type: err.code ?? err.constructor.name,
     message: err.message,
     traceback: err.stack
@@ -70,16 +70,14 @@ function makeError(err, process_id = null, cell_name = null) {
           .slice(1)
           .map((s) => s.trim())
       : [],
-    process_id,
-    cell_name,
   };
 }
 
-async function* withErrorCatch(iter, process_id, cell_name) {
+async function* withErrorCatch(iter) {
   try {
     yield* iter;
   } catch (err) {
-    yield makeError(err, process_id, cell_name);
+    yield makeError(err);
   }
 }
 
@@ -225,13 +223,14 @@ class Process {
       }
     };
 
+    const cellTo = { target: "terminal", cell: "main" };
+    const cellAddress = { process: processId };
     // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
     stdinPty._socket.on("data", (d) =>
       emit({
         type: "send",
-        target: "terminal",
-        process_id: processId,
-        cell_name: "main",
+        to: cellTo,
+        address: cellAddress,
         stream: "stdout",
         text: d.toString(),
       }),
@@ -239,9 +238,8 @@ class Process {
     stdoutPty._socket.on("data", (d) =>
       emit({
         type: "send",
-        target: "terminal",
-        process_id: processId,
-        cell_name: "main",
+        to: cellTo,
+        address: cellAddress,
         stream: "stdout",
         text: d.toString(),
       }),
@@ -249,28 +247,21 @@ class Process {
     stderrPty._socket.on("data", (d) =>
       emit({
         type: "send",
-        target: "terminal",
-        process_id: processId,
-        cell_name: "main",
+        to: cellTo,
+        address: cellAddress,
         stream: "stderr",
         text: d.toString(),
       }),
     );
     // EIO means the slave side closed (process exited) — not a real error.
     stdinPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, processId, "main"));
-      }
+      if (e.code !== "EIO") emit(makeError(e));
     });
     stdoutPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, processId, "main"));
-      }
+      if (e.code !== "EIO") emit(makeError(e));
     });
     stderrPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") {
-        emit(makeError(e, processId, "main"));
-      }
+      if (e.code !== "EIO") emit(makeError(e));
     });
 
     // fd5: control channel (full duplex) — directives from child to shell
@@ -283,19 +274,22 @@ class Process {
         } catch {
           return;
         }
-        // const transformed = { target: "terminal", ...data };
         const transformed = { ...data };
-        // Prefix process_id from subprocess: "abc" → "processId.abc"; absent/"main" → processId
-
-        if (
-          transformed.process_id !== undefined &&
-          transformed.process_id !== null
-        ) {
-          transformed.process_id = `${processId}.${subId}`;
+        // Wrap address: subprocess's address (defaulting to {}) becomes {process: processId, subaddress: orig}
+        if (transformed.address?.parent) {
+          transformed.address = { target: "shell" };
         } else {
-          transformed.process_id = processId;
+          transformed.address = {
+            process: processId,
+            subaddress: transformed.address ?? {},
+          };
         }
-
+        // Wrap to.process: subprocess's child routing gets prefixed with this process
+        if (transformed.to?.process !== undefined) {
+          transformed.to = { process: processId, subaddress: transformed.to };
+        } else if (!transformed.to) {
+          transformed.to = { target: "terminal" };
+        }
         emit(transformed);
       });
 
@@ -311,9 +305,8 @@ class Process {
         }
         emit({
           type: "send",
-          target: "terminal",
-          process_id: processId,
-          cell_name: "main",
+          to: cellTo,
+          address: cellAddress,
           stream: "dataout",
           data,
         });
@@ -332,7 +325,7 @@ class Process {
       cleanup();
       emit({
         type: "process_close",
-        target: "terminal",
+        to: { target: "terminal" },
         process_id: processId,
         return_code: return_code ?? 0,
       });
@@ -340,10 +333,10 @@ class Process {
     });
     child.on("error", (err) => {
       cleanup();
-      emit(makeError(err, processId, "main"));
+      emit(makeError(err));
       emit({
         type: "process_close",
-        target: "terminal",
+        to: { target: "terminal" },
         process_id: processId,
         return_code: 1,
       });
@@ -644,42 +637,32 @@ class Shell {
         yield* self._applyConfig();
         yield {
           type: "prompt_create",
-          target: "terminal",
-          process_id: "main",
-          prompt_name: "cq",
+          to: { target: "terminal", prompt: "cq" },
+          address: { target: "shell" },
           prompt: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           name: "cq",
           tag: "cq",
           language: null,
         };
+        // yield {
+        //   type: "set_prompt",
+        //   prompt: "<span style='color:#ff0000;'>!!</span>",
+        //   to: { target: "terminal", prompt: "cq" },
+        // };
       })();
       for await (const obj of inputStream) {
-        // Forward to sub-process by dotted process_id
-        let procid = obj.process_id;
-        let subproc = null;
-        if (procid && procid !== "main") {
-          if (procid?.includes(".")) {
-            const dot = procid.indexOf(".");
-            procid = procid.slice(0, dot);
-            subproc = proc.slice(dot + 1);
-          }
-          const proc = self._processes.get(procid);
+        // Route to subprocess via to.process
+        if (obj.to?.process !== undefined) {
+          const proc = self._processes.get(obj.to.process);
           if (proc) {
-            proc.writeControl({
-              ...obj,
-              process_id: subproc,
-            });
-          }
-          continue;
-        }
-        if (obj.process_id?.includes(".")) {
-          const dot = obj.process_id.indexOf(".");
-          const proc = self._processes.get(obj.process_id.slice(0, dot));
-          if (proc) {
-            proc.writeControl({
-              ...obj,
-              process_id: obj.process_id.slice(dot + 1),
-            });
+            if (obj.to.subaddress !== undefined) {
+              proc.writeControl({ ...obj, to: obj.to.subaddress });
+            } else if (obj.type === "input") {
+              if (obj.data !== undefined) proc.writeDatain(obj.data);
+              else proc.writeStdin(obj.text);
+            } else if (obj.type === "close") {
+              proc.close();
+            }
           }
           continue;
         }
@@ -690,13 +673,13 @@ class Shell {
         try {
           const result = handler.call(self, obj);
           if (result && result[Symbol.asyncIterator]) {
-            yield withErrorCatch(result, obj.process_id ?? null, null);
+            yield withErrorCatch(result);
           } else {
             await result;
           }
         } catch (err) {
           yield (async function* singleError() {
-            yield makeError(err, obj.process_id ?? null, null);
+            yield makeError(err);
           })();
         }
         if (self._shutdown) {
@@ -718,7 +701,7 @@ class Shell {
 
     async function* routed() {
       for await (const instruction of merge(allStreams())) {
-        if (instruction.target === "shell") {
+        if (instruction.to?.target === "shell") {
           self._handleShellInstruction(instruction);
         } else {
           yield instruction;
@@ -734,8 +717,9 @@ class Shell {
   }
 
   _notifyControls(event) {
+    const msg = { to: { target: "shell" }, ...event };
     for (const control of this._controls.values()) {
-      control._proc?.writeControl(event);
+      control._proc?.writeControl(msg);
     }
   }
 
@@ -775,7 +759,11 @@ class Shell {
       }
     }
 
-    yield { type: "configure", target: "shell", interface: iface ?? {} };
+    yield {
+      type: "configure",
+      to: { target: "shell" },
+      interface: iface ?? {},
+    };
   }
 
   async *handle$cd(obj) {
@@ -802,7 +790,7 @@ class Shell {
     const { text, position, want_completions, request_id } = obj;
     yield {
       type: "highlight",
-      target: "terminal",
+      to: { target: "terminal" },
       request_id,
       ranges: shellHighlight(text, this._builtins),
     };
@@ -814,26 +802,6 @@ class Shell {
 
   async handle$wait(obj) {
     await new Promise((r) => setTimeout(r, obj.seconds * 1000));
-  }
-
-  async handle$input(obj) {
-    const proc = this._processes.get(obj.process_id);
-    if (!proc) {
-      return;
-    }
-    if (obj.data !== undefined) {
-      await proc.writeDatain(obj.data);
-    } else {
-      await proc.writeStdin(obj.text);
-    }
-  }
-
-  async handle$close(obj) {
-    if (!obj.process_id) {
-      this._shutdown = true;
-      return;
-    }
-    this._processes.get(obj.process_id)?.close();
   }
 
   handle$resize(obj) {
@@ -894,7 +862,7 @@ class Shell {
       );
       control._proc = proc;
       for await (const event of proc.events()) {
-        if (event.target === "shell") {
+        if (event.to?.target === "shell") {
           this._emitControlEvent({ ...event, control: true });
         } else {
           this._emitControlEvent(event);
@@ -959,10 +927,8 @@ class Shell {
       const processId = this._generateProcessId();
       yield {
         type: "cell_create",
-        target: "terminal",
-        process_id: processId,
-        cell_name: "main",
-        prompt_name,
+        to: { target: "terminal", cell: "main" },
+        address: { process: processId },
         echo_html,
         mode: "auto",
         background: obj.background ?? false,
@@ -971,13 +937,12 @@ class Shell {
       try {
         yield* this._runBuiltin(cmd, args, processId);
       } catch (err) {
-        yield makeError(err, processId, "main");
+        yield makeError(err);
         return_code = 1;
       }
-      // yield { type: "cell_close", target: "terminal", process_id: processId, cell_name: "main", return_code };
       yield {
         type: "process_close",
-        target: "terminal",
+        to: { target: "terminal" },
         process_id: processId,
         return_code,
       };
@@ -990,10 +955,8 @@ class Shell {
 
     yield {
       type: "cell_create",
-      target: "terminal",
-      process_id: processId,
-      cell_name: "main",
-      prompt_name,
+      to: { target: "terminal", cell: "main" },
+      address: { process: processId },
       echo_html,
       mode: "auto",
       background: obj.background ?? false,
@@ -1008,13 +971,8 @@ class Shell {
     }
   }
 
-  handle$prompt_close(obj) {
-    const proc = this._processes.get(obj.process_id);
-    if (proc) {
-      proc.kill();
-    } else {
-      this._shutdown = true;
-    }
+  handle$prompt_close(_obj) {
+    this._shutdown = true;
   }
 
   async *_runBuiltin(name, args, processId) {
@@ -1030,7 +988,7 @@ class Shell {
     }
     const result = handler.call(this, obj);
     if (result && result[Symbol.asyncIterator]) {
-      yield* withErrorCatch(result, obj.process_id ?? null, null);
+      yield* withErrorCatch(result);
     } else {
       await result;
     }

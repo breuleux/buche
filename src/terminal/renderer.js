@@ -41,8 +41,14 @@ const cellHandlers = {
   data: DataHandler,
 };
 
+// Stable string key from an address object + a local name.
+function cellKey(address, name) {
+  return JSON.stringify(address) + ":" + name;
+}
+
 class Executor {
   constructor(bridge) {
+    // Map<key, {cell: Cell, address: object}>
     this.cells = new Map();
     this._activeCell = null;
     this.bridge = bridge;
@@ -53,10 +59,6 @@ class Executor {
     this.bridge.onInstruction((instruction) => this.execute(instruction));
   }
 
-  _cellKey(process_id, cell_name) {
-    return `${process_id}:${cell_name}`;
-  }
-
   execute(instruction) {
     const handler = this[`handle$${instruction.type}`];
     if (handler) {
@@ -65,7 +67,7 @@ class Executor {
   }
 
   handle$cell_create(instruction) {
-    const key = this._cellKey(instruction.process_id, instruction.cell_name);
+    const key = cellKey(instruction.address, instruction.to.cell);
     if (this.cells.has(key)) {
       console.error("Cell already exists:", key);
       return;
@@ -84,8 +86,8 @@ class Executor {
     const sendInput = (arg) =>
       this.bridge.sendCommand(
         typeof arg === "string"
-          ? { type: "input", process_id: instruction.process_id, text: arg }
-          : { type: "input", process_id: instruction.process_id, data: arg },
+          ? { type: "input", to: instruction.address, text: arg }
+          : { type: "input", to: instruction.address, data: arg },
       );
     const onBackground = () => {
       this._activeCell = null;
@@ -99,7 +101,7 @@ class Executor {
       onBackground,
     );
     buffer.appendChild(cell.node);
-    this.cells.set(key, cell);
+    this.cells.set(key, { cell, address: instruction.address });
     if (!instruction.background) {
       this._activeCell = key;
       cell.node.focus();
@@ -108,16 +110,16 @@ class Executor {
 
   handle$send(instruction) {
     this.cells
-      .get(this._cellKey(instruction.process_id, instruction.cell_name))
-      ?.send(instruction);
+      .get(cellKey(instruction.address, instruction.to.cell))
+      ?.cell.send(instruction);
   }
 
   handle$cell_close(instruction) {
-    const key = this._cellKey(instruction.process_id, instruction.cell_name);
-    const cell = this.cells.get(key);
-    if (cell) {
-      const isFocused = cell.node === document.activeElement;
-      cell.close(instruction.return_code);
+    const key = cellKey(instruction.address, instruction.to.cell);
+    const entry = this.cells.get(key);
+    if (entry) {
+      const isFocused = entry.cell.node === document.activeElement;
+      entry.cell.close(instruction.return_code);
       this.cells.delete(key);
       if (this._activeCell === key) {
         this._activeCell = null;
@@ -133,10 +135,10 @@ class Executor {
   handle$process_close(instruction) {
     const { process_id } = instruction;
     let anyFocused = false;
-    for (const [key, cell] of [...this.cells]) {
-      if (key.startsWith(`${process_id}:`)) {
-        if (cell.node === document.activeElement) anyFocused = true;
-        cell.close(instruction.return_code);
+    for (const [key, entry] of [...this.cells]) {
+      if (entry.address?.process === process_id) {
+        if (entry.cell.node === document.activeElement) anyFocused = true;
+        entry.cell.close(instruction.return_code);
         this.cells.delete(key);
         if (this._activeCell === key) this._activeCell = null;
       }
