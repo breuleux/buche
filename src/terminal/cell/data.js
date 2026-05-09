@@ -6,7 +6,7 @@ const RUNTIME = await fetch(
 ).then((r) => r.text());
 
 export class DataHandler {
-  constructor(cellNode, _instruction, sendInput) {
+  constructor(cellNode, _instruction, bridge) {
     this._ready = false;
     this._pending = [];
 
@@ -35,25 +35,15 @@ export class DataHandler {
         this._pending = [];
       } else if (msg._buche === "resize") {
         this._iframe.style.height = `${msg.height}px`;
-      } else if (msg._buche === "send" && sendInput) {
-        sendInput(msg.data);
+      } else if (msg._buche === "send" && bridge) {
+        // bridge.sendInput(msg.data);
+        bridge.sendControl(msg.data);
       }
     };
     window.addEventListener("message", this._onMessage);
   }
 
-  send(data) {
-    if (data.stream !== "dataout") {
-      return;
-    }
-    const { type, content, mode, selector } = data.data;
-    if (type !== "html") {
-      return;
-    }
-    this._post({ _buche: "op", content, mode, selector });
-  }
-
-  _post(msg) {
+  send(msg) {
     if (this._ready) {
       this._iframe.contentWindow.postMessage(msg, "*");
     } else {

@@ -11,23 +11,23 @@ const BUFFER_MAX_LINES = 1000;
 export class AutoHandler {
   static handlesInput = true;
 
-  constructor(cellNode, instruction, sendInput) {
+  constructor(cellNode, instruction, bridge) {
     this.instruction = instruction;
-    this._sendInput = sendInput;
+    this._bridge = bridge;
     this._wrapper = document.createElement("div");
     cellNode.appendChild(this._wrapper);
     this._handler = new TextHandler(this._wrapper, instruction);
     this._buffer = [];
     this._bufferLines = 0;
     this._switched = false;
-    if (sendInput) {
+    if (bridge) {
       cellNode.addEventListener("keydown", (e) => {
         const text = keyToInput(e);
         if (text === null) {
           return;
         }
         e.preventDefault();
-        sendInput(text);
+        bridge.sendInput(text);
       });
     }
   }
@@ -40,7 +40,7 @@ export class AutoHandler {
 
     this._addToBuffer(data);
 
-    if (data.stream === "dataout") {
+    if (data.type !== "text") {
       this._switchTo(DataHandler);
     } else if (data.text && FULLSCREEN_RE.test(data.text)) {
       this._switchTo(TermHandler);
@@ -95,7 +95,7 @@ export class AutoHandler {
     this._handler = new HandlerClass(
       this._wrapper,
       this.instruction,
-      this._sendInput,
+      this._bridge,
     );
     for (const data of this._buffer) {
       this._handler.send(data);

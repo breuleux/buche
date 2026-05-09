@@ -1,7 +1,7 @@
 import { html } from "../utils.js";
 
 export class Cell {
-  constructor(instruction, echo, HandlerClass, sendInput, onBackground) {
+  constructor(instruction, echo, HandlerClass, bridge) {
     this._statusDot = html`<div class="cell-status cell-status-running"></div>`;
     this.node = html`<div class="cell" data-cell-id="${instruction.cell_id}" tabindex="0">
 			${this._statusDot}
@@ -13,11 +13,11 @@ export class Cell {
       if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
         e.stopImmediatePropagation();
-        onBackground?.();
+        bridge?.onBackground();
       }
     });
 
-    this.handler = new HandlerClass(this.node, instruction, sendInput);
+    this.handler = new HandlerClass(this.node, instruction, bridge);
 
     this.node.addEventListener("click", () => this.node.focus());
     this.node.addEventListener("focus", () =>

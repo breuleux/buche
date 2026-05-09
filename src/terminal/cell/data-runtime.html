@@ -48,15 +48,16 @@
       window.addEventListener("message", (e) => {
         if (e.source !== par) { return; }
         var msg = e.data;
-        if (!msg || msg._buche !== "op") { return; }
-        var mode = msg.mode || "append";
-        var targets = msg.selector
-          ? Array.from(document.querySelectorAll(msg.selector))
-          : [document.body];
-        for (var target of targets) { apply(target, mode, msg.content); }
-        reportHeight();
-        var pf = document.getElementById("prime-focus");
-        if (pf) { pf.focus(); }
+        if (msg.type === "html") {
+          var mode = msg.mode || "append";
+          var targets = msg.selector
+            ? Array.from(document.querySelectorAll(msg.selector))
+            : [document.body];
+          for (var target of targets) { apply(target, mode, msg.content); }
+          reportHeight();
+          var pf = document.getElementById("prime-focus");
+          if (pf) { pf.focus(); }
+        }
       });
 
       // API available to user scripts inside the iframe.

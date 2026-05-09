@@ -46,6 +46,28 @@ function cellKey(address, name) {
   return JSON.stringify(address) + ":" + name;
 }
 
+class CellBridge {
+  constructor(executor, instruction) {
+    this.executor = executor;
+    this.instruction = instruction;
+  }
+  sendInput(arg) {
+    this.executor.bridge.sendCommand(
+      typeof arg === "string"
+        ? { type: "input", to: this.instruction.address, text: arg }
+        : { type: "input", to: this.instruction.address, data: arg },
+    );
+  }
+  sendControl(arg) {
+    console.log({ ...arg, to: this.instruction.address });
+    this.executor.bridge.sendCommand({ ...arg, to: this.instruction.address });
+  }
+  onBackground() {
+    this.executor._activeCell = null;
+    this.executor.prompt.focus();
+  }
+}
+
 class Executor {
   constructor(bridge) {
     // Map<key, {cell: Cell, address: object}>
@@ -83,23 +105,8 @@ class Executor {
       div.innerHTML = instruction.echo_html;
       echo = div.firstChild;
     }
-    const sendInput = (arg) =>
-      this.bridge.sendCommand(
-        typeof arg === "string"
-          ? { type: "input", to: instruction.address, text: arg }
-          : { type: "input", to: instruction.address, data: arg },
-      );
-    const onBackground = () => {
-      this._activeCell = null;
-      this.prompt.focus();
-    };
-    const cell = new Cell(
-      instruction,
-      echo,
-      HandlerClass,
-      sendInput,
-      onBackground,
-    );
+    const bridge = new CellBridge(this, instruction);
+    const cell = new Cell(instruction, echo, HandlerClass, bridge);
     buffer.appendChild(cell.node);
     this.cells.set(key, { cell, address: instruction.address });
     if (!instruction.background) {
@@ -108,10 +115,29 @@ class Executor {
     }
   }
 
-  handle$send(instruction) {
+  handle$cell_send(instruction) {
     this.cells
       .get(cellKey(instruction.address, instruction.to.cell))
-      ?.cell.send(instruction);
+      ?.cell.send(instruction.message);
+  }
+
+  handle$send(instruction) {
+    const cell = this.cells.get(
+      cellKey(instruction.address, instruction.to.cell),
+    )?.cell;
+    if (instruction.data) {
+      cell.send({
+        type: "data",
+        data: instruction.data,
+        stream: instruction.stream,
+      });
+    } else if (instruction.text) {
+      cell.send({
+        type: "text",
+        text: instruction.text,
+        stream: instruction.stream,
+      });
+    }
   }
 
   handle$cell_close(instruction) {

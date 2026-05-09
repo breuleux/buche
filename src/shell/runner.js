@@ -278,11 +278,13 @@ class Process {
         // Wrap address: subprocess's address (defaulting to {}) becomes {process: processId, subaddress: orig}
         if (transformed.address?.parent) {
           transformed.address = { target: "shell" };
-        } else {
+        } else if (transformed.address) {
           transformed.address = {
             process: processId,
             subaddress: transformed.address ?? {},
           };
+        } else {
+          transformed.address = { process: processId };
         }
         // Wrap to.process: subprocess's child routing gets prefixed with this process
         if (transformed.to?.process !== undefined) {
@@ -655,13 +657,14 @@ class Shell {
         if (obj.to?.process !== undefined) {
           const proc = self._processes.get(obj.to.process);
           if (proc) {
-            if (obj.to.subaddress !== undefined) {
-              proc.writeControl({ ...obj, to: obj.to.subaddress });
-            } else if (obj.type === "input") {
+            const hasSubaddress = obj.to.subaddress !== undefined;
+            if (obj.type === "input" && !hasSubaddress) {
               if (obj.data !== undefined) proc.writeDatain(obj.data);
               else proc.writeStdin(obj.text);
-            } else if (obj.type === "close") {
+            } else if (obj.type === "close" && !hasSubaddress) {
               proc.close();
+            } else {
+              proc.writeControl({ ...obj, to: obj.to.subaddress ?? {} });
             }
           }
           continue;

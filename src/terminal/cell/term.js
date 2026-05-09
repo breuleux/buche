@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { html, keyToInput } from "../utils.js";
 
 export class TermHandler {
-  constructor(cellNode, _instruction, sendInput) {
+  constructor(cellNode, _instruction, bridge) {
     this._term = new Terminal({
       scrollback: 1000,
       convertEol: false,
@@ -22,14 +22,14 @@ export class TermHandler {
     this._resizeObserver = new ResizeObserver(() => this._fitAddon.fit());
     this._resizeObserver.observe(container);
 
-    if (sendInput) {
+    if (bridge) {
       cellNode.addEventListener("keydown", (e) => {
         const text = keyToInput(e);
         if (text === null) {
           return;
         }
         e.preventDefault();
-        sendInput(text);
+        bridge.sendInput(text);
       });
     }
   }
