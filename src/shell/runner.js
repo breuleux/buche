@@ -173,7 +173,7 @@ class ProcessBuilder {
 }
 
 class Process {
-  constructor(cmd, args, processId, cols) {
+  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
@@ -200,7 +200,9 @@ class Process {
         TERM: "xterm-256color",
         COLORTERM: "truecolor",
         BUCHE_CONTROL_FD: "5",
+        ...extraEnv,
       },
+      ...(cwd !== undefined && { cwd }),
     });
 
     // Parent no longer needs the slave fds — child inherited them.
@@ -747,16 +749,17 @@ class Shell {
       const same =
         desired &&
         desired.cmd === ctrl.cmd &&
-        desired.args.join("\0") === ctrl.args.join("\0");
+        desired.args.join("\0") === ctrl.args.join("\0") &&
+        desired.configDir === ctrl.configDir;
       if (!same) {
         ctrl.enabled = false;
         ctrl._proc?.kill();
         this._controls.delete(name);
       }
     }
-    for (const [name, { cmd, args }] of control) {
+    for (const [name, { cmd, args, configDir }] of control) {
       if (!this._controls.has(name)) {
-        const ctrl = { cmd, args, restartMs: null, enabled: true, _proc: null };
+        const ctrl = { cmd, args, configDir, restartMs: null, enabled: true, _proc: null };
         this._controls.set(name, ctrl);
         this._runControlLoop(name);
       }
@@ -862,6 +865,8 @@ class Shell {
         control.args,
         processId,
         this._cols,
+        {},
+        control.configDir,
       );
       control._proc = proc;
       for await (const event of proc.events()) {

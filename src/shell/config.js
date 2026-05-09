@@ -6,13 +6,15 @@ const os = require("node:os");
 const yaml = require("js-yaml");
 const bashParser = require("bash-parser");
 
-const GLOBAL_CONFIG_PATH = path.join(
-  os.homedir(),
-  ".config",
-  "buche",
-  "config.yaml",
-);
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "default-config.yaml");
+
+// Returns config file paths in XDG priority order (highest first).
+// XDG_CONFIG_HOME defaults to ~/.config; XDG_CONFIG_DIRS defaults to /etc/xdg.
+function xdgConfigPaths() {
+  const home = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  const dirs = (process.env.XDG_CONFIG_DIRS || "/etc/xdg").split(":").filter(Boolean);
+  return [home, ...dirs].map((dir) => path.join(dir, "buche", "config.yaml"));
+}
 
 // [LATER] Verify a config file against the trust list in
 // ~/.config/buche/allowed.json (stores file paths and their SHA-256 hashes).
@@ -22,9 +24,8 @@ function isTrusted(_filePath) {
 }
 
 // Parse a control command string into { cmd, args } using bash-parser.
-// Commands starting with "." are resolved relative to configDir.
 // Returns null if the string is empty, not a string, or fails to parse.
-function parseControlCmd(cmdStr, configDir) {
+function parseControlCmd(cmdStr) {
   if (typeof cmdStr !== "string") return null;
   let ast;
   try {
@@ -34,8 +35,7 @@ function parseControlCmd(cmdStr, configDir) {
   }
   const node = ast?.commands?.[0];
   if (!node || node.type !== "Command" || !node.name) return null;
-  let cmd = node.name.text;
-  if (cmd.startsWith(".")) cmd = path.resolve(configDir, cmd);
+  const cmd = node.name.text;
   const args = (node.suffix ?? [])
     .filter((item) => item.type !== "Redirect")
     .map((item) => item.text);
@@ -123,12 +123,14 @@ function collectConfigs(cwd) {
     dir = parent;
   }
 
-  // Global config unless disabled by any higher-priority config.
+  // XDG global configs unless disabled by any higher-priority config.
   if (!entries.some((e) => e.data["ignore-global"])) {
-    const globalEntry = readConfigFile(GLOBAL_CONFIG_PATH, { global: true });
-    if (globalEntry !== null) {
-      entries.push(globalEntry);
-      expandSources(globalEntry, entries);
+    for (const configPath of xdgConfigPaths()) {
+      const globalEntry = readConfigFile(configPath, { global: true });
+      if (globalEntry !== null) {
+        entries.push(globalEntry);
+        expandSources(globalEntry, entries);
+      }
     }
   }
 
@@ -172,8 +174,8 @@ function mergeConfigs(entries) {
       !Array.isArray(data.control)
     ) {
       for (const [name, cmdStr] of Object.entries(data.control)) {
-        const resolved = parseControlCmd(cmdStr, dir);
-        if (resolved) control.set(name, resolved);
+        const resolved = parseControlCmd(cmdStr);
+        if (resolved) control.set(name, { ...resolved, configDir: dir });
       }
     }
 
