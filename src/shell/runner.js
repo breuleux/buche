@@ -267,7 +267,7 @@ class Process {
     });
 
     // fd5: control channel (full duplex) — directives from child to shell
-    readline
+    const rl5 = readline
       .createInterface({ input: child.stdio[5], crlfDelay: Infinity })
       .on("line", (line) => {
         let data;
@@ -298,7 +298,7 @@ class Process {
       });
 
     // fd4: data channel — arbitrary JSON objects sent to the renderer
-    readline
+    const rl4 = readline
       .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
       .on("line", (line) => {
         let data;
@@ -317,6 +317,8 @@ class Process {
       });
 
     const cleanup = () => {
+      rl4.close();
+      rl5.close();
       stdinPty._socket.destroy();
       stdoutPty._socket.destroy();
       stderrPty._socket.destroy();
