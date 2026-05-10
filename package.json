@@ -24,6 +24,7 @@
     "commander": "^14.0.3",
     "js-yaml": "^4.1.1",
     "monaco-editor": "^0.52.0",
-    "node-pty": "^1.1.0"
+    "node-pty": "^1.1.0",
+    "tinykeys": "^3.0.0"
   }
 }
