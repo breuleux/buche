@@ -1,3 +1,4 @@
+import { tinykeys } from "tinykeys";
 import { html } from "./utils.js";
 import { History } from "./history.js";
 
@@ -478,6 +479,27 @@ export class PromptCollection {
         `)}`;
       },
     };
+
+    tinykeys(window, {
+      "$mod+ArrowLeft": (e) => {
+        if (!focusedPrompt) return;
+        e.preventDefault();
+        focusedPrompt._promptCollection._move(-1);
+      },
+      "$mod+ArrowRight": (e) => {
+        if (!focusedPrompt) return;
+        e.preventDefault();
+        focusedPrompt._promptCollection._move(1);
+      },
+      "Control+d": (e) => {
+        if (!focusedPrompt) return;
+        e.preventDefault();
+        focusedPrompt._promptCollection._buche.sendCommand({
+          type: "prompt_close",
+          to: focusedPrompt.address,
+        });
+      },
+    });
 
     const loaderScript = document.createElement("script");
     loaderScript.src = `${vsBase}/loader.js`;

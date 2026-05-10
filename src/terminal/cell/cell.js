@@ -1,3 +1,4 @@
+import { tinykeys } from "tinykeys";
 import { html } from "../utils.js";
 
 export class Cell {
@@ -9,12 +10,12 @@ export class Cell {
 		</div>`;
 
     // Register before HandlerClass so this fires first and can suppress input.
-    this.node.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.key === "z") {
+    tinykeys(this.node, {
+      "Control+z": (e) => {
         e.preventDefault();
         e.stopImmediatePropagation();
         bridge?.onBackground();
-      }
+      },
     });
 
     this.handler = new HandlerClass(this.node, instruction, bridge);
