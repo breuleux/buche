@@ -106,7 +106,7 @@ class Executor {
     }
     const bridge = new CellBridge(this, instruction);
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
-    const zone = this._zoneManager.resolveZone(instruction.zone ?? "main");
+    const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
     this.cells.set(key, { cell, address: instruction.address, zone: zone.name });

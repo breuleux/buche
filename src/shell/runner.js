@@ -9,8 +9,6 @@ const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
 
-let _zidCounter = 0;
-
 function expandEnvVars(str, env) {
   return str.replace(
     /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
@@ -913,10 +911,9 @@ class Shell {
       if (m) {
         const dir = m[1];
         const base = typeof effectiveZone === "string" ? effectiveZone : "main";
-        const _zid = `z${++_zidCounter}`;
-        if (dir === "tab") effectiveZone = { base, newTab: true, _zid };
-        else if (dir === "float") effectiveZone = { base, float: true, _zid };
-        else effectiveZone = { base, [dir]: 1, _zid };
+        if (dir === "tab") effectiveZone = { base, newTab: true };
+        else if (dir === "float") effectiveZone = { base, float: true };
+        else effectiveZone = { base, [dir]: 1 };
         text = text.slice(m[0].length);
       }
     }

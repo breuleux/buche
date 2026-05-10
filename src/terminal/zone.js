@@ -234,8 +234,9 @@ export class ZoneManager {
     this._adjacency = new Map();
     // Persistent group tracking for @left/@right: `${direction}:${base}` → ZoneGroup
     this._sideGroups = new Map();
-    // Per-command zone caching: descriptor._zid → zone name
-    this._descriptorCache = new Map();
+    // Per-process zone caching: processId → zone name (so all events from one
+    // @left/@right/@tab command land in the same zone without a counter in the runner)
+    this._processZones = new Map();
     this._activeZoneName = "main";
     setMoveToGroupHandler((delta) => this.moveToGroup(delta));
 
@@ -437,23 +438,27 @@ export class ZoneManager {
 
   // Resolve a descriptor to a Zone, creating if needed.
   // descriptor: string | {base, left?} | {base, right?} | {base, newTab: true}
-  resolveZone(descriptor) {
-    return this._zones.get(this.resolveZoneName(descriptor));
+  // processId: the outermost process ID from the instruction's address (optional).
+  //   Used to route all events from one @left/@right/@tab command to the same zone.
+  resolveZone(descriptor, processId) {
+    return this._zones.get(this.resolveZoneName(descriptor, processId));
   }
 
-  resolveZoneName(descriptor) {
+  resolveZoneName(descriptor, processId) {
     if (!descriptor || descriptor === "main") return "main";
     if (typeof descriptor === "string") {
       if (!this._zones.has(descriptor)) this._createZoneInNewGroup(descriptor, null);
       return descriptor;
     }
 
-    // Per-command caching via _zid: all events from one @left/@right/@tab/@float
-    // command share the same _zid tag, so they all land in the same zone.
-    const { base, left, right, newTab, float, _zid } = descriptor;
-    if (_zid && this._descriptorCache.has(_zid)) {
-      return this._descriptorCache.get(_zid);
+    // Per-process caching: all events (cell_create, prompt_create) from the same
+    // processId share a zone, so @left foo creates one zone regardless of how many
+    // events the subprocess emits.
+    if (processId && this._processZones.has(processId)) {
+      return this._processZones.get(processId);
     }
+
+    const { base, left, newTab, float } = descriptor;
 
     if (float) {
       const cacheKey = `float:${base}`;
@@ -461,6 +466,7 @@ export class ZoneManager {
       const newName = `zone-${++_zoneCounter}`;
       this._adjacency.set(cacheKey, newName);
       this._createFloatZone(newName, base);
+      if (processId) this._processZones.set(processId, newName);
       return newName;
     }
 
@@ -483,11 +489,7 @@ export class ZoneManager {
 
       if (!group && baseGroup) {
         for (const [key, g] of this._sideGroups) {
-          if (g === baseGroup) {
-            sideKey = key;
-            group = g;
-            break;
-          }
+          if (g === baseGroup) { sideKey = key; group = g; break; }
         }
       }
 
@@ -505,19 +507,24 @@ export class ZoneManager {
       group.activateLatest();
     }
 
-    if (_zid) this._descriptorCache.set(_zid, newName);
+    if (processId) this._processZones.set(processId, newName);
     return newName;
   }
 
   // ── Prompt delegation ──────────────────────────────────────────────────
 
   addPrompt(instruction) {
-    const zone = this.resolveZone(instruction.zone ?? "main");
+    const processId = instruction.address?.process;
+    const zone = this.resolveZone(instruction.zone ?? "main", processId);
     zone.promptCollection.addPrompt({ ...instruction, zone: zone.name });
     return zone.name;
   }
 
   removePromptsByProcess(process_id) {
+    // Clean up processZones cache for root-level process closures.
+    if (!process_id.includes("/")) {
+      this._processZones.delete(process_id);
+    }
     for (const [zoneName, zone] of this._zones) {
       const hadPrompts = zone.promptCollection._prompts.length > 0;
       zone.promptCollection.removePromptsByProcess(process_id);
