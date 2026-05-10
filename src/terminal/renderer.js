@@ -6,7 +6,7 @@ import { TermHandler } from "./cell/term.js";
 import { TextHandler } from "./cell/text.js";
 import { isPromptFocused } from "./prompt.js";
 import { ZoneManager } from "./zone.js";
-import { html } from "./utils.js";
+import { html, addressMatchesProcess } from "./utils.js";
 import "./scroll-fader.js";
 
 // ── Zone manager ─────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ class Executor {
     let anyFocused = false;
     let closedZone = null;
     for (const [key, entry] of [...this.cells]) {
-      if (entry.address?.process === process_id) {
+      if (addressMatchesProcess(entry.address, process_id)) {
         if (entry.cell.node === document.activeElement) anyFocused = true;
         closedZone = entry.zone;
         entry.cell.close(instruction.return_code);

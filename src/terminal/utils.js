@@ -1,3 +1,16 @@
+// Match a cell/prompt address against a (possibly nested) process_id string.
+// Address: { process: "P1", subaddress: { process: "P2", ... } }
+// process_id: "P1" or "P1/P2" (slashes separate nesting levels).
+export function addressMatchesProcess(address, process_id) {
+  const parts = process_id.split("/");
+  let a = address;
+  for (const part of parts) {
+    if (!a || a.process !== part) return false;
+    a = a.subaddress;
+  }
+  return true;
+}
+
 export function keyToInput(e) {
   if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
     const code = e.key.toUpperCase().charCodeAt(0) - 64;

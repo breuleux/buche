@@ -1,5 +1,5 @@
 import { tinykeys } from "tinykeys";
-import { html } from "./utils.js";
+import { html, addressMatchesProcess } from "./utils.js";
 import { History } from "./history.js";
 
 let focusedPrompt = null;
@@ -713,7 +713,7 @@ export class PromptCollection {
 
   removePromptsByProcess(process_id) {
     const toRemove = this._prompts.filter(
-      (p) => p.address?.process === process_id,
+      (p) => addressMatchesProcess(p.address, process_id),
     );
     for (const p of toRemove) {
       p.el.remove();
@@ -721,7 +721,7 @@ export class PromptCollection {
     }
     const before = this._activeIdx;
     this._prompts = this._prompts.filter(
-      (p) => p.address?.process !== process_id,
+      (p) => !addressMatchesProcess(p.address, process_id),
     );
     if (this._prompts.length > 0) {
       this._activeIdx = Math.min(before, this._prompts.length - 1);
