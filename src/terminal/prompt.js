@@ -437,6 +437,7 @@ class Prompt {
       this._editor.layout();
     };
     this._editor.onDidContentSizeChange(updateHeight);
+    new ResizeObserver(() => this._editor?.layout()).observe(this.editorEl);
     updateHeight();
 
     this._decorations = this._editor.createDecorationsCollection([]);
