@@ -16,12 +16,6 @@ export class TermHandler {
     const container = html`<div class="cell-term"></div>`;
     cellNode.appendChild(container);
 
-    this._term.open(container);
-    this._fitAddon.fit();
-
-    this._resizeObserver = new ResizeObserver(() => this._fitAddon.fit());
-    this._resizeObserver.observe(container);
-
     if (bridge) {
       // Use xterm's onData so it handles application cursor mode, sends \r for
       // Enter, and generally translates keys correctly for terminal programs.
@@ -33,6 +27,12 @@ export class TermHandler {
       // When used via AutoHandler, AutoHandler calls this.focus() instead.
       cellNode.addEventListener("focus", () => this._term.focus());
     }
+
+    this._term.open(container);
+    this._fitAddon.fit();
+
+    this._resizeObserver = new ResizeObserver(() => this._fitAddon.fit());
+    this._resizeObserver.observe(container);
   }
 
   send(data) {

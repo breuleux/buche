@@ -26,7 +26,7 @@ bufferWrap.inner.appendChild(buffer);
   const sendResize = () => {
     const width = bufferWrap.clientWidth;
     if (width > 0) {
-      const cols = Math.max(1, Math.floor((width - CELL_PADDING) / charWidth));
+      const cols = Math.max(1, Math.floor((width - CELL_PADDING) / charWidth) - 2);
       window.buche.sendCommand({ type: "resize", cols });
     }
   };

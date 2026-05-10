@@ -38,13 +38,18 @@ export class Cell {
 
     this.handler = new HandlerClass(this.node, instruction, bridge);
 
-    this.node.addEventListener("click", () => this.node.focus());
-    this.node.addEventListener("focus", () =>
+    this.node.addEventListener("click", () => {
+      this.node.focus();
+      this.handler.focus?.();
+    });
+    this.node.addEventListener("focusin", () =>
       this.handler.setCursorState?.("active"),
     );
-    this.node.addEventListener("blur", () =>
-      this.handler.setCursorState?.("inactive"),
-    );
+    this.node.addEventListener("focusout", (e) => {
+      if (!this.node.contains(e.relatedTarget)) {
+        this.handler.setCursorState?.("inactive");
+      }
+    });
   }
 
   send(data) {

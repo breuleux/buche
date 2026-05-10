@@ -1,9 +1,7 @@
 import { DataHandler } from "./data.js";
 import { TermHandler } from "./term.js";
 import { TextHandler } from "./text.js";
-
-// Sequences that indicate a full-screen TUI has taken over the terminal.
-const FULLSCREEN_RE = /\x1b\[(?:\?1049h|2J)/;
+import { TermBuffer } from "../ansi.js";
 
 const BUFFER_MAX_LINES = 1000;
 
@@ -37,7 +35,7 @@ export class AutoHandler {
 
     if (data.type !== "text") {
       this._switchTo(DataHandler);
-    } else if (data.text && FULLSCREEN_RE.test(data.text)) {
+    } else if (data.text && TermBuffer.containsUnhandledEscape(data.text)) {
       this._switchTo(TermHandler);
     } else {
       this._handler.send(data);
@@ -96,8 +94,10 @@ export class AutoHandler {
       this._handler.send(data);
     }
     this._buffer = [];
-    // If the cell already has focus when we switch, hand it to the new handler
-    // immediately (the focus event won't re-fire on its own).
+    this._handler.focus?.();
+  }
+
+  focus() {
     this._handler.focus?.();
   }
 

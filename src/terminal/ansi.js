@@ -77,6 +77,24 @@ function stylesEq(a, b) {
 // Handles \b (backspace), \r (carriage return), \n (linefeed),
 // ANSI SGR (colors/styles), and \x1b[K (erase to EOL).
 export class TermBuffer {
+  // CSI command letters that _handleCSI actively processes.
+  // Keep in sync with _handleCSI. Used by containsUnhandledEscape so that
+  // auto.js can detect sequences requiring a full terminal emulator.
+  static HANDLED_CSI = new Set(["m", "K", "A", "C", "D"]);
+
+  // Returns true if `text` contains a CSI sequence whose command letter is
+  // not in HANDLED_CSI — i.e. something TextHandler cannot render correctly.
+  static containsUnhandledEscape(text) {
+    const CSI_RE = /\x1b\[([0-9;?]*)([A-Za-z~])/g;
+    let m;
+    while ((m = CSI_RE.exec(text)) !== null) {
+      if (!TermBuffer.HANDLED_CSI.has(m[2])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   constructor() {
     this.fg = null;
     this.bg = null;
