@@ -91,7 +91,6 @@ class Executor {
   }
 
   execute(instruction) {
-    console.log(instruction);
     const handler = this[`handle$${instruction.type}`];
     if (handler) {
       handler.call(this, instruction);
@@ -196,6 +195,10 @@ class Executor {
 
   handle$highlight(instruction) {
     this.prompt.applyHighlight(instruction);
+  }
+
+  handle$complete(instruction) {
+    this.prompt.applyComplete(instruction);
   }
 
   clearInactiveCells() {

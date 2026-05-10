@@ -229,6 +229,37 @@ function _editorCommands() {
       },
     },
 
+    tabComplete: {
+      trigger: monaco.KeyCode.Tab,
+      run() {
+        const prompt = focusedPrompt;
+        if (!prompt) return;
+        const editor = prompt._editor;
+        if (!editor) return;
+        const text = editor.getValue();
+        const pos = editor.getPosition();
+        const model = editor.getModel();
+        if (!pos || !model) return;
+        const position = model.getOffsetAt(pos);
+        const left = text.slice(0, position);
+        const prefix = /(\S*)$/.exec(left)?.[1] ?? "";
+        const request_id = crypto.randomUUID();
+        prompt._promptCollection._completionRequests.set(request_id, {
+          prompt,
+          prefix,
+          position,
+        });
+        prompt._promptCollection._buche.sendCommand({
+          type: "parse",
+          to: prompt.address,
+          text,
+          position,
+          want_completions: true,
+          request_id,
+        });
+      },
+    },
+
     acceptHistorySuggestion: {
       trigger: monaco.KeyCode.RightArrow,
       run() {
@@ -460,6 +491,7 @@ export class PromptCollection {
     this._container = container;
     this._monacoReady = false;
     this._parseRequests = new Map();
+    this._completionRequests = new Map();
     this._history = new History({
       buche,
       getPrompts: () => this._prompts,
@@ -651,5 +683,47 @@ export class PromptCollection {
     }
     this._parseRequests.delete(request_id);
     prompt.applyHighlight(ranges);
+  }
+
+  applyComplete({ request_id, completions }) {
+    const req = this._completionRequests.get(request_id);
+    if (!req) return;
+    this._completionRequests.delete(request_id);
+    if (completions.length === 0) return;
+
+    const { prompt, prefix, position } = req;
+    const editor = prompt._editor;
+    if (!editor) return;
+
+    let insert;
+    if (completions.length === 1) {
+      insert = completions[0].value;
+    } else {
+      let common = completions[0].value;
+      for (const { value } of completions) {
+        while (!value.startsWith(common)) {
+          common = common.slice(0, -1);
+        }
+      }
+      if (common.length <= prefix.length) return;
+      insert = common;
+    }
+
+    if (insert === prefix) return;
+
+    const model = editor.getModel();
+    const startPos = model.getPositionAt(position - prefix.length);
+    const endPos = model.getPositionAt(position);
+    editor.executeEdits("tab-complete", [
+      {
+        range: new monaco.Range(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column,
+        ),
+        text: insert,
+      },
+    ]);
   }
 }
