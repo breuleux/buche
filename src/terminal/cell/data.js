@@ -9,6 +9,7 @@ export class DataHandler {
   constructor(cellNode, _instruction, bridge) {
     this._ready = false;
     this._pending = [];
+    this._bridge = bridge;
 
     this._iframe = document.createElement("iframe");
     this._iframe.style.cssText =
@@ -27,20 +28,28 @@ export class DataHandler {
       if (!msg) {
         return;
       }
-      if (msg._buche === "ready") {
-        this._ready = true;
-        for (const m of this._pending) {
-          this._iframe.contentWindow.postMessage(m, "*");
-        }
-        this._pending = [];
-      } else if (msg._buche === "resize") {
-        this._iframe.style.height = `${msg.height}px`;
-      } else if (msg._buche === "send" && bridge) {
-        // bridge.sendInput(msg.data);
-        bridge.sendControl(msg.data);
-      }
+      const method = this[`handle$${msg.type}`];
+      method.call(this, msg);
     };
     window.addEventListener("message", this._onMessage);
+  }
+
+  handle$ready(msg) {
+    this._ready = true;
+    for (const m of this._pending) {
+      this._iframe.contentWindow.postMessage(m, "*");
+    }
+    this._pending = [];
+  }
+
+  handle$resize(msg) {
+    this._iframe.style.height = `${msg.height}px`;
+  }
+
+  handle$send(msg) {
+    if (this._bridge) {
+      this._bridge.sendControl(msg.data);
+    }
   }
 
   send(msg) {
