@@ -1,4 +1,4 @@
-import { PromptCollection } from "./prompt.js";
+import { PromptCollection, setMoveToGroupHandler } from "./prompt.js";
 import { html } from "./utils.js";
 
 let _zoneCounter = 0;
@@ -179,6 +179,7 @@ export class ZoneManager {
     // Stable adjacency for left/right: `${direction}:${baseName}` → zone name
     this._adjacency = new Map();
     this._activeZoneName = "main";
+    setMoveToGroupHandler((delta) => this.moveToGroup(delta));
 
     const ctx = document.createElement("canvas").getContext("2d");
     ctx.font = "13px Consolas, Menlo, monospace";
@@ -371,7 +372,6 @@ export class ZoneManager {
   addPrompt(instruction) {
     const zone = this.resolveZone(instruction.zone ?? "main");
     zone.promptCollection.addPrompt(instruction);
-    zone.promptCollection.focus();
     return zone.name;
   }
 
@@ -402,36 +402,36 @@ export class ZoneManager {
   focusZone(zoneName) {
     const zone = this._zones.get(zoneName) ?? this._zones.get("main");
     if (!zone) return;
-    // Make the zone's tab active in its group (in case it's a hidden tab)
+    // Make the zone's tab active in its group (in case it's a hidden tab).
+    // activateByName schedules a rAF for focus — do not call focus() synchronously
+    // here, as it runs right after cell.node.blur() and is unreliable.
     this._groups.get(zone.name)?.activateByName(zone.name);
-    // If zone has no prompts, fall back to main
+    // If zone has no prompts, fall back to main via rAF for the same reason.
     if (zone.promptCollection._prompts.length === 0 && zone.name !== "main") {
-      this._zones.get("main")?.promptCollection.focus();
-    } else {
-      zone.promptCollection.focus();
+      requestAnimationFrame(() => this._zones.get("main")?.promptCollection.focus());
     }
   }
 
-  // Cycle to the next (+1) or previous (-1) tab across all zones, left-to-right.
+  // Cycle to the next (+1) or previous (-1) tab within the current zone's group.
   cycleTab(delta) {
-    // Build flat ordered list: groups in DOM order, zones in tab order within each group.
+    this._groups.get(this._activeZoneName)?.cycleTab(delta);
+  }
+
+  // Move focus to the next (+1) or previous (-1) zone group in DOM order.
+  moveToGroup(delta) {
+    const groupNodes = [...this._container.querySelectorAll(":scope > .zone-group")];
+    const currentGroup = this._groups.get(this._activeZoneName);
+    const currentIdx = groupNodes.indexOf(currentGroup?.node ?? null);
+    if (currentIdx === -1) return;
+    const nextNode = groupNodes[currentIdx + delta];
+    if (!nextNode) return;
     const seen = new Set();
-    const all = []; // { zone, group }
-    for (const groupNode of this._container.children) {
-      for (const group of this._groups.values()) {
-        if (group.node === groupNode && !seen.has(group)) {
-          seen.add(group);
-          for (const zone of group._zones) all.push({ zone, group });
-          break;
-        }
+    for (const group of this._groups.values()) {
+      if (group.node === nextNode && !seen.has(group)) {
+        seen.add(group);
+        group.activateByName(group.activeZone.name);
+        return;
       }
     }
-    if (all.length < 2) return;
-
-    let currentIdx = all.findIndex(({ zone }) => zone.name === this._activeZoneName);
-    if (currentIdx === -1) currentIdx = 0;
-
-    const { zone, group } = all[(currentIdx + delta + all.length) % all.length];
-    group.activateByName(zone.name);
   }
 }

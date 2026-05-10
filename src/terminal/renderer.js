@@ -326,6 +326,16 @@ buchekeys(window, {
     _executor._zoneManager.cycleTab(-1);
   },
 
+  "$mod+Shift+ArrowLeft": (e) => {
+    e.preventDefault();
+    _executor._zoneManager.moveToGroup(-1);
+  },
+
+  "$mod+Shift+ArrowRight": (e) => {
+    e.preventDefault();
+    _executor._zoneManager.moveToGroup(+1);
+  },
+
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 

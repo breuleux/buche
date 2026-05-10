@@ -3,6 +3,8 @@ import { html } from "./utils.js";
 import { History } from "./history.js";
 
 let focusedPrompt = null;
+let _moveToGroup = null; // (delta: number) => void — set by ZoneManager
+export function setMoveToGroupHandler(fn) { _moveToGroup = fn; }
 
 // ── Module-level Monaco / tinykeys singletons ────────────────────────────
 // Monaco must be loaded exactly once even when multiple PromptCollections exist.
@@ -205,6 +207,15 @@ function _editorCommands() {
       run() {
         focusedPrompt?._promptCollection._move(1);
       },
+    },
+
+    prevGroup: {
+      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.LeftArrow,
+      run() { _moveToGroup?.(-1); },
+    },
+    nextGroup: {
+      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.RightArrow,
+      run() { _moveToGroup?.(1); },
     },
 
     prevHistory: {
@@ -651,7 +662,7 @@ export class PromptCollection {
     if (this._monacoReady) {
       this._activate(this._prompts.length - 1);
       p.init();
-      p.focus();
+      requestAnimationFrame(() => p.focus());
     }
     return p;
   }
