@@ -9,6 +9,8 @@ const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
 
+let _zidCounter = 0;
+
 function expandEnvVars(str, env) {
   return str.replace(
     /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
@@ -911,9 +913,10 @@ class Shell {
       if (m) {
         const dir = m[1];
         const base = typeof effectiveZone === "string" ? effectiveZone : "main";
-        if (dir === "tab") effectiveZone = { base, newTab: true };
-        else if (dir === "float") effectiveZone = { base, float: true };
-        else effectiveZone = { base, [dir]: 1 };
+        const _zid = `z${++_zidCounter}`;
+        if (dir === "tab") effectiveZone = { base, newTab: true, _zid };
+        else if (dir === "float") effectiveZone = { base, float: true, _zid };
+        else effectiveZone = { base, [dir]: 1, _zid };
         text = text.slice(m[0].length);
       }
     }
@@ -1003,11 +1006,13 @@ class Shell {
       }
       // Inject zone into cell_create/prompt_create from subprocesses.
       // If the subprocess set an object descriptor (e.g. @tab, @left), it was
-      // intentional — respect it. Only override plain strings (e.g. the
-      // hardcoded "main" that every cq sub-shell emits on startup).
+      // intentional — respect it. Only override null/undefined and the hardcoded
+      // "main" default that every cq sub-shell emits on startup. Preserve any
+      // explicit zone name (e.g. "zone-2") that the sub-shell set based on the
+      // zone it received via prompt_submit.
       if (
         (event.type === "cell_create" || event.type === "prompt_create") &&
-        (event.zone == null || typeof event.zone === "string")
+        (event.zone == null || event.zone === "main")
       ) {
         yield { ...event, zone: effectiveZone };
       } else {

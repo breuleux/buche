@@ -156,6 +156,9 @@ scroll-fader {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+	/* Don't clip overflow here — let scroll-fader-inner handle it so wheel
+	   events are correctly routed to the scroll container. */
+	overflow: visible;
 }
 
 .zone-buffer-wrap .scroll-fader-inner {
@@ -164,6 +167,12 @@ scroll-fader {
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column-reverse;
+	/* Hide the scrollbar visually without preventing wheel-scroll routing */
+	scrollbar-width: none;
+}
+
+.zone-buffer-wrap .scroll-fader-inner::-webkit-scrollbar {
+	display: none;
 }
 
 .cell scroll-fader .scroll-fader-inner {
@@ -201,6 +210,83 @@ scroll-fader {
 .cell .scroll-shadow-top,
 .cell .scroll-shadow-bottom {
 	height: 32px;
+}
+
+/* ── Solo cell mode: single cell fills the entire buffer area ──
+ *
+ * DOM: scroll-fader.zone-buffer-wrap (flex container, height H from .zone)
+ *        .scroll-fader-inner         (flex: 1 1 auto → already fills H)
+ *          .zone-buffer              (flex: 1 1 0    → fills H)
+ *            .cell                   (flex: 1 1 0    → fills H)
+ *
+ * Then inside the cell, each handler's content container must also flex-fill.
+ * The cell's own scroll-fader (text handler) is display:block by default, so
+ * we make it a flex column here so its inner can use flex: 1 1 0.
+ */
+
+/* zone-buffer fills scroll-fader-inner (which already has height H via flex) */
+.zone-solo-cell .zone-buffer-wrap .scroll-fader-inner > .zone-buffer {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* cell fills zone-buffer */
+.zone-solo-cell .zone-buffer-wrap .scroll-fader-inner > .zone-buffer > .cell {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Direct content fills the cell */
+.zone-solo-cell .cell > div:not(.cell-header),
+.zone-solo-cell .cell > iframe {
+	flex: 1 1 0;
+	min-height: 0;
+}
+
+/* Auto handler: wrapper divs are flex columns so height propagates */
+.zone-solo-cell .cell > div:not(.cell-header) {
+	display: flex;
+	flex-direction: column;
+}
+
+.zone-solo-cell .cell > div:not(.cell-header) > div {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Cell-level scroll-faders (text handler): make them flex containers so their
+   inner can flex-fill, and remove the 600px cap */
+.zone-solo-cell .cell scroll-fader {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.zone-solo-cell .cell scroll-fader .scroll-fader-inner {
+	flex: 1 1 0;
+	min-height: 0;
+	max-height: none;
+	overflow-y: auto;
+}
+
+/* Term cells and iframes fill their container */
+.zone-solo-cell .cell .cell-term {
+	flex: 1 1 0;
+	min-height: 0;
+}
+
+.zone-solo-cell .cell iframe {
+	flex: 1 1 0;
+	min-height: 0;
+	max-height: none !important;
+	height: 100% !important;
 }
 
 /* ── Float zone (per-zone, above prompt) ── */

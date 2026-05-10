@@ -44,6 +44,11 @@ export class Zone {
   // Must be called after zone.node is connected to the DOM.
   initBuffer() {
     this._bufferWrap.inner.appendChild(this.buffer);
+    if (this.name !== "main") {
+      new MutationObserver(() => {
+        this.node.classList.toggle("zone-solo-cell", this.buffer.children.length === 1);
+      }).observe(this.buffer, { childList: true });
+    }
   }
 
   startResizeTracking(charWidth, cellPadding, onCols) {
@@ -225,8 +230,12 @@ export class ZoneManager {
     this._bridge = bridge;
     this._zones = new Map();  // zoneName → Zone
     this._groups = new Map(); // zoneName → ZoneGroup
-    // Stable adjacency for left/right: `${direction}:${baseName}` → zone name
+    // Persistent adjacency for float zones: `float:${baseName}` → zone name
     this._adjacency = new Map();
+    // Persistent group tracking for @left/@right: `${direction}:${base}` → ZoneGroup
+    this._sideGroups = new Map();
+    // Per-command zone caching: descriptor._zid → zone name
+    this._descriptorCache = new Map();
     this._activeZoneName = "main";
     setMoveToGroupHandler((delta) => this.moveToGroup(delta));
 
@@ -320,6 +329,10 @@ export class ZoneManager {
     if (newActive === null) {
       // Group is now empty — remove it and reset sibling flex so they redistribute
       group.node.remove();
+      // Clean up _sideGroups if this group was a left/right side group
+      for (const [key, g] of this._sideGroups) {
+        if (g === group) { this._sideGroups.delete(key); break; }
+      }
       for (const el of this._container.querySelectorAll(":scope > .zone-group")) {
         el.style.flex = "";
       }
@@ -329,6 +342,7 @@ export class ZoneManager {
       }
     } else if (this._activeZoneName === zoneName) {
       this._setFocusedZone(newActive);
+      this._zones.get(newActive)?.promptCollection.focus();
     }
 
     this._updateMultiLayout();
@@ -434,7 +448,12 @@ export class ZoneManager {
       return descriptor;
     }
 
-    const { base, left, right, newTab, float } = descriptor;
+    // Per-command caching via _zid: all events from one @left/@right/@tab/@float
+    // command share the same _zid tag, so they all land in the same zone.
+    const { base, left, right, newTab, float, _zid } = descriptor;
+    if (_zid && this._descriptorCache.has(_zid)) {
+      return this._descriptorCache.get(_zid);
+    }
 
     if (float) {
       const cacheKey = `float:${base}`;
@@ -445,36 +464,48 @@ export class ZoneManager {
       return newName;
     }
 
+    const newName = `zone-${++_zoneCounter}`;
+
     if (newTab) {
-      // If the shell stamped an ID, reuse the same zone for all messages in
-      // that command (cell_create + prompt_create share the same descriptor).
-      // Include base in the key so that left-zone tab-0 and right-zone tab-0
-      // don't collide (each sub-shell process resets its own counter to 0).
-      const cacheKey = descriptor.id != null ? `newTab:${base}:${descriptor.id}` : null;
-      if (cacheKey && this._adjacency.has(cacheKey)) {
-        return this._adjacency.get(cacheKey);
-      }
       const group = this._groups.get(base) ?? this._groups.get("main");
-      const newName = `zone-${++_zoneCounter}`;
-      if (cacheKey) this._adjacency.set(cacheKey, newName);
       this._createZoneInGroup(newName, group);
       group.activateLatest();
-      return newName;
+    } else {
+      // @left or @right: create a new tab in the adjacent group (creating the
+      // group itself on first use).
+      const direction = left !== undefined ? "left" : "right";
+
+      // If base is itself in a side group, use that group directly rather than
+      // creating another column. This handles @left from within a left-side zone.
+      const baseGroup = this._groups.get(base);
+      let sideKey = `${direction}:${base}`;
+      let group = this._sideGroups.get(sideKey);
+
+      if (!group && baseGroup) {
+        for (const [key, g] of this._sideGroups) {
+          if (g === baseGroup) {
+            sideKey = key;
+            group = g;
+            break;
+          }
+        }
+      }
+
+      if (!group) {
+        group = new ZoneGroup();
+        group.onActivate = (zoneName) => { this._setFocusedZone(zoneName); };
+        const baseGroupNode = baseGroup?.node ?? null;
+        const insertBefore = direction === "left" ? baseGroupNode : baseGroupNode?.nextSibling ?? null;
+        this._container.insertBefore(group.node, insertBefore ?? null);
+        this._sideGroups.set(sideKey, group);
+        this._updateMultiLayout();
+      }
+
+      this._initZone(newName, group);
+      group.activateLatest();
     }
 
-    const direction = left !== undefined ? "left" : "right";
-    const key = `${direction}:${base}`;
-    if (this._adjacency.has(key)) return this._adjacency.get(key);
-
-    const newName = `zone-${++_zoneCounter}`;
-    this._adjacency.set(key, newName);
-    const reverse = direction === "left" ? "right" : "left";
-    this._adjacency.set(`${reverse}:${newName}`, base);
-
-    // Insert next to base's ZoneGroup node (not the zone node directly)
-    const baseGroupNode = this._groups.get(base)?.node ?? null;
-    const insertBefore = direction === "left" ? baseGroupNode : baseGroupNode?.nextSibling ?? null;
-    this._createZoneInNewGroup(newName, insertBefore);
+    if (_zid) this._descriptorCache.set(_zid, newName);
     return newName;
   }
 
@@ -482,13 +513,18 @@ export class ZoneManager {
 
   addPrompt(instruction) {
     const zone = this.resolveZone(instruction.zone ?? "main");
-    zone.promptCollection.addPrompt(instruction);
+    zone.promptCollection.addPrompt({ ...instruction, zone: zone.name });
     return zone.name;
   }
 
   removePromptsByProcess(process_id) {
-    for (const zone of this._zones.values()) {
+    for (const [zoneName, zone] of this._zones) {
+      const hadPrompts = zone.promptCollection._prompts.length > 0;
       zone.promptCollection.removePromptsByProcess(process_id);
+      if (hadPrompts && zone.promptCollection._prompts.length === 0 && zoneName !== "main") {
+        zone.buffer.replaceChildren();
+        this.removeZoneIfEmpty(zoneName);
+      }
     }
   }
 
@@ -516,7 +552,9 @@ export class ZoneManager {
   }
 
   focusZone(zoneName) {
-    const zone = this._zones.get(zoneName) ?? this._zones.get("main");
+    const zone = this._zones.get(zoneName);
+    // Zone may have been removed by removePromptsByProcess; removeZoneIfEmpty
+    // already set focus in that case — don't override it.
     if (!zone) return;
     // Float zones (no group) manage their own focus via onFloatBlur — don't interfere.
     if (!this._groups.has(zone.name)) return;
