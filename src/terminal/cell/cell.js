@@ -4,14 +4,20 @@ import { html } from "../utils.js";
 export class Cell {
   constructor(instruction, echo, HandlerClass, bridge) {
     this._statusDot = html`<div class="cell-status cell-status-running"></div>`;
+    this._btnBar = html`<span class="cell-btn-bar"></span>`;
     this._killBtn = bridge
       ? html`<button class="cell-kill-btn">✕</button>`
       : null;
-    const header = html`<div class="cell-header">${echo}${this._killBtn}</div>`;
+    const controls = html`<span class="cell-controls">${this._btnBar}${this._killBtn}</span>`;
+    const header = html`<div class="cell-header">${echo}${controls}</div>`;
     this.node = html`<div class="cell" data-cell-id="${instruction.cell_id}" tabindex="0">
 			${this._statusDot}
 			${header}
 		</div>`;
+
+    if (bridge) {
+      bridge.addHeaderButton = (btn) => this._btnBar.appendChild(btn);
+    }
 
     if (this._killBtn) {
       this._killBtn.addEventListener("click", (e) => {
@@ -24,7 +30,16 @@ export class Cell {
       this.node.style.height = `${this.node.offsetHeight}px`;
     });
     header.addEventListener("mouseleave", () => {
-      this.node.style.height = "";
+      const node = this.node;
+      if (!node.style.height) return;
+      const locked = node.offsetHeight;
+      node.style.height = "";
+      const natural = node.offsetHeight;
+      if (locked === natural) return;
+      node.style.height = `${locked}px`;
+      node.offsetHeight; // force reflow
+      node.style.height = `${natural}px`;
+      node.addEventListener("transitionend", () => { node.style.height = ""; }, { once: true });
     });
 
     // Register before HandlerClass so this fires first and can suppress input.
@@ -58,8 +73,11 @@ export class Cell {
 
   close(return_code) {
     this._statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
-    this._killBtn?.remove();
-    this._killBtn = null;
+    if (this._killBtn) {
+      this._killBtn.style.visibility = "hidden";
+      this._killBtn.style.pointerEvents = "none";
+      this._killBtn = null;
+    }
     this.handler.setCursorState?.("hidden");
     this.node.removeAttribute("tabindex");
     this.node.blur();

@@ -150,6 +150,8 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	/* margin-bottom: 8px; */
 	outline: none;
 	border-radius: 3px;
+	overflow: hidden;
+	transition: height 0.2s ease;
 }
 
 .cell:focus {
@@ -164,10 +166,17 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	position: relative;
 }
 
-.cell-kill-btn {
+.cell-controls {
 	position: absolute;
 	top: 1px;
 	right: 4px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.cell-kill-btn,
+.cell-view-btn {
 	background: none;
 	border: none;
 	color: #555;
@@ -185,13 +194,36 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 
 .cell:hover .cell-kill-btn,
-.cell:focus-within .cell-kill-btn {
+.cell:focus-within .cell-kill-btn,
+.cell:hover .cell-view-btn,
+.cell:focus-within .cell-view-btn {
 	opacity: 1;
 }
 
 .cell-kill-btn:hover {
 	color: #f48771;
 	background: #3a0000;
+}
+
+.cell-view-btn:hover {
+	color: #ccc;
+	background: #333;
+}
+
+.cell-view-btn-active {
+	color: #aaa;
+}
+
+@keyframes cell-btn-blink {
+	0%, 100% { opacity: 1; color: #fff; }
+	50% { opacity: 0.15; color: #888; }
+}
+
+.cell-view-btn-activity {
+	opacity: 1;
+	color: #fff;
+	animation: cell-btn-blink 0.75s ease-in-out 4;
+	animation-fill-mode: forwards;
 }
 
 .cell-header .cell-input {
