@@ -278,34 +278,37 @@ export class ZoneManager {
   _makeDivider(leftGroup, rightGroup) {
     const divider = html`<div class="zone-divider"></div>`;
 
-    divider.addEventListener("mousedown", (e) => {
+    divider.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      const startX = e.clientX;
+      divider.setPointerCapture(e.pointerId);
 
       // Freeze all groups at their current pixel widths
       const groupNodes = [...this._container.querySelectorAll(":scope > .zone-group")];
       const startWidths = new Map(groupNodes.map(g => [g, g.getBoundingClientRect().width]));
       for (const [g, w] of startWidths) g.style.flex = `0 0 ${w}px`;
 
+      const startX = e.clientX;
       const leftStart = startWidths.get(leftGroup);
       const rightStart = startWidths.get(rightGroup);
       divider.classList.add("dragging");
 
-      const onMouseMove = (e) => {
+      const onPointerMove = (e) => {
         const delta = e.clientX - startX;
         leftGroup.style.flex = `0 0 ${Math.max(80, leftStart + delta)}px`;
         rightGroup.style.flex = `0 0 ${Math.max(80, rightStart - delta)}px`;
         for (const zone of this._zones.values()) zone.promptCollection.layoutAll();
       };
 
-      const onMouseUp = () => {
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
+      const onPointerUp = () => {
+        divider.removeEventListener("pointermove", onPointerMove);
+        divider.removeEventListener("pointerup", onPointerUp);
+        divider.removeEventListener("pointercancel", onPointerUp);
         divider.classList.remove("dragging");
       };
 
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
+      divider.addEventListener("pointermove", onPointerMove);
+      divider.addEventListener("pointerup", onPointerUp);
+      divider.addEventListener("pointercancel", onPointerUp);
     });
 
     return divider;
