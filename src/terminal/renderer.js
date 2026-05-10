@@ -63,6 +63,11 @@ class Executor {
     this.cells = new Map();
     this._activeCell = null;
     this.bridge = bridge;
+    // Echo elements emitted to the source zone when output is redirected via @left/@right/@tab.
+    // handle$echo sets this; handle$cell_create consumes it immediately after (same event sequence).
+    this._pendingEchoElements = null; // {statusDot, btnBar} | null
+    // Maps cellKey → {statusDot} so close events can update the echo's indicator.
+    this._cellEchoElements = new Map();
     this._zoneManager = new ZoneManager(zonesContainer, bridge);
     this._zoneManager.onFloatBlur = (zoneName, baseZoneName) => {
       for (const [key, entry] of [...this.cells]) {
@@ -104,8 +109,20 @@ class Executor {
       div.innerHTML = instruction.echo_html;
       echo = div.firstChild;
     }
+
+    // Consume the echo elements emitted just before this cell_create.
+    const echoElements = this._pendingEchoElements;
+    this._pendingEchoElements = null;
+
     const bridge = new CellBridge(this, instruction);
+    if (echoElements) bridge.echoElements = echoElements;
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
+
+    if (echoElements) {
+      echoElements.node.dataset.cellKey = key;
+      echoElements.node._linkedCellNode = cell.node; // survives cell entry removal
+      this._cellEchoElements.set(key, echoElements);
+    }
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
@@ -145,6 +162,7 @@ class Executor {
     const key = cellKey(instruction.address, instruction.to.cell);
     const entry = this.cells.get(key);
     if (entry) {
+      this._closeEchoStatus(key, instruction.return_code);
       const isFocused = entry.cell.node === document.activeElement;
       entry.cell.close(instruction.return_code);
       this.cells.delete(key);
@@ -159,12 +177,20 @@ class Executor {
     }
   }
 
+  _closeEchoStatus(key, return_code) {
+    const echoEls = this._cellEchoElements.get(key);
+    if (!echoEls) return;
+    echoEls.statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
+    this._cellEchoElements.delete(key);
+  }
+
   handle$process_close(instruction) {
     const { process_id } = instruction;
     let anyFocused = false;
     let closedZone = null;
     for (const [key, entry] of [...this.cells]) {
       if (addressMatchesProcess(entry.address, process_id)) {
+        this._closeEchoStatus(key, instruction.return_code);
         if (entry.cell.node === document.activeElement) anyFocused = true;
         closedZone = entry.zone;
         entry.cell.close(instruction.return_code);
@@ -196,9 +222,10 @@ class Executor {
 
   clearInactiveCells() {
     const activeNodes = new Set([...this.cells.values()].map((e) => e.cell.node));
+    const activeEchoNodes = new Set([...this._cellEchoElements.values()].map((e) => e.node));
     for (const zone of this._zoneManager.allZones()) {
       for (const child of [...zone.buffer.children]) {
-        if (!activeNodes.has(child)) {
+        if (!activeNodes.has(child) && !activeEchoNodes.has(child)) {
           child.remove();
         }
       }
@@ -208,6 +235,20 @@ class Executor {
   handle$library(instruction) {
     const { hash_function, hash, nonce, files } = instruction;
     window.buche.storeLibrary({ hash_function, hash, nonce, files });
+  }
+
+  handle$echo(instruction) {
+    if (!instruction.echo_html) return;
+    const inner = document.createElement("div");
+    inner.innerHTML = instruction.echo_html;
+    const statusDot = html`<div class="cell-status cell-status-running"></div>`;
+    const btnBar = html`<span class="cell-btn-bar"></span>`;
+    const el = html`<div class="cell-echo" tabindex="0">
+      ${statusDot}
+      <div class="cell-header">${inner.firstChild}<span class="cell-controls">${btnBar}</span></div>
+    </div>`;
+    this._pendingEchoElements = { statusDot, btnBar, node: el };
+    this._zoneManager.resolveZone(instruction.zone ?? "main").buffer.appendChild(el);
   }
 
   handle$error(instruction) {
@@ -228,9 +269,12 @@ const _executor = new Executor(window.buche);
 
 // ── Cell navigation helpers ──────────────────────────────────────────────
 
+// Returns navigable nodes (cells + echoes) in the active zone's buffer, in DOM order.
 function getOrderedCellNodes() {
-  return [..._executor._zoneManager.allZones()].flatMap((zone) =>
-    [...zone.buffer.children].filter((n) => n.classList.contains("cell")),
+  const activeZone = _executor._zoneManager._zones.get(_executor._zoneManager._activeZoneName);
+  if (!activeZone) return [];
+  return [...activeZone.buffer.children].filter(
+    (n) => n.classList.contains("cell") || n.classList.contains("cell-echo"),
   );
 }
 
@@ -238,10 +282,37 @@ function focusCellNode(node) {
   node.focus();
 }
 
+// Directly focuses the active zone's prompt, bypassing activateByName's
+// "don't steal from focused cell" guard. Used by explicit "return to prompt" actions.
+function focusActivePrompt() {
+  const zoneName = _executor._zoneManager._activeZoneName;
+  const zone = _executor._zoneManager._zones.get(zoneName);
+  if (zone?.promptCollection._prompts.length > 0) {
+    zone.promptCollection.focus();
+  } else {
+    _executor._zoneManager._zones.get("main")?.promptCollection.focus();
+  }
+}
+
+// Returns the focused .cell or .cell-echo node, whichever applies.
+function getFocusedNavigableNode() {
+  const el = document.activeElement;
+  return el?.closest?.(".cell") ?? el?.closest?.(".cell-echo") ?? null;
+}
+
+// Returns the Executor cell entry for the focused navigable node.
+// For .cell-echo nodes, looks up the linked cell via dataset.cellKey.
 function getFocusedCellEntry() {
-  const cellNode = document.activeElement?.closest?.(".cell");
-  if (!cellNode) return null;
-  return [..._executor.cells.values()].find((e) => e.cell.node === cellNode) ?? null;
+  const el = document.activeElement;
+  const cellNode = el?.closest?.(".cell");
+  if (cellNode) {
+    return [..._executor.cells.values()].find((e) => e.cell.node === cellNode) ?? null;
+  }
+  const echoNode = el?.closest?.(".cell-echo");
+  if (echoNode?.dataset.cellKey) {
+    return _executor.cells.get(echoNode.dataset.cellKey) ?? null;
+  }
+  return null;
 }
 
 // ── Global key bindings ──────────────────────────────────────────────────
@@ -257,7 +328,7 @@ buchekeys(window, {
   "Control+q ~ ArrowUp": (e) => {
     const ordered = getOrderedCellNodes();
     if (ordered.length === 0) return;
-    const focused = document.activeElement?.closest?.(".cell");
+    const focused = getFocusedNavigableNode();
     if (!focused || !ordered.includes(focused)) {
       focusCellNode(ordered[ordered.length - 1]);
       return;
@@ -269,12 +340,11 @@ buchekeys(window, {
   "Control+q ~ ArrowDown": (e) => {
     const ordered = getOrderedCellNodes();
     if (ordered.length === 0) return;
-    const focused = document.activeElement?.closest?.(".cell");
+    const focused = getFocusedNavigableNode();
     if (!focused || !ordered.includes(focused)) return;
     const idx = ordered.indexOf(focused);
     if (idx === ordered.length - 1) {
-      const entry = getFocusedCellEntry();
-      _executor._zoneManager.focusZone(entry?.zone ?? "main");
+      focusActivePrompt();
     } else {
       focusCellNode(ordered[idx + 1]);
     }
@@ -291,43 +361,40 @@ buchekeys(window, {
   },
 
   "Control+q ~ Alt+ArrowUp": (e) => {
-    const cellNode = document.activeElement?.closest?.(".cell");
-    if (!cellNode) return;
-    const prev = cellNode.previousElementSibling;
-    if (prev?.classList.contains("cell")) {
-      cellNode.parentElement.insertBefore(cellNode, prev);
-      cellNode.scrollIntoView({ block: "nearest" });
+    const node = getFocusedNavigableNode();
+    if (!node) return;
+    const prev = node.previousElementSibling;
+    if (prev && (prev.classList.contains("cell") || prev.classList.contains("cell-echo"))) {
+      node.parentElement.insertBefore(node, prev);
+      node.scrollIntoView({ block: "nearest" });
     }
   },
 
   "Control+q ~ Alt+ArrowDown": (e) => {
-    const cellNode = document.activeElement?.closest?.(".cell");
-    if (!cellNode) return;
-    const next = cellNode.nextElementSibling;
-    if (next?.classList.contains("cell")) {
-      cellNode.parentElement.insertBefore(next, cellNode);
-      cellNode.scrollIntoView({ block: "nearest" });
+    const node = getFocusedNavigableNode();
+    if (!node) return;
+    const next = node.nextElementSibling;
+    if (next && (next.classList.contains("cell") || next.classList.contains("cell-echo"))) {
+      node.parentElement.insertBefore(next, node);
+      node.scrollIntoView({ block: "nearest" });
     }
   },
 
   "Control+q ~ f": (e) => {
-    const cellNode = document.activeElement?.closest?.(".cell");
-    if (!cellNode) return;
-    cellNode.parentElement.appendChild(cellNode);
-    cellNode.scrollIntoView({ block: "nearest" });
-    const entry = getFocusedCellEntry();
-    _executor._zoneManager.focusZone(entry?.zone ?? "main");
+    const node = getFocusedNavigableNode();
+    if (!node) return;
+    node.parentElement.appendChild(node);
+    node.scrollIntoView({ block: "nearest" });
+    focusActivePrompt();
   },
 
   "Control+q ~ l": (e) => {
     _executor.clearInactiveCells();
-    const entry = getFocusedCellEntry();
-    _executor._zoneManager.focusZone(entry?.zone ?? "main");
+    focusActivePrompt();
   },
 
   "Control+q ~ p": (e) => {
-    const entry = getFocusedCellEntry();
-    _executor._zoneManager.focusZone(entry?.zone ?? "main");
+    focusActivePrompt();
   },
 
   "Control+Tab": (e) => {
@@ -354,29 +421,42 @@ buchekeys(window, {
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 
   "Control+q ~ d": (e) => {
-    const cellNode = document.activeElement?.closest?.(".cell");
-    if (!cellNode) return;
+    const focused = getFocusedNavigableNode();
+    if (!focused) return;
     const allCells = getOrderedCellNodes();
-    const idx = allCells.indexOf(cellNode);
+    const idx = allCells.indexOf(focused);
     const nextFocus = allCells[idx + 1] ?? null;
-    let key = null;
-    let zone = "main";
-    for (const [k, entry] of _executor.cells) {
-      if (entry.cell.node === cellNode) { key = k; zone = entry.zone; break; }
-    }
+    const activeZoneName = _executor._zoneManager._activeZoneName;
+
+    const isEcho = focused.classList.contains("cell-echo");
+    const key = isEcho
+      ? (focused.dataset.cellKey ?? null)
+      : ([..._executor.cells].find(([, e]) => e.cell.node === focused)?.[0] ?? null);
+
     if (key) {
-      const { cell } = _executor.cells.get(key);
-      if (cell.isAlive()) cell.kill();
-      cell.node.remove();
-      _executor.cells.delete(key);
-      if (_executor._activeCell === key) _executor._activeCell = null;
+      const entry = _executor.cells.get(key);
+      if (entry) {
+        if (entry.cell.isAlive()) entry.cell.kill();
+        entry.cell.node.remove();
+        _executor.cells.delete(key);
+        if (_executor._activeCell === key) _executor._activeCell = null;
+      } else if (isEcho) {
+        // Cell already completed: entry is gone but node may still be in another zone's buffer.
+        focused._linkedCellNode?.remove();
+      }
+      // Remove echo node. After cell completion _cellEchoElements is already cleared,
+      // so fall back to the focused node itself.
+      const echoEls = _executor._cellEchoElements.get(key);
+      if (echoEls) { echoEls.node.remove(); _executor._cellEchoElements.delete(key); }
+      else if (isEcho) focused.remove();
     } else {
-      cellNode.remove();
+      focused.remove();
     }
+
     if (nextFocus?.isConnected) {
       focusCellNode(nextFocus);
     } else {
-      _executor._zoneManager.focusZone(zone);
+      _executor._zoneManager.focusZone(activeZoneName);
     }
   },
 });

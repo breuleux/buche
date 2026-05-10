@@ -918,6 +918,18 @@ class Shell {
       }
     }
 
+    // When output is redirected to another zone, emit the echo separately to
+    // the source zone so the command stays visible where it was typed.
+    if (typeof effectiveZone !== "string" && obj.echo_html) {
+      yield {
+        type: "echo",
+        to: { target: "terminal" },
+        zone: obj.zone ?? "main",
+        echo_html: obj.echo_html,
+      };
+      obj = { ...obj, echo_html: null };
+    }
+
     if (text !== undefined) {
       let ast;
       try {

@@ -18,7 +18,10 @@ export class Cell {
     this._bridge = bridge ?? null;
 
     if (bridge) {
-      bridge.addHeaderButton = (btn) => this._btnBar.appendChild(btn);
+      bridge.addHeaderButton = (btn) => {
+        this._btnBar.appendChild(btn);
+        bridge.echoElements?.btnBar.appendChild(btn.cloneNode(true));
+      };
     }
 
     if (this._killBtn) {
