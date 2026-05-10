@@ -1,4 +1,4 @@
-import { tinykeys } from "tinykeys";
+import { buchekeys } from "./buchekeys.js";
 import { AutoHandler } from "./cell/auto.js";
 import { Cell } from "./cell/cell.js";
 import { DataHandler } from "./cell/data.js";
@@ -91,6 +91,7 @@ class Executor {
   }
 
   execute(instruction) {
+    console.log(instruction);
     const handler = this[`handle$${instruction.type}`];
     if (handler) {
       handler.call(this, instruction);
@@ -226,10 +227,131 @@ class Executor {
 
 const _executor = new Executor(window.buche);
 
-tinykeys(window, {
+// ── Cell navigation helpers ──────────────────────────────────────────────
+
+function getOrderedCellNodes() {
+  return [...buffer.children].filter((n) => n.classList.contains("cell"));
+}
+
+function focusCellNode(node) {
+  node.focus();
+}
+
+function getFocusedCellEntry() {
+  const cellNode = document.activeElement?.closest?.(".cell");
+  if (!cellNode) return null;
+  return [..._executor.cells.values()].find((e) => e.cell.node === cellNode) ?? null;
+}
+
+// ── Global key bindings ──────────────────────────────────────────────────
+
+buchekeys(window, {
   "Control+l": (e) => {
     if (!isPromptFocused()) return;
     e.preventDefault();
     _executor.clearInactiveCells();
+  },
+
+  // C-q prefix mode bindings
+  "Control+q ~ ArrowUp": (e) => {
+    const ordered = getOrderedCellNodes();
+    if (ordered.length === 0) return;
+    const focused = document.activeElement?.closest?.(".cell");
+    if (!focused || !ordered.includes(focused)) {
+      // From prompt or outside — jump to last cell
+      focusCellNode(ordered[ordered.length - 1]);
+      return;
+    }
+    const idx = ordered.indexOf(focused);
+    if (idx > 0) focusCellNode(ordered[idx - 1]);
+  },
+
+  "Control+q ~ ArrowDown": (e) => {
+    const ordered = getOrderedCellNodes();
+    if (ordered.length === 0) return;
+    const focused = document.activeElement?.closest?.(".cell");
+    if (!focused || !ordered.includes(focused)) return;
+    const idx = ordered.indexOf(focused);
+    if (idx === ordered.length - 1) {
+      _executor.prompt.focus();
+    } else {
+      focusCellNode(ordered[idx + 1]);
+    }
+  },
+
+  "Control+q ~ k": (e) => {
+    const entry = getFocusedCellEntry();
+    if (entry?.cell.isAlive()) entry.cell.kill();
+  },
+
+  "Control+q ~ Shift+K": (e) => {
+    const entry = getFocusedCellEntry();
+    if (entry?.cell.isAlive()) entry.cell.kill("SIGKILL");
+  },
+
+  "Control+q ~ Alt+ArrowUp": (e) => {
+    const cellNode = document.activeElement?.closest?.(".cell");
+    if (!cellNode) return;
+    const prev = cellNode.previousElementSibling;
+    if (prev?.classList.contains("cell")) {
+      buffer.insertBefore(cellNode, prev);
+      cellNode.scrollIntoView({ block: "nearest" });
+    }
+  },
+
+  "Control+q ~ Alt+ArrowDown": (e) => {
+    const cellNode = document.activeElement?.closest?.(".cell");
+    if (!cellNode) return;
+    const next = cellNode.nextElementSibling;
+    if (next?.classList.contains("cell")) {
+      buffer.insertBefore(next, cellNode);
+      cellNode.scrollIntoView({ block: "nearest" });
+    }
+  },
+
+  "Control+q ~ f": (e) => {
+    const cellNode = document.activeElement?.closest?.(".cell");
+    if (!cellNode) return;
+    buffer.appendChild(cellNode);
+    cellNode.scrollIntoView({ block: "nearest" });
+    _executor.prompt.focus();
+  },
+
+  "Control+q ~ l": (e) => {
+    _executor.clearInactiveCells();
+    _executor.prompt.focus();
+  },
+
+  "Control+q ~ p": (e) => {
+    _executor.prompt.focus();
+  },
+
+  "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
+  "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
+
+  "Control+q ~ d": (e) => {
+    const cellNode = document.activeElement?.closest?.(".cell");
+    if (!cellNode) return;
+    const allCells = getOrderedCellNodes();
+    const idx = allCells.indexOf(cellNode);
+    const nextFocus = allCells[idx + 1] ?? null;
+    let key = null;
+    for (const [k, entry] of _executor.cells) {
+      if (entry.cell.node === cellNode) { key = k; break; }
+    }
+    if (key) {
+      const { cell } = _executor.cells.get(key);
+      if (cell.isAlive()) cell.kill();
+      cell.node.remove();
+      _executor.cells.delete(key);
+      if (_executor._activeCell === key) _executor._activeCell = null;
+    } else {
+      cellNode.remove();
+    }
+    if (nextFocus?.isConnected) {
+      focusCellNode(nextFocus);
+    } else {
+      _executor.prompt.focus();
+    }
   },
 });

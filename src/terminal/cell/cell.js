@@ -15,6 +15,8 @@ export class Cell {
 			${header}
 		</div>`;
 
+    this._bridge = bridge ?? null;
+
     if (bridge) {
       bridge.addHeaderButton = (btn) => this._btnBar.appendChild(btn);
     }
@@ -49,13 +51,21 @@ export class Cell {
         e.stopImmediatePropagation();
         bridge?.onBackground();
       },
+      // Enter while the wrapper itself has focus (navigation mode) → enter edit mode.
+      "Enter": (e) => {
+        if (document.activeElement !== this.node) return;
+        if (!this.isAlive()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.handler.focus?.();
+      },
     });
 
     this.handler = new HandlerClass(this.node, instruction, bridge);
 
     this.node.addEventListener("click", () => {
       this.node.focus();
-      this.handler.focus?.();
+      if (this.isAlive()) this.handler.focus?.();
     });
     this.node.addEventListener("focusin", () =>
       this.handler.setCursorState?.("active"),
@@ -65,6 +75,14 @@ export class Cell {
         this.handler.setCursorState?.("inactive");
       }
     });
+  }
+
+  isAlive() {
+    return this._killBtn !== null;
+  }
+
+  kill(signal) {
+    this._bridge?.sendControl(signal ? { type: "kill", signal } : { type: "kill" });
   }
 
   send(data) {
@@ -79,7 +97,6 @@ export class Cell {
       this._killBtn = null;
     }
     this.handler.setCursorState?.("hidden");
-    this.node.removeAttribute("tabindex");
     this.node.blur();
   }
 }

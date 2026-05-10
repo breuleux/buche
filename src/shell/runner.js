@@ -360,8 +360,8 @@ class Process {
     this._control.destroy();
   }
 
-  kill() {
-    this._child.kill();
+  kill(signal) {
+    this._child.kill(signal);
   }
 
   async *events() {
@@ -642,7 +642,7 @@ class Shell {
             } else if (obj.type === "close" && !hasSubaddress) {
               proc.close();
             } else if (obj.type === "kill" && !hasSubaddress) {
-              proc.kill();
+              proc.kill(obj.signal);
             } else {
               proc.writeControl({ ...obj, to: obj.to.subaddress ?? {} });
             }
