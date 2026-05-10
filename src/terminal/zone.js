@@ -16,14 +16,29 @@ export class Zone {
     this._inputContainer = document.createElement("div");
     this._inputContainer.className = "zone-input-container";
 
+    this._inputArea = document.createElement("div");
+    this._inputArea.className = "zone-input-area";
+    this._inputArea.appendChild(this._inputContainer);
+
     this.node = document.createElement("div");
     this.node.className = "zone";
     this.node.dataset.zone = name;
     this.node.appendChild(this._bufferWrap);
-    this.node.appendChild(this._inputContainer);
+    this.node.appendChild(this._inputArea);
 
     // PromptCollection inserts its tab bar after _inputContainer (still inside zone node)
     this.promptCollection = new PromptCollection(this._inputContainer, bridge, name);
+  }
+
+  // Lazily create a float container between the buffer and the input.
+  getFloatContainer() {
+    if (!this._floatContainer) {
+      this._floatContainer = document.createElement("div");
+      this._floatContainer.className = "zone-float-container";
+      this._floatContainer.style.display = "none";
+      this._inputArea.insertBefore(this._floatContainer, this._inputContainer);
+    }
+    return this._floatContainer;
   }
 
   // Must be called after zone.node is connected to the DOM.
@@ -112,8 +127,12 @@ class ZoneGroup {
       requestAnimationFrame(() => this._zones[idx].promptCollection.layoutAll());
     }
 
-    // Always focus after paint (even if already the active tab — e.g. cross-group cycling)
-    requestAnimationFrame(() => this._zones[idx].promptCollection.focus());
+    // Always focus after paint, but don't steal focus from a focused cell.
+    requestAnimationFrame(() => {
+      if (!document.activeElement?.closest?.(".cell")) {
+        this._zones[idx].promptCollection.focus();
+      }
+    });
     this.onActivate?.(zoneName);
   }
 
@@ -168,6 +187,36 @@ class ZoneGroup {
   }
 }
 
+// ── FloatZone ──────────────────────────────────────────────────────────────
+// A minimal zone that renders cells inside another zone's float container.
+// No ZoneGroup, no prompts, no tabs.
+
+class FloatZone {
+  constructor(name, container) {
+    this.name = name;
+    this._container = container;
+    this.buffer = document.createElement("div");
+    this.buffer.className = "zone-buffer";
+    // Stub so ZoneManager iteration methods (applyHighlight etc.) don't crash.
+    this.promptCollection = {
+      _prompts: [],
+      focus() {},
+      layoutAll() {},
+      removePromptsByProcess() {},
+      setPrompt() {},
+      applyHighlight() {},
+      applyComplete() {},
+      onFocus: null,
+      onPromptsChanged: null,
+    };
+  }
+
+  // Call before appending a cell so the container is visible when focus() runs.
+  prepareForCell() {
+    this._container.style.display = "";
+  }
+}
+
 // ── ZoneManager ────────────────────────────────────────────────────────────
 
 export class ZoneManager {
@@ -185,6 +234,8 @@ export class ZoneManager {
     ctx.font = "13px Consolas, Menlo, monospace";
     this._charWidth = ctx.measureText("M").width;
     this._cellPadding = 16;
+
+    this.onFloatBlur = null; // (zoneName, baseZoneName) => void
 
     this._createZoneInNewGroup("main", null);
     // The main zone starts focused; mark it after _groups is populated
@@ -283,6 +334,57 @@ export class ZoneManager {
     this._updateMultiLayout();
   }
 
+  // Create a FloatZone anchored to a base zone's float container.
+  _createFloatZone(name, baseZoneName) {
+    const baseZone = this._zones.get(baseZoneName) ?? this._zones.get("main");
+    const container = baseZone.getFloatContainer();
+    const zone = new FloatZone(name, container);
+    container.appendChild(zone.buffer);
+
+    // Show/hide the container based on whether the buffer has cells.
+    new MutationObserver(() => {
+      container.style.display = zone.buffer.children.length > 0 ? "" : "none";
+    }).observe(zone.buffer, { childList: true });
+
+    const triggerBlur = () => this.onFloatBlur?.(name, baseZoneName);
+
+    // focusout handles non-iframe focus changes and process-close blur.
+    container.addEventListener("focusout", (e) => {
+      if (e.relatedTarget) {
+        if (!container.contains(e.relatedTarget)) triggerBlur();
+        return;
+      }
+      // relatedTarget is null: could be process close or iframe focus-in.
+      // Wait a microtask for document.activeElement to settle.
+      Promise.resolve().then(() => {
+        if (!container.contains(document.activeElement)) triggerBlur();
+      });
+    });
+
+    // focusin (capture) catches programmatic focus and keyboard navigation,
+    // including when focus moves to the prompt via editor.focus().
+    // mousedown (capture) catches clicks from inside iframes where focusin
+    // may not cross the iframe boundary into the parent frame.
+    const onOutside = (e) => {
+      if (zone.buffer.children.length > 0 && !container.contains(e.target)) {
+        triggerBlur();
+      }
+    };
+    document.addEventListener("focusin", onOutside, true);
+    document.addEventListener("mousedown", onOutside, true);
+
+    // ESC closes the float and returns focus to the base zone.
+    container.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.onFloatBlur?.(name, baseZoneName);
+      }
+    });
+
+    this._zones.set(name, zone);
+  }
+
   // Create a Zone inside a brand-new ZoneGroup, inserting the group into the container.
   _createZoneInNewGroup(name, insertBefore) {
     const group = new ZoneGroup();
@@ -332,7 +434,16 @@ export class ZoneManager {
       return descriptor;
     }
 
-    const { base, left, right, newTab } = descriptor;
+    const { base, left, right, newTab, float } = descriptor;
+
+    if (float) {
+      const cacheKey = `float:${base}`;
+      if (this._adjacency.has(cacheKey)) return this._adjacency.get(cacheKey);
+      const newName = `zone-${++_zoneCounter}`;
+      this._adjacency.set(cacheKey, newName);
+      this._createFloatZone(newName, base);
+      return newName;
+    }
 
     if (newTab) {
       // If the shell stamped an ID, reuse the same zone for all messages in
@@ -399,9 +510,16 @@ export class ZoneManager {
     }
   }
 
+  clearZoneBuffer(zoneName) {
+    const zone = this._zones.get(zoneName);
+    if (zone) zone.buffer.replaceChildren();
+  }
+
   focusZone(zoneName) {
     const zone = this._zones.get(zoneName) ?? this._zones.get("main");
     if (!zone) return;
+    // Float zones (no group) manage their own focus via onFloatBlur — don't interfere.
+    if (!this._groups.has(zone.name)) return;
     // Make the zone's tab active in its group (in case it's a hidden tab).
     // activateByName schedules a rAF for focus — do not call focus() synchronously
     // here, as it runs right after cell.node.blur() and is unreliable.

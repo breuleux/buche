@@ -64,6 +64,19 @@ class Executor {
     this._activeCell = null;
     this.bridge = bridge;
     this._zoneManager = new ZoneManager(zonesContainer, bridge);
+    this._zoneManager.onFloatBlur = (zoneName, baseZoneName) => {
+      for (const [key, entry] of [...this.cells]) {
+        if (entry.zone === zoneName) {
+          if (entry.cell.isAlive()) entry.cell.kill();
+          entry.cell.node.remove();
+          this.cells.delete(key);
+          if (this._activeCell === key) this._activeCell = null;
+        }
+      }
+      // Also remove nodes already closed by process_close (no longer in this.cells).
+      this._zoneManager.clearZoneBuffer(zoneName);
+      this._zoneManager.focusZone(baseZoneName);
+    };
     this.bridge.onInstruction((instruction) => this.execute(instruction));
   }
 
@@ -94,6 +107,7 @@ class Executor {
     const bridge = new CellBridge(this, instruction);
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main");
+    zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
     this.cells.set(key, { cell, address: instruction.address, zone: zone.name });
     if (!instruction.background) {

@@ -203,6 +203,27 @@ scroll-fader {
 	height: 32px;
 }
 
+/* ── Float zone (per-zone, above prompt) ── */
+.zone-input-area {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.zone-float-container {
+	position: absolute;
+	bottom: 100%;
+	left: 8px;
+	right: 8px;
+	max-height: 40vh;
+	overflow-y: auto;
+	background: #252526;
+	border: 1px solid #3c3c3c;
+	border-radius: 4px;
+	margin-bottom: 4px;
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+	z-index: 10;
+}
+
 /* ── Monaco input (per-zone) ── */
 .zone-input-container {
 	flex: 0 0 auto;

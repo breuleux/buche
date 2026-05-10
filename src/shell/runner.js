@@ -467,7 +467,7 @@ function shellHighlight(text, builtins) {
       state = "arg";
     } else if (token.startsWith("$")) {
       ranges.push({ start, end, cls: "sh-var" });
-    } else if (state === "cmd" && /^@(left|right|tab)$/.test(token)) {
+    } else if (state === "cmd" && /^@(left|right|tab|float)$/.test(token)) {
       ranges.push({ start, end, cls: "sh-zone" });
       // state stays "cmd" so the following token is highlighted as the command
     } else if (state === "cmd") {
@@ -907,11 +907,13 @@ class Shell {
     let effectiveZone = obj.zone ?? "main";
     let text = obj.text;
     if (text !== undefined) {
-      const m = /^@(left|right|tab)\s+/.exec(text);
+      const m = /^@(left|right|tab|float)\s+/.exec(text);
       if (m) {
         const dir = m[1];
         const base = typeof effectiveZone === "string" ? effectiveZone : "main";
-        effectiveZone = dir === "tab" ? { base, newTab: true } : { base, [dir]: 1 };
+        if (dir === "tab") effectiveZone = { base, newTab: true };
+        else if (dir === "float") effectiveZone = { base, float: true };
+        else effectiveZone = { base, [dir]: 1 };
         text = text.slice(m[0].length);
       }
     }
