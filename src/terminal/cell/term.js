@@ -1,6 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { html, keyToInput } from "../utils.js";
+import { html } from "../utils.js";
 
 export class TermHandler {
   constructor(cellNode, _instruction, bridge) {
@@ -23,19 +23,24 @@ export class TermHandler {
     this._resizeObserver.observe(container);
 
     if (bridge) {
-      cellNode.addEventListener("keydown", (e) => {
-        const text = keyToInput(e);
-        if (text === null) {
-          return;
-        }
-        e.preventDefault();
-        bridge.sendInput(text);
-      });
+      // Use xterm's onData so it handles application cursor mode, sends \r for
+      // Enter, and generally translates keys correctly for terminal programs.
+      this._term.onData((text) => bridge.sendInput(text));
+      // Keep the PTY dimensions in sync with the xterm viewport.
+      this._term.onResize(({ cols, rows }) => bridge.sendResize(cols, rows));
+      // Forward focus from the cell div to xterm's internal textarea.
+      // Works when TermHandler is used directly (cellNode is the real cell div).
+      // When used via AutoHandler, AutoHandler calls this.focus() instead.
+      cellNode.addEventListener("focus", () => this._term.focus());
     }
   }
 
   send(data) {
     this._term.write(data.text);
+  }
+
+  focus() {
+    this._term.focus();
   }
 
   setCursorState(_state) {

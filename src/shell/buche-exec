@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""
+Spawn helper for buche.
+
+Programs like less/more/emacs open /dev/tty for keyboard input and display
+output.  Without this wrapper they get the *parent* buche process's
+controlling terminal (the original shell) instead of buche's PTY.
+
+This wrapper fixes that by running before exec-ing the real command:
+  • setsid()   — new session, breaks link to parent's controlling terminal
+  • TIOCSCTTY  — makes the inherited fd 0 (the PTY slave) the controlling
+                 terminal for the new session; on BSD/macOS this also sets
+                 the foreground process group when t_pgrp was NULL (freshly
+                 created PTY), so programs that read from /dev/tty won't
+                 receive SIGTTIN.
+
+Usage: buche-exec <cmd> [args…]
+"""
+import os, sys, fcntl, termios
+
+os.setsid()
+
+TIOCSCTTY = getattr(termios, "TIOCSCTTY", 0x20007461)  # 0x20007461 on macOS
+fcntl.ioctl(0, TIOCSCTTY, 0)
+
+os.execvp(sys.argv[1], sys.argv[1:])

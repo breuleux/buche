@@ -1,4 +1,3 @@
-import { keyToInput } from "../utils.js";
 import { DataHandler } from "./data.js";
 import { TermHandler } from "./term.js";
 import { TextHandler } from "./text.js";
@@ -20,16 +19,6 @@ export class AutoHandler {
     this._buffer = [];
     this._bufferLines = 0;
     this._switched = false;
-    if (bridge) {
-      cellNode.addEventListener("keydown", (e) => {
-        const text = keyToInput(e);
-        if (text === null) {
-          return;
-        }
-        e.preventDefault();
-        bridge.sendInput(text);
-      });
-    }
   }
 
   send(data) {
@@ -39,6 +28,12 @@ export class AutoHandler {
     }
 
     this._addToBuffer(data);
+
+    // if (data.type !== "text") {
+    //   this._switchTo(DataHandler);
+    // } else {
+    //   this._switchTo(TermHandler);
+    // }
 
     if (data.type !== "text") {
       this._switchTo(DataHandler);
@@ -101,6 +96,9 @@ export class AutoHandler {
       this._handler.send(data);
     }
     this._buffer = [];
+    // If the cell already has focus when we switch, hand it to the new handler
+    // immediately (the focus event won't re-fire on its own).
+    this._handler.focus?.();
   }
 
   setCursorState(state) {

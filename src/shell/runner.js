@@ -178,23 +178,21 @@ class Process {
     this._resolve = null;
     this._done = false;
 
-    // Open a PTY pair for each stream so the child's isatty() returns true,
-    // while we still read stdout and stderr separately from the master sides.
-    const stdinPty = pty.open({ cols, rows: 50 });
-    stdinPty._slave.destroy(); // prevent _slave from racing the child for stdin reads
-    const stdoutPty = pty.open({ cols, rows: 50 });
-    const stderrPty = pty.open({ cols, rows: 50 });
+    // Single PTY for stdin/stdout/stderr — this is how real terminals work.
+    // Programs like less/more/emacs open /dev/tty for both keyboard input and
+    // display output; with a single PTY they all resolve to the same device,
+    // so there is no split between multiple masters.
+    const mainPty = pty.open({ cols, rows: 24 });
+    mainPty._slave.destroy(); // close parent's internal slave fd; child gets its own via slaveFd below
     const { O_RDWR, O_NOCTTY } = fs.constants;
-    const stdinSlave = fs.openSync(stdinPty.ptsName, O_RDWR | O_NOCTTY);
-    const stdoutSlave = fs.openSync(stdoutPty.ptsName, O_RDWR | O_NOCTTY);
-    const stderrSlave = fs.openSync(stderrPty.ptsName, O_RDWR | O_NOCTTY);
+    // Open the slave once; spawn will dup it to fd 0, 1, and 2 in the child.
+    const slaveFd = fs.openSync(mainPty.ptsName, O_RDWR | O_NOCTTY);
 
-    this._stdinPty = stdinPty;
-    this._stdoutPty = stdoutPty;
-    this._stderrPty = stderrPty;
+    this._pty = mainPty;
 
-    const child = spawn(cmd, args, {
-      stdio: [stdinSlave, stdoutSlave, stderrSlave, "pipe", "pipe", "pipe"],
+    const helperPath = path.join(__dirname, "buche-exec");
+    const child = spawn("python3", [helperPath, cmd, ...args], {
+      stdio: [slaveFd, slaveFd, slaveFd, "pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         TERM: "xterm-256color",
@@ -205,10 +203,8 @@ class Process {
       ...(cwd !== undefined && { cwd }),
     });
 
-    // Parent no longer needs the slave fds — child inherited them.
-    fs.closeSync(stdinSlave);
-    fs.closeSync(stdoutSlave);
-    fs.closeSync(stderrSlave);
+    // Parent no longer needs the slave fd — child inherited it.
+    fs.closeSync(slaveFd);
 
     this.pid = child.pid;
     this.processId = processId;
@@ -227,42 +223,17 @@ class Process {
 
     const cellTo = { target: "terminal", cell: "main" };
     const cellAddress = { process: processId };
-    // Echo from stdin PTY master (respects ECHO flag set via tcsetattr)
-    stdinPty._socket.on("data", (d) =>
+    mainPty._socket.on("data", (d) =>
       emit({
         type: "send",
         to: cellTo,
         address: cellAddress,
         stream: "stdout",
-        text: d.toString(),
-      }),
-    );
-    stdoutPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        to: cellTo,
-        address: cellAddress,
-        stream: "stdout",
-        text: d.toString(),
-      }),
-    );
-    stderrPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        to: cellTo,
-        address: cellAddress,
-        stream: "stderr",
         text: d.toString(),
       }),
     );
     // EIO means the slave side closed (process exited) — not a real error.
-    stdinPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e));
-    });
-    stdoutPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e));
-    });
-    stderrPty._socket.on("error", (e) => {
+    mainPty._socket.on("error", (e) => {
       if (e.code !== "EIO") emit(makeError(e));
     });
 
@@ -319,9 +290,7 @@ class Process {
     const cleanup = () => {
       rl4.close();
       rl5.close();
-      stdinPty._socket.destroy();
-      stdoutPty._socket.destroy();
-      stderrPty._socket.destroy();
+      mainPty._socket.destroy();
       child.stdio[3].destroy();
       child.stdio[4].destroy();
       child.stdio[5].destroy();
@@ -350,15 +319,13 @@ class Process {
     });
   }
 
-  resize(cols) {
-    pty.native.resize(this._stdinPty._fd, cols, 50);
-    pty.native.resize(this._stdoutPty._fd, cols, 50);
-    pty.native.resize(this._stderrPty._fd, cols, 50);
+  resize(cols, rows = 24) {
+    pty.native.resize(this._pty._fd, cols, rows);
   }
 
   writeStdin(text) {
     return new Promise((resolve, reject) =>
-      fs.write(this._stdinPty._fd, text, (err) =>
+      fs.write(this._pty._fd, text, (err) =>
         err ? reject(err) : resolve(),
       ),
     );
@@ -381,7 +348,7 @@ class Process {
   }
 
   close() {
-    this._stdinPty._socket.destroy();
+    this._pty._socket.destroy();
     this._datain.destroy();
     this._control.destroy();
   }
@@ -826,6 +793,11 @@ class Shell {
     for (const proc of this._processes.values()) {
       proc.resize(obj.cols);
     }
+  }
+
+  handle$pty_resize(obj) {
+    const proc = this._processes.get(obj.to.process);
+    proc?.resize(obj.cols, obj.rows);
   }
 
   async handle$shutdown(_obj) {

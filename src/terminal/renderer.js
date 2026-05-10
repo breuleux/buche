@@ -58,6 +58,14 @@ class CellBridge {
         : { type: "input", to: this.instruction.address, data: arg },
     );
   }
+  sendResize(cols, rows) {
+    this.executor.bridge.sendCommand({
+      type: "pty_resize",
+      to: this.instruction.address,
+      cols,
+      rows,
+    });
+  }
   sendControl(arg) {
     console.log({ ...arg, to: this.instruction.address });
     this.executor.bridge.sendCommand({ ...arg, to: this.instruction.address });

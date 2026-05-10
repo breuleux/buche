@@ -66,7 +66,8 @@ function createWindow() {
 
   cq.stdout.pipe(process.stdout);
   cq.stderr.pipe(process.stderr);
-  cq.on("exit", () => win.close());
+  cq.on("exit", () => { if (!win.isDestroyed()) win.close(); });
+  win.on("closed", () => cq.kill());
 
   const fd5 = cq.stdio[5];
 
@@ -135,7 +136,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });
 
 app.on("activate", () => {
