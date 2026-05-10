@@ -1,4 +1,5 @@
 import { PromptCollection } from "./prompt.js";
+import { html } from "./utils.js";
 
 let _zoneCounter = 0;
 
@@ -201,6 +202,51 @@ export class ZoneManager {
     for (const group of groups) {
       group.node.classList.toggle("zone-group-multi", isMulti);
     }
+    this._syncDividers();
+  }
+
+  _syncDividers() {
+    for (const el of this._container.querySelectorAll(".zone-divider")) el.remove();
+    const groupNodes = [...this._container.querySelectorAll(":scope > .zone-group")];
+    for (let i = 1; i < groupNodes.length; i++) {
+      groupNodes[i].insertAdjacentElement("beforebegin", this._makeDivider(groupNodes[i - 1], groupNodes[i]));
+    }
+  }
+
+  _makeDivider(leftGroup, rightGroup) {
+    const divider = html`<div class="zone-divider"></div>`;
+
+    divider.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+
+      // Freeze all groups at their current pixel widths
+      const groupNodes = [...this._container.querySelectorAll(":scope > .zone-group")];
+      const startWidths = new Map(groupNodes.map(g => [g, g.getBoundingClientRect().width]));
+      for (const [g, w] of startWidths) g.style.flex = `0 0 ${w}px`;
+
+      const leftStart = startWidths.get(leftGroup);
+      const rightStart = startWidths.get(rightGroup);
+      divider.classList.add("dragging");
+
+      const onMouseMove = (e) => {
+        const delta = e.clientX - startX;
+        leftGroup.style.flex = `0 0 ${Math.max(80, leftStart + delta)}px`;
+        rightGroup.style.flex = `0 0 ${Math.max(80, rightStart - delta)}px`;
+        for (const zone of this._zones.values()) zone.promptCollection.layoutAll();
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        divider.classList.remove("dragging");
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+
+    return divider;
   }
 
   removeZoneIfEmpty(zoneName) {
@@ -220,8 +266,11 @@ export class ZoneManager {
     }
 
     if (newActive === null) {
-      // Group is now empty — remove it
+      // Group is now empty — remove it and reset sibling flex so they redistribute
       group.node.remove();
+      for (const el of this._container.querySelectorAll(":scope > .zone-group")) {
+        el.style.flex = "";
+      }
       if (this._activeZoneName === zoneName) {
         this._setFocusedZone("main");
         this._zones.get("main")?.promptCollection.focus();
