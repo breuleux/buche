@@ -3,6 +3,10 @@ import { html } from "./utils.js";
 import { History } from "./history.js";
 
 let focusedPrompt = null;
+
+export function isPromptFocused() {
+  return focusedPrompt !== null;
+}
 let lastEditWasDeletion = false;
 
 function applyRangesToText(text, ranges) {

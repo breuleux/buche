@@ -1,9 +1,10 @@
+import { tinykeys } from "tinykeys";
 import { AutoHandler } from "./cell/auto.js";
 import { Cell } from "./cell/cell.js";
 import { DataHandler } from "./cell/data.js";
 import { TermHandler } from "./cell/term.js";
 import { TextHandler } from "./cell/text.js";
-import { PromptCollection } from "./prompt.js";
+import { PromptCollection, isPromptFocused } from "./prompt.js";
 import { html } from "./utils.js";
 import "./scroll-fader.js";
 
@@ -196,6 +197,15 @@ class Executor {
     this.prompt.applyHighlight(instruction);
   }
 
+  clearInactiveCells() {
+    const activeNodes = new Set([...this.cells.values()].map((e) => e.cell.node));
+    for (const child of [...buffer.children]) {
+      if (!activeNodes.has(child)) {
+        child.remove();
+      }
+    }
+  }
+
   handle$library(instruction) {
     const { hash_function, hash, nonce, files } = instruction;
     window.buche.storeLibrary({ hash_function, hash, nonce, files });
@@ -215,3 +225,11 @@ class Executor {
 }
 
 const _executor = new Executor(window.buche);
+
+tinykeys(window, {
+  "Control+l": (e) => {
+    if (!isPromptFocused()) return;
+    e.preventDefault();
+    _executor.clearInactiveCells();
+  },
+});
