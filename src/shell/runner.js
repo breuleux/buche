@@ -667,6 +667,8 @@ class Shell {
               else proc.writeStdin(obj.text);
             } else if (obj.type === "close" && !hasSubaddress) {
               proc.close();
+            } else if (obj.type === "kill" && !hasSubaddress) {
+              proc.kill();
             } else {
               proc.writeControl({ ...obj, to: obj.to.subaddress ?? {} });
             }

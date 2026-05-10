@@ -160,6 +160,37 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	margin-bottom: 2px;
 } */
 
+.cell-header {
+	position: relative;
+}
+
+.cell-kill-btn {
+	position: absolute;
+	top: 1px;
+	right: 4px;
+	background: none;
+	border: none;
+	color: #555;
+	cursor: pointer;
+	font-size: 11px;
+	font-family: inherit;
+	padding: 1px 4px;
+	line-height: 1;
+	border-radius: 2px;
+	opacity: 0;
+	transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.cell:hover .cell-kill-btn,
+.cell:focus-within .cell-kill-btn {
+	opacity: 1;
+}
+
+.cell-kill-btn:hover {
+	color: #f48771;
+	background: #3a0000;
+}
+
 .cell-header .cell-input {
 	margin: 0;
 }
