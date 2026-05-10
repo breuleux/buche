@@ -9,6 +9,13 @@ const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
 
+function expandEnvVars(str, env) {
+  return str.replace(
+    /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (_, braced, bare) => env[braced ?? bare] ?? "",
+  );
+}
+
 async function* merge(iterables) {
   const queue = [];
   let notify = null;
@@ -843,13 +850,14 @@ class Shell {
     const control = this._controls.get(name);
     while (control.enabled) {
       const processId = this._generateProcessId();
+      const extraEnv = { THIS_CONFIG_DIR: control.configDir };
+      const spawnEnv = { ...process.env, ...extraEnv };
       const proc = new Process(
-        control.cmd,
-        control.args,
+        expandEnvVars(control.cmd, spawnEnv),
+        control.args.map((a) => expandEnvVars(a, spawnEnv)),
         processId,
         this._cols,
-        {},
-        control.configDir,
+        extraEnv,
       );
       control._proc = proc;
       for await (const event of proc.events()) {
