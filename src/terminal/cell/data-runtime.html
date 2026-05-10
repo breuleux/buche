@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <style>
       * { box-sizing: border-box; }
-      body { margin: 0; background: black; color: white; }
+      body { margin: 0; background: #1e1e1e; color: white; }
     </style>
   </head>
   <body>
@@ -29,16 +29,21 @@
 
         async exec(msg) {
           // Execute JavaScript; if response_id isn't null, respond with the result
-          const {code, response_id} = msg;
+          const {code, response_id, selector} = msg;
+          const targets = selector
+            ? Array.from(document.querySelectorAll(selector))
+            : [null];
           if (response_id != null) {
+            const fn = (0, eval)(`(function() { return (${code}); })`);
             try {
-              const value = await (0, eval)(code);
-              par.postMessage({ type: "response", response_id, value }, "*");
+              const value = await Promise.all(targets.map(t => fn.call(t)));
+              par.postMessage({ type: "response", response_id, value: selector ? value : value[0] }, "*");
             } catch (e) {
               par.postMessage({ type: "response", response_id, error: String(e) }, "*");
             }
           } else {
-            (0, eval)(code);
+            const fn = (0, eval)(`(function() { ${code} })`);
+            targets.forEach(t => fn.call(t));
           }
         },
 
@@ -61,8 +66,13 @@
         }
       }
 
+      var lastHeight = null;
       function reportHeight() {
-        par.postMessage({ type: "resize", height: document.body.scrollHeight }, "*");
+        var h = document.body.scrollHeight;
+        if (h !== lastHeight) {
+          lastHeight = h;
+          par.postMessage({ type: "resize", height: h }, "*");
+        }
       }
 
       new ResizeObserver(reportHeight).observe(document.body);
