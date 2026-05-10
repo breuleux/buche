@@ -11,8 +11,11 @@ const DEFAULT_CONFIG_PATH = path.join(__dirname, "default-config.yaml");
 // Returns config file paths in XDG priority order (highest first).
 // XDG_CONFIG_HOME defaults to ~/.config; XDG_CONFIG_DIRS defaults to /etc/xdg.
 function xdgConfigPaths() {
-  const home = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
-  const dirs = (process.env.XDG_CONFIG_DIRS || "/etc/xdg").split(":").filter(Boolean);
+  const home =
+    process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  const dirs = (process.env.XDG_CONFIG_DIRS || "/etc/xdg")
+    .split(":")
+    .filter(Boolean);
   return [home, ...dirs].map((dir) => path.join(dir, "buche", "config.yaml"));
 }
 

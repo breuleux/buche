@@ -763,7 +763,14 @@ class Shell {
     }
     for (const [name, { cmd, args, configDir }] of control) {
       if (!this._controls.has(name)) {
-        const ctrl = { cmd, args, configDir, restartMs: null, enabled: true, _proc: null };
+        const ctrl = {
+          cmd,
+          args,
+          configDir,
+          restartMs: null,
+          enabled: true,
+          _proc: null,
+        };
         this._controls.set(name, ctrl);
         this._runControlLoop(name);
       }

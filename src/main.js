@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const readline = require("readline");
 const { spawn } = require("child_process");
+const { registerProtocol } = require("./terminal/file-protocol");
 
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
 const termdir = path.join(__dirname, "terminal");
@@ -65,6 +66,7 @@ function createWindow() {
 
   cq.stdout.pipe(process.stdout);
   cq.stderr.pipe(process.stderr);
+  cq.on("exit", () => win.close());
 
   const fd5 = cq.stdio[5];
 
@@ -127,7 +129,10 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  registerProtocol();
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

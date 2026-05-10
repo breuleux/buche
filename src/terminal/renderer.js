@@ -188,6 +188,11 @@ class Executor {
     this.prompt.applyHighlight(instruction);
   }
 
+  handle$library(instruction) {
+    const { hash_function, hash, nonce, files } = instruction;
+    window.buche.storeLibrary({ hash_function, hash, nonce, files });
+  }
+
   handle$error(instruction) {
     const traceback = (instruction.traceback || []).map(
       (line) => html`<div class="error-traceback-line">${line}</div>`,

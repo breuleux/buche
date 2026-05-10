@@ -26,4 +26,5 @@ contextBridge.exposeInMainWorld("buche", {
     get: () => ipcRenderer.invoke("history:get"),
     add: (entry) => ipcRenderer.send("history:add", entry),
   },
+  storeLibrary: (lib) => ipcRenderer.send("library:store", lib),
 });

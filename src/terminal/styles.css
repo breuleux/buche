@@ -178,7 +178,10 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	line-height: 1;
 	border-radius: 2px;
 	opacity: 0;
-	transition: opacity 0.15s, color 0.15s, background 0.15s;
+	transition:
+		opacity 0.15s,
+		color 0.15s,
+		background 0.15s;
 }
 
 .cell:hover .cell-kill-btn,
