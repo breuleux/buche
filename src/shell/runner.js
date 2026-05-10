@@ -807,6 +807,12 @@ class Shell {
     proc?.resize(obj.cols, obj.rows);
   }
 
+  handle$nuke(_obj) {
+    for (const proc of this._processes.values()) {
+      proc.kill();
+    }
+  }
+
   async handle$shutdown(_obj) {
     for (const proc of this._processes.values()) {
       proc.kill();

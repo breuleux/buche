@@ -28,6 +28,9 @@ const BUILTINS = {
       }
     }
   },
+  async *nuke(_args, _cell_id) {
+    yield { type: "nuke" };
+  },
   async *control(args, _cell_id) {
     const [subcommand, name, ...rest] = args;
     if (subcommand === "set") {
