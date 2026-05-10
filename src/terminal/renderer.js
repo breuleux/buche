@@ -316,6 +316,16 @@ buchekeys(window, {
     _executor._zoneManager.focusZone(entry?.zone ?? "main");
   },
 
+  "Control+Tab": (e) => {
+    e.preventDefault();
+    _executor._zoneManager.cycleTab(+1);
+  },
+
+  "Control+Shift+Tab": (e) => {
+    e.preventDefault();
+    _executor._zoneManager.cycleTab(-1);
+  },
+
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 

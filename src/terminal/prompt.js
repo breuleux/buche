@@ -413,6 +413,7 @@ class Prompt {
 
     this._editor.onDidFocusEditorWidget(() => {
       focusedPrompt = this;
+      this._promptCollection.onFocus?.();
     });
 
     for (let spec of Object.values(_editorCommands())) {
@@ -572,6 +573,8 @@ export class PromptCollection {
     this._activeIdx = 0;
     this._container = container;
     this._monacoReady = false;
+    this.onFocus = null; // () => void — called when any prompt in this collection gains focus
+    this.onPromptsChanged = null; // () => void — called when prompts are added or removed
     this._parseRequests = new Map();
     this._completionRequests = new Map();
     this._history = new History({
@@ -617,11 +620,14 @@ export class PromptCollection {
     _initMonaco(vsBase);
     _onMonacoReady(() => {
       this._monacoReady = true;
+      if (this._prompts.length > 0) {
+        this._activate(0);
+      }
       for (const p of this._prompts) {
         p.init();
       }
       if (this._prompts.length > 0) {
-        this._activate(0);
+        this._prompts[this._activeIdx]?.focus();
       }
     });
   }
@@ -643,8 +649,9 @@ export class PromptCollection {
     this._tabBar.appendChild(p.tabEl);
     this._prompts.push(p);
     if (this._monacoReady) {
-      p.init();
       this._activate(this._prompts.length - 1);
+      p.init();
+      p.focus();
     }
     return p;
   }
@@ -688,6 +695,10 @@ export class PromptCollection {
     this._active?.focus();
   }
 
+  layoutAll() {
+    for (const p of this._prompts) p.layout();
+  }
+
   removePromptsByProcess(process_id) {
     const toRemove = this._prompts.filter(
       (p) => p.address?.process === process_id,
@@ -704,6 +715,7 @@ export class PromptCollection {
       this._activeIdx = Math.min(before, this._prompts.length - 1);
       this._activate(this._activeIdx);
     }
+    this.onPromptsChanged?.();
   }
 
   setPrompt({ to, address, prompt }) {

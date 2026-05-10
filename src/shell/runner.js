@@ -467,7 +467,7 @@ function shellHighlight(text, builtins) {
       state = "arg";
     } else if (token.startsWith("$")) {
       ranges.push({ start, end, cls: "sh-var" });
-    } else if (state === "cmd" && /^@(left|right)$/.test(token)) {
+    } else if (state === "cmd" && /^@(left|right|tab)$/.test(token)) {
       ranges.push({ start, end, cls: "sh-zone" });
       // state stays "cmd" so the following token is highlighted as the command
     } else if (state === "cmd") {
@@ -907,11 +907,11 @@ class Shell {
     let effectiveZone = obj.zone ?? "main";
     let text = obj.text;
     if (text !== undefined) {
-      const m = /^@(left|right)\s+/.exec(text);
+      const m = /^@(left|right|tab)\s+/.exec(text);
       if (m) {
         const dir = m[1];
         const base = typeof effectiveZone === "string" ? effectiveZone : "main";
-        effectiveZone = { base, [dir]: 1 };
+        effectiveZone = dir === "tab" ? { base, newTab: true } : { base, [dir]: 1 };
         text = text.slice(m[0].length);
       }
     }
@@ -999,9 +999,14 @@ class Shell {
       if (event.type === "process_close" && event.process_id === processId) {
         this._processes.delete(processId);
       }
-      // The parent's effective zone always wins for cell_create/prompt_create
-      // from subprocesses — the subprocess cannot know which zone it's in.
-      if (event.type === "cell_create" || event.type === "prompt_create") {
+      // Inject zone into cell_create/prompt_create from subprocesses.
+      // If the subprocess set an object descriptor (e.g. @tab, @left), it was
+      // intentional — respect it. Only override plain strings (e.g. the
+      // hardcoded "main" that every cq sub-shell emits on startup).
+      if (
+        (event.type === "cell_create" || event.type === "prompt_create") &&
+        (event.zone == null || typeof event.zone === "string")
+      ) {
         yield { ...event, zone: effectiveZone };
       } else {
         yield event;

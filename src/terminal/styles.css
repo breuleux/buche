@@ -31,12 +31,93 @@ body {
 	min-height: 0;
 }
 
-.zone {
+/* ── Zone groups (one per left/right column; holds 1..N tabs) ── */
+.zone-group {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 0;
 	min-width: 0;
 	min-height: 0;
+}
+
+.zone-top-tabs {
+	display: none;
+	flex: 0 0 auto;
+	flex-direction: row;
+	background: #1a1a1a;
+	border-bottom: 1px solid #2e2e2e;
+	padding: 0 4px;
+}
+
+.zone-top-tabs.visible,
+.zone-group-multi .zone-top-tabs {
+	display: flex;
+}
+
+.zone-top-tab {
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	color: #555;
+	cursor: default;
+	font-size: 11px;
+	font-family: inherit;
+	padding: 4px 12px 3px;
+	line-height: 1;
+	user-select: none;
+	transition: color 0.15s;
+}
+
+.zone-top-tab:hover {
+	color: #999;
+}
+
+.zone-top-tab.active {
+	color: #aaa;
+	border-bottom-color: #555;
+}
+
+.zone-top-tab.zone-focused {
+	color: #d4d4d4;
+	border-bottom-color: #569cd6;
+}
+
+/* Single-tab group: render as a 2px strip, no label */
+.zone-group-single .zone-top-tabs {
+	padding: 0;
+}
+
+.zone-group-single .zone-top-tab {
+	flex: 1;
+	padding: 0;
+	height: 2px;
+	font-size: 0;
+	border-bottom: none;
+	background: transparent;
+	transition: background 0.15s;
+}
+
+.zone-group-single .zone-top-tab.zone-focused {
+	background: #569cd6;
+}
+
+.zone-group-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.zone {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+}
+
+.zone.zone-hidden {
+	display: none;
 }
 
 /* ── Buffer (per-zone) ── */
