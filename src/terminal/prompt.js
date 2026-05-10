@@ -4,6 +4,86 @@ import { History } from "./history.js";
 
 let focusedPrompt = null;
 
+// ── Module-level Monaco / tinykeys singletons ────────────────────────────
+// Monaco must be loaded exactly once even when multiple PromptCollections exist.
+
+let _monacoLoadState = "idle"; // "idle" | "loading" | "ready"
+const _monacoReadyCallbacks = [];
+let _keysRegistered = false;
+let _completionsRegistered = false;
+const _allHistories = []; // one entry per PromptCollection
+
+function _onMonacoReady(cb) {
+  if (_monacoLoadState === "ready") {
+    cb();
+  } else {
+    _monacoReadyCallbacks.push(cb);
+  }
+}
+
+function _initMonaco(vsBase) {
+  if (_monacoLoadState !== "idle") return;
+  _monacoLoadState = "loading";
+
+  window.MonacoEnvironment = {
+    getWorkerUrl(_moduleId, _label) {
+      return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+        self.MonacoEnvironment = { baseUrl: '${vsBase}/' };
+        importScripts('${vsBase}/base/worker/workerMain.js');
+      `)}`;
+    },
+  };
+
+  const loaderScript = document.createElement("script");
+  loaderScript.src = `${vsBase}/loader.js`;
+  loaderScript.onload = () => {
+    require.config({ paths: { vs: vsBase } });
+    require(["vs/editor/editor.main"], () => {
+      _monacoLoadState = "ready";
+      if (!_completionsRegistered) {
+        _completionsRegistered = true;
+        _registerHistoryCompletions();
+      }
+      for (const cb of _monacoReadyCallbacks.splice(0)) cb();
+    });
+  };
+  document.head.appendChild(loaderScript);
+}
+
+function _registerHistoryCompletions() {
+  monaco.languages.registerInlineCompletionsProvider("*", {
+    provideInlineCompletions(model, position, _context, _token) {
+      const text = model.getValue();
+      const offset = model.getOffsetAt(position);
+      if (!text || offset !== text.length || lastEditWasDeletion)
+        return { items: [] };
+      for (const history of _allHistories) {
+        const entries = history._entries;
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const { text: entryText } = entries[i];
+          if (entryText.startsWith(text) && entryText.length > text.length) {
+            return {
+              items: [
+                {
+                  insertText: entryText.slice(text.length),
+                  range: new monaco.Range(
+                    position.lineNumber,
+                    position.column,
+                    position.lineNumber,
+                    position.column,
+                  ),
+                },
+              ],
+            };
+          }
+        }
+      }
+      return { items: [] };
+    },
+    freeInlineCompletions() {},
+  });
+}
+
 export function isPromptFocused() {
   return focusedPrompt !== null;
 }
@@ -407,6 +487,7 @@ class Prompt {
       to: this.address,
       text: value,
       echo_html,
+      zone: this._promptCollection._zoneName,
     });
     this._editor.setValue("");
   }
@@ -484,8 +565,9 @@ class Prompt {
 }
 
 export class PromptCollection {
-  constructor(container, buche) {
+  constructor(container, buche, zoneName = "main") {
     this._buche = buche;
+    this._zoneName = zoneName;
     this._prompts = [];
     this._activeIdx = 0;
     this._container = container;
@@ -501,90 +583,46 @@ export class PromptCollection {
         if (idx !== -1) this._activate(idx);
       },
     });
+    _allHistories.push(this._history);
 
     this._tabBar = document.createElement("div");
-    this._tabBar.id = "prompt-tabs";
+    this._tabBar.className = "prompt-tabs";
     container.insertAdjacentElement("afterend", this._tabBar);
 
-    const vsBase = `file://${buche.vsBase}`;
-    window.MonacoEnvironment = {
-      getWorkerUrl(_moduleId, _label) {
-        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
-          self.MonacoEnvironment = { baseUrl: '${vsBase}/' };
-          importScripts('${vsBase}/base/worker/workerMain.js');
-        `)}`;
-      },
-    };
-
-    tinykeys(window, {
-      "$mod+ArrowLeft": (e) => {
-        if (!focusedPrompt) return;
-        e.preventDefault();
-        focusedPrompt._promptCollection._move(-1);
-      },
-      "$mod+ArrowRight": (e) => {
-        if (!focusedPrompt) return;
-        e.preventDefault();
-        focusedPrompt._promptCollection._move(1);
-      },
-      "Control+d": (e) => {
-        if (!focusedPrompt) return;
-        e.preventDefault();
-        focusedPrompt._promptCollection._buche.sendCommand({
-          type: "prompt_close",
-          to: focusedPrompt.address,
-        });
-      },
-    });
-
-    const loaderScript = document.createElement("script");
-    loaderScript.src = `${vsBase}/loader.js`;
-    loaderScript.onload = () => {
-      require.config({ paths: { vs: vsBase } });
-      require(["vs/editor/editor.main"], () => {
-        this._monacoReady = true;
-        this._registerHistoryCompletions();
-        for (const p of this._prompts) {
-          p.init();
-        }
-        if (this._prompts.length > 0) {
-          this._activate(0);
-        }
+    if (!_keysRegistered) {
+      _keysRegistered = true;
+      tinykeys(window, {
+        "$mod+ArrowLeft": (e) => {
+          if (!focusedPrompt) return;
+          e.preventDefault();
+          focusedPrompt._promptCollection._move(-1);
+        },
+        "$mod+ArrowRight": (e) => {
+          if (!focusedPrompt) return;
+          e.preventDefault();
+          focusedPrompt._promptCollection._move(1);
+        },
+        "Control+d": (e) => {
+          if (!focusedPrompt) return;
+          e.preventDefault();
+          focusedPrompt._promptCollection._buche.sendCommand({
+            type: "prompt_close",
+            to: focusedPrompt.address,
+          });
+        },
       });
-    };
-    document.head.appendChild(loaderScript);
-  }
+    }
 
-  _registerHistoryCompletions() {
-    const history = this._history;
-    monaco.languages.registerInlineCompletionsProvider("*", {
-      provideInlineCompletions(model, position, _context, _token) {
-        const text = model.getValue();
-        const offset = model.getOffsetAt(position);
-        if (!text || offset !== text.length || lastEditWasDeletion)
-          return { items: [] };
-        const entries = history._entries;
-        for (let i = entries.length - 1; i >= 0; i--) {
-          const { text: entryText } = entries[i];
-          if (entryText.startsWith(text) && entryText.length > text.length) {
-            return {
-              items: [
-                {
-                  insertText: entryText.slice(text.length),
-                  range: new monaco.Range(
-                    position.lineNumber,
-                    position.column,
-                    position.lineNumber,
-                    position.column,
-                  ),
-                },
-              ],
-            };
-          }
-        }
-        return { items: [] };
-      },
-      freeInlineCompletions() {},
+    const vsBase = `file://${buche.vsBase}`;
+    _initMonaco(vsBase);
+    _onMonacoReady(() => {
+      this._monacoReady = true;
+      for (const p of this._prompts) {
+        p.init();
+      }
+      if (this._prompts.length > 0) {
+        this._activate(0);
+      }
     });
   }
 

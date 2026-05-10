@@ -4,36 +4,14 @@ import { Cell } from "./cell/cell.js";
 import { DataHandler } from "./cell/data.js";
 import { TermHandler } from "./cell/term.js";
 import { TextHandler } from "./cell/text.js";
-import { PromptCollection, isPromptFocused } from "./prompt.js";
+import { isPromptFocused } from "./prompt.js";
+import { ZoneManager } from "./zone.js";
 import { html } from "./utils.js";
 import "./scroll-fader.js";
 
-// ── Buffer protocol ─────────────────────────────────────────────────────
+// ── Zone manager ─────────────────────────────────────────────────────────
 
-const bufferWrap = document.getElementById("buffer-wrap");
-const buffer = document.createElement("div");
-buffer.id = "buffer-inner";
-bufferWrap.inner.appendChild(buffer);
-
-// ── Terminal width tracking ──────────────────────────────────────────────
-// Measure char width once using canvas (same font as the UI), then derive
-// cols from the buffer container width on every resize.
-{
-  const ctx = document.createElement("canvas").getContext("2d");
-  ctx.font = "13px Consolas, Menlo, monospace";
-  const charWidth = ctx.measureText("M").width;
-  const CELL_PADDING = 16; // .cell padding-left in styles.css
-
-  const sendResize = () => {
-    const width = bufferWrap.clientWidth;
-    if (width > 0) {
-      const cols = Math.max(1, Math.floor((width - CELL_PADDING) / charWidth) - 2);
-      window.buche.sendCommand({ type: "resize", cols });
-    }
-  };
-  new ResizeObserver(sendResize).observe(bufferWrap);
-  sendResize();
-}
+const zonesContainer = document.getElementById("zones-container");
 
 const cellHandlers = {
   text: TextHandler,
@@ -73,20 +51,19 @@ class CellBridge {
   }
   onBackground() {
     this.executor._activeCell = null;
-    this.executor.prompt.focus();
+    const key = cellKey(this.instruction.address, this.instruction.to.cell);
+    const zoneName = this.executor.cells.get(key)?.zone ?? "main";
+    this.executor._zoneManager.focusZone(zoneName);
   }
 }
 
 class Executor {
   constructor(bridge) {
-    // Map<key, {cell: Cell, address: object}>
+    // Map<key, {cell: Cell, address: object, zone: string}>
     this.cells = new Map();
     this._activeCell = null;
     this.bridge = bridge;
-    this.prompt = new PromptCollection(
-      document.getElementById("input-container"),
-      this.bridge,
-    );
+    this._zoneManager = new ZoneManager(zonesContainer, bridge);
     this.bridge.onInstruction((instruction) => this.execute(instruction));
   }
 
@@ -116,8 +93,9 @@ class Executor {
     }
     const bridge = new CellBridge(this, instruction);
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
-    buffer.appendChild(cell.node);
-    this.cells.set(key, { cell, address: instruction.address });
+    const zone = this._zoneManager.resolveZone(instruction.zone ?? "main");
+    zone.buffer.appendChild(cell.node);
+    this.cells.set(key, { cell, address: instruction.address, zone: zone.name });
     if (!instruction.background) {
       this._activeCell = key;
       cell.node.focus();
@@ -159,10 +137,10 @@ class Executor {
       if (this._activeCell === key) {
         this._activeCell = null;
         if (isFocused) {
-          this.prompt.focus();
+          this._zoneManager.focusZone(entry.zone);
         }
       } else if (isFocused) {
-        this.prompt.focus();
+        this._zoneManager.focusZone(entry.zone);
       }
     }
   }
@@ -170,42 +148,45 @@ class Executor {
   handle$process_close(instruction) {
     const { process_id } = instruction;
     let anyFocused = false;
+    let closedZone = null;
     for (const [key, entry] of [...this.cells]) {
       if (entry.address?.process === process_id) {
         if (entry.cell.node === document.activeElement) anyFocused = true;
+        closedZone = entry.zone;
         entry.cell.close(instruction.return_code);
         this.cells.delete(key);
         if (this._activeCell === key) this._activeCell = null;
       }
     }
-    this.prompt.removePromptsByProcess(process_id);
+    this._zoneManager.removePromptsByProcess(process_id);
     if (anyFocused || this._activeCell === null) {
-      this.prompt.focus();
+      this._zoneManager.focusZone(closedZone ?? "main");
     }
   }
 
   handle$prompt_create(instruction) {
-    this.prompt.addPrompt(instruction);
-    this.prompt.focus();
+    this._zoneManager.addPrompt(instruction);
   }
 
   handle$set_prompt(instruction) {
-    this.prompt.setPrompt(instruction);
+    this._zoneManager.setPrompt(instruction);
   }
 
   handle$highlight(instruction) {
-    this.prompt.applyHighlight(instruction);
+    this._zoneManager.applyHighlight(instruction);
   }
 
   handle$complete(instruction) {
-    this.prompt.applyComplete(instruction);
+    this._zoneManager.applyComplete(instruction);
   }
 
   clearInactiveCells() {
     const activeNodes = new Set([...this.cells.values()].map((e) => e.cell.node));
-    for (const child of [...buffer.children]) {
-      if (!activeNodes.has(child)) {
-        child.remove();
+    for (const zone of this._zoneManager.allZones()) {
+      for (const child of [...zone.buffer.children]) {
+        if (!activeNodes.has(child)) {
+          child.remove();
+        }
       }
     }
   }
@@ -224,7 +205,8 @@ class Executor {
         <pre class="error-header">${instruction.error_type}: ${instruction.message}</pre>
         ${traceback.length ? html`<div class="error-traceback">${traceback}</div>` : null}
       </div>`;
-    buffer.appendChild(cell);
+    // Route error cells to the main zone buffer
+    this._zoneManager.resolveZone("main").buffer.appendChild(cell);
   }
 }
 
@@ -233,7 +215,9 @@ const _executor = new Executor(window.buche);
 // ── Cell navigation helpers ──────────────────────────────────────────────
 
 function getOrderedCellNodes() {
-  return [...buffer.children].filter((n) => n.classList.contains("cell"));
+  return [..._executor._zoneManager.allZones()].flatMap((zone) =>
+    [...zone.buffer.children].filter((n) => n.classList.contains("cell")),
+  );
 }
 
 function focusCellNode(node) {
@@ -261,7 +245,6 @@ buchekeys(window, {
     if (ordered.length === 0) return;
     const focused = document.activeElement?.closest?.(".cell");
     if (!focused || !ordered.includes(focused)) {
-      // From prompt or outside — jump to last cell
       focusCellNode(ordered[ordered.length - 1]);
       return;
     }
@@ -276,7 +259,8 @@ buchekeys(window, {
     if (!focused || !ordered.includes(focused)) return;
     const idx = ordered.indexOf(focused);
     if (idx === ordered.length - 1) {
-      _executor.prompt.focus();
+      const entry = getFocusedCellEntry();
+      _executor._zoneManager.focusZone(entry?.zone ?? "main");
     } else {
       focusCellNode(ordered[idx + 1]);
     }
@@ -297,7 +281,7 @@ buchekeys(window, {
     if (!cellNode) return;
     const prev = cellNode.previousElementSibling;
     if (prev?.classList.contains("cell")) {
-      buffer.insertBefore(cellNode, prev);
+      cellNode.parentElement.insertBefore(cellNode, prev);
       cellNode.scrollIntoView({ block: "nearest" });
     }
   },
@@ -307,7 +291,7 @@ buchekeys(window, {
     if (!cellNode) return;
     const next = cellNode.nextElementSibling;
     if (next?.classList.contains("cell")) {
-      buffer.insertBefore(next, cellNode);
+      cellNode.parentElement.insertBefore(next, cellNode);
       cellNode.scrollIntoView({ block: "nearest" });
     }
   },
@@ -315,18 +299,21 @@ buchekeys(window, {
   "Control+q ~ f": (e) => {
     const cellNode = document.activeElement?.closest?.(".cell");
     if (!cellNode) return;
-    buffer.appendChild(cellNode);
+    cellNode.parentElement.appendChild(cellNode);
     cellNode.scrollIntoView({ block: "nearest" });
-    _executor.prompt.focus();
+    const entry = getFocusedCellEntry();
+    _executor._zoneManager.focusZone(entry?.zone ?? "main");
   },
 
   "Control+q ~ l": (e) => {
     _executor.clearInactiveCells();
-    _executor.prompt.focus();
+    const entry = getFocusedCellEntry();
+    _executor._zoneManager.focusZone(entry?.zone ?? "main");
   },
 
   "Control+q ~ p": (e) => {
-    _executor.prompt.focus();
+    const entry = getFocusedCellEntry();
+    _executor._zoneManager.focusZone(entry?.zone ?? "main");
   },
 
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
@@ -339,8 +326,9 @@ buchekeys(window, {
     const idx = allCells.indexOf(cellNode);
     const nextFocus = allCells[idx + 1] ?? null;
     let key = null;
+    let zone = "main";
     for (const [k, entry] of _executor.cells) {
-      if (entry.cell.node === cellNode) { key = k; break; }
+      if (entry.cell.node === cellNode) { key = k; zone = entry.zone; break; }
     }
     if (key) {
       const { cell } = _executor.cells.get(key);
@@ -354,7 +342,7 @@ buchekeys(window, {
     if (nextFocus?.isConnected) {
       focusCellNode(nextFocus);
     } else {
-      _executor.prompt.focus();
+      _executor._zoneManager.focusZone(zone);
     }
   },
 });

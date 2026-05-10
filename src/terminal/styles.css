@@ -18,36 +18,48 @@ body {
 	line-height: 1.1;
 }
 
-/* ── Buffer ──
- * #buffer-wrap: flex child of body, holds the fade overlays.
- * #buffer:      the actual scroll container (inside the wrap, not the overlay host).
- * Keeping overlays on the wrap means they are never inside the scrollable element,
- * so they don't move when the user scrolls.
+/* ── Zones ──
+ * #zones-container: flex row holding one .zone per pane.
+ * .zone:            flex column — buffer wrap + input container.
+ * .zone-buffer-wrap: grows to fill zone, hosts the scroll fader.
+ * Keeping scroll shadows on the wrap means they stay fixed while content scrolls.
  */
+
+#zones-container {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.zone {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+}
+
+/* ── Buffer (per-zone) ── */
 scroll-fader {
 	display: block;
 	position: relative;
 	overflow: hidden;
 }
 
-scroll-fader#buffer-wrap {
+.zone-buffer-wrap {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-scroll-fader#buffer-wrap .scroll-fader-inner {
+.zone-buffer-wrap .scroll-fader-inner {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column-reverse;
 }
-/* 
-#buffer-inner {
-	padding: 8px 12px;
-} */
 
 .cell scroll-fader .scroll-fader-inner {
 	max-height: 600px;
@@ -77,8 +89,8 @@ scroll-fader#buffer-wrap .scroll-fader-inner {
 	opacity: 1;
 }
 
-scroll-fader#buffer-wrap .scroll-shadow-top,
-scroll-fader#buffer-wrap .scroll-shadow-bottom {
+.zone-buffer-wrap .scroll-shadow-top,
+.zone-buffer-wrap .scroll-shadow-bottom {
 	height: 48px;
 }
 .cell .scroll-shadow-top,
@@ -86,8 +98,8 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 	height: 32px;
 }
 
-/* ── Monaco input ── */
-#input-container {
+/* ── Monaco input (per-zone) ── */
+.zone-input-container {
 	flex: 0 0 auto;
 	/* border-top: 1px solid #3c3c3c; */
 	display: flex;
@@ -123,7 +135,7 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 
 /* ── Prompt tabs ── */
-#prompt-tabs {
+.prompt-tabs {
 	display: flex;
 	/* border-top: 1px solid #2a2a2a;
 	background: #1a1a1a; */
@@ -322,6 +334,10 @@ scroll-fader#buffer-wrap .scroll-shadow-bottom {
 }
 
 /* ── Shell syntax highlighting (Monaco inline decorations) ── */
+.sh-zone {
+	color: #569cd6 !important;
+	font-weight: bold;
+}
 .sh-cmd {
 	color: #dcdcaa !important;
 	font-weight: bold;

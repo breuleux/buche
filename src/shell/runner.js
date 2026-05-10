@@ -100,10 +100,10 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, echo_html, prompt_name, background = false) {
+  async *runNode(node, echo_html, prompt_name, background = false, zone = "main") {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, echo_html, prompt_name, background);
+        yield* this._runCommand(node, echo_html, prompt_name, background, zone);
         break;
       case "Pipeline":
         throw new FeatureNotImplementedError("pipes (|)");
@@ -130,13 +130,14 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, echo_html, prompt_name, background = false) {
+  async *_runCommand(node, echo_html, prompt_name, background = false, zone = "main") {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
           yield* this._shell.handle$prompt_submit({
             command: "set",
             args: [item.text],
+            zone,
           });
         }
       }
@@ -163,6 +164,7 @@ class ProcessBuilder {
       echo_html,
       prompt_name,
       background,
+      zone,
     });
   }
 
@@ -271,6 +273,11 @@ class Process {
           transformed.to = { process: processId, subaddress: transformed.to };
         } else if (!transformed.to) {
           transformed.to = { target: "terminal" };
+        }
+        // Namespace process_close.process_id so it can't collide with the
+        // parent shell's process IDs (both start their counters from 0).
+        if (transformed.type === "process_close") {
+          transformed.process_id = `${processId}/${transformed.process_id}`;
         }
         emit(transformed);
       });
@@ -460,6 +467,9 @@ function shellHighlight(text, builtins) {
       state = "arg";
     } else if (token.startsWith("$")) {
       ranges.push({ start, end, cls: "sh-var" });
+    } else if (state === "cmd" && /^@(left|right)$/.test(token)) {
+      ranges.push({ start, end, cls: "sh-zone" });
+      // state stays "cmd" so the following token is highlighted as the command
     } else if (state === "cmd") {
       ranges.push({ start, end, cls: "sh-cmd" });
       state = "arg";
@@ -623,6 +633,7 @@ class Shell {
           name: "cq",
           tag: "cq",
           language: null,
+          zone: "main",
         };
         // yield {
         //   type: "set_prompt",
@@ -891,10 +902,24 @@ class Shell {
       process_id: obj.process_id,
       prompt_name: obj.prompt_name,
     });
-    if (obj.text !== undefined) {
+
+    // Determine effective zone, parsing @left / @right prefix from raw text.
+    let effectiveZone = obj.zone ?? "main";
+    let text = obj.text;
+    if (text !== undefined) {
+      const m = /^@(left|right)\s+/.exec(text);
+      if (m) {
+        const dir = m[1];
+        const base = typeof effectiveZone === "string" ? effectiveZone : "main";
+        effectiveZone = { base, [dir]: 1 };
+        text = text.slice(m[0].length);
+      }
+    }
+
+    if (text !== undefined) {
       let ast;
       try {
-        ast = bashParser(obj.text, {
+        ast = bashParser(text, {
           resolveEnv: (name) => this._vars.get(name) ?? process.env[name] ?? "",
           resolveHomeUser: (username) => {
             if (!username) {
@@ -919,7 +944,7 @@ class Shell {
         const prompt_name = first ? (obj.prompt_name ?? null) : null;
         first = false;
         const background = node.async === true;
-        yield* builder.runNode(node, echo_html, prompt_name, background);
+        yield* builder.runNode(node, echo_html, prompt_name, background, effectiveZone);
       }
       return;
     }
@@ -936,6 +961,7 @@ class Shell {
         address: { process: processId },
         echo_html,
         mode: "auto",
+        zone: effectiveZone,
         background: obj.background ?? false,
       };
       let return_code = 0;
@@ -964,6 +990,7 @@ class Shell {
       address: { process: processId },
       echo_html,
       mode: "auto",
+      zone: effectiveZone,
       background: obj.background ?? false,
       pid: proc.pid,
     };
@@ -972,7 +999,13 @@ class Shell {
       if (event.type === "process_close" && event.process_id === processId) {
         this._processes.delete(processId);
       }
-      yield event;
+      // The parent's effective zone always wins for cell_create/prompt_create
+      // from subprocesses — the subprocess cannot know which zone it's in.
+      if (event.type === "cell_create" || event.type === "prompt_create") {
+        yield { ...event, zone: effectiveZone };
+      } else {
+        yield event;
+      }
     }
   }
 
