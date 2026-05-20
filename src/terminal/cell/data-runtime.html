@@ -68,7 +68,11 @@
           for (const [type, code] of Object.entries(msg.handlers)) {
             handlers[type] = (0, eval)(`(${code})`);
           }
-        }
+        },
+
+        bucheInfo(msg) {
+          window.bucheInfo = { maxHeight: msg.maxHeight };
+        },
       }
 
       var lastHeight = null;

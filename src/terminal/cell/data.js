@@ -42,6 +42,9 @@ export class DataHandler {
     if (keysConfig) {
       this._iframe.contentWindow.postMessage({ type: "buchekeysConfig", ...keysConfig }, "*");
     }
+    const bufferWrap = this._iframe.closest(".zone-buffer-wrap");
+    const maxHeight = bufferWrap ? bufferWrap.clientHeight : 0;
+    this._iframe.contentWindow.postMessage({ type: "bucheInfo", maxHeight }, "*");
     for (const m of this._pending) {
       this._iframe.contentWindow.postMessage(m, "*");
     }
