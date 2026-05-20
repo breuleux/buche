@@ -9,11 +9,18 @@ export class Cell {
       ? html`<button class="cell-kill-btn">✕</button>`
       : null;
     const controls = html`<span class="cell-controls">${this._btnBar}${this._killBtn}</span>`;
-    const header = html`<div class="cell-header">${echo}${controls}</div>`;
+    // _metaEl is a permanent 0-height parking spot in the cell.
+    // In solo mode, _statusDot and _controls are moved out of it into the zone's
+    // tab (dot left, controls right) and returned here when solo ends.
+    this._metaEl = html`<div class="cell-meta">${this._statusDot}${controls}</div>`;
+    const header = html`<div class="cell-header">${echo}</div>`;
     this.node = html`<div class="cell" data-cell-id="${instruction.cell_id}" tabindex="0">
-			${this._statusDot}
+			${this._metaEl}
 			${header}
 		</div>`;
+    this.node._metaEl = this._metaEl;
+    this.node._statusDot = this._statusDot;
+    this.node._controls = controls;
 
     // Called when focus is programmatically restored to this cell (e.g. zone switch).
     // Each handler can implement focus() to handle internal focus delegation.

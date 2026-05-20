@@ -90,6 +90,13 @@ body {
 	line-height: 1;
 	user-select: none;
 	transition: color 0.15s;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.zone-top-tab .tab-label {
+	flex: 1;
 }
 
 .zone-top-tab:hover {
@@ -123,6 +130,25 @@ body {
 
 .zone-group-single .zone-top-tab.zone-focused {
 	background: #569cd6;
+}
+
+/* Single-tab solo cell: show the tab bar as a thin header with the meta elements */
+.zone-group-single.zone-solo-active .zone-top-tabs {
+	display: flex;
+	padding: 0 4px;
+}
+
+.zone-group-single.zone-solo-active .zone-top-tab {
+	height: auto;
+	padding: 3px 4px;
+	font-size: 11px;
+	border-bottom: 1px solid #2e2e2e;
+	background: #1a1a1a;
+}
+
+/* Never show the "Tab N" label in single-tab mode */
+.zone-group-single .zone-top-tab .tab-label {
+	display: none;
 }
 
 .zone-group-body {
@@ -240,20 +266,20 @@ scroll-fader {
 	flex-direction: column;
 }
 
-/* Direct content fills the cell */
-.zone-solo-cell .cell > div:not(.cell-header),
+/* Direct content fills the cell (.cell-meta is zero-height and must not flex-fill) */
+.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta),
 .zone-solo-cell .cell > iframe {
 	flex: 1 1 0;
 	min-height: 0;
 }
 
 /* Auto handler: wrapper divs are flex columns so height propagates */
-.zone-solo-cell .cell > div:not(.cell-header) {
+.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta) {
 	display: flex;
 	flex-direction: column;
 }
 
-.zone-solo-cell .cell > div:not(.cell-header) > div {
+.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta) > div {
 	flex: 1 1 0;
 	min-height: 0;
 	display: flex;
@@ -381,7 +407,7 @@ scroll-fader {
 
 .cell {
 	position: relative;
-	padding-left: 16px;
+	/* padding-left: 16px; */
 	/* margin-bottom: 8px; */
 	outline: none;
 	border-radius: 3px;
@@ -463,6 +489,38 @@ scroll-fader {
 
 .cell-header .cell-input {
 	margin: 0;
+}
+
+/* ── Cell meta (status dot + controls wrapper) ──
+ * In-cell: zero-height, children are absolutely positioned as before.
+ * In-tab/strip: flex row showing status + controls inline.
+ */
+.cell .cell-meta {
+	height: 0;
+	overflow: visible;
+}
+
+/* Status dot and controls are direct children of the tab in solo mode */
+.zone-top-tab > .cell-status {
+	position: static;
+	left: auto;
+	top: auto;
+	flex: 0 0 auto;
+}
+
+.zone-top-tab > .cell-controls {
+	position: static;
+	top: auto;
+	right: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: auto;
+}
+
+.zone-top-tab > .cell-controls .cell-kill-btn,
+.zone-top-tab > .cell-controls .cell-view-btn {
+	opacity: 1;
 }
 
 .cell-status {
