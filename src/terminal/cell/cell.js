@@ -15,6 +15,12 @@ export class Cell {
 			${header}
 		</div>`;
 
+    // Called when focus is programmatically restored to this cell (e.g. zone switch).
+    // Each handler can implement focus() to handle internal focus delegation.
+    this.node._bucheFocus = () => {
+      if (this.isAlive()) this.handler.focus?.();
+    };
+
     this._bridge = bridge ?? null;
 
     if (bridge) {
@@ -100,6 +106,7 @@ export class Cell {
       this._killBtn = null;
     }
     this.handler.setCursorState?.("hidden");
+    this.node._bucheFocus = null; // Dead — focusLatent() will fall back to the prompt
     this.node.blur();
   }
 }

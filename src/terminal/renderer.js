@@ -281,6 +281,7 @@ function getOrderedCellNodes() {
 
 function focusCellNode(node) {
   node.focus();
+  node._bucheFocus?.();
 }
 
 // Directly focuses the active zone's prompt, bypassing activateByName's

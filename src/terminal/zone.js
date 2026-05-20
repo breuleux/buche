@@ -6,9 +6,20 @@ let _zoneCounter = 0;
 export class Zone {
   constructor(name, bridge) {
     this.name = name;
+    this._latentCellNode = null;
+    this._latentFocusIsPrompt = false;
 
     this.buffer = document.createElement("div");
     this.buffer.className = "zone-buffer";
+
+    // Track the last focused .cell node within this zone's buffer.
+    this.buffer.addEventListener("focusin", (e) => {
+      const cell = e.target.closest(".cell");
+      if (cell) {
+        this._latentCellNode = cell;
+        this._latentFocusIsPrompt = false;
+      }
+    });
 
     this._bufferWrap = document.createElement("scroll-fader");
     this._bufferWrap.classList.add("zone-buffer-wrap");
@@ -61,8 +72,24 @@ export class Zone {
     }).observe(this._bufferWrap);
   }
 
-  focus() {
+  // Focus the zone: restore the last focused cell, or fall back to the prompt.
+  // Uses _bucheFocus presence as a live-cell signal (cleared on cell.close()).
+  focusLatent() {
+    if (!this._latentFocusIsPrompt) {
+      const node = this._latentCellNode;
+      if (node?.isConnected && this.buffer.contains(node) && node._bucheFocus) {
+        node.focus();
+        node._bucheFocus();
+        return;
+      }
+    }
+    this._latentCellNode = null;
+    this._latentFocusIsPrompt = false;
     this.promptCollection.focus();
+  }
+
+  focus() {
+    this.focusLatent();
   }
 }
 
@@ -132,11 +159,9 @@ class ZoneGroup {
       requestAnimationFrame(() => this._zones[idx].promptCollection.layoutAll());
     }
 
-    // Always focus after paint, but don't steal focus from a focused cell.
+    // Always focus after paint, restoring latent cell or falling back to prompt.
     requestAnimationFrame(() => {
-      if (!document.activeElement?.closest?.(".cell")) {
-        this._zones[idx].promptCollection.focus();
-      }
+      this._zones[idx].focusLatent();
     });
     this.onActivate?.(zoneName);
   }
@@ -175,7 +200,7 @@ class ZoneGroup {
       this._tabEls.get(next.name)?.classList.add("active");
       requestAnimationFrame(() => {
         next.promptCollection.layoutAll();
-        next.promptCollection.focus();
+        next.focusLatent();
       });
       this.onActivate?.(next.name);
     } else {
@@ -342,11 +367,11 @@ export class ZoneManager {
       }
       if (this._activeZoneName === zoneName) {
         this._setFocusedZone("main");
-        this._zones.get("main")?.promptCollection.focus();
+        this._zones.get("main")?.focusLatent();
       }
     } else if (this._activeZoneName === zoneName) {
       this._setFocusedZone(newActive);
-      this._zones.get(newActive)?.promptCollection.focus();
+      this._zones.get(newActive)?.focusLatent();
     }
 
     this._updateMultiLayout();
@@ -421,7 +446,10 @@ export class ZoneManager {
 
   _initZone(name, group) {
     const zone = new Zone(name, this._bridge);
-    zone.promptCollection.onFocus = () => { this._setFocusedZone(name); };
+    zone.promptCollection.onFocus = () => {
+      zone._latentFocusIsPrompt = true;
+      this._setFocusedZone(name);
+    };
     zone.promptCollection.onPromptsChanged = () => { this.removeZoneIfEmpty(name); };
     group.addZone(zone);
     zone.initBuffer();
@@ -574,7 +602,7 @@ export class ZoneManager {
     this._groups.get(zone.name)?.activateByName(zone.name);
     // If zone has no prompts, fall back to main via rAF for the same reason.
     if (zone.promptCollection._prompts.length === 0 && zone.name !== "main") {
-      requestAnimationFrame(() => this._zones.get("main")?.promptCollection.focus());
+      requestAnimationFrame(() => this._zones.get("main")?.focusLatent());
     }
   }
 

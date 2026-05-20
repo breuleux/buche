@@ -71,5 +71,11 @@ export class DataHandler {
     }
   }
 
+  focus() {
+    if (this._ready) {
+      this._iframe.contentWindow.postMessage({ type: "focus" }, "*");
+    }
+  }
+
   setCursorState(_state) {}
 }

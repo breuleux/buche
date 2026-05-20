@@ -21,10 +21,15 @@
           var targets = selector
             ? Array.from(document.querySelectorAll(selector))
             : [document.body];
-          for (var target of targets) { apply(target, mode, content); }
+          var added = [];
+          for (var target of targets) { added.push(...apply(target, mode, content)); }
           reportHeight();
-          var pf = document.getElementById("prime-focus");
-          if (pf) { pf.focus(); }          
+          var pf = findPrimeFocus(added);
+          if (pf) { pf.focus(); }
+        },
+
+        focus(_msg) {
+          window.autofocus();
         },
 
         async exec(msg) {
@@ -89,6 +94,7 @@
 
       // Parse content into a detached div, activate scripts, then move nodes into
       // the live DOM so scripts execute exactly once on insertion.
+      // Returns the array of top-level nodes that were added.
       function apply(target, mode, content) {
         var tmp = document.createElement("div");
         tmp.innerHTML = content;
@@ -102,6 +108,17 @@
         } else {
           target.append(...nodes);
         }
+        return nodes;
+      }
+
+      function findPrimeFocus(nodes) {
+        for (var node of nodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.id === "prime-focus") return node;
+          var pf = node.querySelector("#prime-focus");
+          if (pf) return pf;
+        }
+        return null;
       }
 
       window.addEventListener("message", (e) => {
@@ -111,6 +128,10 @@
       });
 
       // API available to user scripts inside the iframe.
+      window.autofocus = () => {
+        var pf = document.getElementById("prime-focus");
+        if (pf) { pf.focus(); }
+      }
       window.buche = (data) => {
         par.postMessage({ type: "send", data: data }, "*");
       };
