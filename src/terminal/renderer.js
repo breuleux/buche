@@ -1,4 +1,5 @@
 import { buchekeys } from "./buchekeys.js";
+import { setIframeKeysConfig } from "./iframekeys.js";
 import { AutoHandler } from "./cell/auto.js";
 import { Cell } from "./cell/cell.js";
 import { DataHandler } from "./cell/data.js";
@@ -317,13 +318,10 @@ function getFocusedCellEntry() {
 
 // ── Global key bindings ──────────────────────────────────────────────────
 
-buchekeys(window, {
-  "Control+l": (e) => {
-    if (!isPromptFocused()) return;
-    e.preventDefault();
-    _executor.clearInactiveCells();
-  },
-
+// These fire in the capture phase so they work regardless of what handlers
+// child elements define (e.g. terminal input cells that stop propagation).
+// The returned config is forwarded to data: iframes so they can mirror the same bindings.
+const { config: _globalKeysConfig } = buchekeys(window, {
   // C-q prefix mode bindings
   "Control+q ~ ArrowUp": (e) => {
     const ordered = getOrderedCellNodes();
@@ -397,6 +395,9 @@ buchekeys(window, {
     focusActivePrompt();
   },
 
+  "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
+  "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
+
   "Control+Tab": (e) => {
     e.preventDefault();
     _executor._zoneManager.cycleTab(+1);
@@ -416,9 +417,6 @@ buchekeys(window, {
     e.preventDefault();
     _executor._zoneManager.moveToGroup(+1);
   },
-
-  "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
-  "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 
   "Control+q ~ d": (e) => {
     const focused = getFocusedNavigableNode();
@@ -458,5 +456,14 @@ buchekeys(window, {
     } else {
       _executor._zoneManager.focusZone(activeZoneName);
     }
+  },
+}, { capture: true });
+setIframeKeysConfig(_globalKeysConfig);
+
+buchekeys(window, {
+  "Control+l": (e) => {
+    if (!isPromptFocused()) return;
+    e.preventDefault();
+    _executor.clearInactiveCells();
   },
 });

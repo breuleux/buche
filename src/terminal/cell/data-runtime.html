@@ -125,6 +125,56 @@
       };
 
       par.postMessage({ type: "ready" }, "*");
+
+      // Forward global buche key combos to the parent window so capture-phase
+      // listeners on parent window still fire even when focus is inside this iframe.
+      // Config is sent by the parent via a "buchekeysConfig" message.
+      var keysConfig = { globalKeys: [], prefixKeys: [] };
+      handlers.buchekeysConfig = function(msg) {
+        keysConfig = { globalKeys: msg.globalKeys || [], prefixKeys: msg.prefixKeys || [] };
+      };
+
+      function matchesKey(e, k) {
+        return e.key === k.key && e.ctrlKey === k.ctrlKey && e.shiftKey === k.shiftKey
+          && e.altKey === k.altKey && e.metaKey === k.metaKey;
+      }
+      function forward(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        par.postMessage({ type: "keyforward", key: e.key, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey }, "*");
+      }
+
+      var prefixActive = false;
+      var prefixTimer = null;
+      var prefixSubTimeout = 500;
+
+      window.addEventListener("keydown", function(e) {
+        if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+        if (prefixActive) {
+          // Forward every non-modifier key to the parent.
+          // No timer before the first sub-key; start the timer after the first one
+          // so subsequent sub-keys must come within the timeout.
+          forward(e);
+          clearTimeout(prefixTimer);
+          prefixTimer = setTimeout(function() { prefixActive = false; }, prefixSubTimeout);
+          return;
+        }
+
+        var prefixKey = keysConfig.prefixKeys.find(function(k) { return matchesKey(e, k); });
+        if (prefixKey) {
+          forward(e);
+          prefixActive = true;
+          prefixSubTimeout = prefixKey.timeout;
+          clearTimeout(prefixTimer);
+          // No timeout yet — wait indefinitely for the first sub-key.
+          return;
+        }
+
+        if (keysConfig.globalKeys.some(function(k) { return matchesKey(e, k); })) {
+          forward(e);
+        }
+      }, true);
     })());
     </script>
   </body>

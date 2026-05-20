@@ -1,6 +1,8 @@
 // Runtime injected into every data: iframe.
 // data: URLs get an opaque origin — scripts inside cannot touch the parent DOM,
 // storage, or any other cell, but postMessage still works.
+import { getIframeKeysConfig } from "../iframekeys.js";
+
 const RUNTIME = await fetch(
   new URL("./data-runtime.html", import.meta.url),
 ).then((r) => r.text());
@@ -36,6 +38,10 @@ export class DataHandler {
 
   handle$ready(msg) {
     this._ready = true;
+    const keysConfig = getIframeKeysConfig();
+    if (keysConfig) {
+      this._iframe.contentWindow.postMessage({ type: "buchekeysConfig", ...keysConfig }, "*");
+    }
     for (const m of this._pending) {
       this._iframe.contentWindow.postMessage(m, "*");
     }
@@ -44,6 +50,11 @@ export class DataHandler {
 
   handle$resize(msg) {
     this._iframe.style.height = `${msg.height}px`;
+  }
+
+  handle$keyforward(msg) {
+    const { type, ...init } = msg;
+    window.dispatchEvent(new KeyboardEvent("keydown", { ...init, bubbles: false, cancelable: true }));
   }
 
   handle$send(msg) {
