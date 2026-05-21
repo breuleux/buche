@@ -115,6 +115,8 @@ class ZoneGroup {
     this._zones = [];
     this._activeIdx = 0;
     this._tabEls = new Map(); // zoneName → <button>
+    this._tabLabelEls = new Map(); // zoneName → <span class="tab-label">
+    this._tabDefaultLabels = new Map(); // zoneName → default label string
     this._soloZones = new Set(); // zones currently in solo mode
     this.onActivate = null; // (zoneName) => void — set by ZoneManager
 
@@ -144,12 +146,25 @@ class ZoneGroup {
     this.node.classList.toggle("zone-solo-active", this._soloZones.size > 0);
   }
 
+  setTabLabel(zoneName, text) {
+    const span = this._tabLabelEls.get(zoneName);
+    if (span) span.textContent = text;
+  }
+
+  getDefaultLabel(zoneName) {
+    return this._tabDefaultLabels.get(zoneName) ?? "";
+  }
+
   addZone(zone) {
     const n = this._zones.length + 1;
+    const defaultLabel = `Tab ${n}`;
+    const labelSpan = html`<span class="tab-label">${defaultLabel}</span>`;
     const tabEl = document.createElement("button");
     tabEl.className = "zone-top-tab";
-    tabEl.appendChild(html`<span class="tab-label">Tab ${n}</span>`);
+    tabEl.appendChild(labelSpan);
     tabEl.addEventListener("click", () => this.activateByName(zone.name));
+    this._tabLabelEls.set(zone.name, labelSpan);
+    this._tabDefaultLabels.set(zone.name, defaultLabel);
 
     if (this._zones.length === 0) {
       tabEl.classList.add("active");
@@ -214,6 +229,8 @@ class ZoneGroup {
     this._zones[idx].node.remove();
     this._tabEls.get(zoneName)?.remove();
     this._tabEls.delete(zoneName);
+    this._tabLabelEls.delete(zoneName);
+    this._tabDefaultLabels.delete(zoneName);
     this._soloZones.delete(zoneName);
     this.node.classList.toggle("zone-solo-active", this._soloZones.size > 0);
     this._zones.splice(idx, 1);
@@ -476,6 +493,15 @@ export class ZoneManager {
     zone.promptCollection.onFocus = () => {
       zone._latentFocusIsPrompt = true;
       this._setFocusedZone(name);
+      if (!zone._soloCellNode) {
+        const n = zone.promptCollection.activeName;
+        if (n) group.setTabLabel(name, n);
+      }
+    };
+    zone.promptCollection.onActiveChanged = (promptName) => {
+      if (!zone._soloCellNode) {
+        group.setTabLabel(name, promptName ?? group.getDefaultLabel(name));
+      }
     };
     zone.promptCollection.onPromptsChanged = () => { this.removeZoneIfEmpty(name); };
     zone.onSoloChanged = (isSolo, cellNode) => {
@@ -484,11 +510,13 @@ export class ZoneManager {
         // Dot goes to the far left, controls to the far right.
         if (cellNode._statusDot) tabEl.prepend(cellNode._statusDot);
         if (cellNode._controls) tabEl.appendChild(cellNode._controls);
+        group.setTabLabel(name, cellNode._cellLabel ?? "");
       } else if (!isSolo && cellNode) {
         // Reassemble back into _metaEl (which stays in the cell as a parking spot).
         const metaEl = cellNode._metaEl;
         if (cellNode._statusDot) metaEl.prepend(cellNode._statusDot);
         if (cellNode._controls) metaEl.appendChild(cellNode._controls);
+        group.setTabLabel(name, zone.promptCollection.activeName ?? group.getDefaultLabel(name));
       }
       group.setSoloActive(name, isSolo);
     };

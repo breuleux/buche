@@ -58,6 +58,8 @@ class CellBridge {
   }
 }
 
+let _cellCounter = 0;
+
 class Executor {
   constructor(bridge) {
     // Map<key, {cell: Cell, address: object, zone: string}>
@@ -118,6 +120,7 @@ class Executor {
     const bridge = new CellBridge(this, instruction);
     if (echoElements) bridge.echoElements = echoElements;
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
+    cell.node._cellLabel = `cell-${++_cellCounter}`;
 
     if (echoElements) {
       echoElements.node.dataset.cellKey = key;
@@ -138,6 +141,18 @@ class Executor {
     this.cells
       .get(cellKey(instruction.address, instruction.to.cell))
       ?.cell.send(instruction.message);
+  }
+
+  handle$set_label(instruction) {
+    const key = cellKey(instruction.address, instruction.to.cell);
+    const entry = this.cells.get(key);
+    if (!entry) return;
+    entry.cell.node._cellLabel = instruction.label;
+    // If this cell is the current solo cell, update the tab label live.
+    const zone = this._zoneManager._zones.get(entry.zone);
+    if (zone?._soloCellNode === entry.cell.node) {
+      this._zoneManager._groups.get(entry.zone)?.setTabLabel(entry.zone, instruction.label);
+    }
   }
 
   handle$send(instruction) {

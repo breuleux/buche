@@ -411,6 +411,8 @@ class Prompt {
     this.el.appendChild(this.labelEl);
     this.el.appendChild(this.editorEl);
 
+    this._name = name;
+
     this.tabEl = document.createElement("div");
     this.tabEl.className = "prompt-tab";
     this.tabEl.textContent = name;
@@ -586,6 +588,7 @@ export class PromptCollection {
     this._container = container;
     this._monacoReady = false;
     this.onFocus = null; // () => void — called when any prompt in this collection gains focus
+    this.onActiveChanged = null; // (name: string) => void — called when the active prompt changes
     this.onPromptsChanged = null; // () => void — called when prompts are added or removed
     this._parseRequests = new Map();
     this._completionRequests = new Map();
@@ -680,6 +683,11 @@ export class PromptCollection {
     next.tabEl.classList.add("active");
     next.layout();
     next.focus();
+    this.onActiveChanged?.(next._name);
+  }
+
+  get activeName() {
+    return this._active?._name ?? null;
   }
 
   _move(delta) {

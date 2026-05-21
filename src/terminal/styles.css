@@ -260,6 +260,7 @@ scroll-fader {
 
 /* cell fills zone-buffer */
 .zone-solo-cell .zone-buffer-wrap .scroll-fader-inner > .zone-buffer > .cell {
+	padding-left: 0px;
 	flex: 1 1 0;
 	min-height: 0;
 	display: flex;
@@ -407,7 +408,7 @@ scroll-fader {
 
 .cell {
 	position: relative;
-	/* padding-left: 16px; */
+	padding-left: 16px;
 	/* margin-bottom: 8px; */
 	outline: none;
 	border-radius: 3px;

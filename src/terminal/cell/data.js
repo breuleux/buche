@@ -44,7 +44,8 @@ export class DataHandler {
     }
     const bufferWrap = this._iframe.closest(".zone-buffer-wrap");
     const maxHeight = bufferWrap ? bufferWrap.clientHeight : 0;
-    this._iframe.contentWindow.postMessage({ type: "bucheInfo", maxHeight }, "*");
+    const dynamicHeight = !this._iframe.closest(".zone-solo-cell");
+    this._iframe.contentWindow.postMessage({ type: "bucheInfo", maxHeight, dynamicHeight }, "*");
     for (const m of this._pending) {
       this._iframe.contentWindow.postMessage(m, "*");
     }
