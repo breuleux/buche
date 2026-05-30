@@ -823,7 +823,6 @@ class Shell {
           address: { target: "shell" },
           prompt: "<span style='color:#569cd6;'>&gt;&gt;</span>",
           name: "cq",
-          tag: "cq",
           language: null,
           zone: "main",
           bindings: self._promptBindings,
@@ -1029,8 +1028,8 @@ class Shell {
   }
 
   async *handle$history_navigate(obj) {
-    const { direction, anchor_id, filter, tag, request_id } = obj;
-    const result = this._history.navigate({ direction, anchor_id, filter, tag });
+    const { direction, anchor_id, filter, request_id } = obj;
+    const result = this._history.navigate({ direction, anchor_id, filter });
     yield {
       type: "history_nav_result",
       to: { target: "terminal" },
@@ -1133,8 +1132,8 @@ class Shell {
   }
 
   async *handle$prompt_submit(obj) {
-    if (obj.text !== undefined && obj.tag !== undefined) {
-      this._history.push({ id: crypto.randomUUID(), text: obj.text, tag: obj.tag, prompt_id: obj.prompt_id ?? null });
+    if (obj.text !== undefined) {
+      this._history.push({ id: crypto.randomUUID(), text: obj.text, prompt_id: obj.prompt_id ?? null });
     }
 
     this._notifyControls({

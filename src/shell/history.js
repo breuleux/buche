@@ -47,10 +47,10 @@ class ShellHistory {
     return null;
   }
 
-  // Find prev/next entry relative to anchor_id, filtered by tag and text.
+  // Find prev/next entry relative to anchor_id, filtered by text.
   // Returns { text, anchor_id, filter } or { text: null, anchor_id: null, filter }.
-  navigate({ direction, anchor_id, filter, tag }) {
-    const relevant = tag ? this._entries.filter((e) => e.tag === tag) : this._entries;
+  navigate({ direction, anchor_id, filter }) {
+    const relevant = this._entries;
 
     let anchorIdx;
     if (anchor_id === null) {
