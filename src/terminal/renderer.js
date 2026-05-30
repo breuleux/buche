@@ -414,6 +414,13 @@ function getFocusedCellEntry() {
   return null;
 }
 
+function getBottomCellEntry() {
+  const ordered = getOrderedCellNodes();
+  if (ordered.length === 0) return null;
+  const node = ordered[ordered.length - 1];
+  return [..._executor.cells.values()].find((e) => e.cell.node === node) ?? null;
+}
+
 // ── Global key bindings ──────────────────────────────────────────────────
 
 // These fire in the capture phase so they work regardless of what handlers
@@ -447,12 +454,12 @@ const { config: _globalKeysConfig } = buchekeys(window, {
   },
 
   "Control+q ~ k": (e) => {
-    const entry = getFocusedCellEntry();
+    const entry = getFocusedCellEntry() ?? getBottomCellEntry();
     if (entry?.cell.isAlive()) entry.cell.kill();
   },
 
   "Control+q ~ Shift+K": (e) => {
-    const entry = getFocusedCellEntry();
+    const entry = getFocusedCellEntry() ?? getBottomCellEntry();
     if (entry?.cell.isAlive()) entry.cell.kill("SIGKILL");
   },
 
@@ -548,7 +555,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
   },
 
   "Control+q ~ d": (e) => {
-    const focused = getFocusedNavigableNode();
+    const focused = getFocusedNavigableNode() ?? getOrderedCellNodes().at(-1) ?? null;
     if (!focused) return;
     const allCells = getOrderedCellNodes();
     const idx = allCells.indexOf(focused);
