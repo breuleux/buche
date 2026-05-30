@@ -287,12 +287,15 @@ class Process {
 
     this._pty = mainPty;
 
-    // Build stdio entries for fd 0, 1, 2, applying any shell redirections.
-    // fdMap values can be a number (raw fd), "pipe", or "ipc".
+    // Build stdio entries for fds 0–5, applying any shell redirections.
+    // fdMap values can be a number (raw fd) or "pipe".
     const fdMap = {
       0: pipeStdin ? "pipe" : slaveFd,
       1: pipeStdout ? "pipe" : slaveFd,
       2: slaveFd,
+      3: "pipe",  // datain
+      4: "pipe",  // dataout
+      5: "pipe",  // control
     };
     const openedFds = [];
     for (const redir of redirects) {
@@ -326,7 +329,7 @@ class Process {
 
     const helperPath = path.join(__dirname, "cq-exec");
     const child = spawn("python3", [helperPath, cmd, ...args], {
-      stdio: [fdMap[0], fdMap[1], fdMap[2], "pipe", "pipe", "pipe"],
+      stdio: [fdMap[0], fdMap[1], fdMap[2], fdMap[3], fdMap[4], fdMap[5]],
       env: {
         ...process.env,
         TERM: "xterm-256color",
@@ -351,8 +354,8 @@ class Process {
     this.processId = processId;
     this._stdin = pipeStdin ? child.stdio[0] : null;
     this._stdout = effectivePipeStdout ? child.stdio[1] : null;
-    this._datain = child.stdio[3];
-    this._control = child.stdio[5];
+    this._datain = fdMap[3] === "pipe" ? child.stdio[3] : null;
+    this._control = fdMap[5] === "pipe" ? child.stdio[5] : null;
     this._child = child;
 
     const emit = (event) => {
@@ -398,7 +401,7 @@ class Process {
     }
 
     // fd5: control channel (full duplex) — directives from child to shell
-    const rl5 = readline
+    const rl5 = fdMap[5] === "pipe" ? readline
       .createInterface({ input: child.stdio[5], crlfDelay: Infinity })
       .on("error", () => {})
       .on("line", (line) => {
@@ -432,10 +435,10 @@ class Process {
           transformed.process_id = `${processId}/${transformed.process_id}`;
         }
         emit(transformed);
-      });
+      }) : null;
 
     // fd4: data channel — arbitrary JSON objects sent to the renderer
-    const rl4 = readline
+    const rl4 = fdMap[4] === "pipe" ? readline
       .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
       .on("error", () => {})
       .on("line", (line) => {
@@ -452,17 +455,17 @@ class Process {
           stream: "dataout",
           data,
         });
-      });
+      }) : null;
 
     const cleanup = () => {
-      rl4.close();
-      rl5.close();
+      rl4?.close();
+      rl5?.close();
       mainPty._socket.destroy();
       if (pipeStdin) child.stdio[0]?.destroy();
       if (effectivePipeStdout) child.stdio[1]?.destroy();
-      child.stdio[3].destroy();
-      child.stdio[4].destroy();
-      child.stdio[5].destroy();
+      child.stdio[3]?.destroy();
+      child.stdio[4]?.destroy();
+      child.stdio[5]?.destroy();
     };
 
     child.on("close", (return_code) => {
@@ -493,17 +496,21 @@ class Process {
   }
 
   writeStdin(text) {
-    return new Promise((resolve, reject) =>
-      fs.write(this._pty._fd, text, (err) =>
-        err ? reject(err) : resolve(),
-      ),
-    );
+    return new Promise((resolve) => {
+      const attempt = () =>
+        fs.write(this._pty._fd, text, (err) => {
+          if (!err || err.code === "EIO" || err.code === "ECONNRESET") return resolve();
+          if (err.code === "EAGAIN") return setImmediate(attempt);
+          resolve(); // swallow other errors — process likely dead
+        });
+      attempt();
+    });
   }
 
   writePipeStdin(data) {
     if (!this._stdin) return this.writeStdin(data);
-    return new Promise((resolve, reject) =>
-      this._stdin.write(data, (err) => (err ? reject(err) : resolve())),
+    return new Promise((resolve) =>
+      this._stdin.write(data, () => resolve()),
     );
   }
 
@@ -515,18 +522,16 @@ class Process {
   }
 
   writeDatain(json) {
-    return new Promise((resolve, reject) =>
-      this._datain.write(`${JSON.stringify(json)}\n`, (err) =>
-        err ? reject(err) : resolve(),
-      ),
+    if (!this._datain) return Promise.resolve();
+    return new Promise((resolve) =>
+      this._datain.write(`${JSON.stringify(json)}\n`, () => resolve()),
     );
   }
 
   writeControl(json) {
-    return new Promise((resolve, reject) =>
-      this._control.write(`${JSON.stringify(json)}\n`, (err) =>
-        err ? reject(err) : resolve(),
-      ),
+    if (!this._control) return Promise.resolve();
+    return new Promise((resolve) =>
+      this._control.write(`${JSON.stringify(json)}\n`, () => resolve()),
     );
   }
 
@@ -534,8 +539,8 @@ class Process {
     this._pty._socket.destroy();
     this._stdin?.destroy();
     this._stdout?.destroy();
-    this._datain.destroy();
-    this._control.destroy();
+    this._datain?.destroy();
+    this._control?.destroy();
   }
 
   kill(signal) {
@@ -845,8 +850,8 @@ class Shell {
           if (proc) {
             const hasSubaddress = obj.to.subaddress !== undefined;
             if (obj.type === "input" && !hasSubaddress) {
-              if (obj.data !== undefined) proc.writeDatain(obj.data);
-              else proc.writeStdin(obj.text);
+              if (obj.data !== undefined) proc.writeDatain(obj.data).catch(() => {});
+              else proc.writeStdin(obj.text).catch(() => {});
             } else if (obj.type === "close" && !hasSubaddress) {
               proc.close();
             } else if (obj.type === "kill" && !hasSubaddress) {
