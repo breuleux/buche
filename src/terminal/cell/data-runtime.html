@@ -176,6 +176,9 @@
       window.buche.blur = () => {
         par.postMessage({ type: "blur" }, "*");
       };
+      window.addEventListener("focus", function() {
+        par.postMessage({ type: "focus" }, "*");
+      });
       window.buche.request = (data) => {
         const response_id = Math.random().toString(36).slice(2);
         const promise = new Promise((resolve, reject) => {

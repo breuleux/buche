@@ -29,9 +29,12 @@ export class Cell {
     this.node._statusDot = this._statusDot;
     this.node._controls = controls;
 
+    this.onFocus = null; // () => void — set by Executor; called whenever this cell gains focus
+
     // Called when focus is programmatically restored to this cell (e.g. zone switch).
     // Each handler can implement focus() to handle internal focus delegation.
     this.node._bucheFocus = () => {
+      this.onFocus?.();
       this.handler.focus?.();
     };
 
@@ -82,6 +85,7 @@ export class Cell {
         _focusedCellNode = this.node;
         this.node.classList.add("cell-focused");
       }
+      this.onFocus?.();
       this.handler.setCursorState?.("active");
     });
     this.node.addEventListener("focusout", (e) => {

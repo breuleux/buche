@@ -72,6 +72,10 @@ export class DataHandler {
     this._bridge?.onBackground();
   }
 
+  handle$focus(_msg) {
+    this._bridge?.onFocus?.();
+  }
+
   handle$resolve(msg) {
     if (msg.request_id != null) {
       // Response to an on-demand proc:// request relayed from main

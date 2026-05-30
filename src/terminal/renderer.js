@@ -63,6 +63,10 @@ class CellBridge {
     console.log({ ...arg, to: this.instruction.address });
     this.executor.bridge.sendCommand({ ...arg, to: this.instruction.address });
   }
+  onFocus() {
+    this._cell?.onFocus?.();
+  }
+
   onBackground() {
     this.executor._activeCell = null;
     const key = cellKey(this.instruction.address, this.instruction.to.cell);
@@ -169,6 +173,7 @@ class Executor {
       this._cellEchoElements.set(key, echoElements);
     }
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
+    cell.onFocus = () => this._zoneManager._setFocusedZone(zone.name);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
     this.cells.set(key, { cell, address: instruction.address, zone: zone.name, sticky: instruction.sticky ?? false });
