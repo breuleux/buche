@@ -23,7 +23,7 @@ export class History {
     this._drafts = null;
     this._draftActive = null;
     const last = this._entries[this._entries.length - 1];
-    if (!last || last.text !== entry.text || last.tag !== entry.tag) {
+    if (!last || last.text !== entry.text || last.prompt_id !== entry.prompt_id) {
       this._entries.push(entry);
       this._buche.history.add(entry);
     }
