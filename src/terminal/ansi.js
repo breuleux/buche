@@ -80,7 +80,7 @@ export class TermBuffer {
   // CSI command letters that _handleCSI actively processes.
   // Keep in sync with _handleCSI. Used by containsUnhandledEscape so that
   // auto.js can detect sequences requiring a full terminal emulator.
-  static HANDLED_CSI = new Set(["m", "K", "A", "C", "D"]);
+  static HANDLED_CSI = new Set(["m", "K", "A", "C", "D", "J", "H"]);
 
   // Returns true if `text` contains a CSI sequence whose command letter is
   // not in HANDLED_CSI — i.e. something TextHandler cannot render correctly.
@@ -270,8 +270,12 @@ export class TermBuffer {
       );
     } else if (cmd === "D") {
       this._col = Math.max(0, this._col - (parseInt(params, 10) || 1));
+    } else if (cmd === "J") {
+      this._clearRequested = true;
+      this._cells = [];
+      this._col = 0;
     }
-    // Other sequences (cursor movement, screen ops) ignored for now.
+    // H (cursor position) and other sequences are no-ops in text mode.
   }
 
   // Process raw terminal text. Returns an array of DocumentFragments,
@@ -298,6 +302,10 @@ export class TermBuffer {
         const m = /^\x1b\[([0-9;?]*)([A-Za-z~])/.exec(src.slice(i));
         if (m) {
           this._handleCSI(m[1], m[2]);
+          if (this._clearRequested) {
+            this._clearRequested = false;
+            lines.push({ clear: true });
+          }
           i += m[0].length;
         } else {
           i++;

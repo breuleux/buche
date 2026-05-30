@@ -69,6 +69,16 @@ export class TextHandler {
     }
   }
 
+  _clear() {
+    while (this._startEl.firstChild) this._startEl.removeChild(this._startEl.firstChild);
+    while (this._restEl.firstChild) this._restEl.removeChild(this._restEl.firstChild);
+    this._startLines = 0;
+    this._restLines = 0;
+    this._droppedLines = 0;
+    this._marker.setAttribute("hidden", "");
+    this._currentEl = null;
+  }
+
   _addLine(lineNode) {
     if (this._startLines < START_MAX) {
       this._startEl.appendChild(lineNode);
@@ -140,7 +150,11 @@ export class TextHandler {
 
     for (const { text, stream } of this._buffer) {
       for (const lineNode of this.term.write(text, stream)) {
-        this._addLine(lineNode);
+        if (lineNode.clear) {
+          this._clear();
+        } else {
+          this._addLine(lineNode);
+        }
       }
     }
     this._buffer = [];
