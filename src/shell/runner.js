@@ -9,6 +9,8 @@ const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
 
+const _originalEnv = { ...process.env };
+
 function expandEnvVars(str, env) {
   return str.replace(
     /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
@@ -730,6 +732,15 @@ class Shell {
   }
 
   async *_applyConfig() {
+    // Reset to original env so stale config vars don't accumulate across reloads.
+    for (const key of Object.keys(process.env)) {
+      if (key in _originalEnv) process.env[key] = _originalEnv[key];
+      else delete process.env[key];
+    }
+    for (const key of Object.keys(_originalEnv)) {
+      if (!(key in process.env)) process.env[key] = _originalEnv[key];
+    }
+
     const { env, control, interface: iface, bindings } = loadConfig(process.cwd());
 
     // Apply env vars

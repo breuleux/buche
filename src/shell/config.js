@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const { spawnSync } = require("node:child_process");
 const yaml = require("js-yaml");
 const bashParser = require("bash-parser");
 
@@ -73,6 +74,27 @@ function parseEnvEntry(raw) {
     append: raw.append === true,
     separator: sep,
   };
+}
+
+// Source a bash file in a clean environment and return all resulting env vars.
+// Uses set -a so variables don't need explicit `export`. Returns a Map of
+// name → { value: string, export: true }, or an empty Map on failure.
+function loadBashSourceEnv(sourcePath) {
+  const result = spawnSync(
+    "bash",
+    ["--norc", "--noprofile", "-c", 'set -a; . "$1"; env', "--", sourcePath],
+    { encoding: "utf8", env: { PATH: process.env.PATH || "/usr/bin:/bin" } }
+  );
+  if (result.status !== 0) return new Map();
+  const vars = new Map();
+  for (const line of result.stdout.split("\n")) {
+    const eqIdx = line.indexOf("=");
+    if (eqIdx < 1) continue;
+    const name = line.slice(0, eqIdx);
+    const value = line.slice(eqIdx + 1);
+    vars.set(name, { value, export: true });
+  }
+  return vars;
 }
 
 // Load a YAML file. Returns { data, dir } or null if absent, unreadable, or
@@ -153,6 +175,23 @@ function mergeConfigs(entries) {
 
   // Process from lowest to highest priority so higher-priority writes win.
   for (const { data, dir } of [...entries].reverse()) {
+    // source-env — processed before env so the env section can override
+    if (Array.isArray(data["source-env"])) {
+      for (const item of data["source-env"]) {
+        if (
+          typeof item !== "object" ||
+          item === null ||
+          item.language !== "bash" ||
+          typeof item.source !== "string"
+        )
+          continue;
+        const sourcePath = path.resolve(dir, item.source);
+        for (const [name, val] of loadBashSourceEnv(sourcePath)) {
+          env.set(name, val);
+        }
+      }
+    }
+
     // env
     if (data.env && typeof data.env === "object" && !Array.isArray(data.env)) {
       for (const [name, raw] of Object.entries(data.env)) {
