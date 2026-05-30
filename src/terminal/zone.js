@@ -279,6 +279,7 @@ class FloatZone {
       setPrompt() {},
       applyHighlight() {},
       applyComplete() {},
+      applyHistoryNav() {},
       onFocus: null,
       onPromptsChanged: null,
     };
@@ -655,6 +656,12 @@ export class ZoneManager {
   applyComplete(instruction) {
     for (const zone of this._zones.values()) {
       zone.promptCollection.applyComplete(instruction);
+    }
+  }
+
+  applyHistoryNav(instruction) {
+    for (const zone of this._zones.values()) {
+      zone.promptCollection.applyHistoryNav(instruction);
     }
   }
 

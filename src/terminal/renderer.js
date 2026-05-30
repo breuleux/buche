@@ -316,6 +316,10 @@ class Executor {
     this._zoneManager.applyComplete(instruction);
   }
 
+  handle$history_nav_result(instruction) {
+    this._zoneManager.applyHistoryNav(instruction);
+  }
+
   clearInactiveCells() {
     const activeNodes = new Set([...this.cells.values()].map((e) => e.cell.node));
     const activeEchoNodes = new Set([...this._cellEchoElements.values()].map((e) => e.node));

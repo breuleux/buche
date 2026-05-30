@@ -1,6 +1,5 @@
 import { tinykeys } from "tinykeys";
 import { html, addressMatchesProcess } from "./utils.js";
-import { History } from "./history.js";
 
 let focusedPrompt = null;
 let _moveToGroup = null; // (delta: number) => void — set by ZoneManager
@@ -13,7 +12,6 @@ let _monacoLoadState = "idle"; // "idle" | "loading" | "ready"
 const _monacoReadyCallbacks = [];
 let _keysRegistered = false;
 let _completionsRegistered = false;
-const _allHistories = []; // one entry per PromptCollection
 
 function _onMonacoReady(cb) {
   if (_monacoLoadState === "ready") {
@@ -59,28 +57,22 @@ function _registerHistoryCompletions() {
       const offset = model.getOffsetAt(position);
       if (!text || offset !== text.length || lastEditWasDeletion)
         return { items: [] };
-      for (const history of _allHistories) {
-        const entries = history._entries;
-        for (let i = entries.length - 1; i >= 0; i--) {
-          const { text: entryText } = entries[i];
-          if (entryText.startsWith(text) && entryText.length > text.length) {
-            return {
-              items: [
-                {
-                  insertText: entryText.slice(text.length),
-                  range: new monaco.Range(
-                    position.lineNumber,
-                    position.column,
-                    position.lineNumber,
-                    position.column,
-                  ),
-                },
-              ],
-            };
-          }
-        }
-      }
-      return { items: [] };
+      const filigrane = focusedPrompt?._filigrane;
+      if (!filigrane || !filigrane.startsWith(text) || filigrane === text)
+        return { items: [] };
+      return {
+        items: [
+          {
+            insertText: filigrane.slice(text.length),
+            range: new monaco.Range(
+              position.lineNumber,
+              position.column,
+              position.lineNumber,
+              position.column,
+            ),
+          },
+        ],
+      };
     },
     freeInlineCompletions() {},
   });
@@ -156,26 +148,6 @@ const EDITOR_OPTIONS = {
   },
 };
 
-function _getHistoryFilter(editor, isDraft) {
-  const sel = editor.getSelection();
-  if (sel && !sel.isEmpty()) {
-    return editor.getModel().getValueInRange(sel);
-  }
-  if (isDraft) {
-    const model = editor.getModel();
-    const pos = editor.getPosition();
-    if (pos && model) {
-      const lastLine = model.getLineCount();
-      if (
-        pos.lineNumber === lastLine &&
-        pos.column > model.getLineLength(lastLine)
-      ) {
-        return editor.getValue() || null;
-      }
-    }
-  }
-  return null;
-}
 
 function _parseMonacoKey(keyStr) {
   const parts = keyStr.split("+");
@@ -244,8 +216,7 @@ function _editorCommands() {
         const editor = focusedPrompt?._editor;
         if (!editor) return;
         if (editor.getPosition()?.lineNumber === 1) {
-          const history = focusedPrompt._promptCollection._history;
-          history?.prev(focusedPrompt, _getHistoryFilter(editor, history._idx === -1));
+          focusedPrompt?._sendHistoryNavigate("prev");
         } else {
           editor.trigger("keyboard", "cursorUp", null);
         }
@@ -260,30 +231,12 @@ function _editorCommands() {
           editor.getPosition()?.lineNumber ===
           editor.getModel()?.getLineCount();
         if (atLastLine) {
-          const history = focusedPrompt._promptCollection._history;
-          history?.next(focusedPrompt, _getHistoryFilter(editor, history._idx === -1));
+          if (focusedPrompt?._navDraft !== null) {
+            focusedPrompt._sendHistoryNavigate("next");
+          }
         } else {
           editor.trigger("keyboard", "cursorDown", null);
         }
-      },
-    },
-
-    prevHistoryAny: {
-      trigger: monaco.KeyMod.Alt | monaco.KeyCode.UpArrow,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        const history = focusedPrompt._promptCollection._history;
-        history?.prev(null, _getHistoryFilter(editor, history._idx === -1));
-      },
-    },
-    nextHistoryAny: {
-      trigger: monaco.KeyMod.Alt | monaco.KeyCode.DownArrow,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        const history = focusedPrompt._promptCollection._history;
-        history?.next(null, _getHistoryFilter(editor, history._idx === -1));
       },
     },
 
@@ -422,6 +375,9 @@ class Prompt {
     this._bindings = bindings
       ? Object.entries(bindings).map(([key, name]) => ({ key, name }))
       : [];
+    this._navAnchorId = null;  // ID of currently displayed history entry
+    this._navDraft = null;     // text saved before navigation started
+    this._filigrane = null;    // inline suggestion from parse response
 
     this._promptHtml = promptHtml;
 
@@ -493,7 +449,7 @@ class Prompt {
 
     this._editor.onDidChangeModelContent((e) => {
       if (!e.isFlush) {
-        this._promptCollection._history?.cancelNavigation();
+        this._cancelNavigation();
         lastEditWasDeletion = e.changes.some(
           (c) => c.rangeLength > 0 && c.text === "",
         );
@@ -537,17 +493,15 @@ class Prompt {
   }
 
   _submit(value) {
+    this._cancelNavigation();
     const echoNode = this.echo();
     const echo_html = echoNode.outerHTML;
-    this._promptCollection._history?.push({
-      text: value,
-      tag: this.tag,
-      prompt_id: this.promptId,
-    });
     this._promptCollection._buche.sendCommand({
       type: "prompt_submit",
       to: this.address,
       text: value,
+      tag: this.tag,
+      prompt_id: this.promptId,
       echo_html,
       zone: this._promptCollection._zoneName,
     });
@@ -624,6 +578,54 @@ class Prompt {
       ),
     );
   }
+
+  _cancelNavigation() {
+    if (this._navDraft === null && this._navAnchorId === null) return;
+    for (const [id, p] of this._promptCollection._histNavRequests) {
+      if (p === this) this._promptCollection._histNavRequests.delete(id);
+    }
+    this._navAnchorId = null;
+    this._navDraft = null;
+  }
+
+  _sendHistoryNavigate(direction) {
+    const editor = this._editor;
+    if (!editor) return;
+    const text = editor.getValue();
+    const pos = editor.getPosition();
+    const model = editor.getModel();
+    const position = pos ? model.getOffsetAt(pos) : text.length;
+
+    const isFirstNav = this._navDraft === null;
+    if (isFirstNav && direction === "prev") {
+      this._navDraft = text;
+    }
+
+    let filter = null;
+    const sel = editor.getSelection();
+    if (sel && !sel.isEmpty()) {
+      filter = model.getValueInRange(sel);
+    } else if (isFirstNav && pos && model) {
+      const lastLine = model.getLineCount();
+      if (pos.lineNumber === lastLine && pos.column > model.getLineLength(lastLine)) {
+        filter = text || null;
+      }
+    }
+
+    const request_id = crypto.randomUUID();
+    this._promptCollection._histNavRequests.set(request_id, this);
+    this._promptCollection._buche.sendCommand({
+      type: "history_navigate",
+      to: this.address,
+      direction,
+      anchor_id: this._navAnchorId,
+      text,
+      position,
+      filter,
+      tag: this.tag,
+      request_id,
+    });
+  }
 }
 
 export class PromptCollection {
@@ -639,16 +641,7 @@ export class PromptCollection {
     this.onPromptsChanged = null; // () => void — called when prompts are added or removed
     this._parseRequests = new Map();
     this._completionRequests = new Map();
-    this._history = new History({
-      buche,
-      getPrompts: () => this._prompts,
-      getActive: () => this._active,
-      activate: (prompt) => {
-        const idx = this._prompts.indexOf(prompt);
-        if (idx !== -1) this._activate(idx);
-      },
-    });
-    _allHistories.push(this._history);
+    this._histNavRequests = new Map();
 
     this._tabBar = document.createElement("div");
     this._tabBar.className = "prompt-tabs";
@@ -805,13 +798,30 @@ export class PromptCollection {
     }
   }
 
-  applyHighlight({ request_id, ranges }) {
+  applyHighlight({ request_id, ranges, filigrane }) {
     const prompt = this._parseRequests.get(request_id);
-    if (!prompt) {
-      return;
-    }
+    if (!prompt) return;
     this._parseRequests.delete(request_id);
     prompt.applyHighlight(ranges);
+    prompt._filigrane = filigrane ?? null;
+  }
+
+  applyHistoryNav({ request_id, direction, text, anchor_id, filter }) {
+    const prompt = this._histNavRequests.get(request_id);
+    if (!prompt) return;
+    this._histNavRequests.delete(request_id);
+    if (text === null) {
+      if (direction === "next" && prompt._navDraft !== null) {
+        const draft = prompt._navDraft;
+        prompt._navAnchorId = null;
+        prompt._navDraft = null;
+        prompt.setValue(draft);
+      }
+      return;
+    }
+    prompt._navAnchorId = anchor_id;
+    prompt.setValue(text);
+    prompt.selectSubstring(filter);
   }
 
   applyComplete({ request_id, completions }) {
