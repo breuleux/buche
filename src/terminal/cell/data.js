@@ -10,6 +10,7 @@ export class DataHandler {
     this._procCellId = `c${++_procCellCounter}`;
 
     this._iframe = document.createElement("iframe");
+    this._iframe.setAttribute("sandbox", "allow-scripts");
     this._iframe.style.cssText =
       "border:none;width:100%;display:block;height:0;max-height:600px;";
     this._iframe.src = `proc://${this._procCellId}/`;
