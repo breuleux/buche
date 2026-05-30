@@ -168,7 +168,7 @@ function collectConfigs(cwd) {
 
 // Merge config entries (highest priority first) into a resolved config object.
 // Returns { env: Map<name, {value, export}>, control: Map<name, {cmd, args}>, interface: object|null }
-function mergeConfigs(entries) {
+function mergeConfigs(entries, cwd) {
   const env = new Map(); // name → { value: string, export: boolean }
   const control = new Map(); // name → { cmd: string, args: string[] }
   let iface = null;
@@ -185,7 +185,15 @@ function mergeConfigs(entries) {
           typeof item.source !== "string"
         )
           continue;
-        const sourcePath = path.resolve(dir, item.source);
+        const expanded = item.source.replace(
+          /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+          (_, braced, bare) => {
+            const name = braced ?? bare;
+            if (name === "PWD" && cwd) return cwd;
+            return process.env[name] ?? "";
+          },
+        );
+        const sourcePath = path.resolve(dir, expanded);
         for (const [name, val] of loadBashSourceEnv(sourcePath)) {
           env.set(name, val);
         }
@@ -251,7 +259,7 @@ function mergeConfigs(entries) {
 // Load and merge all applicable config files for cwd.
 // Returns { env: Map, control: Map, interface: object|null, bindings: Map }.
 function loadConfig(cwd) {
-  return mergeConfigs(collectConfigs(cwd));
+  return mergeConfigs(collectConfigs(cwd), cwd);
 }
 
 module.exports = { loadConfig };
