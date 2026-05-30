@@ -346,7 +346,7 @@ scroll-fader {
 	z-index: 10;
 }
 
-/* ── Monaco input (per-zone) ── */
+/* ── CodeMirror input (per-zone) ── */
 .zone-input-container {
 	flex: 0 0 auto;
 	/* border-top: 1px solid #3c3c3c; */
@@ -380,6 +380,22 @@ scroll-fader {
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 20px;
+	font-size: 13px;
+	font-family: "Consolas", "Menlo", monospace;
+}
+
+.prompt-editor .cm-editor {
+	height: auto;
+}
+
+.prompt-editor .cm-scroller {
+	overflow: hidden;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+.prompt-editor .cm-focused {
+	outline: none;
 }
 
 /* ── Prompt tabs ── */
@@ -663,7 +679,7 @@ scroll-fader {
 	line-height: 20px;
 }
 
-/* ── Shell syntax highlighting (Monaco inline decorations) ── */
+/* ── Shell syntax highlighting (inline decorations) ── */
 .sh-zone {
 	color: #569cd6 !important;
 	font-weight: bold;

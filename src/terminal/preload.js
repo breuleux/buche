@@ -20,7 +20,6 @@ ipcRenderer.on("proc:request", (_event, msg) => {
 });
 
 contextBridge.exposeInMainWorld("buche", {
-  vsBase: path.join(__dirname, "../../node_modules/monaco-editor/min/vs"),
   onInstruction: (cb) => {
     onInstructionCb = cb;
     for (const instruction of pending) {

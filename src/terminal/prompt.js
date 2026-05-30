@@ -1,98 +1,110 @@
 import { tinykeys } from "tinykeys";
+import {
+  EditorState,
+  StateField,
+  StateEffect,
+  Compartment,
+  EditorSelection,
+  Transaction,
+} from "@codemirror/state";
+import { EditorView, keymap, Decoration, WidgetType } from "@codemirror/view";
 import { html, addressMatchesProcess } from "./utils.js";
 import { clearFocusedCell } from "./cell/cell.js";
 
 let focusedPrompt = null;
-let _moveToGroup = null; // (delta: number) => void — set by ZoneManager
+let _moveToGroup = null;
 export function setMoveToGroupHandler(fn) { _moveToGroup = fn; }
 
-// ── Module-level Monaco / tinykeys singletons ────────────────────────────
-// Monaco must be loaded exactly once even when multiple PromptCollections exist.
+export function isPromptFocused() { return focusedPrompt !== null; }
 
-let _monacoLoadState = "idle"; // "idle" | "loading" | "ready"
-const _monacoReadyCallbacks = [];
 let _keysRegistered = false;
-let _completionsRegistered = false;
 
-function _onMonacoReady(cb) {
-  if (_monacoLoadState === "ready") {
-    cb();
-  } else {
-    _monacoReadyCallbacks.push(cb);
+// ── Ghost text (filigrane) ──────────────────────────────────────────────────
+
+class GhostTextWidget extends WidgetType {
+  constructor(text) { super(); this.text = text; }
+  eq(other) { return this.text === other.text; }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-ghost-text";
+    span.textContent = this.text;
+    return span;
   }
+  ignoreEvent() { return true; }
 }
 
-function _initMonaco(vsBase) {
-  if (_monacoLoadState !== "idle") return;
-  _monacoLoadState = "loading";
-
-  window.MonacoEnvironment = {
-    getWorkerUrl(_moduleId, _label) {
-      return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
-        self.MonacoEnvironment = { baseUrl: '${vsBase}/' };
-        importScripts('${vsBase}/base/worker/workerMain.js');
-      `)}`;
-    },
-  };
-
-  const loaderScript = document.createElement("script");
-  loaderScript.src = `${vsBase}/loader.js`;
-  loaderScript.onload = () => {
-    require.config({ paths: { vs: vsBase } });
-    require(["vs/editor/editor.main"], () => {
-      _monacoLoadState = "ready";
-      if (!_completionsRegistered) {
-        _completionsRegistered = true;
-        _registerHistoryCompletions();
+const ghostTextEffect = StateEffect.define();
+const ghostTextField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    for (const e of tr.effects) {
+      if (e.is(ghostTextEffect)) {
+        return e.value === null
+          ? Decoration.none
+          : Decoration.set([
+              Decoration.widget({ widget: new GhostTextWidget(e.value), side: 1 })
+                .range(tr.state.doc.length),
+            ]);
       }
-      for (const cb of _monacoReadyCallbacks.splice(0)) cb();
-    });
-  };
-  document.head.appendChild(loaderScript);
+    }
+    return tr.docChanged ? Decoration.none : deco;
+  },
+  provide: f => EditorView.decorations.from(f),
+});
+
+// ── Highlight decorations ───────────────────────────────────────────────────
+
+const highlightEffect = StateEffect.define();
+const highlightField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    for (const e of tr.effects) {
+      if (e.is(highlightEffect)) return e.value;
+    }
+    return deco.map(tr.changes);
+  },
+  provide: f => EditorView.decorations.from(f),
+});
+
+// ── Theme ───────────────────────────────────────────────────────────────────
+
+const darkTheme = EditorView.theme({
+  "&": { color: "#d4d4d4", backgroundColor: "transparent" },
+  ".cm-content": { caretColor: "#d4d4d4", padding: "0", lineHeight: "20px" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#d4d4d4" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+    backgroundColor: "#264f78",
+  },
+  "::selection": { backgroundColor: "#264f78" },
+  ".cm-line": { padding: "0" },
+  ".cm-ghost-text": { opacity: "0.4" },
+}, { dark: true });
+
+// ── Key string conversion ───────────────────────────────────────────────────
+
+function _parseCMKey(keyStr) {
+  const modMap = { Control: "Ctrl", Alt: "Alt", Shift: "Shift", Meta: "Meta", Cmd: "Mod" };
+  const parts = keyStr.split("+");
+  const mods = [];
+  let key = "";
+  for (const part of parts) {
+    if (modMap[part]) mods.push(modMap[part]);
+    else key = part;
+  }
+  // Single ASCII letters must be lowercase: CodeMirror uses event.key which is
+  // lowercase when Shift is not held, uppercase when it is. "Control+T" in config
+  // means the T key (no Shift), so we need "Ctrl-t" not "Ctrl-T".
+  if (key.length === 1 && /[A-Za-z]/.test(key)) key = key.toLowerCase();
+  return key ? [...mods, key].join("-") : null;
 }
 
-function _registerHistoryCompletions() {
-  monaco.languages.registerInlineCompletionsProvider("*", {
-    provideInlineCompletions(model, position, _context, _token) {
-      const text = model.getValue();
-      const offset = model.getOffsetAt(position);
-      if (!text || offset !== text.length || lastEditWasDeletion)
-        return { items: [] };
-      const filigrane = focusedPrompt?._filigrane;
-      if (!filigrane || !filigrane.startsWith(text) || filigrane === text)
-        return { items: [] };
-      return {
-        items: [
-          {
-            insertText: filigrane.slice(text.length),
-            range: new monaco.Range(
-              position.lineNumber,
-              position.column,
-              position.lineNumber,
-              position.column,
-            ),
-          },
-        ],
-      };
-    },
-    freeInlineCompletions() {},
-  });
-}
-
-export function isPromptFocused() {
-  return focusedPrompt !== null;
-}
-let lastEditWasDeletion = false;
+// ── applyRangesToText ───────────────────────────────────────────────────────
 
 function applyRangesToText(text, ranges) {
   const points = new Set([0, text.length]);
   for (const { start, end } of ranges) {
-    if (start >= 0 && start <= text.length) {
-      points.add(start);
-    }
-    if (end >= 0 && end <= text.length) {
-      points.add(end);
-    }
+    if (start >= 0 && start <= text.length) points.add(start);
+    if (end >= 0 && end <= text.length) points.add(end);
   }
   const boundaries = [...points].sort((a, b) => a - b);
   const frag = document.createDocumentFragment();
@@ -100,259 +112,19 @@ function applyRangesToText(text, ranges) {
     const s = boundaries[i];
     const e = boundaries[i + 1];
     const seg = text.slice(s, e);
-    if (!seg) {
-      continue;
-    }
+    if (!seg) continue;
     const classes = ranges
       .filter((r) => r.start <= s && r.end >= e)
       .map((r) => r.cls);
     const span = document.createElement("span");
     span.textContent = seg;
-    if (classes.length > 0) {
-      span.className = classes.join(" ");
-    }
+    if (classes.length > 0) span.className = classes.join(" ");
     frag.appendChild(span);
   }
   return frag;
 }
 
-const EDITOR_OPTIONS = {
-  value: "",
-  language: "plaintext",
-  theme: "vs-dark",
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  lineNumbers: "off",
-  renderLineHighlight: "none",
-  overviewRulerLanes: 0,
-  folding: false,
-  wordWrap: "on",
-  fontSize: 13,
-  fontFamily: "Consolas, Menlo, monospace",
-  padding: { top: 0, bottom: 0 },
-  lineHeight: 20,
-  quickSuggestions: false,
-  suggestOnTriggerCharacters: false,
-  acceptSuggestionOnEnter: "off",
-  tabCompletion: "off",
-  wordBasedSuggestions: "off",
-  parameterHints: { enabled: false },
-  suggest: { showWords: false },
-  inlineSuggest: { enabled: true },
-  glyphMargin: false,
-  lineDecorationsWidth: 0,
-  lineNumbersMinChars: 0,
-  scrollbar: {
-    vertical: "hidden",
-    horizontal: "hidden",
-    alwaysConsumeMouseWheel: false,
-  },
-};
-
-
-function _parseMonacoKey(keyStr) {
-  const parts = keyStr.split("+");
-  let mods = 0;
-  let keyCode = 0;
-  for (const part of parts) {
-    switch (part) {
-      case "Control": mods |= monaco.KeyMod.WinCtrl; break;
-      case "Alt":     mods |= monaco.KeyMod.Alt; break;
-      case "Shift":   mods |= monaco.KeyMod.Shift; break;
-      case "Meta":
-      case "Cmd":     mods |= monaco.KeyMod.CtrlCmd; break;
-      default:
-        if (part.length === 1) {
-          keyCode = monaco.KeyCode[`Key${part.toUpperCase()}`] ?? 0;
-        }
-    }
-  }
-  return mods | keyCode;
-}
-
-function _editorCommands() {
-  return {
-    submit: {
-      trigger: monaco.KeyCode.Enter,
-      run() {
-        const value = focusedPrompt?._editor.getValue().trim();
-        if (value) {
-          focusedPrompt._submit(value);
-        }
-      },
-    },
-
-    newline: {
-      trigger: monaco.KeyMod.Shift | monaco.KeyCode.Enter,
-      run() {
-        focusedPrompt?._editor.trigger("keyboard", "type", { text: "\n" });
-      },
-    },
-
-    prevPrompt: {
-      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
-      run() {
-        focusedPrompt?._promptCollection._move(-1);
-      },
-    },
-    nextPrompt: {
-      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow,
-      run() {
-        focusedPrompt?._promptCollection._move(1);
-      },
-    },
-
-    prevGroup: {
-      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.LeftArrow,
-      run() { _moveToGroup?.(-1); },
-    },
-    nextGroup: {
-      trigger: monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.RightArrow,
-      run() { _moveToGroup?.(1); },
-    },
-
-    prevHistory: {
-      trigger: monaco.KeyCode.UpArrow,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        if (editor.getPosition()?.lineNumber === 1) {
-          focusedPrompt?._sendHistoryNavigate("prev");
-        } else {
-          editor.trigger("keyboard", "cursorUp", null);
-        }
-      },
-    },
-    nextHistory: {
-      trigger: monaco.KeyCode.DownArrow,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        const atLastLine =
-          editor.getPosition()?.lineNumber ===
-          editor.getModel()?.getLineCount();
-        if (atLastLine) {
-          if (focusedPrompt?._navDraft !== null) {
-            focusedPrompt._sendHistoryNavigate("next");
-          }
-        } else {
-          editor.trigger("keyboard", "cursorDown", null);
-        }
-      },
-    },
-
-    close: {
-      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyD,
-      run() {
-        const prompt = focusedPrompt;
-        if (!prompt) return;
-        prompt._promptCollection._buche.sendCommand({
-          type: "prompt_close",
-          to: prompt.address,
-        });
-      },
-    },
-
-    clearInput: {
-      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyC,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        editor.setValue("");
-      },
-    },
-
-    deleteWordLeft: {
-      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyW,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        const model = editor.getModel();
-        const pos = editor.getPosition();
-        if (!model || !pos) return;
-        const offset = model.getOffsetAt(pos);
-        const text = model.getValue();
-        let i = offset;
-        while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) i--;
-        while (
-          i > 0 &&
-          text[i - 1] !== " " &&
-          text[i - 1] !== "\t" &&
-          text[i - 1] !== "\n"
-        )
-          i--;
-        if (i === offset) return;
-        const startPos = model.getPositionAt(i);
-        editor.executeEdits("ctrl-w", [
-          {
-            range: new monaco.Range(
-              startPos.lineNumber,
-              startPos.column,
-              pos.lineNumber,
-              pos.column,
-            ),
-            text: "",
-          },
-        ]);
-      },
-    },
-
-    tabComplete: {
-      trigger: monaco.KeyCode.Tab,
-      run() {
-        const prompt = focusedPrompt;
-        if (!prompt) return;
-        const editor = prompt._editor;
-        if (!editor) return;
-        const text = editor.getValue();
-        const pos = editor.getPosition();
-        const model = editor.getModel();
-        if (!pos || !model) return;
-        const position = model.getOffsetAt(pos);
-        const left = text.slice(0, position);
-        const prefix = /(\S*)$/.exec(left)?.[1] ?? "";
-        const request_id = crypto.randomUUID();
-        prompt._promptCollection._completionRequests.set(request_id, {
-          prompt,
-          prefix,
-          position,
-        });
-        prompt._promptCollection._buche.sendCommand({
-          type: "parse",
-          to: prompt.address,
-          text,
-          position,
-          want_completions: true,
-          request_id,
-        });
-      },
-    },
-
-    acceptHistorySuggestion: {
-      trigger: monaco.KeyCode.RightArrow,
-      run() {
-        const editor = focusedPrompt?._editor;
-        if (!editor) return;
-        const model = editor.getModel();
-        const pos = editor.getPosition();
-        const atEnd =
-          pos &&
-          model &&
-          pos.lineNumber === model.getLineCount() &&
-          pos.column > model.getLineLength(pos.lineNumber);
-        if (atEnd) {
-          editor.trigger(
-            "keyboard",
-            "editor.action.inlineSuggest.commit",
-            null,
-          );
-        } else {
-          editor.trigger("keyboard", "cursorRight", null);
-        }
-      },
-    },
-  };
-}
+// ── Prompt ──────────────────────────────────────────────────────────────────
 
 class Prompt {
   constructor({
@@ -370,16 +142,17 @@ class Prompt {
     this.promptId = promptId;
     this.address = address;
     this._promptCollection = promptCollection;
-    this._editor = null;
-    this._decorations = null;
+    this._view = null;
+    this._readOnly = null;
     this._highlightRanges = [];
+    this._lastEditWasDeletion = false;
     this._language = language ?? "plaintext";
     this._bindings = bindings
       ? Object.entries(bindings).map(([key, name]) => ({ key, name }))
       : [];
-    this._navAnchorId = null;  // ID of currently displayed history entry
-    this._navDraft = null;     // text saved before navigation started
-    this._filigrane = null;    // inline suggestion from parse response
+    this._navAnchorId = null;
+    this._navDraft = null;
+    this._filigrane = null;
 
     this._promptHtml = promptHtml;
 
@@ -390,7 +163,6 @@ class Prompt {
     this.editorEl = document.createElement("div");
     this.editorEl.className = "prompt-editor";
 
-    // Wrapper holds label + editor, shown only when active.
     this.el = document.createElement("div");
     this.el.className = "prompt-wrapper";
     this.el.appendChild(this.labelEl);
@@ -415,95 +187,266 @@ class Prompt {
   }
 
   init() {
-    this._editor = monaco.editor.create(this.editorEl, {
-      ...EDITOR_OPTIONS,
-      language: this._language,
+    const self = this;
+    const readOnly = new Compartment();
+    this._readOnly = readOnly;
+
+    const userKeymap = this._bindings.flatMap(({ key, name }) => {
+      const cmKey = _parseCMKey(key);
+      if (!cmKey) return [];
+      return [{
+        key: cmKey,
+        run: (view) => {
+          const text = view.state.doc.toString();
+          const pos = view.state.selection.main.head;
+          self._promptCollection._buche.sendCommand({
+            type: "prompt_binding",
+            to: self.address,
+            name,
+            key,
+            text,
+            position: pos,
+          });
+          return true;
+        },
+      }];
     });
 
-    this._editor.onDidFocusEditorWidget(() => {
-      clearFocusedCell();
-      focusedPrompt = this;
-      this._promptCollection.onFocus?.();
-    });
+    const instanceKeymap = keymap.of([
+      {
+        key: "Enter",
+        run: (view) => {
+          const value = view.state.doc.toString().trim();
+          if (value) self._submit(value);
+          return true;
+        },
+      },
+      {
+        key: "Shift-Enter",
+        run: (view) => {
+          view.dispatch(view.state.replaceSelection("\n"));
+          return true;
+        },
+      },
+      {
+        key: "Mod-ArrowLeft",
+        run: () => { self._promptCollection._move(-1); return true; },
+      },
+      {
+        key: "Mod-ArrowRight",
+        run: () => { self._promptCollection._move(1); return true; },
+      },
+      {
+        key: "Mod-Shift-ArrowLeft",
+        run: () => { _moveToGroup?.(-1); return true; },
+      },
+      {
+        key: "Mod-Shift-ArrowRight",
+        run: () => { _moveToGroup?.(1); return true; },
+      },
+      {
+        key: "ArrowUp",
+        run: (view) => {
+          const pos = view.state.selection.main.head;
+          const line = view.state.doc.lineAt(pos);
+          if (line.number === 1) {
+            self._sendHistoryNavigate("prev");
+            return true;
+          }
+          return false;
+        },
+      },
+      {
+        key: "ArrowDown",
+        run: (view) => {
+          const pos = view.state.selection.main.head;
+          const doc = view.state.doc;
+          const line = doc.lineAt(pos);
+          if (line.number === doc.lines) {
+            if (self._navDraft !== null) self._sendHistoryNavigate("next");
+            return true;
+          }
+          return false;
+        },
+      },
+      {
+        key: "Ctrl-d",
+        run: () => {
+          self._promptCollection._buche.sendCommand({
+            type: "prompt_close",
+            to: self.address,
+          });
+          return true;
+        },
+      },
+      {
+        key: "Ctrl-c",
+        run: (view) => {
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: "" },
+            annotations: Transaction.userEvent.of("setValue"),
+          });
+          return true;
+        },
+      },
+      {
+        key: "Ctrl-w",
+        run: (view) => {
+          const pos = view.state.selection.main.from;
+          const text = view.state.doc.toString();
+          let i = pos;
+          while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) i--;
+          while (i > 0 && text[i - 1] !== " " && text[i - 1] !== "\t" && text[i - 1] !== "\n") i--;
+          if (i < pos) view.dispatch({ changes: { from: i, to: pos } });
+          return true;
+        },
+      },
+      {
+        key: "Tab",
+        run: (view) => {
+          const text = view.state.doc.toString();
+          const pos = view.state.selection.main.head;
+          const left = text.slice(0, pos);
+          const prefix = /(\S*)$/.exec(left)?.[1] ?? "";
+          const request_id = crypto.randomUUID();
+          self._promptCollection._completionRequests.set(request_id, {
+            prompt: self,
+            prefix,
+            position: pos,
+          });
+          self._promptCollection._buche.sendCommand({
+            type: "parse",
+            to: self.address,
+            text,
+            position: pos,
+            want_completions: true,
+            request_id,
+          });
+          return true;
+        },
+      },
+      {
+        key: "ArrowRight",
+        run: (view) => {
+          const sel = view.state.selection.main;
+          if (sel.empty && sel.head === view.state.doc.length && self._filigrane) {
+            const text = view.state.doc.toString();
+            if (self._filigrane.startsWith(text) && self._filigrane !== text) {
+              const suffix = self._filigrane.slice(text.length);
+              const insertAt = view.state.doc.length;
+              view.dispatch({
+                changes: { from: insertAt, insert: suffix },
+                selection: EditorSelection.cursor(insertAt + suffix.length),
+                effects: ghostTextEffect.of(null),
+                annotations: Transaction.userEvent.of("setValue"),
+              });
+              return true;
+            }
+          }
+          return false;
+        },
+      },
+      ...userKeymap,
+    ]);
 
-    for (let spec of Object.values(_editorCommands())) {
-      this._editor.addCommand(spec.trigger, spec.run);
+    this._view = new EditorView({
+      state: EditorState.create({
+        doc: "",
+        extensions: [
+          instanceKeymap,
+          ghostTextField,
+          highlightField,
+          readOnly.of(EditorState.readOnly.of(false)),
+          EditorView.lineWrapping,
+          darkTheme,
+          EditorView.updateListener.of((update) => {
+            if (update.focusChanged) {
+              if (update.view.hasFocus) {
+                clearFocusedCell();
+                focusedPrompt = self;
+                self._promptCollection.onFocus?.();
+              } else if (focusedPrompt === self) {
+                focusedPrompt = null;
+              }
+            }
+            if (update.docChanged) {
+              const isSetValue = update.transactions.some(tr =>
+                tr.isUserEvent("setValue"),
+              );
+              if (!isSetValue) {
+                self._cancelNavigation();
+                let isDeletion = false;
+                for (const tr of update.transactions) {
+                  tr.changes.iterChanges((fromA, toA, _fB, _tB, ins) => {
+                    if (toA > fromA && ins.length === 0) isDeletion = true;
+                  });
+                }
+                self._lastEditWasDeletion = isDeletion;
+              }
+              const text = update.state.doc.toString();
+              const pos = update.state.selection.main.head;
+              const request_id = crypto.randomUUID();
+              self._promptCollection._parseRequests.set(request_id, self);
+              self._promptCollection._buche.sendCommand({
+                type: "parse",
+                to: self.address,
+                text,
+                position: pos,
+                want_completions: false,
+                request_id,
+              });
+            }
+          }),
+        ],
+      }),
+      parent: this.editorEl,
+    });
+  }
+
+  _updateGhostText() {
+    if (!this._view) return;
+    const text = this._view.state.doc.toString();
+    const filigrane = this._filigrane;
+    const sel = this._view.state.selection.main;
+    const atEnd = sel.empty && sel.head === text.length;
+    if (
+      filigrane &&
+      filigrane.startsWith(text) &&
+      filigrane !== text &&
+      !this._lastEditWasDeletion &&
+      atEnd
+    ) {
+      this._view.dispatch({ effects: ghostTextEffect.of(filigrane.slice(text.length)) });
+    } else {
+      this._view.dispatch({ effects: ghostTextEffect.of(null) });
     }
-
-    for (const { key, name } of this._bindings) {
-      const trigger = _parseMonacoKey(key);
-      if (!trigger) continue;
-      this._editor.addCommand(trigger, () => {
-        const editor = this._editor;
-        if (!editor) return;
-        const text = editor.getValue();
-        const pos = editor.getPosition();
-        const position = pos ? editor.getModel().getOffsetAt(pos) : text.length;
-        this._promptCollection._buche.sendCommand({
-          type: "prompt_binding",
-          to: this.address,
-          name,
-          key,
-          text,
-          position,
-        });
-      });
-    }
-
-    const updateHeight = () => {
-      const height = this._editor.getContentHeight();
-      this.editorEl.style.height = `${height}px`;
-      this._editor.layout();
-    };
-    this._editor.onDidContentSizeChange(updateHeight);
-    new ResizeObserver(() => this._editor?.layout()).observe(this.editorEl);
-    updateHeight();
-
-    this._decorations = this._editor.createDecorationsCollection([]);
-
-    this._editor.onDidChangeModelContent((e) => {
-      if (!e.isFlush) {
-        this._cancelNavigation();
-        lastEditWasDeletion = e.changes.some(
-          (c) => c.rangeLength > 0 && c.text === "",
-        );
-      }
-    });
-
-    this._editor.onDidChangeModelContent(() => {
-      const text = this._editor.getValue();
-      const pos = this._editor.getPosition();
-      const position = pos
-        ? this._editor.getModel().getOffsetAt(pos)
-        : text.length;
-      const request_id = crypto.randomUUID();
-      this._promptCollection._parseRequests.set(request_id, this);
-      this._promptCollection._buche.sendCommand({
-        type: "parse",
-        to: this.address,
-        text,
-        position,
-        want_completions: false,
-        request_id,
-      });
-    });
   }
 
   applyHighlight(ranges) {
     this._highlightRanges = ranges;
-    if (!this._editor) {
-      return;
+    if (!this._view) return;
+    const docLen = this._view.state.doc.length;
+
+    // Merge class names for ranges at identical positions so that overlapping
+    // decorations like sh-cmd + sh-invalid become one span with both classes.
+    // CSS cascade (later rule wins) then resolves the visual priority.
+    const byPos = new Map();
+    for (const { start, end, cls } of ranges) {
+      if (start >= end || start < 0 || end > docLen) continue;
+      const key = `${start}:${end}`;
+      if (!byPos.has(key)) byPos.set(key, { start, end, classes: [] });
+      byPos.get(key).classes.push(cls);
     }
-    const model = this._editor.getModel();
-    this._decorations.set(
-      ranges.map(({ start, end, cls }) => ({
-        range: monaco.Range.fromPositions(
-          model.getPositionAt(start),
-          model.getPositionAt(end),
-        ),
-        options: { inlineClassName: cls },
-      })),
-    );
+
+    const decos = [...byPos.values()]
+      .sort((a, b) => a.start - b.start || a.end - b.end)
+      .map(({ start, end, classes }) =>
+        Decoration.mark({ class: classes.join(" ") }).range(start, end),
+      );
+
+    this._view.dispatch({
+      effects: highlightEffect.of(Decoration.set(decos)),
+    });
   }
 
   _submit(value) {
@@ -520,28 +463,27 @@ class Prompt {
       prompt_color: this._color ?? undefined,
       zone: this._promptCollection._zoneName,
     });
-    this._editor.setValue("");
+    this._view.dispatch({
+      changes: { from: 0, to: this._view.state.doc.length, insert: "" },
+      annotations: Transaction.userEvent.of("setValue"),
+    });
   }
 
   getValue() {
-    return this._editor?.getValue() ?? "";
+    return this._view?.state.doc.toString() ?? "";
   }
 
   setValue(text) {
-    if (!this._editor) return;
-    this._editor.setValue(text);
-    const model = this._editor.getModel();
-    if (model) {
-      const lastLine = model.getLineCount();
-      this._editor.setPosition({
-        lineNumber: lastLine,
-        column: model.getLineLength(lastLine) + 1,
-      });
-    }
+    if (!this._view) return;
+    this._view.dispatch({
+      changes: { from: 0, to: this._view.state.doc.length, insert: text },
+      selection: EditorSelection.cursor(text.length),
+      annotations: Transaction.userEvent.of("setValue"),
+    });
   }
 
   echo() {
-    const text = this._editor?.getValue() ?? "";
+    const text = this._view?.state.doc.toString() ?? "";
     const label = document.createElement("div");
     label.className = "cell-input-label";
     label.innerHTML = this._promptHtml;
@@ -551,25 +493,25 @@ class Prompt {
       body.appendChild(applyRangesToText(text, this._highlightRanges));
     } else {
       body.textContent = text;
-      monaco.editor.colorize(text, this._language, {}).then((highlighted) => {
-        body.innerHTML = highlighted;
-      });
     }
     return html`<div class="cell-input">${label}${body}</div>`;
   }
 
   disable() {
-    this._editor?.updateOptions({ readOnly: true });
+    this._view?.dispatch({
+      effects: this._readOnly.reconfigure(EditorState.readOnly.of(true)),
+    });
   }
+
   enable() {
-    this._editor?.updateOptions({ readOnly: false });
+    this._view?.dispatch({
+      effects: this._readOnly.reconfigure(EditorState.readOnly.of(false)),
+    });
   }
-  focus() {
-    this._editor?.focus();
-  }
-  layout() {
-    this._editor?.layout();
-  }
+
+  focus() { this._view?.focus(); }
+
+  layout() { this._view?.requestMeasure(); }
 
   setPromptHtml(promptHtml) {
     this._promptHtml = promptHtml;
@@ -577,21 +519,13 @@ class Prompt {
   }
 
   selectSubstring(needle) {
-    if (!this._editor || !needle) return;
-    const text = this._editor.getValue();
+    if (!this._view || !needle) return;
+    const text = this._view.state.doc.toString();
     const idx = text.indexOf(needle);
     if (idx === -1) return;
-    const model = this._editor.getModel();
-    const start = model.getPositionAt(idx);
-    const end = model.getPositionAt(idx + needle.length);
-    this._editor.setSelection(
-      new monaco.Range(
-        start.lineNumber,
-        start.column,
-        end.lineNumber,
-        end.column,
-      ),
-    );
+    this._view.dispatch({
+      selection: EditorSelection.range(idx, idx + needle.length),
+    });
   }
 
   _cancelNavigation() {
@@ -604,12 +538,10 @@ class Prompt {
   }
 
   _sendHistoryNavigate(direction) {
-    const editor = this._editor;
-    if (!editor) return;
-    const text = editor.getValue();
-    const pos = editor.getPosition();
-    const model = editor.getModel();
-    const position = pos ? model.getOffsetAt(pos) : text.length;
+    const view = this._view;
+    if (!view) return;
+    const text = view.state.doc.toString();
+    const pos = view.state.selection.main.head;
 
     const isFirstNav = this._navDraft === null;
     if (isFirstNav && direction === "prev") {
@@ -617,14 +549,12 @@ class Prompt {
     }
 
     let filter = null;
-    const sel = editor.getSelection();
-    if (sel && !sel.isEmpty()) {
-      filter = model.getValueInRange(sel);
-    } else if (isFirstNav && pos && model) {
-      const lastLine = model.getLineCount();
-      if (pos.lineNumber === lastLine && pos.column > model.getLineLength(lastLine)) {
-        filter = text || null;
-      }
+    const sel = view.state.selection.main;
+    if (!sel.empty) {
+      filter = view.state.doc.sliceString(sel.from, sel.to);
+    } else if (isFirstNav) {
+      const atEnd = pos === text.length;
+      if (atEnd) filter = text || null;
     }
 
     const request_id = crypto.randomUUID();
@@ -635,13 +565,15 @@ class Prompt {
       direction,
       anchor_id: this._navAnchorId,
       text,
-      position,
+      position: pos,
       filter,
       tag: this.tag,
       request_id,
     });
   }
 }
+
+// ── PromptCollection ─────────────────────────────────────────────────────────
 
 export class PromptCollection {
   constructor(container, buche, zoneName = "main") {
@@ -650,13 +582,12 @@ export class PromptCollection {
     this._prompts = [];
     this._activeIdx = 0;
     this._container = container;
-    this._monacoReady = false;
-    this.onFocus = null; // () => void — called when any prompt in this collection gains focus
-    this.onActiveChanged = null; // (name: string) => void — called when the active prompt changes
-    this.onPromptsChanged = null; // () => void — called when prompts are added or removed
-    this.onActiveColorChanged = null; // () => void — called when the active prompt's color changes
-    this.onActivePromptChanged = null; // (prevPromptId: string|null, nextPromptId: string|null) => void
-    this.onPromptRemoved = null; // (promptIds: string[]) => void
+    this.onFocus = null;
+    this.onActiveChanged = null;
+    this.onPromptsChanged = null;
+    this.onActiveColorChanged = null;
+    this.onActivePromptChanged = null;
+    this.onPromptRemoved = null;
     this._parseRequests = new Map();
     this._completionRequests = new Map();
     this._histNavRequests = new Map();
@@ -667,42 +598,9 @@ export class PromptCollection {
 
     if (!_keysRegistered) {
       _keysRegistered = true;
-      tinykeys(window, {
-        "$mod+ArrowLeft": (e) => {
-          if (!focusedPrompt) return;
-          e.preventDefault();
-          focusedPrompt._promptCollection._move(-1);
-        },
-        "$mod+ArrowRight": (e) => {
-          if (!focusedPrompt) return;
-          e.preventDefault();
-          focusedPrompt._promptCollection._move(1);
-        },
-        "Control+d": (e) => {
-          if (!focusedPrompt) return;
-          e.preventDefault();
-          focusedPrompt._promptCollection._buche.sendCommand({
-            type: "prompt_close",
-            to: focusedPrompt.address,
-          });
-        },
-      });
+      // Window-level bindings (add chord sequences etc. here)
+      tinykeys(window, {});
     }
-
-    const vsBase = `file://${buche.vsBase}`;
-    _initMonaco(vsBase);
-    _onMonacoReady(() => {
-      this._monacoReady = true;
-      if (this._prompts.length > 0) {
-        this._activate(0);
-      }
-      for (const p of this._prompts) {
-        p.init();
-      }
-      if (this._prompts.length > 0) {
-        this._prompts[this._activeIdx]?.focus();
-      }
-    });
   }
 
   addPrompt({ to, address, prompt, name, tag, language, bindings, color }) {
@@ -723,11 +621,9 @@ export class PromptCollection {
     this._container.appendChild(p.el);
     this._tabBar.appendChild(p.tabEl);
     this._prompts.push(p);
-    if (this._monacoReady) {
-      this._activate(this._prompts.length - 1);
-      p.init();
-      requestAnimationFrame(() => p.focus());
-    }
+    p.init();
+    this._activate(this._prompts.length - 1);
+    requestAnimationFrame(() => p.focus());
     return p;
   }
 
@@ -764,17 +660,13 @@ export class PromptCollection {
     return this._activeIdx;
   }
 
-  disable() {
-    this._active?.disable();
-  }
+  disable() { this._active?.disable(); }
+
   enable() {
-    for (const p of this._prompts) {
-      p.enable();
-    }
+    for (const p of this._prompts) p.enable();
   }
-  focus() {
-    this._active?.focus();
-  }
+
+  focus() { this._active?.focus(); }
 
   layoutAll() {
     for (const p of this._prompts) p.layout();
@@ -817,12 +709,13 @@ export class PromptCollection {
   setInput({ to, address, text, position }) {
     const promptId = JSON.stringify(address) + ":" + to.prompt;
     const p = this._prompts.find((p) => p.promptId === promptId);
-    if (!p?._editor) return;
-    p._editor.setValue(text);
-    if (position != null) {
-      const model = p._editor.getModel();
-      p._editor.setPosition(model.getPositionAt(position));
-    }
+    if (!p?._view) return;
+    p._view.dispatch({
+      changes: { from: 0, to: p._view.state.doc.length, insert: text },
+      selection: EditorSelection.cursor(
+        position != null ? Math.min(position, text.length) : text.length,
+      ),
+    });
   }
 
   applyHighlight({ request_id, ranges, filigrane }) {
@@ -831,6 +724,7 @@ export class PromptCollection {
     this._parseRequests.delete(request_id);
     prompt.applyHighlight(ranges);
     prompt._filigrane = filigrane ?? null;
+    prompt._updateGhostText();
   }
 
   applyHistoryNav({ request_id, direction, text, anchor_id, filter }) {
@@ -858,8 +752,8 @@ export class PromptCollection {
     if (completions.length === 0) return;
 
     const { prompt, prefix, position } = req;
-    const editor = prompt._editor;
-    if (!editor) return;
+    const view = prompt._view;
+    if (!view) return;
 
     let insert;
     if (completions.length === 1) {
@@ -867,29 +761,16 @@ export class PromptCollection {
     } else {
       let common = completions[0].value;
       for (const { value } of completions) {
-        while (!value.startsWith(common)) {
-          common = common.slice(0, -1);
-        }
+        while (!value.startsWith(common)) common = common.slice(0, -1);
       }
       if (common.length <= prefix.length) return;
       insert = common;
     }
-
     if (insert === prefix) return;
 
-    const model = editor.getModel();
-    const startPos = model.getPositionAt(position - prefix.length);
-    const endPos = model.getPositionAt(position);
-    editor.executeEdits("tab-complete", [
-      {
-        range: new monaco.Range(
-          startPos.lineNumber,
-          startPos.column,
-          endPos.lineNumber,
-          endPos.column,
-        ),
-        text: insert,
-      },
-    ]);
+    view.dispatch({
+      changes: { from: position - prefix.length, to: position, insert },
+      selection: EditorSelection.cursor(position - prefix.length + insert.length),
+    });
   }
 }

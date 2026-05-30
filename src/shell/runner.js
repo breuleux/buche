@@ -972,14 +972,19 @@ class Shell {
       }
     }
 
-    // Rebuild key bindings: assign stable names (UUIDs) to each key→command entry.
-    this._keyBindings.clear();
-    this._promptBindings = {};
+    // Rebuild key bindings. Reuse existing UUIDs for unchanged keys so that
+    // prompts created before a cd/config-reload don't lose their bindings.
+    const nextBindings = {};
     for (const [key, cmd] of bindings) {
-      const name = crypto.randomUUID();
+      const name = this._promptBindings[key] ?? crypto.randomUUID();
+      nextBindings[key] = name;
       this._keyBindings.set(name, cmd);
-      this._promptBindings[key] = name;
     }
+    // Remove stale entries for keys no longer in config.
+    for (const name of Object.values(this._promptBindings)) {
+      if (!Object.values(nextBindings).includes(name)) this._keyBindings.delete(name);
+    }
+    this._promptBindings = nextBindings;
 
     yield {
       type: "configure",
