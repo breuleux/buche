@@ -516,7 +516,7 @@ function closeActiveZone() {
 // The returned config is forwarded to data: iframes so they can mirror the same bindings.
 const { config: _globalKeysConfig } = buchekeys(window, {
   // C-q prefix mode bindings
-  "Control+q ~ ArrowUp": (e) => {
+  "Control+q ~ Control+ArrowUp": (e) => {
     const ordered = getOrderedCellNodes();
     if (ordered.length === 0) return;
     const focused = getFocusedNavigableNode();
@@ -528,7 +528,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     if (idx > 0) focusCellNode(ordered[idx - 1]);
   },
 
-  "Control+q ~ ArrowDown": (e) => {
+  "Control+q ~ Control+ArrowDown": (e) => {
     const ordered = getOrderedCellNodes();
     if (ordered.length === 0) return;
     const focused = getFocusedNavigableNode();
@@ -541,12 +541,12 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     }
   },
 
-  "Control+q ~ k": (e) => {
+  "Control+q ~ Control+k": (e) => {
     const entry = getFocusedCellEntry() ?? getBottomCellEntry();
     if (entry?.cell.isAlive()) entry.cell.kill();
   },
 
-  "Control+q ~ Shift+K": (e) => {
+  "Control+q ~ Control+Shift+K": (e) => {
     const entry = getFocusedCellEntry() ?? getBottomCellEntry();
     if (entry?.cell.isAlive()) entry.cell.kill("SIGKILL");
   },
@@ -571,7 +571,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     }
   },
 
-  "Control+q ~ f": (e) => {
+  "Control+q ~ Control+f": (e) => {
     const node = getFocusedNavigableNode();
     if (!node) return;
     node.parentElement.appendChild(node);
@@ -579,12 +579,12 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     focusActivePrompt();
   },
 
-  "Control+q ~ l": (e) => {
+  "Control+q ~ Control+l": (e) => {
     _executor.clearInactiveCells();
     focusActivePrompt();
   },
 
-  "Control+q ~ p": (e) => {
+  "Control+q ~ Control+p": (e) => {
     focusActivePrompt();
   },
 
@@ -593,7 +593,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     focusActivePrompt();
   },
 
-  "Control+q ~ Shift+T": (e) => {
+  "Control+q ~ Control+t": (e) => {
     const overlay = html`<div class="title-modal-overlay">
       <div class="title-modal">
         <label>Window title</label>
@@ -619,7 +619,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     input.select();
   },
 
-  "Control+q ~ ,": (e) => {
+  "Control+q ~ Control+,": (e) => {
     const zoneName = _executor._zoneManager._activeZoneName;
     const zone = _executor._zoneManager._zones.get(zoneName);
     const pc = zone?.promptCollection;
@@ -678,7 +678,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     _executor._zoneManager.moveToGroup(+1);
   },
 
-  "Control+q ~ d": (e) => {
+  "Control+q ~ Control+d": (e) => {
     const focused = getFocusedNavigableNode() ?? getOrderedCellNodes().at(-1) ?? null;
     if (!focused) return;
 
