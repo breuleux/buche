@@ -214,22 +214,23 @@ class Executor {
     const { process_id } = instruction;
     let anyFocused = false;
     let anyStickyWasFocused = false;
-    let closedZone = null;
+    // Does anyClosed matter to a desired behavior?
+    let anyClosed = false;
     for (const [key, entry] of [...this.cells]) {
       if (addressMatchesProcess(entry.address, process_id)) {
         this._closeEchoStatus(key, instruction.return_code);
         const isFocused = entry.cell.node.contains(document.activeElement);
         if (entry.sticky && isFocused) anyStickyWasFocused = true;
         else if (!entry.sticky && isFocused) anyFocused = true;
-        closedZone = entry.zone;
+        anyClosed = true;
         entry.cell.close(instruction.return_code, { sticky: entry.sticky });
         this.cells.delete(key);
         if (this._activeCell === key) this._activeCell = null;
       }
     }
     this._zoneManager.removePromptsByProcess(process_id);
-    if (!anyStickyWasFocused && (anyFocused || (closedZone !== null && this._activeCell === null))) {
-      this._zoneManager.focusZone(closedZone ?? "main");
+    if (!anyStickyWasFocused && (anyFocused || (anyClosed && this._activeCell === null))) {
+      focusActivePrompt();
     }
   }
 
@@ -425,6 +426,11 @@ const { config: _globalKeysConfig } = buchekeys(window, {
   },
 
   "Control+q ~ p": (e) => {
+    focusActivePrompt();
+  },
+
+  "$mod+p": (e) => {
+    e.preventDefault();
     focusActivePrompt();
   },
 
