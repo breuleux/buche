@@ -435,6 +435,7 @@ scroll-fader {
 	display: flex;
 	align-items: center;
 	gap: 2px;
+	z-index: 1000;
 }
 
 .cell-kill-btn,
