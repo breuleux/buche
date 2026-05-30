@@ -61,6 +61,10 @@ export class DataHandler {
     window.dispatchEvent(new KeyboardEvent("keydown", { ...init, bubbles: false, cancelable: true }));
   }
 
+  handle$blur(_msg) {
+    this._bridge?.onBackground();
+  }
+
   handle$send(msg) {
     if (this._bridge) {
       this._bridge.sendControl(msg.data);

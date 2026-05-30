@@ -105,7 +105,7 @@ export class Cell {
     this.handler.send(data);
   }
 
-  close(return_code) {
+  close(return_code, { sticky = false } = {}) {
     this._statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
     if (this._killBtn) {
       this._killBtn.style.visibility = "hidden";
@@ -114,6 +114,6 @@ export class Cell {
     }
     this.handler.setCursorState?.("hidden");
     this.node._bucheFocus = null; // Dead — focusLatent() will fall back to the prompt
-    this.node.blur();
+    if (!sticky) this.node.blur();
   }
 }

@@ -691,7 +691,7 @@ export class PromptCollection {
     next.el.classList.add("active");
     next.tabEl.classList.add("active");
     next.layout();
-    next.focus();
+    if (!document.activeElement?.closest?.(".cell")) next.focus();
     this.onActiveChanged?.(next._name);
   }
 

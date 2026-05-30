@@ -130,7 +130,7 @@ class Executor {
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
-    this.cells.set(key, { cell, address: instruction.address, zone: zone.name });
+    this.cells.set(key, { cell, address: instruction.address, zone: zone.name, sticky: instruction.sticky ?? false });
     if (!instruction.background) {
       this._activeCell = key;
       cell.node.focus();
@@ -179,17 +179,24 @@ class Executor {
     const entry = this.cells.get(key);
     if (entry) {
       this._closeEchoStatus(key, instruction.return_code);
-      const isFocused = entry.cell.node === document.activeElement;
-      entry.cell.close(instruction.return_code);
+      const isFocused = entry.cell.node.contains(document.activeElement);
+      entry.cell.close(instruction.return_code, { sticky: entry.sticky });
       this.cells.delete(key);
-      if (this._activeCell === key) {
-        this._activeCell = null;
-        if (isFocused) {
-          this._zoneManager.focusZone(entry.zone);
-        }
-      } else if (isFocused) {
+      if (this._activeCell === key) this._activeCell = null;
+      if (!entry.sticky && isFocused) {
         this._zoneManager.focusZone(entry.zone);
       }
+    }
+  }
+
+  handle$cell_configure(instruction) {
+    const key = cellKey(instruction.address, instruction.to.cell);
+    const entry = this.cells.get(key);
+    if (!entry) return;
+    if (instruction.sticky !== null) entry.sticky = instruction.sticky;
+    if (instruction.background === true) {
+      this._activeCell = null;
+      this._zoneManager.focusZone(entry.zone);
     }
   }
 
@@ -203,19 +210,22 @@ class Executor {
   handle$process_close(instruction) {
     const { process_id } = instruction;
     let anyFocused = false;
+    let anyStickyWasFocused = false;
     let closedZone = null;
     for (const [key, entry] of [...this.cells]) {
       if (addressMatchesProcess(entry.address, process_id)) {
         this._closeEchoStatus(key, instruction.return_code);
-        if (entry.cell.node === document.activeElement) anyFocused = true;
+        const isFocused = entry.cell.node.contains(document.activeElement);
+        if (entry.sticky && isFocused) anyStickyWasFocused = true;
+        else if (!entry.sticky && isFocused) anyFocused = true;
         closedZone = entry.zone;
-        entry.cell.close(instruction.return_code);
+        entry.cell.close(instruction.return_code, { sticky: entry.sticky });
         this.cells.delete(key);
         if (this._activeCell === key) this._activeCell = null;
       }
     }
     this._zoneManager.removePromptsByProcess(process_id);
-    if (anyFocused || this._activeCell === null) {
+    if (!anyStickyWasFocused && (anyFocused || (closedZone !== null && this._activeCell === null))) {
       this._zoneManager.focusZone(closedZone ?? "main");
     }
   }
