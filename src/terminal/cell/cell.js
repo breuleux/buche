@@ -69,8 +69,10 @@ export class Cell {
         bridge?.onBackground();
       },
       // Enter while the wrapper itself has focus (navigation mode) → enter edit mode.
+      // Skip for handlers that own all input (e.g. AutoHandler) so Enter reaches the process.
       "Enter": (e) => {
         if (document.activeElement !== this.node) return;
+        if (HandlerClass.handlesInput) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         this.handler.focus?.();

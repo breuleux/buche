@@ -2,7 +2,7 @@ import { DataHandler } from "./data.js";
 import { TermHandler } from "./term.js";
 import { TextHandler } from "./text.js";
 import { TermBuffer } from "../ansi.js";
-import { html } from "../utils.js";
+import { html, keyToInput } from "../utils.js";
 
 const BUFFER_MAX_LINES = 1000;
 
@@ -24,6 +24,16 @@ export class AutoHandler {
 
     this._stdioHandler = new TextHandler(this._stdioWrapper, instruction);
     this._dataHandler = null;
+
+    if (bridge) {
+      cellNode.addEventListener("keydown", (e) => {
+        if (this._switched) return;
+        const text = keyToInput(e);
+        if (text === null) return;
+        e.preventDefault();
+        bridge.sendInput(text);
+      });
+    }
 
     // Buffer for stdio messages; cleared once we switch Text→Term
     this._buffer = [];
