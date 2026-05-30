@@ -320,7 +320,7 @@ class Process {
       }
     }
 
-    const helperPath = path.join(__dirname, "buche-exec");
+    const helperPath = path.join(__dirname, "cq-exec");
     const child = spawn("python3", [helperPath, cmd, ...args], {
       stdio: [fdMap[0], fdMap[1], fdMap[2], "pipe", "pipe", "pipe"],
       env: {

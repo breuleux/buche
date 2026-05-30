@@ -27,4 +27,8 @@ for _tty_fd in (0, 1, 2):
         fcntl.ioctl(_tty_fd, TIOCSCTTY, 0)
         break
 
-os.execvp(sys.argv[1], sys.argv[1:])
+try:
+    os.execvp(sys.argv[1], sys.argv[1:])
+except FileNotFoundError:
+    print(f"command not found: {sys.argv[1]}", file=sys.stderr)
+    sys.exit(127)
