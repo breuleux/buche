@@ -153,6 +153,7 @@ class Prompt {
     this._navAnchorId = null;
     this._navDraft = null;
     this._filigrane = null;
+    this._lastKeyWasTab = false;
 
     this._promptHtml = promptHtml;
 
@@ -200,6 +201,7 @@ class Prompt {
     this._readOnly = readOnly;
 
     const userKeymap = this._bindings.flatMap(({ key, name }) => {
+      if (key === "Tab Tab") return [];
       const cmKey = _parseCMKey(key);
       if (!cmKey) return [];
       return [{
@@ -324,6 +326,24 @@ class Prompt {
       {
         key: "Tab",
         run: (view) => {
+          if (self._lastKeyWasTab) {
+            self._lastKeyWasTab = false;
+            const binding = self._bindings.find(b => b.key === "Tab Tab");
+            if (binding) {
+              const text = view.state.doc.toString();
+              const pos = view.state.selection.main.head;
+              self._promptCollection._buche.sendCommand({
+                type: "prompt_binding",
+                to: self.address,
+                name: binding.name,
+                key: "Tab Tab",
+                text,
+                position: pos,
+              });
+              return true;
+            }
+          }
+          self._lastKeyWasTab = true;
           const text = view.state.doc.toString();
           const pos = view.state.selection.main.head;
           const left = text.slice(0, pos);
@@ -379,6 +399,14 @@ class Prompt {
           readOnly.of(EditorState.readOnly.of(false)),
           EditorView.lineWrapping,
           darkTheme,
+          EditorView.domEventHandlers({
+            keydown(event) {
+              if (event.key !== "Tab") self._lastKeyWasTab = false;
+            },
+            blur() {
+              self._lastKeyWasTab = false;
+            },
+          }),
           EditorView.updateListener.of((update) => {
             if (update.focusChanged) {
               if (update.view.hasFocus) {
