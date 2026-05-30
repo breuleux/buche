@@ -109,7 +109,7 @@ body {
 
 .zone-top-tab.zone-focused {
 	color: #d4d4d4;
-	border-bottom-color: #569cd6;
+	border-bottom-color: oklch(0.62 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
 }
 
 /* Single-tab group: render as a 2px strip, no label */
@@ -128,7 +128,7 @@ body {
 }
 
 .zone-group-single .zone-top-tab.zone-focused {
-	background: #569cd6;
+	background: oklch(0.62 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
 }
 
 /* Single-tab solo cell: show the tab bar as a thin header with the meta elements */
@@ -389,7 +389,7 @@ scroll-fader {
 }
 
 .prompt-tab.active {
-	color: #569cd6;
+	color: oklch(0.68 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
 	background: #1e1e1e;
 }
 

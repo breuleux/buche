@@ -103,13 +103,13 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, echo_html, prompt_name, background = false, zone = "main") {
+  async *runNode(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined) {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, echo_html, prompt_name, background, zone);
+        yield* this._runCommand(node, echo_html, prompt_name, background, zone, prompt_color);
         break;
       case "Pipeline":
-        yield* this._runPipeline(node, echo_html, prompt_name, background, zone);
+        yield* this._runPipeline(node, echo_html, prompt_name, background, zone, prompt_color);
         break;
       case "LogicalExpression":
         throw new FeatureNotImplementedError(
@@ -134,7 +134,7 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, echo_html, prompt_name, background = false, zone = "main") {
+  async *_runCommand(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined) {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
@@ -169,6 +169,7 @@ class ProcessBuilder {
       redirects,
       echo_html,
       prompt_name,
+      prompt_color,
       background,
       zone,
     });
@@ -186,7 +187,7 @@ class ProcessBuilder {
     return [text];
   }
 
-  async *_runPipeline(node, echo_html, prompt_name, background, zone) {
+  async *_runPipeline(node, echo_html, prompt_name, background, zone, prompt_color = undefined) {
     const shell = this._shell;
     const commands = node.commands;
 
@@ -224,6 +225,7 @@ class ProcessBuilder {
       to: { target: "terminal", cell: "main" },
       address: { process: entries[lastIdx].processId },
       echo_html,
+      prompt_color,
       mode: "auto",
       zone,
       background: background ?? false,
@@ -1195,9 +1197,10 @@ class Shell {
       for (const node of ast.commands) {
         const echo_html = first ? (obj.echo_html ?? null) : null;
         const prompt_name = first ? (obj.prompt_name ?? null) : null;
+        const prompt_color = first ? (obj.prompt_color ?? undefined) : undefined;
         first = false;
         const background = node.async === true;
-        yield* builder.runNode(node, echo_html, prompt_name, background, effectiveZone);
+        yield* builder.runNode(node, echo_html, prompt_name, background, effectiveZone, prompt_color);
       }
       return;
     }
@@ -1213,6 +1216,7 @@ class Shell {
         to: { target: "terminal", cell: "main" },
         address: { process: processId },
         echo_html,
+        prompt_color: obj.prompt_color ?? undefined,
         mode: "auto",
         zone: effectiveZone,
         background: obj.background ?? false,
@@ -1242,6 +1246,7 @@ class Shell {
       to: { target: "terminal", cell: "main" },
       address: { process: processId },
       echo_html,
+      prompt_color: obj.prompt_color ?? undefined,
       mode: "auto",
       zone: effectiveZone,
       background: obj.background ?? false,

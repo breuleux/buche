@@ -165,6 +165,9 @@ class Executor {
     if (echoElements) bridge.echoElements = echoElements;
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
     bridge._cell = cell;
+    const promptColor = instruction.prompt_color ?? null;
+    cell.promptColor = promptColor;
+    cell.node._promptColor = promptColor;
     cell.node._cellLabel = `cell-${++_cellCounter}`;
 
     if (echoElements) {
@@ -173,6 +176,7 @@ class Executor {
       this._cellEchoElements.set(key, echoElements);
     }
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
+    if (promptColor) zone._promptColor = promptColor;
     cell.onFocus = () => this._zoneManager._setFocusedZone(zone.name);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);

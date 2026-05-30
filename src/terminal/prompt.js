@@ -363,6 +363,7 @@ class Prompt {
     address,
     language,
     bindings,
+    color,
     promptCollection,
   }) {
     this.tag = tag;
@@ -400,6 +401,17 @@ class Prompt {
     this.tabEl = document.createElement("div");
     this.tabEl.className = "prompt-tab";
     this.tabEl.textContent = name;
+
+    this._color = null;
+    if (color) this.setColor(color);
+  }
+
+  setColor(color) {
+    this._color = color ?? null;
+    const hue = color?.hue ?? 230;
+    const chroma = color?.chroma ?? 0.12;
+    this.tabEl.style.setProperty("--prompt-hue", hue);
+    this.tabEl.style.setProperty("--prompt-chroma", chroma);
   }
 
   init() {
@@ -505,6 +517,7 @@ class Prompt {
       tag: this.tag,
       prompt_id: this.promptId,
       echo_html,
+      prompt_color: this._color ?? undefined,
       zone: this._promptCollection._zoneName,
     });
     this._editor.setValue("");
@@ -641,6 +654,7 @@ export class PromptCollection {
     this.onFocus = null; // () => void — called when any prompt in this collection gains focus
     this.onActiveChanged = null; // (name: string) => void — called when the active prompt changes
     this.onPromptsChanged = null; // () => void — called when prompts are added or removed
+    this.onActiveColorChanged = null; // () => void — called when the active prompt's color changes
     this._parseRequests = new Map();
     this._completionRequests = new Map();
     this._histNavRequests = new Map();
@@ -689,7 +703,7 @@ export class PromptCollection {
     });
   }
 
-  addPrompt({ to, address, prompt, name, tag, language, bindings }) {
+  addPrompt({ to, address, prompt, name, tag, language, bindings, color }) {
     const p = new Prompt({
       promptHtml: prompt,
       name,
@@ -698,6 +712,7 @@ export class PromptCollection {
       address,
       language,
       bindings,
+      color,
       promptCollection: this,
     });
     p.tabEl.addEventListener("click", () => {
@@ -781,11 +796,15 @@ export class PromptCollection {
     this.onPromptsChanged?.();
   }
 
-  setPrompt({ to, address, prompt }) {
+  setPrompt({ to, address, prompt, color }) {
     const promptId = JSON.stringify(address) + ":" + to.prompt;
     const p = this._prompts.find((p) => p.promptId === promptId);
     if (p) {
       p.setPromptHtml(prompt);
+      if (color !== undefined) {
+        p.setColor(color);
+        if (p === this._active) this.onActiveColorChanged?.();
+      }
     }
   }
 

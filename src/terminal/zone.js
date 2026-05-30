@@ -324,7 +324,9 @@ export class ZoneManager {
   _setFocusedZone(zoneName) {
     this._groups.get(this._activeZoneName)?.tabEl(this._activeZoneName)?.classList.remove("zone-focused");
     this._activeZoneName = zoneName;
-    this._groups.get(zoneName)?.tabEl(zoneName)?.classList.add("zone-focused");
+    const tabEl = this._groups.get(zoneName)?.tabEl(zoneName);
+    if (tabEl) tabEl.classList.add("zone-focused");
+    this._zones.get(zoneName)?._updateTabColor?.();
   }
 
   _updateMultiLayout() {
@@ -507,9 +509,25 @@ export class ZoneManager {
 
   _initZone(name, group) {
     const zone = new Zone(name, this._bridge);
+
+    const updateTabColor = () => {
+      if (zone._soloCellNode) return; // solo mode: color is driven by the cell in onSoloChanged
+      const tabEl = group.tabEl(name);
+      if (!tabEl) return;
+      const color = zone.promptCollection._active?._color ?? zone._promptColor;
+      if (color) {
+        tabEl.style.setProperty("--prompt-hue", color.hue ?? 230);
+        tabEl.style.setProperty("--prompt-chroma", color.chroma ?? 0.12);
+      } else {
+        tabEl.style.removeProperty("--prompt-hue");
+        tabEl.style.removeProperty("--prompt-chroma");
+      }
+    };
+
     zone.promptCollection.onFocus = () => {
       zone._latentFocusIsPrompt = true;
       this._setFocusedZone(name);
+      updateTabColor();
       if (!zone._soloCellNode) {
         const n = zone.promptCollection.activeName;
         if (n) group.setTabLabel(name, n);
@@ -519,7 +537,10 @@ export class ZoneManager {
       if (!zone._soloCellNode) {
         group.setTabLabel(name, promptName ?? group.getDefaultLabel(name));
       }
+      updateTabColor();
     };
+    zone.promptCollection.onActiveColorChanged = updateTabColor;
+    zone._updateTabColor = updateTabColor;
     zone.promptCollection.onPromptsChanged = () => { this.removeZoneIfEmpty(name); };
     zone.onSoloChanged = (isSolo, cellNode) => {
       const tabEl = group.tabEl(name);
@@ -528,12 +549,16 @@ export class ZoneManager {
         if (cellNode._statusDot) tabEl.prepend(cellNode._statusDot);
         if (cellNode._controls) tabEl.appendChild(cellNode._controls);
         group.setTabLabel(name, cellNode._cellLabel ?? "");
+        const { hue, chroma } = cellNode._promptColor ?? {};
+        if (hue != null) tabEl.style.setProperty("--prompt-hue", hue);
+        if (chroma != null) tabEl.style.setProperty("--prompt-chroma", chroma);
       } else if (!isSolo && cellNode) {
         // Reassemble back into _metaEl (which stays in the cell as a parking spot).
         const metaEl = cellNode._metaEl;
         if (cellNode._statusDot) metaEl.prepend(cellNode._statusDot);
         if (cellNode._controls) metaEl.appendChild(cellNode._controls);
         group.setTabLabel(name, zone.promptCollection.activeName ?? group.getDefaultLabel(name));
+        updateTabColor();
       }
       group.setSoloActive(name, isSolo);
     };
