@@ -13,7 +13,7 @@ export class DataHandler {
     this._iframe.style.cssText =
       "border:none;width:100%;display:block;height:0;max-height:600px;";
     this._iframe.src = `proc://${this._procCellId}/`;
-    cellNode.appendChild(this._iframe);
+    (cellNode._bodyEl ?? cellNode).appendChild(this._iframe);
 
     this._onMessage = (e) => {
       if (

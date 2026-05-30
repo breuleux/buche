@@ -20,7 +20,7 @@ export class AutoHandler {
     const mainWrapper = document.createElement("div");
     mainWrapper.appendChild(this._stdioWrapper);
     mainWrapper.appendChild(this._dataWrapper);
-    cellNode.appendChild(mainWrapper);
+    (cellNode._bodyEl ?? cellNode).appendChild(mainWrapper);
 
     this._stdioHandler = new TextHandler(this._stdioWrapper, instruction);
     this._dataHandler = null;

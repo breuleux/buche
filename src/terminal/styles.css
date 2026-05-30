@@ -259,27 +259,37 @@ scroll-fader {
 
 /* cell fills zone-buffer */
 .zone-solo-cell .zone-buffer-wrap .scroll-fader-inner > .zone-buffer > .cell {
-	padding-left: 0px;
+	flex: 1 1 0;
+	min-height: 0;
+}
+
+/* Gutter hidden in solo mode */
+.zone-solo-cell .cell .cell-gutter {
+	display: none;
+}
+
+/* cell-body becomes the flex-column fill container */
+.zone-solo-cell .cell .cell-body {
 	flex: 1 1 0;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-/* Direct content fills the cell (.cell-meta is zero-height and must not flex-fill) */
-.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta),
-.zone-solo-cell .cell > iframe {
+/* Direct content fills cell-body (.cell-meta is zero-height and must not flex-fill) */
+.zone-solo-cell .cell-body > div:not(.cell-header):not(.cell-meta),
+.zone-solo-cell .cell-body > iframe {
 	flex: 1 1 0;
 	min-height: 0;
 }
 
 /* Auto handler: wrapper divs are flex columns so height propagates */
-.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta) {
+.zone-solo-cell .cell-body > div:not(.cell-header):not(.cell-meta) {
 	display: flex;
 	flex-direction: column;
 }
 
-.zone-solo-cell .cell > div:not(.cell-header):not(.cell-meta) > div {
+.zone-solo-cell .cell-body > div:not(.cell-header):not(.cell-meta) > div {
 	flex: 1 1 0;
 	min-height: 0;
 	display: flex;
@@ -288,14 +298,14 @@ scroll-fader {
 
 /* Cell-level scroll-faders (text handler): make them flex containers so their
    inner can flex-fill, and remove the 600px cap */
-.zone-solo-cell .cell scroll-fader {
+.zone-solo-cell .cell-body scroll-fader {
 	flex: 1 1 0;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.zone-solo-cell .cell scroll-fader .scroll-fader-inner {
+.zone-solo-cell .cell-body scroll-fader .scroll-fader-inner {
 	flex: 1 1 0;
 	min-height: 0;
 	max-height: none;
@@ -303,12 +313,12 @@ scroll-fader {
 }
 
 /* Term cells and iframes fill their container */
-.zone-solo-cell .cell .cell-term {
+.zone-solo-cell .cell-body .cell-term {
 	flex: 1 1 0;
 	min-height: 0;
 }
 
-.zone-solo-cell .cell iframe {
+.zone-solo-cell .cell-body iframe {
 	flex: 1 1 0;
 	min-height: 0;
 	max-height: none !important;
@@ -407,11 +417,25 @@ scroll-fader {
 
 .cell {
 	position: relative;
-	padding-left: 16px;
+	display: flex;
+	flex-direction: row;
 	/* margin-bottom: 8px; */
 	outline: none;
 	border-radius: 3px;
 	overflow: hidden;
+}
+
+.cell-gutter {
+	width: 16px;
+	flex-shrink: 0;
+	display: flex;
+	justify-content: center;
+	padding-top: 8px;
+}
+
+.cell-body {
+	flex: 1;
+	min-width: 0;
 }
 
 .cell.cell-focused {
@@ -502,9 +526,6 @@ scroll-fader {
 
 /* Status dot and controls are direct children of the tab in solo mode */
 .zone-top-tab > .cell-status {
-	position: static;
-	left: auto;
-	top: auto;
 	flex: 0 0 auto;
 }
 
@@ -524,9 +545,6 @@ scroll-fader {
 }
 
 .cell-status {
-	position: absolute;
-	left: 6px;
-	top: 8px;
 	width: 5px;
 	height: 5px;
 	border-radius: 50%;

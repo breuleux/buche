@@ -16,18 +16,21 @@ export class Cell {
       ? html`<button class="cell-kill-btn">✕</button>`
       : null;
     const controls = html`<span class="cell-controls">${this._btnBar}${this._killBtn}</span>`;
-    // _metaEl is a permanent 0-height parking spot in the cell.
-    // In solo mode, _statusDot and _controls are moved out of it into the zone's
+    this._gutterEl = html`<div class="cell-gutter">${this._statusDot}</div>`;
+    // _metaEl is a permanent 0-height parking spot in the cell body.
+    // In solo mode, _statusDot and _controls are moved out into the zone's
     // tab (dot left, controls right) and returned here when solo ends.
-    this._metaEl = html`<div class="cell-meta">${this._statusDot}${controls}</div>`;
+    this._metaEl = html`<div class="cell-meta">${controls}</div>`;
     const header = html`<div class="cell-header">${echo}</div>`;
+    const body = html`<div class="cell-body">${this._metaEl}${header}</div>`;
     this.node = html`<div class="cell" data-cell-id="${instruction.cell_id}" tabindex="0">
-			${this._metaEl}
-			${header}
+			${this._gutterEl}${body}
 		</div>`;
     this.node._metaEl = this._metaEl;
     this.node._statusDot = this._statusDot;
     this.node._controls = controls;
+    this.node._gutterEl = this._gutterEl;
+    this.node._bodyEl = body;
 
     this.onFocus = null; // () => void — set by Executor; called whenever this cell gains focus
 

@@ -553,10 +553,9 @@ export class ZoneManager {
         if (hue != null) tabEl.style.setProperty("--prompt-hue", hue);
         if (chroma != null) tabEl.style.setProperty("--prompt-chroma", chroma);
       } else if (!isSolo && cellNode) {
-        // Reassemble back into _metaEl (which stays in the cell as a parking spot).
-        const metaEl = cellNode._metaEl;
-        if (cellNode._statusDot) metaEl.prepend(cellNode._statusDot);
-        if (cellNode._controls) metaEl.appendChild(cellNode._controls);
+        // Reassemble: status dot back into the gutter, controls back into _metaEl.
+        if (cellNode._statusDot) cellNode._gutterEl?.prepend(cellNode._statusDot);
+        if (cellNode._controls) cellNode._metaEl?.appendChild(cellNode._controls);
         group.setTabLabel(name, zone.promptCollection.activeName ?? group.getDefaultLabel(name));
         updateTabColor();
       }

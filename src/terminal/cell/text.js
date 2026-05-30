@@ -32,7 +32,7 @@ export class TextHandler {
 
   init() {
     const fader = document.createElement("scroll-fader");
-    this.cellNode.appendChild(fader);
+    (this.cellNode._bodyEl ?? this.cellNode).appendChild(fader);
 
     this._startEl = html`<pre class="cell-text-inner"></pre>`;
     this._marker = html`<div class="cell-lines-dropped" hidden></div>`;
@@ -44,7 +44,7 @@ export class TextHandler {
     fader.inner.appendChild(this._startEl);
 
     this._cursorEl.classList.add("cursor-empty-line");
-    this.cellNode.appendChild(this._cursorEl);
+    (this.cellNode._bodyEl ?? this.cellNode).appendChild(this._cursorEl);
   }
 
   setCursorState(state) {
@@ -167,7 +167,7 @@ export class TextHandler {
       activeEl.appendChild(this._currentEl);
       this._cursorEl.classList.remove("cursor-empty-line");
     } else {
-      this.cellNode.appendChild(this._cursorEl);
+      (this.cellNode._bodyEl ?? this.cellNode).appendChild(this._cursorEl);
       this._cursorEl.classList.add("cursor-empty-line");
     }
 

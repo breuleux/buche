@@ -14,7 +14,7 @@ export class TermHandler {
     this._term.loadAddon(this._fitAddon);
 
     const container = html`<div class="cell-term"></div>`;
-    cellNode.appendChild(container);
+    (cellNode._bodyEl ?? cellNode).appendChild(container);
 
     if (bridge) {
       // Use xterm's onData so it handles application cursor mode, sends \r for
