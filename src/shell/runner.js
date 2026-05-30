@@ -738,7 +738,10 @@ async function shellComplete(text, position, builtins) {
   }
 
   // File/directory completions
-  const results = globSync((prefix || "") + "*", {
+  const homedir = os.homedir();
+  const tildePrefix = prefix.startsWith("~");
+  const expandedPrefix = tildePrefix ? homedir + prefix.slice(1) : prefix;
+  const results = globSync((expandedPrefix || "") + "*", {
     cwd: process.cwd(),
     dot: prefix.startsWith("."),
     mark: true,
@@ -750,7 +753,7 @@ async function shellComplete(text, position, builtins) {
     return a.localeCompare(b);
   });
   return results.map((value) => ({
-    value,
+    value: tildePrefix ? "~" + value.slice(homedir.length) : value,
     kind: value.endsWith("/") ? "directory" : "file",
   }));
 }
