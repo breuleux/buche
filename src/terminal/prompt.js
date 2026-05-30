@@ -129,7 +129,7 @@ function applyRangesToText(text, ranges) {
 class Prompt {
   constructor({
     promptHtml,
-    name,
+    label,
     tag,
     promptId,
     address,
@@ -168,14 +168,22 @@ class Prompt {
     this.el.appendChild(this.labelEl);
     this.el.appendChild(this.editorEl);
 
-    this._name = name;
+    this._externalLabel = label ?? "";
+    this._userLabel = null;
 
     this.tabEl = document.createElement("div");
     this.tabEl.className = "prompt-tab";
-    this.tabEl.textContent = name;
+    this.tabEl.textContent = this._displayLabel;
 
     this._color = null;
     if (color) this.setColor(color);
+  }
+
+  get _displayLabel() { return (this._userLabel ?? this._externalLabel) || "<?>"; }
+
+  setLabel(label) {
+    this._externalLabel = label;
+    if (this._userLabel === null) this.tabEl.textContent = this._displayLabel;
   }
 
   setColor(color) {
@@ -603,10 +611,10 @@ export class PromptCollection {
     }
   }
 
-  addPrompt({ to, address, prompt, name, tag, language, bindings, color }) {
+  addPrompt({ to, address, prompt, label, tag, language, bindings, color }) {
     const p = new Prompt({
       promptHtml: prompt,
-      name,
+      label,
       tag,
       promptId: JSON.stringify(address) + ":" + to.prompt,
       address,
@@ -639,12 +647,12 @@ export class PromptCollection {
     next.tabEl.classList.add("active");
     next.layout();
     if (!document.activeElement?.closest?.(".cell")) next.focus();
-    this.onActiveChanged?.(next._name);
+    this.onActiveChanged?.(next._displayLabel);
     this.onActivePromptChanged?.(prev?.promptId ?? null, next.promptId);
   }
 
   get activeName() {
-    return this._active?._name ?? null;
+    return this._active?._displayLabel ?? null;
   }
 
   _move(delta) {
@@ -694,16 +702,28 @@ export class PromptCollection {
     this.onPromptsChanged?.();
   }
 
-  setPrompt({ to, address, prompt, color }) {
+  setPrompt({ to, address, prompt, label, color }) {
     const promptId = JSON.stringify(address) + ":" + to.prompt;
     const p = this._prompts.find((p) => p.promptId === promptId);
     if (p) {
       p.setPromptHtml(prompt);
+      if (label !== undefined) {
+        p.setLabel(label);
+        if (p === this._active) this.onActiveChanged?.(p._displayLabel);
+      }
       if (color !== undefined) {
         p.setColor(color);
         if (p === this._active) this.onActiveColorChanged?.();
       }
     }
+  }
+
+  setActiveLabel(userLabel) {
+    const p = this._active;
+    if (!p) return;
+    p._userLabel = userLabel || null;
+    p.tabEl.textContent = p._displayLabel;
+    this.onActiveChanged?.(p._displayLabel);
   }
 
   setInput({ to, address, text, position }) {

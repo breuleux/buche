@@ -62,7 +62,7 @@ function createWindow() {
   const cq = spawn(driverCmd, driverArgs, {
     ...driverOpts,
     stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "pipe"],
-    env: { ...process.env, BUCHE_CONTROL_FD: "5" },
+    env: { ...process.env, BUCHE_CONTROL_FD: "5", BUCHE_HOSTNAME: os.hostname() },
   });
 
   cq.stdout.pipe(process.stdout);

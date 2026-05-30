@@ -822,7 +822,7 @@ class Shell {
           to: { target: "terminal", prompt: "cq" },
           address: { target: "shell" },
           prompt: "<span style='color:#569cd6;'>&gt;&gt;</span>",
-          name: "cq",
+          label: "cq",
           language: null,
           zone: "main",
           bindings: self._promptBindings,

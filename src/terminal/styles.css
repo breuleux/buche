@@ -419,6 +419,16 @@ scroll-fader {
 	background: #1e1e1e;
 }
 
+.prompt-tab-edit {
+	background: #2a2a2a;
+	border: none;
+	color: inherit;
+	font: inherit;
+	padding: 0;
+	outline: none;
+	width: 8em;
+}
+
 /* ── Cells ── */
 .cell-echo {
 	display: flex;

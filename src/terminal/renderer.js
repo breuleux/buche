@@ -618,6 +618,37 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     input.select();
   },
 
+  "Control+q ~ ,": (e) => {
+    const zoneName = _executor._zoneManager._activeZoneName;
+    const zone = _executor._zoneManager._zones.get(zoneName);
+    const pc = zone?.promptCollection;
+    const p = pc?._active;
+    if (!p) return;
+    const tabEl = p.tabEl;
+    tabEl.textContent = "";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = p._displayLabel;
+    input.className = "prompt-tab-edit";
+    tabEl.appendChild(input);
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      input.remove();
+      if (commit) pc.setActiveLabel(input.value.trim());
+      else tabEl.textContent = p._displayLabel;
+      p.focus();
+    };
+    input.addEventListener("keydown", (evt) => {
+      evt.stopPropagation();
+      if (evt.key === "Enter") { evt.preventDefault(); finish(true); }
+      else if (evt.key === "Escape") { evt.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(false));
+    requestAnimationFrame(() => { input.select(); });
+  },
+
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 
