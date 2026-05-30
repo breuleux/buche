@@ -421,6 +421,39 @@ function getBottomCellEntry() {
   return [..._executor.cells.values()].find((e) => e.cell.node === node) ?? null;
 }
 
+function closeActiveZone() {
+  const zoneName = _executor._zoneManager._activeZoneName;
+
+  if (zoneName === "main") {
+    const zone = _executor._zoneManager._zones.get("main");
+    const prompt = zone?.promptCollection._active;
+    if (!prompt) return;
+    _executor.bridge.sendCommand({ type: "prompt_close", to: prompt.address });
+    return;
+  }
+
+  for (const [key, entry] of [..._executor.cells]) {
+    if (entry.zone !== zoneName) continue;
+    if (entry.cell.isAlive()) entry.cell.kill();
+    entry.cell.node.remove();
+    _executor.cells.delete(key);
+    if (_executor._activeCell === key) _executor._activeCell = null;
+    const echoEls = _executor._cellEchoElements.get(key);
+    if (echoEls) { echoEls.node.remove(); _executor._cellEchoElements.delete(key); }
+  }
+
+  const zone = _executor._zoneManager._zones.get(zoneName);
+  if (zone) {
+    zone.buffer.replaceChildren();
+    const pc = zone.promptCollection;
+    for (const p of [...pc._prompts]) { p.el.remove(); p.tabEl.remove(); }
+    pc._prompts = [];
+    pc.onPromptsChanged?.();
+  }
+
+  _executor._zoneManager.removeZoneIfEmpty(zoneName);
+}
+
 // ── Global key bindings ──────────────────────────────────────────────────
 
 // These fire in the capture phase so they work regardless of what handlers
@@ -533,6 +566,11 @@ const { config: _globalKeysConfig } = buchekeys(window, {
 
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
+
+  "$mod+w": (e) => {
+    e.preventDefault();
+    closeActiveZone();
+  },
 
   "Control+Tab": (e) => {
     e.preventDefault();
