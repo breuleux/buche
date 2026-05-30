@@ -428,6 +428,9 @@ function fsPathExists(arg) {
 }
 
 function shellHighlight(text, builtins) {
+  if (/^\s*#/.test(text)) {
+    return [{ start: 0, end: text.length, cls: "sh-comment" }];
+  }
   // Tokenize: quoted strings, variable expansions, operators, words
   const tokenRe =
     /('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_][A-Za-z0-9_]*|&&|\|\||>>|2>|[|;&<>]|\S+)/g;
@@ -511,6 +514,17 @@ function shellHighlight(text, builtins) {
       ranges.push({ start, end, cls: "sh-invalid" });
     } else if (cls === "sh-arg" && fsPathExists(token)) {
       ranges.push({ start, end, cls: "sh-path" });
+    }
+  }
+
+  // Inline comment: first # preceded by whitespace that isn't inside a quoted string.
+  const quotedRanges = ranges.filter(r => r.cls === "sh-string" || r.cls === "sh-subshell");
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "#" && (i === 0 || /\s/.test(text[i - 1]))) {
+      if (!quotedRanges.some(r => i >= r.start && i < r.end)) {
+        ranges.push({ start: i, end: text.length, cls: "sh-comment" });
+        break;
+      }
     }
   }
 
@@ -971,6 +985,10 @@ class Shell {
         echo_html: obj.echo_html,
       };
       obj = { ...obj, echo_html: null };
+    }
+
+    if (text !== undefined && /^\s*#/.test(text)) {
+      return;
     }
 
     if (text !== undefined) {

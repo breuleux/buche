@@ -653,6 +653,9 @@ scroll-fader {
 .sh-path {
 	text-decoration: underline;
 }
+.sh-comment {
+	color: #6a6a6a !important;
+}
 
 .text-stdout {
 	color: #d4d4d4;
