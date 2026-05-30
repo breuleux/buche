@@ -30,9 +30,10 @@ export class AutoHandler {
     this._bufferLines = 0;
     this._switched = false;
 
-    // Buttons added to header when DataHandler is first created
+    // Buttons added to header only once both stdio and GUI output exist
     this._stdioBtn = null;
     this._guiBtn = null;
+    this._hasStdio = false;
   }
 
   _triggerActivity(btn) {
@@ -50,6 +51,8 @@ export class AutoHandler {
         this._triggerActivity(this._guiBtn);
       }
     } else if (!this._switched) {
+      this._hasStdio = true;
+      this._ensureButtons();
       this._addToBuffer(data);
       if (data.text && TermBuffer.containsUnhandledEscape(data.text)) {
         this._switchToTerm();
@@ -60,6 +63,8 @@ export class AutoHandler {
         this._triggerActivity(this._stdioBtn);
       }
     } else {
+      this._hasStdio = true;
+      this._ensureButtons();
       this._stdioHandler.send(data);
       if (this._stdioWrapper.style.display === "none") {
         this._triggerActivity(this._stdioBtn);
@@ -69,29 +74,26 @@ export class AutoHandler {
 
   _ensureDataHandler() {
     if (this._dataHandler) return;
-
-    this._dataHandler = new DataHandler(
-      this._dataWrapper,
-      this.instruction,
-      this._bridge,
-    );
-
-    if (this._bridge?.addHeaderButton) {
-      this._stdioBtn = html`<button class="cell-view-btn" title="stdio output">⌨</button>`;
-      this._guiBtn = html`<button class="cell-view-btn cell-view-btn-active" title="GUI output">⊞</button>`;
-      this._stdioBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._showStdio();
-      });
-      this._guiBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this._showGui();
-      });
-      this._bridge.addHeaderButton(this._stdioBtn);
-      this._bridge.addHeaderButton(this._guiBtn);
-    }
-
+    this._dataHandler = new DataHandler(this._dataWrapper, this.instruction, this._bridge);
+    this._ensureButtons();
     this._showGui();
+  }
+
+  _ensureButtons() {
+    if (this._stdioBtn || !this._dataHandler || !this._hasStdio) return;
+    if (!this._bridge?.addHeaderButton) return;
+    this._stdioBtn = html`<button class="cell-view-btn" title="stdio output">⌨</button>`;
+    this._guiBtn = html`<button class="cell-view-btn cell-view-btn-active" title="GUI output">⊞</button>`;
+    this._stdioBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._showStdio();
+    });
+    this._guiBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._showGui();
+    });
+    this._bridge.addHeaderButton(this._stdioBtn);
+    this._bridge.addHeaderButton(this._guiBtn);
   }
 
   _showGui() {
