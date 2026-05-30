@@ -1,5 +1,6 @@
 import { tinykeys } from "tinykeys";
 import { html, addressMatchesProcess } from "./utils.js";
+import { clearFocusedCell } from "./cell/cell.js";
 
 let focusedPrompt = null;
 let _moveToGroup = null; // (delta: number) => void — set by ZoneManager
@@ -408,6 +409,7 @@ class Prompt {
     });
 
     this._editor.onDidFocusEditorWidget(() => {
+      clearFocusedCell();
       focusedPrompt = this;
       this._promptCollection.onFocus?.();
     });

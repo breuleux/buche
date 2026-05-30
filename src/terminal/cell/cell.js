@@ -1,6 +1,13 @@
 import { tinykeys } from "tinykeys";
 import { html } from "../utils.js";
 
+let _focusedCellNode = null;
+
+export function clearFocusedCell() {
+  _focusedCellNode?.classList.remove("cell-focused");
+  _focusedCellNode = null;
+}
+
 export class Cell {
   constructor(instruction, echo, HandlerClass, bridge) {
     this._statusDot = html`<div class="cell-status cell-status-running"></div>`;
@@ -85,9 +92,14 @@ export class Cell {
       this.node.focus();
       this.handler.focus?.();
     });
-    this.node.addEventListener("focusin", () =>
-      this.handler.setCursorState?.("active"),
-    );
+    this.node.addEventListener("focusin", () => {
+      if (_focusedCellNode !== this.node) {
+        _focusedCellNode?.classList.remove("cell-focused");
+        _focusedCellNode = this.node;
+        this.node.classList.add("cell-focused");
+      }
+      this.handler.setCursorState?.("active");
+    });
     this.node.addEventListener("focusout", (e) => {
       if (!this.node.contains(e.relatedTarget)) {
         this.handler.setCursorState?.("inactive");

@@ -403,7 +403,7 @@ scroll-fader {
 }
 
 .cell-echo:focus {
-	background: #232323;
+	background: #333333;
 }
 
 .cell {
@@ -416,7 +416,7 @@ scroll-fader {
 	transition: height 0.2s ease;
 }
 
-.cell:focus {
+.cell.cell-focused {
 	background: #232323;
 }
 
@@ -457,9 +457,9 @@ scroll-fader {
 }
 
 .cell:hover .cell-kill-btn,
-.cell:focus-within .cell-kill-btn,
+.cell.cell-focused .cell-kill-btn,
 .cell:hover .cell-view-btn,
-.cell:focus-within .cell-view-btn {
+.cell.cell-focused .cell-view-btn {
 	opacity: 1;
 }
 
