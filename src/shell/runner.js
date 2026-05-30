@@ -184,7 +184,7 @@ class ProcessBuilder {
 }
 
 class Process {
-  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined) {
+  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined, rows = 24) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
@@ -193,7 +193,7 @@ class Process {
     // Programs like less/more/emacs open /dev/tty for both keyboard input and
     // display output; with a single PTY they all resolve to the same device,
     // so there is no split between multiple masters.
-    const mainPty = pty.open({ cols, rows: 24 });
+    const mainPty = pty.open({ cols, rows });
     mainPty._slave.destroy(); // close parent's internal slave fd; child gets its own via slaveFd below
     const { O_RDWR, O_NOCTTY } = fs.constants;
     // Open the slave once; spawn will dup it to fd 0, 1, and 2 in the child.
@@ -209,6 +209,8 @@ class Process {
         TERM: "xterm-256color",
         COLORTERM: "truecolor",
         BUCHE_CONTROL_FD: "5",
+        BUCHE_PTY_COLS: String(cols),
+        BUCHE_PTY_ROWS: String(rows),
         ...extraEnv,
       },
       ...(cwd !== undefined && { cwd }),
@@ -243,14 +245,15 @@ class Process {
         text: d.toString(),
       }),
     );
-    // EIO means the slave side closed (process exited) — not a real error.
+    // EIO/ECONNRESET means the slave side closed (process exited) — not a real error.
     mainPty._socket.on("error", (e) => {
-      if (e.code !== "EIO") emit(makeError(e));
+      if (e.code !== "EIO" && e.code !== "ECONNRESET") emit(makeError(e));
     });
 
     // fd5: control channel (full duplex) — directives from child to shell
     const rl5 = readline
       .createInterface({ input: child.stdio[5], crlfDelay: Infinity })
+      .on("error", () => {})
       .on("line", (line) => {
         let data;
         try {
@@ -287,6 +290,7 @@ class Process {
     // fd4: data channel — arbitrary JSON objects sent to the renderer
     const rl4 = readline
       .createInterface({ input: child.stdio[4], crlfDelay: Infinity })
+      .on("error", () => {})
       .on("line", (line) => {
         let data;
         try {
@@ -580,7 +584,12 @@ class Shell {
     this._shutdown = false;
     this._builtins = BUILTINS;
     this._emitControlEvent = () => {};
-    this._cols = 230;
+    this._cols = process.env.BUCHE_PTY_COLS
+      ? parseInt(process.env.BUCHE_PTY_COLS, 10)
+      : (process.stdout.columns || 230);
+    this._rows = process.env.BUCHE_PTY_ROWS
+      ? parseInt(process.env.BUCHE_PTY_ROWS, 10)
+      : (process.stdout.rows || 24);
     this._nextProcessId = 0;
     this._keyBindings = new Map(); // binding name → command string
     this._promptBindings = {};     // key string → binding name (for prompt_create)
@@ -907,6 +916,8 @@ class Shell {
         processId,
         this._cols,
         extraEnv,
+        undefined,
+        this._rows,
       );
       control._proc = proc;
       for await (const event of proc.events()) {
@@ -1027,7 +1038,7 @@ class Shell {
     }
 
     const processId = this._generateProcessId();
-    const proc = new Process(cmd, args, processId, this._cols);
+    const proc = new Process(cmd, args, processId, this._cols, {}, undefined, this._rows);
     this._processes.set(processId, proc);
 
     yield {
