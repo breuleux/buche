@@ -59,6 +59,30 @@ class CellBridge {
     const zoneName = this.executor.cells.get(key)?.zone ?? "main";
     this.executor._zoneManager.focusZone(zoneName);
   }
+
+  killAndDelete() {
+    const key = cellKey(this.instruction.address, this.instruction.to.cell);
+    const executor = this.executor;
+    const entry = executor.cells.get(key);
+    const cellNode = this._cell.node;
+    const allCells = getOrderedCellNodes();
+    const idx = allCells.indexOf(cellNode);
+    const nextFocus = allCells[idx + 1] ?? null;
+    const activeZoneName = executor._zoneManager._activeZoneName;
+    if (entry) {
+      if (entry.cell.isAlive()) entry.cell.kill();
+      executor.cells.delete(key);
+      if (executor._activeCell === key) executor._activeCell = null;
+    }
+    cellNode.remove();
+    const echoEls = executor._cellEchoElements.get(key);
+    if (echoEls) { echoEls.node.remove(); executor._cellEchoElements.delete(key); }
+    if (nextFocus?.isConnected) {
+      focusCellNode(nextFocus);
+    } else {
+      executor._zoneManager.focusZone(activeZoneName);
+    }
+  }
 }
 
 let _cellCounter = 0;
@@ -123,6 +147,7 @@ class Executor {
     const bridge = new CellBridge(this, instruction);
     if (echoElements) bridge.echoElements = echoElements;
     const cell = new Cell(instruction, echo, HandlerClass, bridge);
+    bridge._cell = cell;
     cell.node._cellLabel = `cell-${++_cellCounter}`;
 
     if (echoElements) {

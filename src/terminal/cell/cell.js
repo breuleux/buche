@@ -29,6 +29,7 @@ export class Cell {
     };
 
     this._bridge = bridge ?? null;
+    this._alive = !!bridge;
 
     if (bridge) {
       bridge.addHeaderButton = (btn) => {
@@ -40,7 +41,7 @@ export class Cell {
     if (this._killBtn) {
       this._killBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        bridge.sendControl({ type: "kill" });
+        bridge.killAndDelete();
       });
     }
 
@@ -94,7 +95,7 @@ export class Cell {
   }
 
   isAlive() {
-    return this._killBtn !== null;
+    return this._alive;
   }
 
   kill(signal) {
@@ -107,11 +108,7 @@ export class Cell {
 
   close(return_code, { sticky = false } = {}) {
     this._statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
-    if (this._killBtn) {
-      this._killBtn.style.visibility = "hidden";
-      this._killBtn.style.pointerEvents = "none";
-      this._killBtn = null;
-    }
+    this._alive = false;
     this.handler.setCursorState?.("hidden");
     this.node._bucheFocus = null; // Dead — focusLatent() will fall back to the prompt
     if (!sticky) this.node.blur();
