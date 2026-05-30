@@ -37,7 +37,13 @@ export class DataHandler {
       if (e.source !== window || e.data?.__buche !== "proc:request") return;
       if (e.data.cellId !== this._procCellId) return;
       this._iframe.contentWindow?.postMessage(
-        { type: "resolve", request_id: e.data.requestId, path: e.data.path, method: e.data.method },
+        {
+          type: "resolve",
+          request_id: e.data.requestId,
+          path: e.data.path,
+          params: e.data.params,
+          method: e.data.method
+        },
         "*",
       );
     };

@@ -62,7 +62,19 @@
         },
 
         resolve(msg) {
-          par.postMessage({ type: "send", data: { type: "resolve", request_id: msg.request_id, path: msg.path, method: msg.method } }, "*");
+          par.postMessage(
+            {
+              type: "send",
+              data: {
+                type: "resolve",
+                request_id: msg.request_id,
+                path: msg.path,
+                params: msg.params,
+                method: msg.method
+              }
+            },
+            "*"
+          );
         },
 
         data(msg) {

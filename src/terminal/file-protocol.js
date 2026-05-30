@@ -83,6 +83,7 @@ function registerProtocol() {
     const cellId = url.hostname;
     const resourcePath = url.pathname || "/";
     const method = request.method;
+    const params = Object.fromEntries(url.searchParams);
 
     if (resourcePath === "/" || resourcePath === "/index.html") {
       return new Response(PROC_RUNTIME_HTML, {
@@ -116,7 +117,7 @@ function registerProtocol() {
       });
     });
 
-    _webContents.send("proc:request", { requestId, cellId, path: resourcePath, method });
+    _webContents.send("proc:request", { requestId, cellId, path: resourcePath, method, params });
 
     try {
       const response = await promise;
