@@ -435,30 +435,47 @@ export class ZoneManager {
 
     const triggerBlur = () => this.onFloatBlur?.(name, baseZoneName);
 
+    // Returns true if the container or any iframe inside it holds focus.
+    // :focus-within does not pierce frame boundaries, so we check explicitly.
+    const hasFocus = () => {
+      if (container.contains(document.activeElement)) return true;
+      for (const f of container.querySelectorAll("iframe")) {
+        try { if (f.contentDocument?.hasFocus()) return true; } catch {}
+      }
+      return false;
+    };
+
     // focusout handles non-iframe focus changes and process-close blur.
     container.addEventListener("focusout", (e) => {
       if (e.relatedTarget) {
         if (!container.contains(e.relatedTarget)) triggerBlur();
         return;
       }
-      // relatedTarget is null: could be process close or iframe focus-in.
-      // Wait a microtask for document.activeElement to settle.
-      Promise.resolve().then(() => {
-        if (!container.contains(document.activeElement)) triggerBlur();
-      });
+      // relatedTarget is null: could be process close or cross-frame focus-in.
+      // Use a macrotask (setTimeout) so the browser has time to settle
+      // document.activeElement after cross-frame transitions (e.g. an iframe's
+      // content calls pf.focus() — the microtask fires before the browser moves
+      // activeElement away from body, producing a false positive).
+      setTimeout(() => { if (!hasFocus()) triggerBlur(); }, 0);
     });
 
     // focusin (capture) catches programmatic focus and keyboard navigation,
     // including when focus moves to the prompt via editor.focus().
     // mousedown (capture) catches clicks from inside iframes where focusin
     // may not cross the iframe boundary into the parent frame.
-    const onOutside = (e) => {
+    // focusin is debounced via setTimeout so that transient focus movements
+    // (e.g. an editor internally refocusing its own element) don't close the float.
+    document.addEventListener("focusin", (e) => {
+      if (zone.buffer.children.length > 0 && !container.contains(e.target)) {
+        setTimeout(() => { if (!hasFocus()) triggerBlur(); }, 0);
+      }
+    }, true);
+    const onOutsideClick = (e) => {
       if (zone.buffer.children.length > 0 && !container.contains(e.target)) {
         triggerBlur();
       }
     };
-    document.addEventListener("focusin", onOutside, true);
-    document.addEventListener("mousedown", onOutside, true);
+    document.addEventListener("mousedown", onOutsideClick, true);
 
     // ESC closes the float and returns focus to the base zone.
     container.addEventListener("keydown", (e) => {

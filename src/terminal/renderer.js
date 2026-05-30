@@ -116,11 +116,12 @@ class Executor {
         if (entry.zone === zoneName) {
           if (entry.cell.isAlive()) entry.cell.kill();
           entry.cell.node.remove();
-          this.cells.delete(key);
+          // Do NOT delete from this.cells — handle$cell_close / handle$process_close
+          // must still run to call _closeEchoStatus and turn the status dot grey.
           if (this._activeCell === key) this._activeCell = null;
         }
       }
-      // Also remove nodes already closed by process_close (no longer in this.cells).
+      // Remove nodes already closed by process_close (no longer in this.cells).
       this._zoneManager.clearZoneBuffer(zoneName);
       this._zoneManager.focusZone(baseZoneName);
     };
