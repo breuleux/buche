@@ -21,12 +21,22 @@ const cellHandlers = {
   data: DataHandler,
 };
 
+// Recursively strip fields that are null, undefined, or empty objects.
+// Returns undefined if the value itself should be dropped.
+function normalizeAddress(val) {
+  if (val === null || val === undefined) return undefined;
+  if (typeof val !== "object" || Array.isArray(val)) return val;
+  const result = {};
+  for (const [k, v] of Object.entries(val)) {
+    const n = normalizeAddress(v);
+    if (n !== undefined) result[k] = n;
+  }
+  return Object.keys(result).length === 0 ? undefined : result;
+}
+
 // Stable string key from an address object + a local name.
 function cellKey(address, name) {
-  if (!address.subaddress) {
-    address = {...address, subaddress: {}};
-  }
-  return JSON.stringify(address) + ":" + name;
+  return JSON.stringify(normalizeAddress(address) ?? {}) + ":" + name;
 }
 
 class CellBridge {
@@ -168,9 +178,13 @@ class Executor {
   }
 
   handle$cell_send(instruction) {
-    this.cells
-      .get(cellKey(instruction.address, instruction.to.cell))
-      ?.cell.send(instruction.message);
+    const key = cellKey(instruction.address, instruction.to.cell);
+    const cellRef = this.cells.get(key);
+    if (!cellRef) {
+      console.error(`Could not find cell: ${key}`);
+      return;
+    }
+    cellRef.cell.send(instruction.message);
   }
 
   handle$resolve(instruction) {
