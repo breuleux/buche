@@ -21,6 +21,10 @@ import os, sys, fcntl, termios
 os.setsid()
 
 TIOCSCTTY = getattr(termios, "TIOCSCTTY", 0x20007461)  # 0x20007461 on macOS
-fcntl.ioctl(0, TIOCSCTTY, 0)
+# fd 0 may be a pipe (pipeline mode) — find the first tty fd to set as controlling terminal
+for _tty_fd in (0, 1, 2):
+    if os.isatty(_tty_fd):
+        fcntl.ioctl(_tty_fd, TIOCSCTTY, 0)
+        break
 
 os.execvp(sys.argv[1], sys.argv[1:])

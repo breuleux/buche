@@ -108,7 +108,8 @@ class ProcessBuilder {
         yield* this._runCommand(node, echo_html, prompt_name, background, zone);
         break;
       case "Pipeline":
-        throw new FeatureNotImplementedError("pipes (|)");
+        yield* this._runPipeline(node, echo_html, prompt_name, background, zone);
+        break;
       case "LogicalExpression":
         throw new FeatureNotImplementedError(
           `logical expressions (${node.op})`,
@@ -181,10 +182,88 @@ class ProcessBuilder {
     }
     return [text];
   }
+
+  async *_runPipeline(node, echo_html, prompt_name, background, zone) {
+    const shell = this._shell;
+    const commands = node.commands;
+
+    // Parse each command in the pipeline to extract cmd + args
+    const specs = [];
+    for (const cmd of commands) {
+      if (!cmd.name) throw new FeatureNotImplementedError("assignments in pipeline");
+      if (cmd.name.text in shell._builtins) throw new FeatureNotImplementedError("builtins in pipes");
+      const args = [];
+      for (const item of cmd.suffix || []) {
+        if (item.type === "Redirect") continue;
+        for (const expanded of this._expandWord(item.text)) {
+          args.push(expanded);
+        }
+      }
+      specs.push({ name: cmd.name.text, args });
+    }
+
+    const lastIdx = specs.length - 1;
+
+    // Spawn all processes.
+    // Non-first processes use a pipe for stdin (receives previous stdout, not PTY).
+    // Non-last processes use a pipe for stdout so programs don't see a terminal and
+    // behave as they would in a real shell pipeline (e.g. ls outputs one file per line).
+    const entries = specs.map((spec, i) => {
+      const processId = shell._generateProcessId();
+      const proc = new Process(spec.name, spec.args, processId, shell._cols, {}, undefined, shell._rows, i > 0, i < lastIdx);
+      shell._processes.set(processId, proc);
+      return { proc, processId };
+    });
+
+    // Create one cell for the entire pipeline, attributed to the last process
+    yield {
+      type: "cell_create",
+      to: { target: "terminal", cell: "main" },
+      address: { process: entries[lastIdx].processId },
+      echo_html,
+      mode: "auto",
+      zone,
+      background: background ?? false,
+      pid: entries[lastIdx].proc.pid,
+    };
+
+    // For each adjacent pair: pump stdout → writePipeStdin, dataout → writeDatain, then signal EOF
+    for (let i = 0; i < entries.length - 1; i++) {
+      const { proc: src, processId: srcId } = entries[i];
+      const { proc: dst } = entries[i + 1];
+      (async () => {
+        for await (const event of src.events()) {
+          if (event.type === "send" && event.stream === "stdout") {
+            dst.writePipeStdin(event.text).catch(() => {});
+          } else if (event.type === "send" && event.stream === "dataout") {
+            dst.writeDatain(event.data).catch(() => {});
+          } else if (event.type === "process_close") {
+            shell._processes.delete(srcId);
+            dst.closeStdin();
+          }
+        }
+      })();
+    }
+
+    // Yield events from the last process normally
+    for await (const event of entries[lastIdx].proc.events()) {
+      if (event.type === "process_close" && event.process_id === entries[lastIdx].processId) {
+        shell._processes.delete(entries[lastIdx].processId);
+      }
+      if (
+        (event.type === "cell_create" || event.type === "prompt_create") &&
+        (event.zone == null || event.zone === "main")
+      ) {
+        yield { ...event, zone };
+      } else {
+        yield event;
+      }
+    }
+  }
 }
 
 class Process {
-  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined, rows = 24) {
+  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined, rows = 24, pipeStdin = false, pipeStdout = false) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
@@ -203,7 +282,7 @@ class Process {
 
     const helperPath = path.join(__dirname, "buche-exec");
     const child = spawn("python3", [helperPath, cmd, ...args], {
-      stdio: [slaveFd, slaveFd, slaveFd, "pipe", "pipe", "pipe"],
+      stdio: [pipeStdin ? "pipe" : slaveFd, pipeStdout ? "pipe" : slaveFd, slaveFd, "pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         TERM: "xterm-256color",
@@ -221,6 +300,8 @@ class Process {
 
     this.pid = child.pid;
     this.processId = processId;
+    this._stdin = pipeStdin ? child.stdio[0] : null;
+    this._stdout = pipeStdout ? child.stdio[1] : null;
     this._datain = child.stdio[3];
     this._control = child.stdio[5];
     this._child = child;
@@ -236,19 +317,36 @@ class Process {
 
     const cellTo = { target: "terminal", cell: "main" };
     const cellAddress = { process: processId };
-    mainPty._socket.on("data", (d) =>
-      emit({
-        type: "send",
-        to: cellTo,
-        address: cellAddress,
-        stream: "stdout",
-        text: d.toString(),
-      }),
-    );
-    // EIO/ECONNRESET means the slave side closed (process exited) — not a real error.
-    mainPty._socket.on("error", (e) => {
-      if (e.code !== "EIO" && e.code !== "ECONNRESET") emit(makeError(e));
-    });
+    if (pipeStdout) {
+      // stdout is a real pipe — programs won't see a PTY and will output plain text.
+      // The PTY master still carries stderr; drain it silently to avoid backpressure.
+      mainPty._socket.resume();
+      mainPty._socket.on("error", () => {});
+      child.stdio[1].on("data", (d) =>
+        emit({
+          type: "send",
+          to: cellTo,
+          address: cellAddress,
+          stream: "stdout",
+          text: d.toString(),
+        }),
+      );
+      child.stdio[1].on("error", () => {});
+    } else {
+      mainPty._socket.on("data", (d) =>
+        emit({
+          type: "send",
+          to: cellTo,
+          address: cellAddress,
+          stream: "stdout",
+          text: d.toString(),
+        }),
+      );
+      // EIO/ECONNRESET means the slave side closed (process exited) — not a real error.
+      mainPty._socket.on("error", (e) => {
+        if (e.code !== "EIO" && e.code !== "ECONNRESET") emit(makeError(e));
+      });
+    }
 
     // fd5: control channel (full duplex) — directives from child to shell
     const rl5 = readline
@@ -311,6 +409,8 @@ class Process {
       rl4.close();
       rl5.close();
       mainPty._socket.destroy();
+      if (pipeStdin) child.stdio[0].destroy();
+      if (pipeStdout) child.stdio[1].destroy();
       child.stdio[3].destroy();
       child.stdio[4].destroy();
       child.stdio[5].destroy();
@@ -351,6 +451,20 @@ class Process {
     );
   }
 
+  writePipeStdin(data) {
+    if (!this._stdin) return this.writeStdin(data);
+    return new Promise((resolve, reject) =>
+      this._stdin.write(data, (err) => (err ? reject(err) : resolve())),
+    );
+  }
+
+  closeStdin() {
+    if (this._stdin) {
+      this._stdin.end();
+      this._stdin = null;
+    }
+  }
+
   writeDatain(json) {
     return new Promise((resolve, reject) =>
       this._datain.write(`${JSON.stringify(json)}\n`, (err) =>
@@ -369,6 +483,8 @@ class Process {
 
   close() {
     this._pty._socket.destroy();
+    this._stdin?.destroy();
+    this._stdout?.destroy();
     this._datain.destroy();
     this._control.destroy();
   }
