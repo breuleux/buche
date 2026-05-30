@@ -15,7 +15,6 @@ body {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	line-height: 1.1;
 }
 
 /* ── Zones ──
