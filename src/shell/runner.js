@@ -1141,7 +1141,7 @@ class Shell {
   }
 
   async *handle$prompt_submit(obj) {
-    if (obj.text !== undefined) {
+    if (obj.text !== undefined && obj.history !== false) {
       this._history.push({ id: crypto.randomUUID(), text: obj.text, prompt_id: obj.prompt_id ?? null });
     }
 
@@ -1328,6 +1328,7 @@ class Shell {
         text: cmd,
         echo_html: null,
         zone: obj.zone ?? "main",
+        history: false,
       });
     } finally {
       if (savedInput === undefined) delete process.env.CQ_PROMPT_INPUT;
