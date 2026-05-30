@@ -23,6 +23,9 @@ const cellHandlers = {
 
 // Stable string key from an address object + a local name.
 function cellKey(address, name) {
+  if (!address.subaddress) {
+    address = {...address, subaddress: {}};
+  }
   return JSON.stringify(address) + ":" + name;
 }
 
