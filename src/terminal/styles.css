@@ -412,7 +412,6 @@ scroll-fader {
 	outline: none;
 	border-radius: 3px;
 	overflow: hidden;
-	transition: height 0.2s ease;
 }
 
 .cell.cell-focused {

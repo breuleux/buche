@@ -52,22 +52,6 @@ export class Cell {
       });
     }
 
-    header.addEventListener("mouseenter", () => {
-      this.node.style.height = `${this.node.offsetHeight}px`;
-    });
-    header.addEventListener("mouseleave", () => {
-      const node = this.node;
-      if (!node.style.height) return;
-      const locked = node.offsetHeight;
-      node.style.height = "";
-      const natural = node.offsetHeight;
-      if (locked === natural) return;
-      node.style.height = `${locked}px`;
-      node.offsetHeight; // force reflow
-      node.style.height = `${natural}px`;
-      node.addEventListener("transitionend", () => { node.style.height = ""; }, { once: true });
-    });
-
     // Register before HandlerClass so this fires first and can suppress input.
     tinykeys(this.node, {
       "Control+z": (e) => {
