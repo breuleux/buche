@@ -149,10 +149,11 @@ class ProcessBuilder {
 
     const cmd = node.name.text;
     const args = [];
+    const redirects = [];
 
     for (const item of node.suffix || []) {
       if (item.type === "Redirect") {
-        // TODO: handle redirections
+        redirects.push(item);
         continue;
       }
       // Word — apply glob expansion if the text contains unquoted glob characters
@@ -164,6 +165,7 @@ class ProcessBuilder {
     yield* this._shell.handle$prompt_submit({
       command: cmd,
       args,
+      redirects,
       echo_html,
       prompt_name,
       background,
@@ -263,7 +265,7 @@ class ProcessBuilder {
 }
 
 class Process {
-  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined, rows = 24, pipeStdin = false, pipeStdout = false) {
+  constructor(cmd, args, processId, cols, extraEnv = {}, cwd = undefined, rows = 24, pipeStdin = false, pipeStdout = false, redirects = []) {
     this._queue = [];
     this._resolve = null;
     this._done = false;
@@ -274,15 +276,52 @@ class Process {
     // so there is no split between multiple masters.
     const mainPty = pty.open({ cols, rows });
     mainPty._slave.destroy(); // close parent's internal slave fd; child gets its own via slaveFd below
-    const { O_RDWR, O_NOCTTY } = fs.constants;
+    const { O_RDWR, O_NOCTTY, O_WRONLY, O_CREAT, O_TRUNC, O_APPEND, O_RDONLY } = fs.constants;
     // Open the slave once; spawn will dup it to fd 0, 1, and 2 in the child.
     const slaveFd = fs.openSync(mainPty.ptsName, O_RDWR | O_NOCTTY);
 
     this._pty = mainPty;
 
+    // Build stdio entries for fd 0, 1, 2, applying any shell redirections.
+    // fdMap values can be a number (raw fd), "pipe", or "ipc".
+    const fdMap = {
+      0: pipeStdin ? "pipe" : slaveFd,
+      1: pipeStdout ? "pipe" : slaveFd,
+      2: slaveFd,
+    };
+    const openedFds = [];
+    for (const redir of redirects) {
+      const opType = redir.op?.type;
+      const targetFd = redir.numberIo != null ? parseInt(redir.numberIo.text, 10) : null;
+      const filePath = redir.file.text;
+      if (opType === "great") {
+        const fd = targetFd ?? 1;
+        const rfd = fs.openSync(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0o666);
+        openedFds.push(rfd);
+        fdMap[fd] = rfd;
+      } else if (opType === "dgreat") {
+        const fd = targetFd ?? 1;
+        const rfd = fs.openSync(filePath, O_WRONLY | O_CREAT | O_APPEND, 0o666);
+        openedFds.push(rfd);
+        fdMap[fd] = rfd;
+      } else if (opType === "less") {
+        const fd = targetFd ?? 0;
+        const rfd = fs.openSync(filePath, O_RDONLY);
+        openedFds.push(rfd);
+        fdMap[fd] = rfd;
+      } else if (opType === "greatand") {
+        // n>&m — make fd n point to the same place fd m currently points
+        const srcFd = targetFd ?? 1;
+        const dstFd = parseInt(filePath, 10);
+        if (!isNaN(dstFd) && fdMap[dstFd] !== undefined) {
+          fdMap[srcFd] = fdMap[dstFd];
+        }
+      }
+    }
+
     const helperPath = path.join(__dirname, "buche-exec");
     const child = spawn("python3", [helperPath, cmd, ...args], {
-      stdio: [pipeStdin ? "pipe" : slaveFd, pipeStdout ? "pipe" : slaveFd, slaveFd, "pipe", "pipe", "pipe"],
+      stdio: [fdMap[0], fdMap[1], fdMap[2], "pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         TERM: "xterm-256color",
@@ -295,13 +334,17 @@ class Process {
       ...(cwd !== undefined && { cwd }),
     });
 
-    // Parent no longer needs the slave fd — child inherited it.
+    // Parent no longer needs the slave fd or any redirect fds — child inherited them.
     fs.closeSync(slaveFd);
+    for (const fd of openedFds) fs.closeSync(fd);
+
+    // pipeStdout is only effective if the redirect didn't override fd 1 to a file.
+    const effectivePipeStdout = pipeStdout && fdMap[1] === "pipe";
 
     this.pid = child.pid;
     this.processId = processId;
     this._stdin = pipeStdin ? child.stdio[0] : null;
-    this._stdout = pipeStdout ? child.stdio[1] : null;
+    this._stdout = effectivePipeStdout ? child.stdio[1] : null;
     this._datain = child.stdio[3];
     this._control = child.stdio[5];
     this._child = child;
@@ -317,7 +360,7 @@ class Process {
 
     const cellTo = { target: "terminal", cell: "main" };
     const cellAddress = { process: processId };
-    if (pipeStdout) {
+    if (effectivePipeStdout) {
       // stdout is a real pipe — programs won't see a PTY and will output plain text.
       // The PTY master still carries stderr; drain it silently to avoid backpressure.
       mainPty._socket.resume();
@@ -409,8 +452,8 @@ class Process {
       rl4.close();
       rl5.close();
       mainPty._socket.destroy();
-      if (pipeStdin) child.stdio[0].destroy();
-      if (pipeStdout) child.stdio[1].destroy();
+      if (pipeStdin) child.stdio[0]?.destroy();
+      if (effectivePipeStdout) child.stdio[1]?.destroy();
       child.stdio[3].destroy();
       child.stdio[4].destroy();
       child.stdio[5].destroy();
@@ -1172,7 +1215,7 @@ class Shell {
     }
 
     const processId = this._generateProcessId();
-    const proc = new Process(cmd, args, processId, this._cols, {}, undefined, this._rows);
+    const proc = new Process(cmd, args, processId, this._cols, {}, undefined, this._rows, false, false, obj.redirects ?? []);
     this._processes.set(processId, proc);
 
     yield {
