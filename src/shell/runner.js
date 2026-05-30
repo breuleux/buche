@@ -580,6 +580,8 @@ class Shell {
     this._emitControlEvent = () => {};
     this._cols = 230;
     this._nextProcessId = 0;
+    this._keyBindings = new Map(); // binding name → command string
+    this._promptBindings = {};     // key string → binding name (for prompt_create)
   }
 
   _generateProcessId() {
@@ -634,6 +636,7 @@ class Shell {
           tag: "cq",
           language: null,
           zone: "main",
+          bindings: self._promptBindings,
         };
         // yield {
         //   type: "set_prompt",
@@ -718,7 +721,7 @@ class Shell {
   }
 
   async *_applyConfig() {
-    const { env, control, interface: iface } = loadConfig(process.cwd());
+    const { env, control, interface: iface, bindings } = loadConfig(process.cwd());
 
     // Apply env vars
     for (const [name, { value, export: isExport }] of env) {
@@ -759,6 +762,15 @@ class Shell {
         this._controls.set(name, ctrl);
         this._runControlLoop(name);
       }
+    }
+
+    // Rebuild key bindings: assign stable names (UUIDs) to each key→command entry.
+    this._keyBindings.clear();
+    this._promptBindings = {};
+    for (const [key, cmd] of bindings) {
+      const name = crypto.randomUUID();
+      this._keyBindings.set(name, cmd);
+      this._promptBindings[key] = name;
     }
 
     yield {
@@ -1032,6 +1044,29 @@ class Shell {
 
   handle$prompt_close(_obj) {
     this._shutdown = true;
+  }
+
+  async *handle$prompt_binding(obj) {
+    const cmd = this._keyBindings.get(obj.name);
+    if (!cmd) return;
+    const savedInput = process.env.CQ_PROMPT_INPUT;
+    const savedPosition = process.env.CQ_PROMPT_POSITION;
+    process.env.CQ_PROMPT_INPUT = obj.text ?? "";
+    process.env.CQ_PROMPT_POSITION = String(obj.position ?? 0);
+    try {
+      yield* this.handle$prompt_submit({
+        type: "prompt_submit",
+        to: obj.to,
+        text: cmd,
+        echo_html: null,
+        zone: obj.zone ?? "main",
+      });
+    } finally {
+      if (savedInput === undefined) delete process.env.CQ_PROMPT_INPUT;
+      else process.env.CQ_PROMPT_INPUT = savedInput;
+      if (savedPosition === undefined) delete process.env.CQ_PROMPT_POSITION;
+      else process.env.CQ_PROMPT_POSITION = savedPosition;
+    }
   }
 
   async *_runBuiltin(name, args, processId) {

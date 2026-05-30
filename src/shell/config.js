@@ -192,11 +192,25 @@ function mergeConfigs(entries) {
     }
   }
 
-  return { env, control, interface: iface };
+  // bindings — higher-priority entries win (written last, so last write wins)
+  const bindings = new Map(); // key string → command string
+  for (const { data } of [...entries].reverse()) {
+    if (
+      data.bindings &&
+      typeof data.bindings === "object" &&
+      !Array.isArray(data.bindings)
+    ) {
+      for (const [key, cmd] of Object.entries(data.bindings)) {
+        if (typeof cmd === "string") bindings.set(key, cmd);
+      }
+    }
+  }
+
+  return { env, control, interface: iface, bindings };
 }
 
 // Load and merge all applicable config files for cwd.
-// Returns { env: Map, control: Map, interface: object|null }.
+// Returns { env: Map, control: Map, interface: object|null, bindings: Map }.
 function loadConfig(cwd) {
   return mergeConfigs(collectConfigs(cwd));
 }
