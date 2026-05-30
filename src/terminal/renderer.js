@@ -466,6 +466,32 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     focusActivePrompt();
   },
 
+  "Control+q ~ Shift+T": (e) => {
+    const overlay = html`<div class="title-modal-overlay">
+      <div class="title-modal">
+        <label>Window title</label>
+        <input type="text" value="${document.title}" />
+      </div>
+    </div>`;
+    const input = overlay.querySelector("input");
+    const close = () => overlay.remove();
+    input.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape") {
+        evt.stopPropagation();
+        close();
+      } else if (evt.key === "Enter") {
+        const val = input.value.trim();
+        if (val) document.title = val;
+        close();
+      }
+    });
+    overlay.addEventListener("mousedown", (evt) => {
+      if (evt.target === overlay) close();
+    });
+    document.body.appendChild(overlay);
+    input.select();
+  },
+
   "Control+q ~ Control+q": (e) => { /* cancel prefix mode */ },
   "Control+q ~ Escape": (e) => { /* cancel prefix mode */ },
 

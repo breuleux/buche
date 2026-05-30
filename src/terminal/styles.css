@@ -725,3 +725,45 @@ scroll-fader {
 	white-space: pre-wrap;
 	word-break: break-all;
 }
+
+/* ── Title-change modal ── */
+.title-modal-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 9999;
+}
+
+.title-modal {
+	background: #252526;
+	border: 1px solid #454545;
+	border-radius: 4px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 360px;
+}
+
+.title-modal label {
+	font-size: 0.85em;
+	color: #858585;
+}
+
+.title-modal input {
+	background: #1e1e1e;
+	border: 1px solid #454545;
+	border-radius: 2px;
+	color: #d4d4d4;
+	font-family: inherit;
+	font-size: 1em;
+	padding: 4px 8px;
+	outline: none;
+}
+
+.title-modal input:focus {
+	border-color: #569cd6;
+}
