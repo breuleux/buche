@@ -1,3 +1,7 @@
+:root {
+	--buche-bg: oklch(0.15 0 0);
+}
+
 *,
 *::before,
 *::after {
@@ -9,7 +13,7 @@ body {
 	margin: 0;
 	padding: 0;
 	height: 100vh;
-	background: #1e1e1e;
+	background: var(--buche-bg);
 	color: #d4d4d4;
 	font-family: "Consolas", "Menlo", monospace;
 	display: flex;
@@ -67,8 +71,8 @@ body {
 	display: none;
 	flex: 0 0 auto;
 	flex-direction: row;
-	background: #1a1a1a;
-	border-bottom: 1px solid #2e2e2e;
+	background: var(--buche-bg);
+	border-bottom: 1px solid oklch(from var(--buche-bg) calc(l + 0.2) c h);
 	padding: 0 4px;
 }
 
@@ -218,11 +222,11 @@ scroll-fader {
 }
 .scroll-shadow-top {
 	top: 0;
-	background: linear-gradient(#1e1e1e, transparent);
+	background: linear-gradient(var(--buche-bg), transparent);
 }
 .scroll-shadow-bottom {
 	bottom: 0;
-	background: linear-gradient(transparent, #1e1e1e);
+	background: linear-gradient(transparent, var(--buche-bg));
 }
 .scroll-shadow.visible {
 	opacity: 1;
@@ -416,7 +420,7 @@ scroll-fader {
 
 .prompt-tab.active {
 	color: oklch(0.68 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
-	background: #1e1e1e;
+	background: var(--buche-bg);
 }
 
 .prompt-tab-edit {
@@ -492,12 +496,8 @@ scroll-fader {
 }
 
 .cell.cell-focused {
-	background: #232323;
+	background: oklch(from var(--buche-bg) calc(l + 0.05) c h);
 }
-
-/* .cell-header {
-	margin-bottom: 2px;
-} */
 
 .cell-header {
 	position: relative;
@@ -622,7 +622,7 @@ scroll-fader {
 }
 .cell-status-success {
 	/* background: #555555; */
-	background: #1e1e1e;
+	background: var(--buche-bg);
 }
 .cell-status-error {
 	/* background: #8b1414; */
@@ -830,7 +830,7 @@ scroll-fader {
 }
 
 .title-modal input {
-	background: #1e1e1e;
+	background: var(--buche-bg);
 	border: 1px solid #454545;
 	border-radius: 2px;
 	color: #d4d4d4;
