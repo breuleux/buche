@@ -1285,8 +1285,24 @@ class Shell {
     }
   }
 
-  handle$prompt_close(_obj) {
-    this._shutdown = true;
+  async *handle$prompt_close(obj) {
+    if (this._processes.size === 0) {
+      this._shutdown = true;
+      return;
+    }
+    if (obj.force) {
+      const signal = this._shutdown ? "SIGKILL" : "SIGTERM";
+      for (const proc of this._processes.values()) proc.kill(signal);
+      this._shutdown = true;
+    } else {
+      yield {
+        type: "error",
+        to: { target: "terminal" },
+        error_type: "ActiveProcesses",
+        message: "There are active processes. Close them first, or use Ctrl+Shift+D to force quit (twice to force kill).",
+        traceback: [],
+      };
+    }
   }
 
   async *handle$prompt_binding(obj) {

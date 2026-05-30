@@ -283,12 +283,24 @@ class Prompt {
           self._promptCollection._buche.sendCommand({
             type: "prompt_close",
             to: self.address,
+            force: false,
           });
           return true;
         },
       },
       {
-        key: "Ctrl-c",
+        key: "Ctrl-Shift-d",
+        run: () => {
+          self._promptCollection._buche.sendCommand({
+            type: "prompt_close",
+            to: self.address,
+            force: true,
+          });
+          return true;
+        },
+      },
+      {
+        key: "Escape",
         run: (view) => {
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: "" },
