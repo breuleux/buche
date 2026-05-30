@@ -8,6 +8,7 @@ const { sync: globSync } = require("glob");
 const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
+const { ShellHistory } = require("./history");
 
 const _originalEnv = { ...process.env };
 
@@ -749,8 +750,6 @@ async function shellComplete(text, position, builtins) {
   }));
 }
 
-const HISTORY_FILE = path.join(os.homedir(), ".config", "buche", "history.jsonl");
-
 class Shell {
   constructor() {
     this._processes = new Map();
@@ -768,32 +767,7 @@ class Shell {
     this._nextProcessId = 0;
     this._keyBindings = new Map(); // binding name → command string
     this._promptBindings = {};     // key string → binding name (for prompt_create)
-    this._historyEntries = [];
-    this._loadHistory();
-  }
-
-  _loadHistory() {
-    try {
-      this._historyEntries = fs
-        .readFileSync(HISTORY_FILE, "utf8")
-        .split("\n")
-        .filter((l) => l.trim())
-        .map((l, i) => {
-          const entry = JSON.parse(l);
-          if (!entry.id) entry.id = `__legacy_${i}`;
-          return entry;
-        });
-    } catch {
-      this._historyEntries = [];
-    }
-  }
-
-  _appendHistory(entry) {
-    try {
-      fs.mkdirSync(path.dirname(HISTORY_FILE), { recursive: true });
-      fs.appendFileSync(HISTORY_FILE, JSON.stringify(entry) + "\n");
-    } catch {}
-    this._historyEntries.push(entry);
+    this._history = new ShellHistory();
   }
 
   _generateProcessId() {
@@ -1032,22 +1006,12 @@ class Shell {
 
   async *handle$parse(obj) {
     const { text, position, want_completions, request_id } = obj;
-    let filigrane = null;
-    if (text) {
-      for (let i = this._historyEntries.length - 1; i >= 0; i--) {
-        const entry = this._historyEntries[i];
-        if (entry.text.startsWith(text) && entry.text.length > text.length) {
-          filigrane = entry.text;
-          break;
-        }
-      }
-    }
     yield {
       type: "highlight",
       to: { target: "terminal" },
       request_id,
       ranges: shellHighlight(text, this._builtins),
-      filigrane,
+      filigrane: this._history.filigrane(text),
     };
     if (want_completions) {
       const completions = await shellComplete(text, position, this._builtins);
@@ -1057,42 +1021,13 @@ class Shell {
 
   async *handle$history_navigate(obj) {
     const { direction, anchor_id, filter, tag, request_id } = obj;
-    const entries = this._historyEntries;
-    const relevant = tag ? entries.filter((e) => e.tag === tag) : entries;
-
-    let anchorIdx;
-    if (anchor_id === null) {
-      anchorIdx = relevant.length;
-    } else {
-      anchorIdx = relevant.findIndex((e) => e.id === anchor_id);
-      if (anchorIdx === -1) anchorIdx = relevant.length;
-    }
-
-    let found = null;
-    if (direction === "prev") {
-      for (let i = anchorIdx - 1; i >= 0; i--) {
-        if (!filter || relevant[i].text.includes(filter)) {
-          found = relevant[i];
-          break;
-        }
-      }
-    } else {
-      for (let i = anchorIdx + 1; i < relevant.length; i++) {
-        if (!filter || relevant[i].text.includes(filter)) {
-          found = relevant[i];
-          break;
-        }
-      }
-    }
-
+    const result = this._history.navigate({ direction, anchor_id, filter, tag });
     yield {
       type: "history_nav_result",
       to: { target: "terminal" },
       request_id,
       direction,
-      text: found ? found.text : null,
-      anchor_id: found ? found.id : null,
-      filter: filter ?? null,
+      ...result,
     };
   }
 
@@ -1190,11 +1125,7 @@ class Shell {
 
   async *handle$prompt_submit(obj) {
     if (obj.text !== undefined && obj.tag !== undefined) {
-      const last = this._historyEntries[this._historyEntries.length - 1];
-      const entry = { id: crypto.randomUUID(), text: obj.text, tag: obj.tag, prompt_id: obj.prompt_id ?? null };
-      if (!last || last.text !== entry.text || last.prompt_id !== entry.prompt_id) {
-        this._appendHistory(entry);
-      }
+      this._history.push({ id: crypto.randomUUID(), text: obj.text, tag: obj.tag, prompt_id: obj.prompt_id ?? null });
     }
 
     this._notifyControls({
