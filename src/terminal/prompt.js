@@ -285,6 +285,15 @@ function _editorCommands() {
       },
     },
 
+    clearInput: {
+      trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyC,
+      run() {
+        const editor = focusedPrompt?._editor;
+        if (!editor) return;
+        editor.setValue("");
+      },
+    },
+
     deleteWordLeft: {
       trigger: monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyW,
       run() {
