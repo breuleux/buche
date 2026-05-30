@@ -61,6 +61,7 @@ async function main() {
   for await (const event of shell.run(inputStream)) {
     writeLine(JSON.stringify(event));
   }
+  process.exit(0);
 }
 
 main().catch((err) => {
