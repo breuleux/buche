@@ -103,13 +103,13 @@ class ProcessBuilder {
     this._shell = shell;
   }
 
-  async *runNode(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined) {
+  async *runNode(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined, prompt_id = undefined) {
     switch (node.type) {
       case "Command":
-        yield* this._runCommand(node, echo_html, prompt_name, background, zone, prompt_color);
+        yield* this._runCommand(node, echo_html, prompt_name, background, zone, prompt_color, prompt_id);
         break;
       case "Pipeline":
-        yield* this._runPipeline(node, echo_html, prompt_name, background, zone, prompt_color);
+        yield* this._runPipeline(node, echo_html, prompt_name, background, zone, prompt_color, prompt_id);
         break;
       case "LogicalExpression":
         throw new FeatureNotImplementedError(
@@ -134,7 +134,7 @@ class ProcessBuilder {
     }
   }
 
-  async *_runCommand(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined) {
+  async *_runCommand(node, echo_html, prompt_name, background = false, zone = "main", prompt_color = undefined, prompt_id = undefined) {
     if (!node.name) {
       for (const item of node.prefix || []) {
         if (item.type === "AssignmentWord") {
@@ -170,6 +170,7 @@ class ProcessBuilder {
       echo_html,
       prompt_name,
       prompt_color,
+      prompt_id,
       background,
       zone,
     });
@@ -187,7 +188,7 @@ class ProcessBuilder {
     return [text];
   }
 
-  async *_runPipeline(node, echo_html, prompt_name, background, zone, prompt_color = undefined) {
+  async *_runPipeline(node, echo_html, prompt_name, background, zone, prompt_color = undefined, prompt_id = undefined) {
     const shell = this._shell;
     const commands = node.commands;
 
@@ -226,6 +227,7 @@ class ProcessBuilder {
       address: { process: entries[lastIdx].processId },
       echo_html,
       prompt_color,
+      prompt_id,
       mode: "auto",
       zone,
       background: background ?? false,
@@ -1163,6 +1165,8 @@ class Shell {
         to: { target: "terminal" },
         zone: obj.zone ?? "main",
         echo_html: obj.echo_html,
+        prompt_color: obj.prompt_color ?? undefined,
+        prompt_id: obj.prompt_id ?? undefined,
       };
       obj = { ...obj, echo_html: null };
     }
@@ -1198,9 +1202,10 @@ class Shell {
         const echo_html = first ? (obj.echo_html ?? null) : null;
         const prompt_name = first ? (obj.prompt_name ?? null) : null;
         const prompt_color = first ? (obj.prompt_color ?? undefined) : undefined;
+        const prompt_id = first ? (obj.prompt_id ?? undefined) : undefined;
         first = false;
         const background = node.async === true;
-        yield* builder.runNode(node, echo_html, prompt_name, background, effectiveZone, prompt_color);
+        yield* builder.runNode(node, echo_html, prompt_name, background, effectiveZone, prompt_color, prompt_id);
       }
       return;
     }
@@ -1217,6 +1222,7 @@ class Shell {
         address: { process: processId },
         echo_html,
         prompt_color: obj.prompt_color ?? undefined,
+        prompt_id: obj.prompt_id ?? undefined,
         mode: "auto",
         zone: effectiveZone,
         background: obj.background ?? false,
@@ -1247,6 +1253,7 @@ class Shell {
       address: { process: processId },
       echo_html,
       prompt_color: obj.prompt_color ?? undefined,
+      prompt_id: obj.prompt_id ?? undefined,
       mode: "auto",
       zone: effectiveZone,
       background: obj.background ?? false,

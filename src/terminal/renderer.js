@@ -90,9 +90,16 @@ class CellBridge {
       executor.cells.delete(key);
       if (executor._activeCell === key) executor._activeCell = null;
     }
+    const promptId = cellNode.dataset.promptId;
+    if (promptId) executor._cellsByPromptId.get(promptId)?.delete(cellNode);
     cellNode.remove();
     const echoEls = executor._cellEchoElements.get(key);
-    if (echoEls) { echoEls.node.remove(); executor._cellEchoElements.delete(key); }
+    if (echoEls) {
+      const echoPromptId = echoEls.node.dataset.promptId;
+      if (echoPromptId) executor._cellsByPromptId.get(echoPromptId)?.delete(echoEls.node);
+      echoEls.node.remove();
+      executor._cellEchoElements.delete(key);
+    }
     if (nextFocus?.isConnected) {
       focusCellNode(nextFocus);
     } else {
@@ -107,6 +114,7 @@ class Executor {
   constructor(bridge) {
     // Map<key, {cell: Cell, address: object, zone: string}>
     this.cells = new Map();
+    this._cellsByPromptId = new Map(); // promptId → Set<cell.node>
     this._activeCell = null;
     this.bridge = bridge;
     // Echo elements emitted to the source zone when output is redirected via @left/@right/@tab.
@@ -168,6 +176,16 @@ class Executor {
     const promptColor = instruction.prompt_color ?? null;
     cell.promptColor = promptColor;
     cell.node._promptColor = promptColor;
+    if (promptColor) {
+      cell.node.style.setProperty("--prompt-hue", promptColor.hue ?? 230);
+      cell.node.style.setProperty("--prompt-chroma", promptColor.chroma ?? 0.12);
+    }
+    const promptId = instruction.prompt_id ?? null;
+    if (promptId) {
+      cell.node.dataset.promptId = promptId;
+      if (!this._cellsByPromptId.has(promptId)) this._cellsByPromptId.set(promptId, new Set());
+      this._cellsByPromptId.get(promptId).add(cell.node);
+    }
     cell.node._cellLabel = `cell-${++_cellCounter}`;
 
     if (echoElements) {
@@ -304,7 +322,22 @@ class Executor {
   }
 
   handle$prompt_create(instruction) {
-    this._zoneManager.addPrompt(instruction);
+    const zoneName = this._zoneManager.addPrompt(instruction);
+    const zone = this._zoneManager._zones.get(zoneName ?? "main");
+    const pc = zone?.promptCollection;
+    if (pc && !pc._executorCallbacksSet) {
+      pc._executorCallbacksSet = true;
+      pc.onActivePromptChanged = (prevId, nextId) => {
+        if (prevId) for (const node of this._cellsByPromptId.get(prevId) ?? [])
+          node.classList.add("cell-prompt-inactive");
+        if (nextId) for (const node of this._cellsByPromptId.get(nextId) ?? [])
+          node.classList.remove("cell-prompt-inactive");
+      };
+      pc.onPromptRemoved = (ids) => {
+        for (const id of ids) for (const node of this._cellsByPromptId.get(id) ?? [])
+          node.classList.add("cell-prompt-dead");
+      };
+    }
   }
 
   handle$set_prompt(instruction) {
@@ -350,10 +383,22 @@ class Executor {
     inner.innerHTML = instruction.echo_html;
     const statusDot = html`<div class="cell-status cell-status-running"></div>`;
     const btnBar = html`<span class="cell-btn-bar"></span>`;
+    const gutterEl = html`<div class="cell-gutter">${statusDot}</div>`;
     const el = html`<div class="cell-echo" tabindex="0">
-      ${statusDot}
-      <div class="cell-header">${inner.firstChild}<span class="cell-controls">${btnBar}</span></div>
+      ${gutterEl}
+      <div class="cell-body"><div class="cell-header">${inner.firstChild}<span class="cell-controls">${btnBar}</span></div></div>
     </div>`;
+    const promptColor = instruction.prompt_color ?? null;
+    if (promptColor) {
+      el.style.setProperty("--prompt-hue", promptColor.hue ?? 230);
+      el.style.setProperty("--prompt-chroma", promptColor.chroma ?? 0.12);
+    }
+    const promptId = instruction.prompt_id ?? null;
+    if (promptId) {
+      el.dataset.promptId = promptId;
+      if (!this._cellsByPromptId.has(promptId)) this._cellsByPromptId.set(promptId, new Set());
+      this._cellsByPromptId.get(promptId).add(el);
+    }
     this._pendingEchoElements = { statusDot, btnBar, node: el };
     this._zoneManager.resolveZone(instruction.zone ?? "main").buffer.appendChild(el);
   }

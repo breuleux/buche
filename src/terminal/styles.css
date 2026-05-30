@@ -405,8 +405,8 @@ scroll-fader {
 
 /* ── Cells ── */
 .cell-echo {
-	position: relative;
-	padding-left: 16px;
+	display: flex;
+	flex-direction: row;
 	outline: none;
 	border-radius: 3px;
 }
@@ -431,6 +431,33 @@ scroll-fader {
 	display: flex;
 	justify-content: center;
 	padding-top: 8px;
+	position: relative;
+}
+
+.cell-gutter::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 10px;
+	height: calc(100% - 15px);
+	width: 2px;
+	transform: translateX(-50%);
+	background: oklch(0.62 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
+}
+
+.cell-gutter > .cell-status {
+	position: relative;
+	box-shadow: 0 0 0 2px oklch(0.62 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
+}
+
+.cell-prompt-inactive .cell-gutter::before,
+.cell-prompt-dead .cell-gutter::before {
+	background: oklch(0.3 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
+}
+
+.cell-prompt-inactive .cell-gutter > .cell-status,
+.cell-prompt-dead .cell-gutter > .cell-status {
+	box-shadow: 0 0 0 2px oklch(0.3 var(--prompt-chroma, 0.12) var(--prompt-hue, 230));
 }
 
 .cell-body {
@@ -545,8 +572,8 @@ scroll-fader {
 }
 
 .cell-status {
-	width: 5px;
-	height: 5px;
+	width: 6px;
+	height: 6px;
 	border-radius: 50%;
 }
 
@@ -563,14 +590,18 @@ scroll-fader {
 }
 
 .cell-status-running {
-	background: #4ec94e;
+	/* background: #4ec94e; */
+	background: #fff;
 	animation: pulse 1.8s ease-in-out infinite;
 }
 .cell-status-success {
-	background: #555555;
+	/* background: #555555; */
+	background: #1e1e1e;
 }
 .cell-status-error {
-	background: #8b1414;
+	/* background: #8b1414; */
+	background: #f44;
+	border: 1px solid black;
 }
 
 .cell-lines-dropped {

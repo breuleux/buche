@@ -655,6 +655,8 @@ export class PromptCollection {
     this.onActiveChanged = null; // (name: string) => void — called when the active prompt changes
     this.onPromptsChanged = null; // () => void — called when prompts are added or removed
     this.onActiveColorChanged = null; // () => void — called when the active prompt's color changes
+    this.onActivePromptChanged = null; // (prevPromptId: string|null, nextPromptId: string|null) => void
+    this.onPromptRemoved = null; // (promptIds: string[]) => void
     this._parseRequests = new Map();
     this._completionRequests = new Map();
     this._histNavRequests = new Map();
@@ -742,6 +744,7 @@ export class PromptCollection {
     next.layout();
     if (!document.activeElement?.closest?.(".cell")) next.focus();
     this.onActiveChanged?.(next._name);
+    this.onActivePromptChanged?.(prev?.promptId ?? null, next.promptId);
   }
 
   get activeName() {
@@ -789,6 +792,9 @@ export class PromptCollection {
     this._prompts = this._prompts.filter(
       (p) => !addressMatchesProcess(p.address, process_id),
     );
+    if (toRemove.length > 0) {
+      this.onPromptRemoved?.(toRemove.map(p => p.promptId));
+    }
     if (this._prompts.length > 0) {
       this._activeIdx = Math.min(before, this._prompts.length - 1);
       this._activate(this._activeIdx);
