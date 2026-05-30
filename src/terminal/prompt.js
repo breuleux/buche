@@ -177,6 +177,26 @@ function _getHistoryFilter(editor, isDraft) {
   return null;
 }
 
+function _parseMonacoKey(keyStr) {
+  const parts = keyStr.split("+");
+  let mods = 0;
+  let keyCode = 0;
+  for (const part of parts) {
+    switch (part) {
+      case "Control": mods |= monaco.KeyMod.WinCtrl; break;
+      case "Alt":     mods |= monaco.KeyMod.Alt; break;
+      case "Shift":   mods |= monaco.KeyMod.Shift; break;
+      case "Meta":
+      case "Cmd":     mods |= monaco.KeyMod.CtrlCmd; break;
+      default:
+        if (part.length === 1) {
+          keyCode = monaco.KeyCode[`Key${part.toUpperCase()}`] ?? 0;
+        }
+    }
+  }
+  return mods | keyCode;
+}
+
 function _editorCommands() {
   return {
     submit: {
@@ -394,6 +414,7 @@ class Prompt {
     promptId,
     address,
     language,
+    bindings,
     promptCollection,
   }) {
     this.tag = tag;
@@ -404,6 +425,9 @@ class Prompt {
     this._decorations = null;
     this._highlightRanges = [];
     this._language = language ?? "plaintext";
+    this._bindings = bindings
+      ? Object.entries(bindings).map(([key, name]) => ({ key, name }))
+      : [];
 
     this._promptHtml = promptHtml;
 
@@ -440,6 +464,26 @@ class Prompt {
 
     for (let spec of Object.values(_editorCommands())) {
       this._editor.addCommand(spec.trigger, spec.run);
+    }
+
+    for (const { key, name } of this._bindings) {
+      const trigger = _parseMonacoKey(key);
+      if (!trigger) continue;
+      this._editor.addCommand(trigger, () => {
+        const editor = this._editor;
+        if (!editor) return;
+        const text = editor.getValue();
+        const pos = editor.getPosition();
+        const position = pos ? editor.getModel().getOffsetAt(pos) : text.length;
+        this._promptCollection._buche.sendCommand({
+          type: "prompt_binding",
+          to: this.address,
+          name,
+          key,
+          text,
+          position,
+        });
+      });
     }
 
     const updateHeight = () => {
@@ -656,7 +700,7 @@ export class PromptCollection {
     });
   }
 
-  addPrompt({ to, address, prompt, name, tag, language }) {
+  addPrompt({ to, address, prompt, name, tag, language, bindings }) {
     const p = new Prompt({
       promptHtml: prompt,
       name,
@@ -664,6 +708,7 @@ export class PromptCollection {
       promptId: JSON.stringify(address) + ":" + to.prompt,
       address,
       language,
+      bindings,
       promptCollection: this,
     });
     p.tabEl.addEventListener("click", () => {
