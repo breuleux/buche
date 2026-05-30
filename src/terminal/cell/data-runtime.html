@@ -66,6 +66,13 @@
           }
         },
 
+        data(msg) {
+          let schema = msg.data?.$schema ?? "buche:plain";
+          let handler = dataHandlers[schema] ?? dataHandlers["buche:plain"];
+          handler(msg.data);
+          reportHeight();
+        },
+
         register(msg) {
           // Register new handlers; values are function strings like "(msg) => {...}"
           for (const [type, code] of Object.entries(msg.handlers)) {
@@ -73,9 +80,32 @@
           }
         },
 
+        register_schemas(msg) {
+          for (const [spec, code] of Object.entries(msg.schemas)) {
+            dataHandlers[spec] = (0, eval)(`(${code})`);
+          }
+        },
+
         bucheInfo(msg) {
           window.bucheInfo = msg;
         },
+      }
+
+      var dataHandlers = {
+        ["https://json-schema.org/draft/2020-12/schema"](msg) {
+          // no-op
+        },
+
+        ["buche:schema"](msg) {
+          // no-op
+        },
+
+        ["buche:plain"](msg) {
+          var pre = document.createElement("pre");
+          pre.style.cssText = "margin:4px 8px;font-size:12px;white-space:pre-wrap;color:#d4d4d4;";
+          pre.textContent = JSON.stringify(msg, null, 2);
+          document.body.appendChild(pre);
+        }
       }
 
       var lastHeight = null;
