@@ -87,7 +87,6 @@ export class Zone {
   }
 
   // Focus the zone: restore the last focused cell, or fall back to the prompt.
-  // Uses _bucheFocus presence as a live-cell signal (cleared on cell.close()).
   focusLatent() {
     if (!this._latentFocusIsPrompt) {
       const node = this._latentCellNode;

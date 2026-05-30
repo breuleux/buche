@@ -57,6 +57,8 @@ class CellBridge {
     this.executor._activeCell = null;
     const key = cellKey(this.instruction.address, this.instruction.to.cell);
     const zoneName = this.executor.cells.get(key)?.zone ?? "main";
+    const zone = this.executor._zoneManager._zones.get(zoneName);
+    if (zone) zone._latentFocusIsPrompt = true;
     this.executor._zoneManager.focusZone(zoneName);
   }
 

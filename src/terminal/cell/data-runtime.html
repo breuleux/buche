@@ -141,6 +141,9 @@
         par.postMessage({ type: "send", data: data }, "*");
       };
       window.buche.send = window.buche;
+      window.buche.blur = () => {
+        par.postMessage({ type: "blur" }, "*");
+      };
       window.buche.request = (data) => {
         const response_id = Math.random().toString(36).slice(2);
         const promise = new Promise((resolve, reject) => {

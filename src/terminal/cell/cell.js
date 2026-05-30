@@ -25,7 +25,7 @@ export class Cell {
     // Called when focus is programmatically restored to this cell (e.g. zone switch).
     // Each handler can implement focus() to handle internal focus delegation.
     this.node._bucheFocus = () => {
-      if (this.isAlive()) this.handler.focus?.();
+      this.handler.focus?.();
     };
 
     this._bridge = bridge ?? null;
@@ -71,7 +71,6 @@ export class Cell {
       // Enter while the wrapper itself has focus (navigation mode) → enter edit mode.
       "Enter": (e) => {
         if (document.activeElement !== this.node) return;
-        if (!this.isAlive()) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         this.handler.focus?.();
@@ -82,7 +81,7 @@ export class Cell {
 
     this.node.addEventListener("click", () => {
       this.node.focus();
-      if (this.isAlive()) this.handler.focus?.();
+      this.handler.focus?.();
     });
     this.node.addEventListener("focusin", () =>
       this.handler.setCursorState?.("active"),
@@ -110,7 +109,6 @@ export class Cell {
     this._statusDot.className = `cell-status ${return_code === 0 ? "cell-status-success" : "cell-status-error"}`;
     this._alive = false;
     this.handler.setCursorState?.("hidden");
-    this.node._bucheFocus = null; // Dead — focusLatent() will fall back to the prompt
     if (!sticky) this.node.blur();
   }
 }
