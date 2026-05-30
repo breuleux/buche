@@ -93,25 +93,13 @@ export class DataHandler {
 
   send(msg) {
     if (msg.type === "resolve") {
-      if (msg.request_id) {
-        // Shell process is responding to a proc:// resource request
-        window.buche.proc.respond(
-          msg.request_id,
-          msg.status ?? 200,
-          msg.content ?? "",
-          msg.mimetype ?? "application/octet-stream",
-          msg.encoding ?? null,
-        );
-      } else if (msg.path != null) {
-        // Shell process is pre-pushing a resource into the cache
-        window.buche.proc.cache(
-          this._procCellId,
-          msg.path,
-          msg.content ?? "",
-          msg.mimetype ?? "application/octet-stream",
-          msg.encoding ?? null,
-        );
-      }
+      window.buche.proc.cache(
+        this._procCellId,
+        msg.path,
+        msg.content ?? "",
+        msg.mimetype ?? "application/octet-stream",
+        msg.encoding ?? null,
+      );
       return;
     }
     if (this._ready) {

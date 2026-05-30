@@ -52,18 +52,17 @@
           }
         },
 
-        resolve(msg) {
-          if (msg.response_id != null) {
-            // Resolve a buche.request() future
-            const future = futures[msg.response_id];
-            if (future) {
-              delete futures[msg.response_id];
-              if (msg.error != null) { future.reject(msg.error); }
-              else { future.resolve(msg.value); }
-            }
-          } else if (msg.request_id != null) {
-            par.postMessage({ type: "send", data: { type: "resolve", request_id: msg.request_id, path: msg.path, method: msg.method } }, "*");
+        response(msg) {
+          const future = futures[msg.response_id];
+          if (future) {
+            delete futures[msg.response_id];
+            if (msg.error != null) { future.reject(msg.error); }
+            else { future.resolve(msg.value); }
           }
+        },
+
+        resolve(msg) {
+          par.postMessage({ type: "send", data: { type: "resolve", request_id: msg.request_id, path: msg.path, method: msg.method } }, "*");
         },
 
         data(msg) {
