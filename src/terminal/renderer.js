@@ -228,6 +228,10 @@ class Executor {
     this._zoneManager.setPrompt(instruction);
   }
 
+  handle$set_input(instruction) {
+    this._zoneManager.setInput(instruction);
+  }
+
   handle$highlight(instruction) {
     this._zoneManager.applyHighlight(instruction);
   }

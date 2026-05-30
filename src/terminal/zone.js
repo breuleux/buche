@@ -641,6 +641,12 @@ export class ZoneManager {
     }
   }
 
+  setInput(instruction) {
+    for (const zone of this._zones.values()) {
+      zone.promptCollection.setInput(instruction);
+    }
+  }
+
   applyHighlight(instruction) {
     for (const zone of this._zones.values()) {
       zone.promptCollection.applyHighlight(instruction);

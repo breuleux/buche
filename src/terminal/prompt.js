@@ -755,6 +755,17 @@ export class PromptCollection {
     }
   }
 
+  setInput({ to, address, text, position }) {
+    const promptId = JSON.stringify(address) + ":" + to.prompt;
+    const p = this._prompts.find((p) => p.promptId === promptId);
+    if (!p?._editor) return;
+    p._editor.setValue(text);
+    if (position != null) {
+      const model = p._editor.getModel();
+      p._editor.setPosition(model.getPositionAt(position));
+    }
+  }
+
   applyHighlight({ request_id, ranges }) {
     const prompt = this._parseRequests.get(request_id);
     if (!prompt) {
