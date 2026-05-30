@@ -773,6 +773,7 @@ class Shell {
       ? parseInt(process.env.BUCHE_PTY_ROWS, 10)
       : (process.stdout.rows || 24);
     this._nextProcessId = 0;
+    this._oldPwd = null;
     this._keyBindings = new Map(); // binding name → command string
     this._promptBindings = {};     // key string → binding name (for prompt_create)
     this._history = new ShellHistory();
@@ -997,9 +998,13 @@ class Shell {
   }
 
   async *handle$cd(obj) {
-    process.chdir(obj.path);
+    const prev = process.cwd();
+    const target = obj.path === "-" ? (this._oldPwd ?? prev) : obj.path;
+    process.chdir(target);
+    this._oldPwd = prev;
     this._notifyControls({ type: "cwd_changed", cwd: process.cwd() });
     yield* this._applyConfig();
+    process.env.OLDPWD = this._oldPwd;
   }
 
   async handle$set(obj) {
