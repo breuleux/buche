@@ -709,8 +709,17 @@ class Shell {
     return routed();
   }
 
-  _handleShellInstruction(_instruction) {
-    // nothing for now
+  async _handleShellInstruction(instruction) {
+    const handler = this[`handle$${instruction.type}`];
+    if (!handler) return;
+    const result = handler.call(this, instruction);
+    if (result && result[Symbol.asyncIterator]) {
+      for await (const event of withErrorCatch(result)) {
+        this._emitControlEvent(event);
+      }
+    } else {
+      await result;
+    }
   }
 
   _notifyControls(event) {
