@@ -8,7 +8,7 @@ const { sync: globSync } = require("glob");
 const bashParser = require("bash-parser");
 const { BUILTINS } = require("./builtins");
 const { loadConfig } = require("./config");
-const { ShellHistory } = require("./history");
+const { ShellHistory, HISTORY_FILE } = require("./history");
 
 const _originalEnv = { ...process.env };
 
@@ -334,6 +334,7 @@ class Process {
         BUCHE_CONTROL_FD: "5",
         BUCHE_PTY_COLS: String(cols),
         BUCHE_PTY_ROWS: String(rows),
+        BUCHE_HISTORY_FILE: HISTORY_FILE,
         ...extraEnv,
       },
       ...(cwd !== undefined && { cwd }),

@@ -79,4 +79,4 @@ class ShellHistory {
   }
 }
 
-module.exports = { ShellHistory };
+module.exports = { ShellHistory, HISTORY_FILE };
