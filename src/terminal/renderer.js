@@ -69,11 +69,9 @@ class CellBridge {
 
   onBackground() {
     this.executor._activeCell = null;
-    const key = cellKey(this.instruction.address, this.instruction.to.cell);
-    const zoneName = this.executor.cells.get(key)?.zone ?? "main";
-    const zone = this.executor._zoneManager._zones.get(zoneName);
+    const zone = this._cell?.zone;
     if (zone) zone._latentFocusIsPrompt = true;
-    this.executor._zoneManager.focusZone(zoneName);
+    this.executor._zoneManager.focusZone(zone?.name ?? "main");
   }
 
   killAndDelete() {
@@ -81,10 +79,12 @@ class CellBridge {
     const executor = this.executor;
     const entry = executor.cells.get(key);
     const cellNode = this._cell.node;
-    const allCells = getOrderedCellNodes();
+    const zone = this._cell.zone;
+    const allCells = [...(zone?.buffer.children ?? [])].filter(
+      n => n.classList.contains("cell") || n.classList.contains("cell-echo"),
+    );
     const idx = allCells.indexOf(cellNode);
     const nextFocus = allCells[idx + 1] ?? null;
-    const activeZoneName = executor._zoneManager._activeZoneName;
     if (entry) {
       if (entry.cell.isAlive()) entry.cell.kill();
       executor.cells.delete(key);
@@ -103,7 +103,7 @@ class CellBridge {
     if (nextFocus?.isConnected) {
       focusCellNode(nextFocus);
     } else {
-      executor._zoneManager.focusZone(activeZoneName);
+      executor._zoneManager.focusZone(zone?.name ?? "main");
     }
   }
 }
@@ -195,6 +195,7 @@ class Executor {
     }
     const zone = this._zoneManager.resolveZone(instruction.zone ?? "main", instruction.address?.process);
     if (promptColor) zone._promptColor = promptColor;
+    cell.zone = zone;
     cell.onFocus = () => this._zoneManager._setFocusedZone(zone.name);
     zone.prepareForCell?.();
     zone.buffer.appendChild(cell.node);
@@ -235,9 +236,9 @@ class Executor {
     if (!entry) return;
     entry.cell.node._cellLabel = instruction.label;
     // If this cell is the current solo cell, update the tab label live.
-    const zone = this._zoneManager._zones.get(entry.zone);
+    const zone = entry.cell.zone;
     if (zone?._soloCellNode === entry.cell.node) {
-      this._zoneManager._groups.get(entry.zone)?.setTabLabel(entry.zone, instruction.label);
+      this._zoneManager._groups.get(zone.name)?.setTabLabel(zone.name, instruction.label);
     }
   }
 
@@ -270,7 +271,7 @@ class Executor {
       this.cells.delete(key);
       if (this._activeCell === key) this._activeCell = null;
       if (!entry.sticky && isFocused) {
-        this._zoneManager.focusZone(entry.zone);
+        this._zoneManager.focusZone(entry.cell.zone.name);
       }
     }
   }
@@ -282,14 +283,14 @@ class Executor {
     if (instruction.sticky !== null) entry.sticky = instruction.sticky;
     if (instruction.label != null) {
       entry.cell.node._cellLabel = instruction.label;
-      const zone = this._zoneManager._zones.get(entry.zone);
+      const zone = entry.cell.zone;
       if (zone?._soloCellNode === entry.cell.node) {
-        this._zoneManager._groups.get(entry.zone)?.setTabLabel(entry.zone, instruction.label);
+        this._zoneManager._groups.get(zone.name)?.setTabLabel(zone.name, instruction.label);
       }
     }
     if (instruction.background === true) {
       this._activeCell = null;
-      this._zoneManager.focusZone(entry.zone);
+      this._zoneManager.focusZone(entry.cell.zone?.name ?? "main");
     }
   }
 
@@ -680,18 +681,22 @@ const { config: _globalKeysConfig } = buchekeys(window, {
   "Control+q ~ d": (e) => {
     const focused = getFocusedNavigableNode() ?? getOrderedCellNodes().at(-1) ?? null;
     if (!focused) return;
-    const allCells = getOrderedCellNodes();
-    const idx = allCells.indexOf(focused);
-    const nextFocus = allCells[idx + 1] ?? null;
-    const activeZoneName = _executor._zoneManager._activeZoneName;
 
     const isEcho = focused.classList.contains("cell-echo");
     const key = isEcho
       ? (focused.dataset.cellKey ?? null)
       : ([..._executor.cells].find(([, e]) => e.cell.node === focused)?.[0] ?? null);
 
+    const entry = key ? _executor.cells.get(key) : null;
+    const zone = entry?.cell.zone
+      ?? _executor._zoneManager._zones.get(_executor._zoneManager._activeZoneName);
+    const allCells = [...(zone?.buffer.children ?? [])].filter(
+      n => n.classList.contains("cell") || n.classList.contains("cell-echo"),
+    );
+    const idx = allCells.indexOf(focused);
+    const nextFocus = allCells[idx + 1] ?? null;
+
     if (key) {
-      const entry = _executor.cells.get(key);
       if (entry) {
         if (entry.cell.isAlive()) entry.cell.kill();
         entry.cell.node.remove();
@@ -713,7 +718,7 @@ const { config: _globalKeysConfig } = buchekeys(window, {
     if (nextFocus?.isConnected) {
       focusCellNode(nextFocus);
     } else {
-      _executor._zoneManager.focusZone(activeZoneName);
+      _executor._zoneManager.focusZone(zone?.name ?? "main");
     }
   },
 }, { capture: true });

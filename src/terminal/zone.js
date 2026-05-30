@@ -41,6 +41,7 @@ export class Zone {
 
     // PromptCollection inserts its tab bar after _inputContainer (still inside zone node)
     this.promptCollection = new PromptCollection(this._inputContainer, bridge, name);
+    this.promptCollection.zone = this;
   }
 
   // Lazily create a float container between the buffer and the input.
