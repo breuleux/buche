@@ -173,6 +173,20 @@ class Executor {
       ?.cell.send(instruction.message);
   }
 
+  handle$resolve(instruction) {
+    this.cells
+      .get(cellKey(instruction.address, instruction.to.cell))
+      ?.cell.send({
+        type: "resolve",
+        request_id: instruction.request_id,
+        path: instruction.path,
+        content: instruction.content,
+        mimetype: instruction.mimetype,
+        status: instruction.status,
+        encoding: instruction.encoding,
+      });
+  }
+
   handle$set_label(instruction) {
     const key = cellKey(instruction.address, instruction.to.cell);
     const entry = this.cells.get(key);

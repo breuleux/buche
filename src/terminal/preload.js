@@ -12,6 +12,13 @@ ipcRenderer.on("instruction", (_event, instruction) => {
   }
 });
 
+// Forward proc:// resource requests to the renderer via window.postMessage.
+// Using postMessage avoids passing function arguments across the contextBridge
+// (structured clone), which would throw "An object could not be cloned".
+ipcRenderer.on("proc:request", (_event, msg) => {
+  window.postMessage({ __buche: "proc:request", ...msg }, "*");
+});
+
 contextBridge.exposeInMainWorld("buche", {
   vsBase: path.join(__dirname, "../../node_modules/monaco-editor/min/vs"),
   onInstruction: (cb) => {
@@ -27,4 +34,10 @@ contextBridge.exposeInMainWorld("buche", {
     add: (entry) => ipcRenderer.send("history:add", entry),
   },
   storeLibrary: (lib) => ipcRenderer.send("library:store", lib),
+  proc: {
+    respond: (requestId, status, content, mimetype, encoding) =>
+      ipcRenderer.send("proc:response", { requestId, status, content, mimetype, encoding }),
+    cache: (cellId, resourcePath, content, mimetype, encoding) =>
+      ipcRenderer.send("proc:cache", { cellId, path: resourcePath, content, mimetype, encoding }),
+  },
 });

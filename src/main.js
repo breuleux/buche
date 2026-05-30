@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const readline = require("readline");
 const { spawn } = require("child_process");
-const { registerProtocol } = require("./terminal/file-protocol");
+const { registerProtocol, setWebContents } = require("./terminal/file-protocol");
 
 const args = JSON.parse(process.env.BUCHE_OPTS ?? "{}");
 const termdir = path.join(__dirname, "terminal");
@@ -49,6 +49,7 @@ function createWindow() {
   });
 
   win.loadFile(path.join(termdir, "index.html"));
+  setWebContents(win.webContents);
 
   if (args.devtools) {
     win.webContents.openDevTools({ mode: "right" });

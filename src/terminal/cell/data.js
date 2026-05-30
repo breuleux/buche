@@ -1,22 +1,18 @@
-// Runtime injected into every data: iframe.
-// data: URLs get an opaque origin — scripts inside cannot touch the parent DOM,
-// storage, or any other cell, but postMessage still works.
 import { getIframeKeysConfig } from "../iframekeys.js";
 
-const RUNTIME = await fetch(
-  new URL("./data-runtime.html", import.meta.url),
-).then((r) => r.text());
+let _procCellCounter = 0;
 
 export class DataHandler {
   constructor(cellNode, _instruction, bridge) {
     this._ready = false;
     this._pending = [];
     this._bridge = bridge;
+    this._procCellId = `c${++_procCellCounter}`;
 
     this._iframe = document.createElement("iframe");
     this._iframe.style.cssText =
       "border:none;width:100%;display:block;height:0;max-height:600px;";
-    this._iframe.src = `data:text/html;charset=utf-8,${encodeURIComponent(RUNTIME)}`;
+    this._iframe.src = `proc://${this._procCellId}/`;
     cellNode.appendChild(this._iframe);
 
     this._onMessage = (e) => {
@@ -34,6 +30,17 @@ export class DataHandler {
       method.call(this, msg);
     };
     window.addEventListener("message", this._onMessage);
+
+    // Receive proc:// resource requests relayed from preload via window.postMessage.
+    this._onProcRequest = (e) => {
+      if (e.source !== window || e.data?.__buche !== "proc:request") return;
+      if (e.data.cellId !== this._procCellId) return;
+      this._iframe.contentWindow?.postMessage(
+        { type: "resolve", request_id: e.data.requestId, path: e.data.path, method: e.data.method },
+        "*",
+      );
+    };
+    window.addEventListener("message", this._onProcRequest);
   }
 
   handle$ready(msg) {
@@ -65,6 +72,19 @@ export class DataHandler {
     this._bridge?.onBackground();
   }
 
+  handle$resolve(msg) {
+    if (msg.request_id != null) {
+      // Response to an on-demand proc:// request relayed from main
+      window.buche.proc.respond(
+        msg.request_id,
+        msg.status ?? 200,
+        msg.content ?? "",
+        msg.mimetype ?? "application/octet-stream",
+        msg.encoding,
+      );
+    }
+  }
+
   handle$send(msg) {
     if (this._bridge) {
       this._bridge.sendControl(msg.data);
@@ -72,6 +92,28 @@ export class DataHandler {
   }
 
   send(msg) {
+    if (msg.type === "resolve") {
+      if (msg.request_id) {
+        // Shell process is responding to a proc:// resource request
+        window.buche.proc.respond(
+          msg.request_id,
+          msg.status ?? 200,
+          msg.content ?? "",
+          msg.mimetype ?? "application/octet-stream",
+          msg.encoding ?? null,
+        );
+      } else if (msg.path != null) {
+        // Shell process is pre-pushing a resource into the cache
+        window.buche.proc.cache(
+          this._procCellId,
+          msg.path,
+          msg.content ?? "",
+          msg.mimetype ?? "application/octet-stream",
+          msg.encoding ?? null,
+        );
+      }
+      return;
+    }
     if (this._ready) {
       this._iframe.contentWindow.postMessage(msg, "*");
     } else {

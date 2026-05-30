@@ -53,13 +53,16 @@
         },
 
         resolve(msg) {
-          // Resolve the future with corresponding response_id
-          const {response_id, value, error} = msg;
-          const future = futures[response_id];
-          if (future) {
-            delete futures[response_id];
-            if (error != null) { future.reject(error); }
-            else { future.resolve(value); }
+          if (msg.response_id != null) {
+            // Resolve a buche.request() future
+            const future = futures[msg.response_id];
+            if (future) {
+              delete futures[msg.response_id];
+              if (msg.error != null) { future.reject(msg.error); }
+              else { future.resolve(msg.value); }
+            }
+          } else if (msg.request_id != null) {
+            par.postMessage({ type: "send", data: { type: "resolve", request_id: msg.request_id, path: msg.path, method: msg.method } }, "*");
           }
         },
 
@@ -151,6 +154,9 @@
         });
         par.postMessage({ type: "send", data: {...data, response_id} }, "*");
         return promise;
+      };
+      window.buche.respond = (request_id, content, mimetype, status) => {
+        par.postMessage({ type: "resolve", request_id, content, mimetype, status: status ?? 200 }, "*");
       };
 
       par.postMessage({ type: "ready" }, "*");
