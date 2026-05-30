@@ -222,6 +222,13 @@ class Executor {
     const entry = this.cells.get(key);
     if (!entry) return;
     if (instruction.sticky !== null) entry.sticky = instruction.sticky;
+    if (instruction.label != null) {
+      entry.cell.node._cellLabel = instruction.label;
+      const zone = this._zoneManager._zones.get(entry.zone);
+      if (zone?._soloCellNode === entry.cell.node) {
+        this._zoneManager._groups.get(entry.zone)?.setTabLabel(entry.zone, instruction.label);
+      }
+    }
     if (instruction.background === true) {
       this._activeCell = null;
       this._zoneManager.focusZone(entry.zone);
