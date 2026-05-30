@@ -277,22 +277,19 @@ class Executor {
     const { process_id } = instruction;
     let anyFocused = false;
     let anyStickyWasFocused = false;
-    // Does anyClosed matter to a desired behavior?
-    let anyClosed = false;
     for (const [key, entry] of [...this.cells]) {
       if (addressMatchesProcess(entry.address, process_id)) {
         this._closeEchoStatus(key, instruction.return_code);
         const isFocused = entry.cell.node.contains(document.activeElement);
         if (entry.sticky && isFocused) anyStickyWasFocused = true;
         else if (!entry.sticky && isFocused) anyFocused = true;
-        anyClosed = true;
         entry.cell.close(instruction.return_code, { sticky: entry.sticky });
         this.cells.delete(key);
         if (this._activeCell === key) this._activeCell = null;
       }
     }
     this._zoneManager.removePromptsByProcess(process_id);
-    if (!anyStickyWasFocused && (anyFocused || (anyClosed && this._activeCell === null))) {
+    if (!anyStickyWasFocused && anyFocused) {
       focusActivePrompt();
     }
   }
