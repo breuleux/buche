@@ -1,0 +1,58 @@
+/* Styles for the <basic-ansi> custom element (basic-ansi.tsx).
+ * A scrolling text view rendering ANSI-styled pty output. */
+
+basic-ansi {
+	display: block;
+	color: #d4d4d4;
+}
+
+.basic-ansi-lines {
+	margin: 0;
+	padding: 0 12px;
+	font-family: "Menlo", "Consolas", monospace;
+	font-size: 13px;
+	line-height: 1.4;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+/* Per-stream default colours (also overridden inline by ANSI SGR codes). */
+.text-stdout {
+	color: #d4d4d4;
+}
+
+.text-stderr {
+	background: #3a0000;
+	color: #f48771;
+}
+
+/* Cursor at the current write position. */
+.cursor {
+	display: inline-block;
+	width: 0.6ch;
+	height: 1em;
+	vertical-align: text-bottom;
+}
+
+.cursor-inactive {
+	background: #444;
+}
+
+.cursor-active {
+	background: #ddd;
+	animation: basic-ansi-cursor-blink 1.2s ease-in-out infinite;
+}
+
+.cursor-hidden {
+	display: none;
+}
+
+@keyframes basic-ansi-cursor-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
