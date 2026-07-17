@@ -52,6 +52,11 @@ export class TabbedZoneElement extends ZoneElement {
     ensureSetup() {
         const tb = this.tabs;
         this.tabs.setAttribute("hide-single", "");
+        // A zone is a focusable container (see focus.ts): navigating into it
+        // lands on the cell or prompt last focused within it.
+        if (!this.hasAttribute("focusable")) {
+            this.setAttribute("focusable", "zone");
+        }
         this.appendChild(tb);
     }
 

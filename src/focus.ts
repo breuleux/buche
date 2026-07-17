@@ -11,6 +11,10 @@
 //     both the focus and the DOM focus where they are. Clicks inside iframes
 //     aren't visible to the page; they are detected from the focus entering
 //     the iframe (the page's window blurs, with the iframe as activeElement).
+//   * An element whose content can now take the focus (e.g. a cell whose
+//     terminal was just created) dispatches a bubbling "focus-commit-request"
+//     event: if it is (inside) the focused element and commits aren't held,
+//     the focus is committed, so it moves into that content.
 //   * `commitFocus()` calls `commitFocus()` on the focused element, if it has
 //     one (see {@link FocusCommittable}). It is meant to be called when a
 //     navigation is over, so that elements can defer part of taking the focus
@@ -64,6 +68,15 @@
 //       "dom"      the DOM focus landed in it (Tab, or a component's .focus())
 //       "restore"  the previous focus was destroyed or hidden
 //       "api"      a `focus()` call (the caller may pass another source)
+//       "auto"     an `expect(id)` was fulfilled (see below)
+//
+// `expect(id)` arranges for the element with that id to be focused as soon as
+// it is in the root, focusable and visible (it may already be, or appear or
+// become visible later), then committed (unless `holdCommits` is set). It is
+// cancelled if the focus moves first (click, navigation, DOM focus, `focus()`;
+// not a restore after the focused element was removed), by a new `expect`, or
+// by `expect(null)`. Checking costs one id lookup per DOM mutation batch, and
+// only while an expectation is pending.
 //
 // A bubbling "focus-change" event (detail: { previous, current, tags }) is
 // dispatched on the root whenever the focus changes.
@@ -74,7 +87,7 @@ export type Direction = "up" | "down" | "left" | "right";
 export type NavigationMode = "neighbour" | "jump" | "mix";
 
 /** How a focus came about (see the header comment). */
-export type FocusSource = "click" | "nav" | "dom" | "restore" | "api";
+export type FocusSource = "click" | "nav" | "dom" | "restore" | "api" | "auto";
 
 /** A focusable element that does something more on `FocusManager.commitFocus()`. */
 export interface FocusCommittable {
@@ -134,6 +147,9 @@ export class FocusManager {
     holdCommits = false;
 
     private currentEl: HTMLElement | null = null;
+    // The id passed to `expect`, while pending.
+    private expected: string | null = null;
+    private expectScheduled = false;
     // Focusable ancestors of the current leaf, innermost first, captured when it
     // was focused: once it is detached we can no longer walk up from it.
     private currentPath: HTMLElement[] = [];
@@ -154,19 +170,25 @@ export class FocusManager {
         root.addEventListener("pointerdown", this.onPointerDown, true);
         root.addEventListener("mousedown", this.onMouseDown, true);
         root.addEventListener("focusin", this.onFocusIn);
+        root.addEventListener("focus-commit-request", this.onCommitRequest);
         window.addEventListener("blur", this.onWindowBlur);
 
         // Removal or hiding of the focused element shows up as a mutation.
+        // An expected element may also appear by getting its id, or by
+        // becoming visible.
         this.observer = new MutationObserver((records) => {
             if (this.affectsCurrent(records)) {
                 this.scheduleCheck();
+            }
+            if (this.expected !== null) {
+                this.scheduleExpectCheck();
             }
         });
         this.observer.observe(root, {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ["style", "class", "hidden"],
+            attributeFilter: ["style", "class", "hidden", "id"],
         });
     }
 
@@ -174,6 +196,7 @@ export class FocusManager {
         this.root.removeEventListener("pointerdown", this.onPointerDown, true);
         this.root.removeEventListener("mousedown", this.onMouseDown, true);
         this.root.removeEventListener("focusin", this.onFocusIn);
+        this.root.removeEventListener("focus-commit-request", this.onCommitRequest);
         window.removeEventListener("blur", this.onWindowBlur);
         this.observer.disconnect();
     }
@@ -206,6 +229,39 @@ export class FocusManager {
     /** Focus `el` (a container is resolved to its last focused leaf). */
     focus(el: HTMLElement, source: FocusSource = "api"): void {
         this.setCurrent(this.resolve(el), true, source);
+    }
+
+    /**
+     * Focus the element with this id as soon as it is available, unless the
+     * focus moves first (see the header comment). `null` cancels. Replaces any
+     * pending expectation.
+     */
+    expect(id: string | null): void {
+        this.expected = id;
+        this.checkExpected();
+    }
+
+    /**
+     * Go back to the most recent element of the history (before the current
+     * one) that is still there and visible, as when the focused element is
+     * removed; then commit, unless commits are held. Returns whether the focus
+     * moved.
+     */
+    back(): boolean {
+        const target = this.previousValid();
+        if (!target) {
+            return false;
+        }
+        this.setCurrent(this.resolve(target), true, "restore");
+        if (!this.holdCommits) {
+            this.commitFocus();
+        }
+        return true;
+    }
+
+    /** The id passed to `expect`, while it is pending. */
+    get expecting(): string | null {
+        return this.expected;
     }
 
     /** Let the focused element finish taking the focus (see {@link FocusCommittable}). */
@@ -335,6 +391,12 @@ export class FocusManager {
             }
             return;
         }
+        // The focus moved before the expected element showed up: forget it.
+        // (Not when the focus was just restored after a removal, which the
+        // user didn't ask for.)
+        if (source !== "restore") {
+            this.expected = null;
+        }
         previous?.removeAttribute("focused");
         for (const p of this.currentPath) {
             p.removeAttribute("focus-path");
@@ -439,6 +501,46 @@ export class FocusManager {
         return false;
     }
 
+    // The most recent valid element of the history other than the current one.
+    private previousValid(): HTMLElement | null {
+        for (let i = this.past.length - 1; i >= 0; i--) {
+            const el = this.past[i].element;
+            if (el !== this.currentEl && this.valid(el)) {
+                return el;
+            }
+        }
+        return null;
+    }
+
+    private scheduleExpectCheck(): void {
+        if (this.expectScheduled) {
+            return;
+        }
+        this.expectScheduled = true;
+        queueMicrotask(() => {
+            this.expectScheduled = false;
+            this.checkExpected();
+        });
+    }
+
+    // Fulfil a pending `expect` if its element is now available. A single id
+    // lookup (indexed by the browser) unless the element is there.
+    private checkExpected(): void {
+        const id = this.expected;
+        if (id === null) {
+            return;
+        }
+        const el = this.root.ownerDocument.getElementById(id);
+        if (!el || !this.root.contains(el) || !this.isFocusable(el) || !this.valid(el)) {
+            return;
+        }
+        this.expected = null;
+        this.setCurrent(this.resolve(el), true, "auto");
+        if (!this.holdCommits) {
+            this.commitFocus();
+        }
+    }
+
     private scheduleCheck(): void {
         if (this.checkScheduled) {
             return;
@@ -470,14 +572,10 @@ export class FocusManager {
         }
         // Destroyed (or nothing visible around it): go back in history.
         const removed = !current.isConnected;
-        let target: HTMLElement | null = null;
-        for (let i = this.past.length - 1; i >= 0 && !target; i--) {
-            const el = this.past[i].element;
-            if (el !== current && this.valid(el)) {
-                target = el;
-            }
-        }
-        target ??= this.currentPath.find((p) => this.valid(p)) ?? this.topLevel(this.root)[0];
+        const target =
+            this.previousValid() ??
+            this.currentPath.find((p) => this.valid(p)) ??
+            this.topLevel(this.root)[0];
         this.setCurrent(target ? this.resolve(target) : null, true, "restore");
         if (removed && !this.holdCommits) {
             this.commitFocus();
@@ -667,6 +765,23 @@ export class FocusManager {
         if (el && !el.contains(this.currentEl)) {
             this.setCurrent(this.resolve(el), false, "click");
         }
+    };
+
+    // Deferred to a microtask, so the requester can finish setting up the new
+    // content (e.g. size a terminal) before the focus moves into it.
+    private onCommitRequest = (e: Event): void => {
+        const target = e.target;
+        queueMicrotask(() => {
+            const current = this.current;
+            if (
+                current &&
+                target instanceof Node &&
+                current.contains(target) &&
+                !this.holdCommits
+            ) {
+                this.commitFocus();
+            }
+        });
     };
 
     private onFocusIn = (e: FocusEvent): void => {

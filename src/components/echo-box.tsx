@@ -54,7 +54,9 @@
 // tagged `focusable="cell"` and takes the DOM focus itself while navigated
 // onto, so the page keeps the keys; `commitFocus()` then moves the focus into
 // the active view (its embedded terminal or <buche-gui>). While it is the
-// focus (the manager's `focused` attribute), the box is highlighted.
+// focus (the manager's `focused` attribute), the box is highlighted. Setting
+// a view asks the manager to commit again ("focus-commit-request"), so a
+// terminal created while the box has the focus gets it.
 //
 // Events (both bubble). See the exported detail/event types below
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
@@ -73,7 +75,7 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
-import type { Status, StatusString, ViewLabel } from "../echo.ts";
+import { echoElementId, type Status, type StatusString, type ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
@@ -818,6 +820,11 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     private applyEntry(entry: Entry): void {
         const echo = entry.echo;
+        // The element answering a user command can be found (and expected, see
+        // FocusManager.expect) by that command's id.
+        if (echo.id !== undefined) {
+            this.id = echoElementId(echo.id);
+        }
         if (echo?.echo !== undefined) {
             this.setEcho(echo.echo);
         }
@@ -852,6 +859,9 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.ensureSetup();
         const entry = this.ensureView(lbl);
         entry.view.replaceChildren(content);
+        // If this box has the focus, it may now pass it on to the new content
+        // (e.g. a terminal created by the first output; see commitFocus).
+        this.dispatchEvent(new Event("focus-commit-request", { bubbles: true }));
         return entry.view;
     }
 

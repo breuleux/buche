@@ -1,7 +1,9 @@
 import { EchoBox } from "./components/echo-box.tsx";
+import type { PromptCommandDetail } from "./components/prompt-collection.tsx";
 import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
+import { echoElementId } from "./echo.ts";
 import type { Entry } from "./entry.ts";
 import { type Direction, FocusManager, type NavigationMode } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
@@ -83,6 +85,8 @@ export class BucheInterface implements Interface {
     keys: ModalKeys;
     /** Focus navigation across cells, prompts and zones (see focus.ts). */
     focus: FocusManager;
+    /** Counter for the ids given to user commands (see pushCommand). */
+    private commandSeq = 0;
 
     constructor(args: BucheInterfaceArguments) {
         this.container = args.container;
@@ -211,11 +215,70 @@ export class BucheInterface implements Interface {
         (handler as HT).call(this, buche, message);
     }
 
+    // ── Automatic focus ───────────────────────────────────────────────────────
+    // A prompt command gets an id, which the driver repeats on the echo it
+    // produces in response; the echo's element (see echoElementId) is then
+    // expected, and takes the focus when it appears unless the focus moved in
+    // the meantime, or the echo is `background`. When the focused cell's
+    // process ends, the focus goes back to where it was, unless the echo is
+    // `sticky`. A new prompt takes the focus unless it is `background`.
+
+    /** Relay a prompt's command to the machine, expecting the echo answering it. */
+    pushCommand(detail: PromptCommandDetail): void {
+        const id = `c${++this.commandSeq}`;
+        this.focus.expect(echoElementId(id));
+        this.interactions.push({
+            type: "user_command",
+            id,
+            entry: detail.entry,
+            text: detail.text,
+            position: detail.position,
+            command: detail.command,
+        });
+    }
+
+    // A background echo doesn't take the focus: drop the expectation of it.
+    private settleExpectation(entry: Entry): void {
+        const { id, background } = entry.echo;
+        if (background && id !== undefined && this.focus.expecting === echoElementId(id)) {
+            this.focus.expect(null);
+        }
+    }
+
+    private focusNewPrompt(zone: Zone, entry: Entry): void {
+        if (entry.echo.background) {
+            return;
+        }
+        const element = zone.revealPrompt(entry);
+        if (element && isVisible(element)) {
+            this.focus.focus(element, "auto");
+            if (!this.focus.holdCommits) {
+                this.focus.commitFocus();
+            }
+        }
+    }
+
+    // The focused cell's process ended: give the focus back, unless sticky.
+    private releaseEndedCell(entry: Entry): void {
+        const { status } = entry.echo.status;
+        if ((status !== "done" && status !== "error") || entry.echo.sticky) {
+            return;
+        }
+        const current = this.focus.current;
+        if (current instanceof EchoBox && current.boundEntry === entry) {
+            this.focus.back();
+        }
+    }
+
+    // ── Interface messages ────────────────────────────────────────────────────
+
     handle$install_echo(buche: Buche, message: InstallEchoMessage) {
+        this.settleExpectation(message.entry);
         message.zone!.installEcho(this, message.entry);
     }
 
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
+        this.settleExpectation(message.entry);
         const existing = this.map.get(message.entry);
         if (existing) {
             message.entry.fire();
@@ -233,11 +296,13 @@ export class BucheInterface implements Interface {
             console.log("~~!", message.entry.echo.label);
             const element = message.zone!.installPrompt(this, message.entry);
             this.map.set(message.entry, { zone: message.zone!, element });
+            this.focusNewPrompt(message.zone!, message.entry);
         }
     }
 
     handle$update_entry(buche: Buche, message: UpdateEntryMessage) {
         message.entry.fire();
+        this.releaseEndedCell(message.entry);
     }
 
     handle$cell_command(buche: Buche, message: CellCommandMessage) {

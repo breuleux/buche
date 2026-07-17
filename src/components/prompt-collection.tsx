@@ -667,9 +667,16 @@ export class PromptCollection extends HTMLElement {
         }
     }
 
-    /** Switch to a prompt and focus its editor. No-op for an unknown entry. */
-    showPrompt(entry: Entry): void {
-        this.activate(entry, true);
+    /** Switch to a prompt and (unless `focus` is false) focus its editor.
+     *  No-op for an unknown entry. */
+    showPrompt(entry: Entry, focus = true): void {
+        this.activate(entry, focus);
+    }
+
+    /** The element of a prompt (its row: marker + editor), or null. */
+    promptElement(entry: Entry): HTMLElement | null {
+        this.ensureSetup();
+        return this.rows.get(entry)?.row ?? null;
     }
 
     private activate(entry: Entry, focus: boolean): void {
