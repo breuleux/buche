@@ -66,6 +66,9 @@ export class Buche {
                 };
                 /* node:coverage enable */
             }
+            // Full reference for debugging; the toast the interface pops only
+            // carries the short code/reason.
+            console.error("[buche] problem while handling message:", input, err);
             this.sendInterface(problem);
         }
     }
@@ -128,6 +131,7 @@ const baseHandlers = {
             }
             entry = node;
         }
+        console.error("[buche] error reported as problem:", obj, obj.input);
         buche.sendInterface(
             Object.assign({}, obj, {
                 type: "problem",

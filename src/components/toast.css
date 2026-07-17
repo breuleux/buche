@@ -1,0 +1,57 @@
+/* Styles for the notification toasts (toast.tsx): a fixed, top-right stack of
+ * closable cards, floating above everything else on the page. */
+
+.buche-toast-stack {
+	position: fixed;
+	top: 12px;
+	right: 12px;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 420px;
+	/* Let clicks pass through the empty area around the cards. */
+	pointer-events: none;
+}
+
+.buche-toast {
+	pointer-events: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 8px 10px;
+	background: #2a2d33;
+	border: 1px solid #3a3d44;
+	/* Error accent down the left edge, echoing the cells' status gutter. */
+	border-left: 3px solid #e06c75;
+	border-radius: 6px;
+	color: #d4d4d4;
+	font-family: "Menlo", "Consolas", monospace;
+	font-size: 12px;
+	line-height: 1.5;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.buche-toast-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.buche-toast-close {
+	flex: 0 0 auto;
+	padding: 0 2px;
+	background: none;
+	border: none;
+	border-radius: 3px;
+	cursor: pointer;
+	color: #888;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.buche-toast-close:hover {
+	background: rgba(255, 255, 255, 0.06);
+	color: #ccc;
+}

@@ -1,4 +1,5 @@
 import type { EchoBox } from "./components/echo-box.tsx";
+import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
 import type { Entry } from "./entry.ts";
@@ -111,9 +112,14 @@ export class BucheInterface implements Interface {
     }
 
     handle$cell_command(buche: Buche, message: CellCommandMessage) {
-        const existing = this.map.get(message.entry)!;
-        message.entry.cell!.handle(message.command, message.entry, existing.element as EchoBox);
+        const existing = this.map.get(message.entry);
+        if (existing && message.entry.cell) {
+            message.entry.cell.handle(message.command, message.entry, existing.element as EchoBox);
+        }
     }
 
-    handle$problem(buche: Buche, message: ProblemMessage) {}
+    handle$problem(buche: Buche, message: ProblemMessage) {
+        const code = message.subcode ? `${message.code}/${message.subcode}` : message.code;
+        showToast(`${code}: ${message.reason}`);
+    }
 }
