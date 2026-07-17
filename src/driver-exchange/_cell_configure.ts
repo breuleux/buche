@@ -1,4 +1,5 @@
-import { Buche, CellConfiguration } from "../core.ts";
+import { CellConfiguration } from "../cell.ts";
+import { Buche } from "../core.ts";
 import { BaseMessage } from "./common.ts";
 
 export interface CellConfigureMessage extends BaseMessage, CellConfiguration {

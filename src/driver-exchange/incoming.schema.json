@@ -46,11 +46,11 @@
         },
         "sticky": {
           "type": "boolean",
-          "description": "Toggle whether the cell persists after its process closes."
+          "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
         },
         "background": {
           "type": "boolean",
-          "description": "If true, unfocus the cell and return focus to its zone."
+          "description": "If true, do not automatically focus the cell."
         },
         "type": {
           "type": "string",
@@ -96,11 +96,11 @@
         },
         "sticky": {
           "type": "boolean",
-          "description": "Toggle whether the cell persists after its process closes."
+          "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
         },
         "background": {
           "type": "boolean",
-          "description": "If true, unfocus the cell and return focus to its zone."
+          "description": "If true, do not automatically focus the cell."
         },
         "type": {
           "type": "string",
@@ -423,8 +423,7 @@
       "type": "object",
       "additionalProperties": {
         "type": "string"
-      },
-      "description": "Prompt key bindings, as a `{ \"keyChord\": actionName }` map (e.g. `{ \"Tab Tab\": \"complete\" }`). The prompt turns this into `{key, name}` entries."
+      }
     },
     "PromptColor": {
       "type": "object",
@@ -438,8 +437,7 @@
           "description": "OKLCH chroma"
         }
       },
-      "additionalProperties": false,
-      "description": "Prompt accent color, expressed in the OKLCH color space."
+      "additionalProperties": false
     },
     "PromptCreateMessage": {
       "type": "object",

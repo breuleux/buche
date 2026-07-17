@@ -1,4 +1,5 @@
-import { Buche, PromptConfiguration } from "../core.ts";
+import { PromptConfiguration } from "../prompt.ts";
+import { Buche } from "../core.ts";
 import { BaseMessage } from "./common.ts";
 
 export interface PromptConfigureMessage extends BaseMessage, PromptConfiguration {
