@@ -9,5 +9,13 @@ export interface DataMessage extends BaseMessage {
 }
 
 export async function* handle$data(buche: Buche, obj: DataMessage): AsyncIterable<OutM> {
-    // TODO
+    const component = buche.get(obj.from);
+    yield {
+        type: "cell_send",
+        command: {
+            type: "data",
+            data: obj.data,
+        },
+        component: component,
+    };
 }

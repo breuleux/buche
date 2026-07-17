@@ -1,3 +1,4 @@
+import type { CellCommand } from "../cell.ts";
 import type { ComponentData } from "../core.ts";
 import type { Zone } from "../zone.ts";
 
@@ -22,14 +23,6 @@ export interface CloseComponentMessage {
     type: "close_component";
     component: ComponentData;
 }
-
-export interface TextCommand {
-    type: "text";
-    stream: string;
-    text: string;
-}
-
-export type CellCommand = TextCommand;
 
 export interface CellSendMessage {
     type: "cell_send";

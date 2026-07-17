@@ -1,6 +1,25 @@
+import type { Json } from "./driver-exchange/common.ts";
 import type { Prompt } from "./prompt.ts";
 import { IdClass } from "./utils.ts";
 import type { Zone } from "./zone.ts";
+
+export interface TextCommand {
+    type: "text";
+    stream: string;
+    text: string;
+}
+
+export interface DataCommand {
+    type: "data";
+    data: Json;
+}
+
+export interface ExecCommand {
+    type: "exec";
+    code: string;
+}
+
+export type CellCommand = TextCommand | DataCommand | ExecCommand;
 
 export interface CellConfiguration {
     /** The cell/tab label. */

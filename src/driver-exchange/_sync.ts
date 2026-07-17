@@ -8,10 +8,10 @@ export interface SyncMessage extends BaseMessage {
 }
 
 export async function* handle$sync(buche: Buche, obj: SyncMessage): AsyncIterable<OutM> {
-    // buche.send({
-    //     type: "sync",
-    //     from: ["$terminal"],
-    //     to: obj.from,
-    //     nonce: obj.nonce,
-    // })
+    yield {
+        type: "sync",
+        from: ["$terminal"],
+        to: obj.from,
+        nonce: obj.nonce,
+    };
 }
