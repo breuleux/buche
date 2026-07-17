@@ -94,6 +94,21 @@ echo-box {
 	gap: 2px;
 }
 
+/* In normal mode the controls (view buttons + close) only appear while the box
+ * is hovered or focused; the reserved space keeps the layout steady. (Compact
+ * mode shows them in its Alt overlay instead — see below.) */
+echo-box:not([compact]) .echo-box-controls {
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.12s;
+}
+
+echo-box:not([compact]):hover .echo-box-controls,
+echo-box:not([compact]):focus-within .echo-box-controls {
+	visibility: visible;
+	opacity: 1;
+}
+
 .echo-box-view-btn,
 .echo-box-close {
 	background: none;
@@ -212,4 +227,118 @@ echo-box[data-status="standby"] .echo-box-close {
 
 echo-box[data-status="error"] .echo-box-close {
 	color: #f88;
+}
+
+/* ── Compact mode ────────────────────────────────────────────────────────── */
+
+/* No gutter / coloured bar; the cell spans the full width. Status, echo and
+ * controls collapse into an overlay that only shows while Alt/Option is held. */
+echo-box[compact] {
+	grid-template-columns: 1fr;
+	position: relative;
+}
+
+echo-box[compact] .echo-box-gutter {
+	display: none;
+}
+
+echo-box[compact] .echo-box-body {
+	grid-column: 1;
+	position: relative;
+}
+
+/* The header is the overlay: hidden by default, revealed while Alt is held. */
+echo-box[compact] .echo-box-header {
+	display: none;
+}
+
+echo-box[compact][data-alt] .echo-box-header {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	/* Anchored to the top-right and sized to its content (not full width). */
+	position: absolute;
+	top: 0;
+	right: 0;
+	max-width: 100%;
+	z-index: 5;
+	padding: 2px 4px;
+	background: rgba(20, 20, 20, 0.86);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Status · echo · buttons, all clustered on the right. The echo is right-aligned
+ * (content width, shrinking with an ellipsis); an empty echo is omitted so the
+ * status simply sits next to the buttons — the right edge looks the same. */
+echo-box[compact] .echo-box-echo {
+	position: static;
+	flex: 0 1 auto;
+	min-width: 0;
+	padding: 0 4px 0 6px;
+	text-align: right;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+echo-box[compact] .echo-box-echo:empty {
+	display: none;
+}
+
+/* Controls (view buttons + close) ride on the far right in normal flow. */
+echo-box[compact] .echo-box-controls {
+	position: static;
+	flex: 0 0 auto;
+}
+
+/* The inline status dot: hidden by default; in compact mode it becomes a normal
+ * in-flow circle (overriding the gutter status's absolute positioning) sitting
+ * to the left of the echo. */
+.echo-box-status-inline {
+	display: none;
+}
+
+echo-box[compact] .echo-box-status-inline {
+	display: inline-block;
+	position: relative;
+	left: auto;
+	top: auto;
+	transform: none;
+	flex: 0 0 auto;
+}
+
+/* ── Compact resize handles: short, centred, shown with the overlay ───────── */
+
+.echo-box-handle {
+	display: none;
+	position: absolute;
+	left: 50%;
+	width: 36px;
+	height: 4px;
+	z-index: 6;
+	cursor: ns-resize;
+	touch-action: none;
+	background: var(--echo-color);
+	border-radius: 2px;
+	opacity: 0.25;
+}
+
+/* Straddle the top / bottom edge (centred on the border line). */
+.echo-box-handle-top {
+	top: 0;
+	transform: translate(-50%, -50%);
+}
+
+.echo-box-handle-bottom {
+	bottom: 0;
+	transform: translate(-50%, 50%);
+}
+
+.echo-box-handle:hover,
+.echo-box-handle.resizing {
+	opacity: 0.55;
+}
+
+echo-box[compact][data-alt] .echo-box-handle {
+	display: block;
 }

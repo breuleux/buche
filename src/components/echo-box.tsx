@@ -37,6 +37,13 @@
 // element's bottom edge fixed (the surrounding scroll position is adjusted to
 // absorb the size change), while a bottom-half drag keeps the top edge fixed.
 //
+// Compact mode (`box.setCompact(true)` or the `compact` attribute) hides the
+// coloured gutter bar and shows only the cell. The status, echo and controls
+// reappear as a right-aligned top overlay — status · echo · buttons, an empty
+// echo omitted — but only while the Alt/Option key is held with the pointer over
+// that box (it is per-box, not global). The same gesture reveals short resize
+// handles centred at the top and bottom edges.
+//
 // Events (both bubble):
 //   "viewchange"  detail: { view: string }   — the active view changed
 //   "close"                                   — the closing icon was clicked
@@ -72,19 +79,34 @@ export class EchoBox extends HTMLElement {
     private gutter!: HTMLElement;
     private statusEl!: HTMLElement;
     private echoEl!: HTMLElement;
+    private headerEl!: HTMLElement;
     private controlsEl!: HTMLElement;
     private cellEl!: HTMLElement;
     private closeEl!: HTMLButtonElement;
+    private inlineStatusEl!: HTMLElement;
+    private handleTop!: HTMLElement;
+    private handleBottom!: HTMLElement;
     private viewMap = new Map<string, { btn: HTMLButtonElement; view: HTMLElement }>();
     private _activeView: string | null = null;
     private _status: EchoStatus = "running";
+    private _compact = false;
+    // Whether the pointer is currently over this box. The compact overlay and
+    // handles are shown only while Alt is held *and* the pointer is over the box,
+    // so Alt-tracking is per-box (not global) and scoped to the hover.
+    private hovering = false;
+    private onAltKey = (e: KeyboardEvent) => this.syncAlt(e.altKey);
+    private onAltBlur = () => this.syncAlt(false);
 
     static get observedAttributes(): string[] {
-        return ["status", "color", "echo"];
+        return ["status", "color", "echo", "compact"];
     }
 
     connectedCallback(): void {
         this.ensureSetup();
+    }
+
+    disconnectedCallback(): void {
+        this.stopHover();
     }
 
     attributeChangedCallback(name: string, _old: string | null, value: string | null): void {
@@ -98,6 +120,11 @@ export class EchoBox extends HTMLElement {
             this.color = value ?? "";
         } else if (name === "echo") {
             this.setEcho(value ?? "");
+        } else if (name === "compact") {
+            const want = value !== null;
+            if (want !== this._compact) {
+                this.setCompact(want);
+            }
         }
     }
 
@@ -120,9 +147,15 @@ export class EchoBox extends HTMLElement {
         this.gutter.append(this.statusEl);
         this.gutter.addEventListener("pointerdown", (e) => this.startResize(e));
 
-        // Header: echo text + controls (view icons, then the closing icon).
+        // Header: a status dot, the echo text, then controls (view icons, then
+        // the closing icon). In compact mode this row becomes a right-aligned
+        // overlay: status · echo · buttons — so an empty echo just closes up and
+        // the status stays put beside the buttons.
         this.echoEl = div("echo-box-echo");
         this.controlsEl = div("echo-box-controls");
+        // A second status dot that only shows in compact mode, where the gutter
+        // (and its status circle) is hidden; here it sits to the left of the echo.
+        this.inlineStatusEl = div("echo-box-status echo-box-status-inline");
         this.closeEl = document.createElement("button");
         this.closeEl.type = "button";
         this.closeEl.className = "echo-box-close";
@@ -133,16 +166,35 @@ export class EchoBox extends HTMLElement {
         });
         this.controlsEl.append(this.closeEl);
 
-        const header = div("echo-box-header");
-        header.append(this.echoEl, this.controlsEl);
+        this.headerEl = div("echo-box-header");
+        this.headerEl.append(this.inlineStatusEl, this.echoEl, this.controlsEl);
 
         // Cell: holds the views; only the active one is shown.
         this.cellEl = div("echo-box-cell");
 
         const body = div("echo-box-body");
-        body.append(header, this.cellEl);
+        body.append(this.headerEl, this.cellEl);
 
         this.append(this.gutter, body);
+
+        // Compact-mode resize handles at the very top and bottom edges. They are
+        // hidden unless compact + Alt-hover (see the stylesheet) and drive the
+        // same resize as the gutter, anchored to the top or bottom edge.
+        this.handleTop = div("echo-box-handle echo-box-handle-top");
+        this.handleBottom = div("echo-box-handle echo-box-handle-bottom");
+        this.handleTop.addEventListener("pointerdown", (e) => this.startResize(e, true));
+        this.handleBottom.addEventListener("pointerdown", (e) => this.startResize(e, false));
+        this.append(this.handleTop, this.handleBottom);
+
+        // Reveal the compact overlay/handles only while the pointer is over this
+        // box and Alt is held. Key listeners are attached only during the hover.
+        this.addEventListener("pointerenter", (e) => this.startHover(e as PointerEvent));
+        this.addEventListener("pointermove", (e) => {
+            if (this.hovering) {
+                this.syncAlt((e as PointerEvent).altKey);
+            }
+        });
+        this.addEventListener("pointerleave", () => this.stopHover());
 
         // Apply initial configuration from attributes.
         this._status = (this.getAttribute("status") as EchoStatus) ?? "running";
@@ -165,20 +217,29 @@ export class EchoBox extends HTMLElement {
             });
         }
         this.updateControlsState();
+
+        if (this.hasAttribute("compact")) {
+            this.setCompact(true);
+        }
     }
 
     // ── Resize (drag the gutter handle) ───────────────────────────────────────
 
-    /** Drag the gutter to grow/shrink the cell: outward grows, inward shrinks. */
-    private startResize(event: PointerEvent): void {
+    /** Drag the gutter (or a compact-mode handle) to grow/shrink the cell:
+     *  outward grows, inward shrinks. `forcedTopHalf` pins the anchored edge for
+     *  the top/bottom handles; when omitted the grabbed half of the gutter
+     *  decides. */
+    private startResize(event: PointerEvent, forcedTopHalf?: boolean): void {
         // Ignore anything but a primary-button / touch / pen press.
         if (event.button !== 0) {
             return;
         }
         event.preventDefault();
-        const gutter = this.gutter;
-        gutter.setPointerCapture(event.pointerId);
-        gutter.classList.add("resizing");
+        // The element the drag started on (the gutter or one of the handles);
+        // pointer capture and the move/up listeners all live on it.
+        const source = event.currentTarget as HTMLElement;
+        source.setPointerCapture(event.pointerId);
+        source.classList.add("resizing");
 
         const startY = event.clientY;
         // Continue from the last explicit height if we set one (keeps repeated
@@ -193,10 +254,15 @@ export class EchoBox extends HTMLElement {
         // Dragging outward grows the cell, inward shrinks it; `reverse` swaps them.
         // The bar alongside the top line (the header/echo row, above the cell)
         // always counts as the top half, even on a short bar where the geometric
-        // middle would fall within it.
-        const rect = gutter.getBoundingClientRect();
-        const cellTop = this.cellEl.getBoundingClientRect().top;
-        const topHalf = startY < Math.max(rect.top + rect.height / 2, cellTop);
+        // middle would fall within it. A handle passes its edge in explicitly.
+        let topHalf: boolean;
+        if (forcedTopHalf !== undefined) {
+            topHalf = forcedTopHalf;
+        } else {
+            const rect = source.getBoundingClientRect();
+            const cellTop = this.cellEl.getBoundingClientRect().top;
+            topHalf = startY < Math.max(rect.top + rect.height / 2, cellTop);
+        }
         const outward = topHalf ? 1 : -1;
         const sign = (this.hasAttribute("reverse") ? -1 : 1) * outward;
 
@@ -224,16 +290,16 @@ export class EchoBox extends HTMLElement {
         };
 
         const onUp = (e: PointerEvent) => {
-            gutter.releasePointerCapture(e.pointerId);
-            gutter.classList.remove("resizing");
-            gutter.removeEventListener("pointermove", onMove);
-            gutter.removeEventListener("pointerup", onUp);
-            gutter.removeEventListener("pointercancel", onUp);
+            source.releasePointerCapture(e.pointerId);
+            source.classList.remove("resizing");
+            source.removeEventListener("pointermove", onMove);
+            source.removeEventListener("pointerup", onUp);
+            source.removeEventListener("pointercancel", onUp);
         };
 
-        gutter.addEventListener("pointermove", onMove);
-        gutter.addEventListener("pointerup", onUp);
-        gutter.addEventListener("pointercancel", onUp);
+        source.addEventListener("pointermove", onMove);
+        source.addEventListener("pointerup", onUp);
+        source.addEventListener("pointercancel", onUp);
     }
 
     /** The nearest scrollable ancestor, falling back to the document scroller. */
@@ -289,6 +355,96 @@ export class EchoBox extends HTMLElement {
         } else {
             this.style.removeProperty("--echo-color");
         }
+    }
+
+    // ── Compact mode ──────────────────────────────────────────────────────────
+
+    /** Whether the box is in compact mode. */
+    get compact(): boolean {
+        this.ensureSetup();
+        return this._compact;
+    }
+
+    set compact(on: boolean) {
+        this.setCompact(on);
+    }
+
+    /** Switch compact mode on or off. In compact mode the coloured bar is gone;
+     *  the status, echo and controls appear only as a right-aligned overlay while
+     *  Alt/Option is held over the box (an empty echo is omitted, and the status
+     *  sits to the left of the echo), and the same gesture reveals short
+     *  top/bottom resize handles in the middle. */
+    setCompact(on: boolean): void {
+        this.ensureSetup();
+        on = Boolean(on);
+        this._compact = on;
+        this.toggleAttribute("compact", on);
+        if (!on) {
+            this.stopHover();
+        }
+    }
+
+    // Begin tracking Alt for this box while the pointer is over it.
+    private startHover(event: PointerEvent): void {
+        if (!this._compact) {
+            return;
+        }
+        this.hovering = true;
+        window.addEventListener("keydown", this.onAltKey);
+        window.addEventListener("keyup", this.onAltKey);
+        // Alt is released "silently" on blur (e.g. Alt+Tab); clear it then.
+        window.addEventListener("blur", this.onAltBlur);
+        this.syncAlt(event.altKey);
+    }
+
+    // Stop tracking Alt and hide the overlay/handles.
+    private stopHover(): void {
+        this.hovering = false;
+        window.removeEventListener("keydown", this.onAltKey);
+        window.removeEventListener("keyup", this.onAltKey);
+        window.removeEventListener("blur", this.onAltBlur);
+        this.syncAlt(false);
+    }
+
+    // Reflect "compact + hovering + Alt down" to the `data-alt` attribute the
+    // stylesheet keys the overlay and handles on. On the way in, the overlay is
+    // pinned to its current viewport spot (see pinOverlay) so it stays put.
+    private syncAlt(down: boolean): void {
+        const active = this._compact && this.hovering && down;
+        const wasActive = this.hasAttribute("data-alt");
+        if (active === wasActive) {
+            return;
+        }
+        this.toggleAttribute("data-alt", active);
+        if (active) {
+            this.pinOverlay();
+        } else {
+            this.unpinOverlay();
+        }
+    }
+
+    // Freeze the overlay at its current on-screen position (`position: fixed`)
+    // while it is active, so that a resize triggered from within it — e.g. the
+    // cell growing after a view-switch click — doesn't shift it out from under
+    // the pointer. Measured after `data-alt` is set so the rect is the laid-out
+    // overlay position.
+    private pinOverlay(): void {
+        const rect = this.headerEl.getBoundingClientRect();
+        const style = this.headerEl.style;
+        style.position = "fixed";
+        style.top = `${rect.top}px`;
+        style.left = `${rect.left}px`;
+        style.right = "auto";
+        style.width = `${rect.width}px`;
+    }
+
+    private unpinOverlay(): void {
+        const style = this.headerEl.style;
+        style.position = "";
+        style.top = "";
+        style.left = "";
+        style.right = "";
+        style.width = "";
     }
 
     // ── Echo (the submitted command line) ─────────────────────────────────────
