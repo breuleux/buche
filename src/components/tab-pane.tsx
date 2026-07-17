@@ -57,6 +57,35 @@ interface Row {
     listener: (entry: Entry) => void;
 }
 
+// ── Events ────────────────────────────────────────────────────────────────
+// `detail` shapes and typed `CustomEvent` aliases for the events dispatched by
+// {@link TabPane}. All events bubble.
+
+/** `detail` of the "tabchange" event: the active tab changed. */
+export interface TabChangeDetail {
+    entry: Entry;
+}
+/** `detail` of the "tabclose" event: a tab's ✕ was clicked. */
+export interface TabCloseDetail {
+    entry: Entry;
+}
+/** `detail` of the "viewselect" event: a tab's view icon was clicked. */
+export interface TabViewSelectDetail {
+    entry: Entry;
+    view: ViewLabel;
+}
+
+export type TabChangeEvent = CustomEvent<TabChangeDetail>;
+export type TabCloseEvent = CustomEvent<TabCloseDetail>;
+export type TabViewSelectEvent = CustomEvent<TabViewSelectDetail>;
+
+/** Typed event map for {@link TabPane} (drives `addEventListener`). */
+export interface TabPaneEventMap {
+    tabchange: TabChangeEvent;
+    tabclose: TabCloseEvent;
+    viewselect: TabViewSelectEvent;
+}
+
 export class TabPane extends HTMLElement {
     /**
      * Theme used to resolve a tab's accent into a concrete underline color.
@@ -83,6 +112,44 @@ export class TabPane extends HTMLElement {
     attributeChangedCallback(): void {
         this.ensureSetup();
         this.updateTabsVisibility();
+    }
+
+    // Typed event listeners for this element's custom events (see
+    // {@link TabPaneEventMap}); falls back to the standard signature.
+    addEventListener<K extends keyof TabPaneEventMap>(
+        type: K,
+        listener: (this: TabPane, ev: TabPaneEventMap[K]) => void,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.addEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | AddEventListenerOptions,
+        );
+    }
+
+    removeEventListener<K extends keyof TabPaneEventMap>(
+        type: K,
+        listener: (this: TabPane, ev: TabPaneEventMap[K]) => void,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.removeEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | EventListenerOptions,
+        );
     }
 
     private ensureSetup(): void {
@@ -150,7 +217,9 @@ export class TabPane extends HTMLElement {
         closeEl.setAttribute("aria-label", "Close");
         closeEl.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.dispatchEvent(new CustomEvent("tabclose", { detail: { entry }, bubbles: true }));
+            this.dispatchEvent(
+                new CustomEvent<TabCloseDetail>("tabclose", { detail: { entry }, bubbles: true }),
+            );
         });
 
         tab.append(statusEl, labelEl, viewsEl, closeEl);
@@ -223,7 +292,9 @@ export class TabPane extends HTMLElement {
         row.tab.classList.add("active");
         row.pane.style.display = "";
         this.applyUnderline(row);
-        this.dispatchEvent(new CustomEvent("tabchange", { detail: { entry }, bubbles: true }));
+        this.dispatchEvent(
+            new CustomEvent<TabChangeDetail>("tabchange", { detail: { entry }, bubbles: true }),
+        );
     }
 
     /** The pane element for a tab, so callers can fill it with content. */
@@ -293,7 +364,10 @@ export class TabPane extends HTMLElement {
             e.stopPropagation();
             this.showTab(entry);
             this.dispatchEvent(
-                new CustomEvent("viewselect", { detail: { entry, view: lbl }, bubbles: true }),
+                new CustomEvent<TabViewSelectDetail>("viewselect", {
+                    detail: { entry, view: lbl },
+                    bubbles: true,
+                }),
             );
         });
         return btn;

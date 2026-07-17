@@ -47,9 +47,10 @@
 // that box (it is per-box, not global). The same gesture reveals short resize
 // handles centred at the top and bottom edges.
 //
-// Events (both bubble):
-//   "viewchange"  detail: { view: string }   — the active view changed
-//   "close"                                   — the closing icon was clicked
+// Events (both bubble). See the exported detail/event types below
+// ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
+//   "viewchange"  detail: { view: ViewLabel }  — the active view changed
+//   "close"                                     — the closing icon was clicked
 //
 // Appearance lives in the companion stylesheet `echo-box.css` (or the
 // consolidated components.css).
@@ -91,6 +92,25 @@ interface ViewEntry {
     view: HTMLElement;
     /** Whether the view may hold content the user hasn't seen yet. */
     unseen: boolean;
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+// `detail` shapes and typed `CustomEvent` aliases for the events dispatched by
+// {@link EchoBox}. All events bubble.
+
+/** `detail` of the "viewchange" event: the active view changed. */
+export interface EchoViewChangeDetail {
+    view: ViewLabel;
+}
+
+export type EchoViewChangeEvent = CustomEvent<EchoViewChangeDetail>;
+/** The "close" event (the ✕ was clicked) carries no detail. */
+export type EchoCloseEvent = CustomEvent<null>;
+
+/** Typed event map for {@link EchoBox} (drives `addEventListener`). */
+export interface EchoBoxEventMap {
+    viewchange: EchoViewChangeEvent;
+    close: EchoCloseEvent;
 }
 
 const STATUSES: readonly EchoStatus[] = ["running", "done", "error", "unresponsive", "standby"];
@@ -141,6 +161,44 @@ export class EchoBox extends HTMLElement {
 
     disconnectedCallback(): void {
         this.stopHover();
+    }
+
+    // Typed event listeners for this element's custom events (see
+    // {@link EchoBoxEventMap}); falls back to the standard signature.
+    addEventListener<K extends keyof EchoBoxEventMap>(
+        type: K,
+        listener: (this: EchoBox, ev: EchoBoxEventMap[K]) => void,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.addEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | AddEventListenerOptions,
+        );
+    }
+
+    removeEventListener<K extends keyof EchoBoxEventMap>(
+        type: K,
+        listener: (this: EchoBox, ev: EchoBoxEventMap[K]) => void,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.removeEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | EventListenerOptions,
+        );
     }
 
     attributeChangedCallback(name: string, _old: string | null, value: string | null): void {
@@ -196,7 +254,7 @@ export class EchoBox extends HTMLElement {
         this.closeEl.textContent = "✕";
         this.closeEl.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+            this.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
         });
         this.controlsEl.append(this.closeEl);
 
@@ -554,7 +612,9 @@ export class EchoBox extends HTMLElement {
 
     private applyEntry(entry: Entry): void {
         const echo = entry.echo;
-        this.setEcho(echo.echo ?? echo.label ?? "");
+        if (echo?.echo !== undefined) {
+            this.setEcho(echo.echo);
+        }
         this.color = echo.color ?? "";
         this.status = echoStatus(echo.status);
         // The echo's `views` set drives which view icons exist.
@@ -635,7 +695,10 @@ export class EchoBox extends HTMLElement {
         }
         this.updateViewStyles();
         this.dispatchEvent(
-            new CustomEvent("viewchange", { detail: { view: lbl }, bubbles: true }),
+            new CustomEvent<EchoViewChangeDetail>("viewchange", {
+                detail: { view: lbl },
+                bubbles: true,
+            }),
         );
     }
 

@@ -5,6 +5,7 @@ import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import type {
     EditorFactory,
     PromptCollection,
+    PromptCommandDetail,
     StyleSpan,
 } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
@@ -52,6 +53,7 @@ function stubFactory(): EditorFactory {
             setPosition: (position) => {
                 editor.position = position;
             },
+            getPosition: () => editor.position ?? value.length,
             focus: () => {},
             destroy: () => {
                 destroyed.push(value);
@@ -74,7 +76,13 @@ const plain = (text: string): StyledText => ({ text, ranges: [] });
 
 // Build a prompt Entry: label + accent on its Echo; marker + content on its Prompt.
 function makeEntry(
-    opts: { label?: string; color?: string; marker?: StyledText; content?: StyledText } = {},
+    opts: {
+        label?: string;
+        color?: string;
+        marker?: StyledText;
+        content?: StyledText;
+        bindings?: Record<string, string>;
+    } = {},
 ): Entry {
     const entry = new Entry({});
     if (opts.label != null) {
@@ -87,6 +95,7 @@ function makeEntry(
         new Prompt({
             prompt: opts.marker ?? { text: "", ranges: [] },
             content: opts.content ?? { text: "", ranges: [] },
+            bindings: opts.bindings,
         }),
     );
     return entry;
@@ -501,5 +510,88 @@ describe("prompt-collection — removing", () => {
         expect(a.listeners.length).toBe(1);
         pc.removePrompt(a);
         expect(a.listeners.length).toBe(0);
+    });
+});
+
+describe("prompt-collection — key bindings", () => {
+    const press = (el: Element, init: KeyboardEventInit) =>
+        el.dispatchEvent(
+            new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
+        );
+
+    test("a bound chord fires a command event with command, event, entry, text and position", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" }, content: plain("hello") }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        editor.setPosition?.(2);
+
+        // The listener param is typed as PromptCommandEvent via the event map.
+        const events: PromptCommandDetail[] = [];
+        pc.addEventListener("command", (e) => {
+            events.push(e.detail);
+        });
+
+        const ev = new KeyboardEvent("keydown", {
+            key: "l",
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        editor.dom.dispatchEvent(ev);
+
+        expect(events.length).toBe(1);
+        expect(events[0].command).toBe("clear");
+        expect(events[0].entry).toBe(entry);
+        expect(events[0].event).toBe(ev);
+        expect(events[0].text).toBe("hello");
+        expect(events[0].position).toBe(2);
+        // The key is swallowed so the editor doesn't also act on it.
+        expect(ev.defaultPrevented).toBe(true);
+    });
+
+    test("chord matching is case- and modifier-alias-insensitive", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({ label: "a", bindings: { "ctrl+shift+K": "kill" } }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        press(editor.dom, { key: "K", ctrlKey: true, shiftKey: true });
+        expect(commands).toEqual(["kill"]);
+    });
+
+    test("an unbound chord does not fire a command event", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" } }));
+        const editor = pc.getEditor(entry) as StubEditor;
+        let fired = 0;
+        pc.addEventListener("command", () => {
+            fired++;
+        });
+
+        press(editor.dom, { key: "l" }); // no Ctrl
+        press(editor.dom, { key: "k", ctrlKey: true }); // different key
+        expect(fired).toBe(0);
+    });
+
+    test("bindings are read live, so reconfiguring the Entry is heeded", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a" }));
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        // No binding yet.
+        press(editor.dom, { key: "l", ctrlKey: true });
+        expect(commands).toEqual([]);
+
+        // Add a binding; it takes effect without re-adding the prompt.
+        entry.prompt!.bindings = { "Ctrl+L": "clear" };
+        press(editor.dom, { key: "l", ctrlKey: true });
+        expect(commands).toEqual(["clear"]);
     });
 });

@@ -30,9 +30,15 @@
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
 // marker (the editor content is left alone so it never clobbers user edits).
 //
-// Events (both bubble):
-//   "promptchange"  detail: { entry: Entry }     — the active prompt changed
-//   "reorder"       detail: { order: Entry[] }    — tabs were reordered
+// A prompt heeds its Entry's Prompt `bindings` map (e.g. { "Ctrl+L": "clear" }):
+// pressing a bound chord in the editor fires a bubbling "command" event and
+// swallows the key so the editor doesn't also act on it.
+//
+// Events (all bubble):
+//   "promptchange"  detail: { entry: Entry }                      — active prompt changed
+//   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
+//   "command"       detail: { command, event, entry, text, position }
+//                                                                  — a bound chord was pressed
 //
 // Appearance lives in the companion stylesheet `prompt-collection.css` (or the
 // consolidated components.css).
@@ -52,6 +58,73 @@ import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import type { Entry } from "../entry.ts";
 import type { HighlightRange, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
+
+// ── Key bindings ────────────────────────────────────────────────────────────
+// A prompt's Entry carries a `bindings` map like { "Ctrl+L": "clear" }. When a
+// bound chord is pressed in that prompt's editor, a bubbling "command" event is
+// fired carrying the command name, the keyboard event and the Entry.
+
+/** Modifier aliases → canonical modifier name. */
+const MODIFIER_ALIASES: Record<string, "ctrl" | "alt" | "shift" | "meta"> = {
+    ctrl: "ctrl",
+    control: "ctrl",
+    alt: "alt",
+    option: "alt",
+    opt: "alt",
+    shift: "shift",
+    meta: "meta",
+    cmd: "meta",
+    command: "meta",
+    super: "meta",
+    win: "meta",
+    windows: "meta",
+};
+
+const MODIFIER_ORDER = ["ctrl", "alt", "shift", "meta"] as const;
+
+/** Normalize a single key name (case-insensitive; space → "space"). */
+function normalizeKeyName(key: string): string {
+    const k = key.trim();
+    return k === " " ? "space" : k.toLowerCase();
+}
+
+/** A canonical chord for a keyboard event, e.g. "ctrl+shift+l". */
+function chordFromEvent(e: KeyboardEvent): string {
+    const parts: string[] = [];
+    if (e.ctrlKey) {
+        parts.push("ctrl");
+    }
+    if (e.altKey) {
+        parts.push("alt");
+    }
+    if (e.shiftKey) {
+        parts.push("shift");
+    }
+    if (e.metaKey) {
+        parts.push("meta");
+    }
+    parts.push(normalizeKeyName(e.key));
+    return parts.join("+");
+}
+
+/** Normalize a binding string like "Ctrl+L" into a canonical chord "ctrl+l". */
+function normalizeChord(chord: string): string {
+    const mods = new Set<string>();
+    let key = "";
+    for (const raw of chord.split("+")) {
+        const token = raw.trim().toLowerCase();
+        if (!token) {
+            continue;
+        }
+        const mod = MODIFIER_ALIASES[token];
+        if (mod) {
+            mods.add(mod);
+        } else {
+            key = normalizeKeyName(raw);
+        }
+    }
+    return [...MODIFIER_ORDER.filter((m) => mods.has(m)), key].filter(Boolean).join("+");
+}
 
 /** A resolved colorization span: a `[start, end)` range with an inline style. */
 export interface StyleSpan {
@@ -83,6 +156,8 @@ export interface PromptEditor {
     setBaseStyle?(css: string): void;
     /** Move the cursor to an offset into the text. Optional. */
     setPosition?(position: number): void;
+    /** The current cursor position (offset into the text). Optional. */
+    getPosition?(): number;
 }
 
 export type EditorFactory = (options: {
@@ -102,6 +177,43 @@ interface Row {
     editor: PromptEditor;
     /** The reconfiguration callback registered on `entry.listeners`. */
     listener: (entry: Entry) => void;
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+// `detail` shapes and typed `CustomEvent` aliases for the events dispatched by
+// {@link PromptCollection}. All events bubble.
+
+/** `detail` of the "promptchange" event: the active prompt changed. */
+export interface PromptChangeDetail {
+    entry: Entry;
+}
+/** `detail` of the "reorder" event: the tabs were reordered. */
+export interface PromptReorderDetail {
+    order: Entry[];
+}
+/** `detail` of the "command" event: a bound key chord was pressed in a prompt. */
+export interface PromptCommandDetail {
+    /** The command name the chord is bound to (the binding map's value). */
+    command: string;
+    /** The originating keyboard event. */
+    event: KeyboardEvent;
+    /** The Entry of the prompt the chord was pressed in. */
+    entry: Entry;
+    /** The prompt's current editor text. */
+    text: string;
+    /** The prompt's current cursor position (offset into `text`). */
+    position: number;
+}
+
+export type PromptChangeEvent = CustomEvent<PromptChangeDetail>;
+export type PromptReorderEvent = CustomEvent<PromptReorderDetail>;
+export type PromptCommandEvent = CustomEvent<PromptCommandDetail>;
+
+/** Typed event map for {@link PromptCollection} (drives `addEventListener`). */
+export interface PromptCollectionEventMap {
+    promptchange: PromptChangeEvent;
+    reorder: PromptReorderEvent;
+    command: PromptCommandEvent;
 }
 
 let darkTheme: Extension | null = null;
@@ -217,6 +329,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
             const pos = Math.max(0, Math.min(view.state.doc.length, position));
             view.dispatch({ selection: { anchor: pos } });
         },
+        getPosition: () => view.state.selection.main.head,
         focus: () => view.focus(),
         destroy: () => view.destroy(),
     };
@@ -246,6 +359,44 @@ export class PromptCollection extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
+    }
+
+    // Typed event listeners for this element's custom events (see
+    // {@link PromptCollectionEventMap}); falls back to the standard signature.
+    addEventListener<K extends keyof PromptCollectionEventMap>(
+        type: K,
+        listener: (this: PromptCollection, ev: PromptCollectionEventMap[K]) => void,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+    ): void;
+    addEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.addEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | AddEventListenerOptions,
+        );
+    }
+
+    removeEventListener<K extends keyof PromptCollectionEventMap>(
+        type: K,
+        listener: (this: PromptCollection, ev: PromptCollectionEventMap[K]) => void,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | EventListenerOptions,
+    ): void;
+    removeEventListener(type: string, listener: unknown, options?: unknown): void {
+        super.removeEventListener(
+            type,
+            listener as EventListenerOrEventListenerObject,
+            options as boolean | EventListenerOptions,
+        );
     }
 
     private ensureSetup(): void {
@@ -313,6 +464,9 @@ export class PromptCollection extends HTMLElement {
         row.setAttribute("data-prompt", id);
         row.hidden = true;
         row.append(marker, editorHost);
+        // Heed the Entry's key bindings. Capture phase so a bound chord fires the
+        // "command" event before the editor (CodeMirror) can act on the key.
+        row.addEventListener("keydown", (e) => this.handleBindings(entry, e), true);
         this.promptsEl.appendChild(row);
 
         const tab = document.createElement("span");
@@ -401,7 +555,39 @@ export class PromptCollection extends HTMLElement {
         if (focus) {
             this.rows.get(entry)?.editor.focus();
         }
-        this.dispatchEvent(new CustomEvent("promptchange", { detail: { entry }, bubbles: true }));
+        this.dispatchEvent(
+            new CustomEvent<PromptChangeDetail>("promptchange", {
+                detail: { entry },
+                bubbles: true,
+            }),
+        );
+    }
+
+    // Match a keydown against the Entry's `bindings` map. On a match, swallow the
+    // key (so the editor doesn't also act on it) and fire a bubbling "command"
+    // event carrying the command name, the keyboard event and the Entry.
+    private handleBindings(entry: Entry, e: KeyboardEvent): void {
+        const bindings = entry.prompt?.bindings;
+        if (!bindings) {
+            return;
+        }
+        const chord = chordFromEvent(e);
+        for (const [key, command] of Object.entries(bindings)) {
+            if (normalizeChord(key) === chord) {
+                e.preventDefault();
+                e.stopPropagation();
+                const editor = this.rows.get(entry)?.editor;
+                const text = editor?.getValue() ?? "";
+                const position = editor?.getPosition?.() ?? text.length;
+                this.dispatchEvent(
+                    new CustomEvent<PromptCommandDetail>("command", {
+                        detail: { command, event: e, entry, text, position },
+                        bubbles: true,
+                    }),
+                );
+                return;
+            }
+        }
     }
 
     /** Rotate the active prompt cyclically (-1 = previous, +1 = next) and focus
@@ -431,7 +617,10 @@ export class PromptCollection extends HTMLElement {
         this.order.splice(idx, 0, entry);
         this.applyOrder();
         this.dispatchEvent(
-            new CustomEvent("reorder", { detail: { order: [...this.order] }, bubbles: true }),
+            new CustomEvent<PromptReorderDetail>("reorder", {
+                detail: { order: [...this.order] },
+                bubbles: true,
+            }),
         );
     }
 
@@ -616,7 +805,10 @@ export class PromptCollection extends HTMLElement {
         }
         if (changed) {
             this.dispatchEvent(
-                new CustomEvent("reorder", { detail: { order: [...this.order] }, bubbles: true }),
+                new CustomEvent<PromptReorderDetail>("reorder", {
+                    detail: { order: [...this.order] },
+                    bubbles: true,
+                }),
             );
         }
     }
