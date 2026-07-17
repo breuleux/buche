@@ -18,6 +18,24 @@ export interface EchoConfiguration {
 
     /** Accent color for the component. */
     color?: Accent;
+
+    /**
+     * The id of the user command this echo answers (repeated from the
+     * "command" request's `id`). The interface uses it to give the focus to
+     * the echo's element when it appears.
+     */
+    id?: string;
+
+    /** If true, keep the focus on the cell when its process ends. */
+    sticky?: boolean;
+
+    /** If true, do not automatically focus the cell or prompt. */
+    background?: boolean;
+}
+
+/** The DOM id of the element showing the echo answering command `id`. */
+export function echoElementId(id: string): string {
+    return `echo-${id}`;
 }
 
 export type ViewLabel = "pty" | "gui";
@@ -36,6 +54,15 @@ export class Echo extends WithId() {
 
     /** Accent color for the component. */
     color!: Accent;
+
+    /** The id of the user command this echo answers, if any. */
+    id?: string;
+
+    /** If true, keep the focus on the cell when its process ends. */
+    sticky = false;
+
+    /** If true, do not automatically focus the cell or prompt. */
+    background = false;
 
     /** Address of the component. */
     address: Address;
@@ -58,5 +85,8 @@ export class Echo extends WithId() {
         this.label = config.label ?? this.label ?? `%${this.serialId}`;
         this.color = config.color ?? this.color ?? "purple";
         this.echo = config.echo ?? this.echo;
+        this.id = config.id ?? this.id;
+        this.sticky = config.sticky ?? this.sticky;
+        this.background = config.background ?? this.background;
     }
 }

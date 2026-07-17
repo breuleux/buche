@@ -22,18 +22,11 @@ export interface ExecCommand {
 
 export type CellCommand = TextCommand | DataCommand | ExecCommand;
 
-export interface CellConfiguration {
-    /** Toggle whether the cell keeps or relinquishes focus when it is closed. */
-    sticky?: boolean;
-
-    /** If true, do not automatically focus the cell. */
-    background?: boolean;
-}
+// Nothing for now (`sticky` and `background` moved to the echo configuration).
+// biome-ignore lint/suspicious/noEmptyInterface: extension point for cell options
+export interface CellConfiguration {}
 
 export class Cell extends WithId() implements CellConfiguration {
-    sticky?: boolean;
-    background?: boolean;
-
     zones: Record<string, never>; // cells do not define zones currently
 
     constructor(config: CellConfiguration) {

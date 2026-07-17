@@ -75,6 +75,10 @@
         },
         "command": {
           "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "description": "Identifies this command. A driver that produces an echo in response repeats it as the echo's `id`, so the terminal can relate the two (e.g. to focus the new cell)."
         }
       },
       "required": ["command", "from", "position", "text", "to", "type"],

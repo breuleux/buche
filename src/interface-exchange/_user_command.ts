@@ -9,6 +9,9 @@ export interface UserCommandMessage {
     text: string;
     position: number;
     command: string;
+
+    /** Identifies the command; forwarded to the driver (see CommandRequest). */
+    id?: string;
 }
 
 export function handle$user_command(buche: Buche, obj: UserCommandMessage): void {
@@ -19,5 +22,6 @@ export function handle$user_command(buche: Buche, obj: UserCommandMessage): void
         text: obj.text,
         position: obj.position,
         command: obj.command,
+        ...(obj.id !== undefined ? { id: obj.id } : {}),
     });
 }

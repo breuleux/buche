@@ -40,14 +40,6 @@
     "CellConfigureMessage": {
       "type": "object",
       "properties": {
-        "sticky": {
-          "type": "boolean",
-          "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
-        },
-        "background": {
-          "type": "boolean",
-          "description": "If true, do not automatically focus the cell."
-        },
         "echo": {
           "$ref": "#/definitions/StyledText",
           "description": "Text of the command"
@@ -59,6 +51,18 @@
         "color": {
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
+        },
+        "id": {
+          "type": "string",
+          "description": "The id of the user command this echo answers (repeated from the \"command\" request's `id`). The interface uses it to give the focus to the echo's element when it appears."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "If true, keep the focus on the cell when its process ends."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, do not automatically focus the cell or prompt."
         },
         "from": {
           "$ref": "#/definitions/Address",
@@ -385,6 +389,18 @@
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
         },
+        "id": {
+          "type": "string",
+          "description": "The id of the user command this echo answers (repeated from the \"command\" request's `id`). The interface uses it to give the focus to the echo's element when it appears."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "If true, keep the focus on the cell when its process ends."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, do not automatically focus the cell or prompt."
+        },
         "type": {
           "type": "string",
           "const": "echo",
@@ -474,6 +490,18 @@
         "color": {
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
+        },
+        "id": {
+          "type": "string",
+          "description": "The id of the user command this echo answers (repeated from the \"command\" request's `id`). The interface uses it to give the focus to the echo's element when it appears."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "If true, keep the focus on the cell when its process ends."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, do not automatically focus the cell or prompt."
         },
         "from": {
           "$ref": "#/definitions/Address",

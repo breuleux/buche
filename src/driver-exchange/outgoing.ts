@@ -12,6 +12,13 @@ export interface CommandRequest extends BaseRequest {
     text: string;
     position: number;
     command: string;
+
+    /**
+     * Identifies this command. A driver that produces an echo in response
+     * repeats it as the echo's `id`, so the terminal can relate the two (e.g.
+     * to focus the new cell).
+     */
+    id?: string;
 }
 
 export interface ParseRequest extends BaseRequest {
