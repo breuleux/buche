@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import { readdirSync } from "node:fs";
 import { Machine } from "../src/machine.ts"
-import { MachinePlayer } from "./utils.ts"
+import { getCases, MachinePlayer } from "./utils.ts"
 import path from "node:path";
 
 
@@ -30,12 +30,7 @@ describe("Sanity check Machine", () => {
         path.join(import.meta.dirname, "data/sanity")
     );
 
-    for (const file of readdirSync(machine.datadir)) {
-        const match = file.match(/(.*)\.source\.jsonl$/);
-        if (!match) continue;
-
-        const name = match[1];
-
+    for (const name of getCases(machine.datadir)) {
         test(`Conformity of machine on '${name}.source.jsonl'`, async () => {
             await machine.test(name);
         });

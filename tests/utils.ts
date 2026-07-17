@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import { once } from 'node:events';
+import { readdirSync } from "node:fs";
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,5 +83,14 @@ export class MachinePlayer<In, Out> {
                 "The obtained output is different from the expected output",
             );
         }
+    }
+}
+
+export function* getCases(directory: string) {
+    for (const file of readdirSync(directory)) {
+        const match = file.match(/(.*)\.source\.jsonl$/);
+        if (!match) continue;
+
+        yield match[1];
     }
 }
