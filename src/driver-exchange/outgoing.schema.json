@@ -14,6 +14,12 @@
           "$ref": "#/definitions/SignalRequest"
         },
         {
+          "$ref": "#/definitions/TextRequest"
+        },
+        {
+          "$ref": "#/definitions/ResizeRequest"
+        },
+        {
           "$ref": "#/definitions/SyncRequest"
         }
       ],
@@ -92,6 +98,77 @@
         }
       },
       "required": ["code", "from", "to", "type"],
+      "additionalProperties": false
+    },
+    "TextRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "from": {
+          "$ref": "#/definitions/Address"
+        },
+        "to": {
+          "$ref": "#/definitions/Address"
+        },
+        "stream": {
+          "type": "string",
+          "const": "stdin",
+          "description": "Stream the text is delivered on (keyboard input from the interface)."
+        },
+        "text": {
+          "type": "string",
+          "description": "Raw input text, as produced by the terminal emulator."
+        }
+      },
+      "required": ["from", "stream", "text", "to", "type"],
+      "additionalProperties": false
+    },
+    "ResizeRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "resize"
+        },
+        "from": {
+          "$ref": "#/definitions/Address"
+        },
+        "to": {
+          "$ref": "#/definitions/Address"
+        },
+        "pixel": {
+          "type": "object",
+          "properties": {
+            "height": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            }
+          },
+          "required": ["height", "width"],
+          "additionalProperties": false,
+          "description": "The cell's content area, in CSS pixels."
+        },
+        "pty": {
+          "type": "object",
+          "properties": {
+            "height": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            }
+          },
+          "required": ["height", "width"],
+          "additionalProperties": false,
+          "description": "The terminal grid, in character cells, when the cell holds a pty."
+        }
+      },
+      "required": ["from", "pixel", "to", "type"],
       "additionalProperties": false
     },
     "SyncRequest": {

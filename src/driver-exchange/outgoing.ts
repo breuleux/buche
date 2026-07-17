@@ -25,7 +25,39 @@ export interface SignalRequest extends BaseRequest {
     code: number;
 }
 
+export interface TextRequest extends BaseRequest {
+    type: "text";
+
+    /** Stream the text is delivered on (keyboard input from the interface). */
+    stream: "stdin";
+
+    /** Raw input text, as produced by the terminal emulator. */
+    text: string;
+}
+
+export interface ResizeRequest extends BaseRequest {
+    type: "resize";
+
+    /** The cell's content area, in CSS pixels. */
+    pixel: {
+        height: number;
+        width: number;
+    };
+
+    /** The terminal grid, in character cells, when the cell holds a pty. */
+    pty?: {
+        height: number;
+        width: number;
+    };
+}
+
 export type SyncRequest = SyncMessage;
 
 /** Union of every message type. */
-export type OutgoingDriverMessage = ParseRequest | CommandRequest | SignalRequest | SyncRequest;
+export type OutgoingDriverMessage =
+    | ParseRequest
+    | CommandRequest
+    | SignalRequest
+    | TextRequest
+    | ResizeRequest
+    | SyncRequest;

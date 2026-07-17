@@ -22,6 +22,11 @@ export interface EchoConfiguration {
 
 export type ViewLabel = "pty" | "gui";
 
+/** Whether the echo's process can still receive signals (kill, resize, ...). */
+export function killable(echo: Echo): boolean {
+    return echo.status.status === "running" || echo.status.status === "unresponsive";
+}
+
 export class Echo extends WithId() {
     /** Text of the command */
     echo?: StyledText;

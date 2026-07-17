@@ -8,6 +8,9 @@
 //   term.write("\x1b[32mhello\x1b[0m world\r\n");   // feed raw pty output
 //   term.addEventListener("term-data", (e) => pty.write((e as CustomEvent<string>).detail));
 //
+// Events (both bubble): "term-data" carries keyboard input; "term-appear"
+// announces that the terminal has been attached to the document.
+//
 // The terminal always declares `max-rows` rows to the pty, but the element only
 // shows the rows that have ever been used — so it starts at height 0 and grows
 // downward as output arrives. A row, once revealed, is never hidden again.
@@ -88,6 +91,9 @@ export class EmbeddedTerm extends HTMLElement {
     private stubKey = "";
     // null → dynamic sizing; a number → rows are pinned to fit that many px.
     private fixedHeight: number | null = null;
+    // Dynamic-mode growth cap in px (the containing box's max-height);
+    // null → fall back to the max-rows attribute.
+    private boxHeight: number | null = null;
 
     // Held-newline state, see the block below.
     private held = ""; // a trailing "\n" not yet written, or ""
@@ -102,6 +108,7 @@ export class EmbeddedTerm extends HTMLElement {
         this.ensureSetup();
         this.observer ??= new ResizeObserver(() => this.refit());
         this.observer.observe(this);
+        this.dispatchEvent(new CustomEvent("term-appear", { bubbles: true }));
     }
 
     disconnectedCallback(): void {
@@ -118,7 +125,7 @@ export class EmbeddedTerm extends HTMLElement {
         } else if (name === "max-rows") {
             this.maxRows = this.readMaxRows();
             if (this.fixedHeight === null) {
-                this.resizeTerminal(this.maxRows);
+                this.resizeTerminal(this.dynamicRows());
             }
         } else if (name === "cols") {
             this.refit();
@@ -177,12 +184,15 @@ export class EmbeddedTerm extends HTMLElement {
      * Pin the terminal to whatever row count fits `height` px, disabling the
      * dynamic growth: the row count becomes real, is reported to the pty, and
      * every row is shown whether or not it holds anything. Pass `null` to go
-     * back to declaring `max-rows` and growing from the content.
+     * back to growing from the content, with the row count capped by
+     * `maxHeight` px (typically the containing box's max-height) rather than
+     * the `max-rows` attribute.
      */
-    fit(height: number | null): void {
+    fit(height: number | null, maxHeight: number | null = this.boxHeight): void {
         this.ensureSetup();
+        this.boxHeight = maxHeight;
         this.fixedHeight = height;
-        this.resizeTerminal(height === null ? this.maxRows : this.rowsForHeight(height));
+        this.resizeTerminal(height === null ? this.dynamicRows() : this.rowsForHeight(height));
         this.measure();
     }
 
@@ -469,6 +479,12 @@ export class EmbeddedTerm extends HTMLElement {
         return cell ? Math.max(1, Math.floor(height / cell)) : this.maxRows;
     }
 
+    /** The row count while in dynamic sizing: whatever fits the box's
+     *  max-height, else the `max-rows` attribute. */
+    private dynamicRows(): number {
+        return this.boxHeight === null ? this.maxRows : this.rowsForHeight(this.boxHeight);
+    }
+
     private fittedCols(fallback: number): number {
         const attr = Number(this.getAttribute("cols"));
         if (Number.isFinite(attr) && attr >= 2) {
@@ -495,7 +511,7 @@ export class EmbeddedTerm extends HTMLElement {
             return;
         }
         const rows =
-            this.fixedHeight === null ? this.term.rows : this.rowsForHeight(this.fixedHeight);
+            this.fixedHeight === null ? this.dynamicRows() : this.rowsForHeight(this.fixedHeight);
         this.resizeTerminal(rows);
     }
 

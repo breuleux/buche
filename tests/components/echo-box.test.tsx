@@ -306,6 +306,34 @@ describe("echo-box — resize handle", () => {
         expect(cell.style.height).toBe("80px");
     });
 
+    test("resizing lifts the max-height ceiling", () => {
+        const { box, gutter } = setup(100);
+        box.style.maxHeight = "300px";
+        drag(gutter, 50, 30);
+        expect(box.style.maxHeight).toBe("none");
+    });
+
+    test("double-clicking the bar snaps back to the dynamic sizing", () => {
+        const { box, cell, gutter } = setup(100);
+        box.style.maxHeight = "300px";
+        drag(gutter, 50, 30);
+        let fired = 0;
+        box.addEventListener("resize", () => fired++);
+        gutter.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        expect(cell.style.height).toBe("");
+        expect(box.style.maxHeight).toBe("");
+        expect(fired).toBe(1);
+    });
+
+    test("double-click without a user height is a no-op", () => {
+        const box = make();
+        const gutter = q(box, ".echo-box-gutter") as HTMLElement;
+        let fired = 0;
+        box.addEventListener("resize", () => fired++);
+        gutter.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        expect(fired).toBe(0);
+    });
+
     const stubScrollParent = (box: EchoBox, scroller: HTMLElement) => {
         (box as unknown as { resolveScrollParent: () => HTMLElement }).resolveScrollParent = () =>
             scroller;

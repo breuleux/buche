@@ -54,6 +54,8 @@
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "viewchange"  detail: { view: ViewLabel }  — the active view changed
 //   "close"                                     — the closing icon was clicked
+//   "resize"                                    — the user resized the cell;
+//     debounced by 50ms during a drag (and flushed when the drag ends)
 //
 // Appearance lives in the companion stylesheet `echo-box.css` (or the
 // consolidated components.css).
@@ -109,14 +111,20 @@ export interface EchoViewChangeDetail {
 export type EchoViewChangeEvent = CustomEvent<EchoViewChangeDetail>;
 /** The "close" event (the ✕ was clicked) carries no detail. */
 export type EchoCloseEvent = CustomEvent<null>;
+/** The "resize" event (the user resized the cell) carries no detail. */
+export type EchoResizeEvent = CustomEvent<null>;
 
 /** Typed event map for {@link EchoBox} (drives `addEventListener`). */
 export interface EchoBoxEventMap {
     viewchange: EchoViewChangeEvent;
     close: EchoCloseEvent;
+    resize: EchoResizeEvent;
 }
 
 const STATUSES: readonly EchoStatus[] = ["running", "done", "error", "unresponsive", "standby"];
+
+/** Debounce window for the user-resize "resize" event, in milliseconds. */
+const RESIZE_DEBOUNCE_MS = 50;
 
 function div(className: string): HTMLElement {
     const el = document.createElement("div");
@@ -145,6 +153,8 @@ export class EchoBox extends HTMLElement {
     private _status: EchoStatus = "running";
     private _compact = false;
     private _destroyWhenDone = false;
+    // Pending debounced "resize" notification (see scheduleResize).
+    private resizeTimer: ReturnType<typeof setTimeout> | null = null;
     // The bound Entry (if configured from one) and the listener registered on it.
     private _entry: Entry | null = null;
     private entryListener: ((entry: Entry) => void) | null = null;
@@ -165,6 +175,11 @@ export class EchoBox extends HTMLElement {
 
     disconnectedCallback(): void {
         this.stopHover();
+        // A box that goes away mid-drag should not announce a resize.
+        if (this.resizeTimer !== null) {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = null;
+        }
     }
 
     // Typed event listeners for this element's custom events (see
@@ -245,6 +260,7 @@ export class EchoBox extends HTMLElement {
         this.statusEl = div("echo-box-status");
         this.gutter.append(this.statusEl);
         this.gutter.addEventListener("pointerdown", (e) => this.startResize(e));
+        this.gutter.addEventListener("dblclick", () => this.resetHeight());
 
         // Header: a status dot, the echo text, then controls (view icons, then
         // the closing icon). In compact mode this row becomes a right-aligned
@@ -283,6 +299,8 @@ export class EchoBox extends HTMLElement {
         this.handleBottom = div("echo-box-handle echo-box-handle-bottom");
         this.handleTop.addEventListener("pointerdown", (e) => this.startResize(e, true));
         this.handleBottom.addEventListener("pointerdown", (e) => this.startResize(e, false));
+        this.handleTop.addEventListener("dblclick", () => this.resetHeight());
+        this.handleBottom.addEventListener("dblclick", () => this.resetHeight());
         this.append(this.handleTop, this.handleBottom);
 
         // Reveal the compact overlay/handles only while the pointer is over this
@@ -382,9 +400,13 @@ export class EchoBox extends HTMLElement {
             // `upAmount` is positive when moving up; `sign` maps it onto grow/shrink.
             const upAmount = startY - e.clientY;
             const height = Math.max(0, startHeight + upAmount * sign);
+            // The height is now customized by the user, so drop the CSS ceiling
+            // that only sizes un-dragged cells — otherwise the drag clamps at it.
+            this.style.maxHeight = "none";
             this.cellEl.style.height = `${height}px`;
             // Counter-scroll by however far the anchored edge actually drifted.
             scroller.scrollTop += anchorEdge() - anchor;
+            this.scheduleResize();
         };
 
         const onUp = (e: PointerEvent) => {
@@ -393,11 +415,55 @@ export class EchoBox extends HTMLElement {
             source.removeEventListener("pointermove", onMove);
             source.removeEventListener("pointerup", onUp);
             source.removeEventListener("pointercancel", onUp);
+            // Report the final size even if the debounce hadn't elapsed yet.
+            this.flushResize();
         };
 
         source.addEventListener("pointermove", onMove);
         source.addEventListener("pointerup", onUp);
         source.addEventListener("pointercancel", onUp);
+    }
+
+    /** (Re)arm the debounced "resize" notification; fires RESIZE_DEBOUNCE_MS
+     *  after the last resize movement. */
+    private scheduleResize(): void {
+        if (this.resizeTimer !== null) {
+            clearTimeout(this.resizeTimer);
+        }
+        this.resizeTimer = setTimeout(() => {
+            this.resizeTimer = null;
+            this.notifyResize();
+        }, RESIZE_DEBOUNCE_MS);
+    }
+
+    /** Fire a pending debounced "resize" now, if one is armed. */
+    private flushResize(): void {
+        if (this.resizeTimer === null) {
+            return;
+        }
+        clearTimeout(this.resizeTimer);
+        this.resizeTimer = null;
+        this.notifyResize();
+    }
+
+    private notifyResize(): void {
+        this.dispatchEvent(new CustomEvent<null>("resize", { bubbles: true }));
+    }
+
+    /** Undo the user's custom height (double-click the bar): clear the explicit
+     *  height and the dropped ceiling, snapping back to the dynamic
+     *  max-height sizing, and announce the new size. */
+    private resetHeight(): void {
+        if (this.cellEl.style.height === "" && this.style.maxHeight === "") {
+            return;
+        }
+        if (this.resizeTimer !== null) {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = null;
+        }
+        this.cellEl.style.height = "";
+        this.style.maxHeight = "";
+        this.notifyResize();
     }
 
     /** The nearest scrollable ancestor, falling back to the document scroller. */
@@ -455,6 +521,39 @@ export class EchoBox extends HTMLElement {
     destroy(): void {
         this.unbindEntry();
         this.remove();
+    }
+
+    // ── Sizing ──────────────────────────────────────────────────────────────
+
+    /** The height in px imposed on the cell by a user drag, or null when the
+     *  cell has not been resized. Views that need a fixed grid (e.g.
+     *  embedded-term) size to it and otherwise stay dynamic (CSS `max-height`
+     *  still caps the box either way). */
+    get cellContentHeight(): number | null {
+        this.ensureSetup();
+        const explicit = Number.parseFloat(this.cellEl.style.height);
+        return Number.isFinite(explicit) ? explicit : null;
+    }
+
+    /** The height in px the cell can reach before the box's CSS `max-height`
+     *  clamps it (the max-height minus the header chrome), or null when the
+     *  box imposes no ceiling. Views that size dynamically grow up to it. */
+    get maxContentHeight(): number | null {
+        this.ensureSetup();
+        const max = Number.parseFloat(getComputedStyle(this).maxHeight);
+        if (!Number.isFinite(max)) {
+            return null;
+        }
+        return Math.max(0, max - this.headerEl.offsetHeight);
+    }
+
+    /** The cell content area's rendered size, in CSS pixels. */
+    get cellSize(): { height: number; width: number } {
+        this.ensureSetup();
+        return {
+            height: this.cellEl.clientHeight,
+            width: this.cellEl.clientWidth,
+        };
     }
 
     // ── Colour ──────────────────────────────────────────────────────────────

@@ -14,6 +14,8 @@ echo-box {
 	font-family: "Menlo", "Consolas", monospace;
 	font-size: 13px;
 	line-height: 1.5;
+	/* Ceiling for the cell; embedded views size their grid to it. */
+	max-height: 300px;
 }
 
 /* ── Gutter: status circle at the top, line running down beside the cell ── */

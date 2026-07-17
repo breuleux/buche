@@ -66,6 +66,14 @@ export class Cell extends WithId() implements CellConfiguration {
                 }
             });
             box.setView("pty", view);
+            // Dynamic sizing (rows grow with content) is the default, capped
+            // by the box's max-height; a user drag pins the rows to the
+            // dragged height, and double-clicking the bar frees it again.
+            const fit = () => {
+                view.fit(box.cellContentHeight, box.maxContentHeight);
+            };
+            box.addEventListener("resize", fit);
+            fit();
         }
         view.write(message.text);
     }

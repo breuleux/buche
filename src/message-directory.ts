@@ -16,14 +16,23 @@ export const incomingDriverMessageTypes = new Set<string>([
 ]);
 
 /** Message `type` names for driver outgoing messages. */
-export const outgoingDriverMessageTypes = new Set<string>(["command", "parse", "signal", "sync"]);
+export const outgoingDriverMessageTypes = new Set<string>([
+    "command",
+    "parse",
+    "resize",
+    "signal",
+    "sync",
+    "text",
+]);
 
 /** Message `type` names for interface incoming messages. */
 export const incomingInterfaceMessageTypes = new Set<string>([
     "user_command",
     "user_focus",
     "user_input",
+    "user_resize",
     "user_signal",
+    "user_text",
 ]);
 
 /** Message `type` names for interface outgoing messages. */

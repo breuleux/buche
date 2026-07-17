@@ -1,5 +1,6 @@
 import { BucheTerm } from "./components/buche-term.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
+import type { EmbeddedTerm } from "./components/embedded-term.tsx";
 import type {
     PromptCommandEvent,
     PromptTextChangeEvent,
@@ -81,6 +82,23 @@ export class TabbedZone extends Zone {
     }
 }
 
+/** Report the box's current size to the machine as a `user_resize`
+ *  interaction. Deferred to a microtask so whatever synchronous listeners the
+ *  triggering event has (including Cell's initial pty fit) run first and the
+ *  terminal reports its final grid. */
+function reportResize(ifc: Interface, eb: EchoBox, entry: Entry): void {
+    queueMicrotask(() => {
+        const view = eb.getView("pty")?.childNodes[0] as EmbeddedTerm | undefined;
+        const term = view?.terminal;
+        ifc.interactions.push({
+            type: "user_resize",
+            pixel: eb.cellSize,
+            pty: term ? { height: term.rows, width: term.cols } : undefined,
+            entry,
+        });
+    });
+}
+
 export class PromptZone extends Zone {
     declare element: BucheTerm;
     echoMap: Map<Entry, EchoBox> = new Map();
@@ -97,6 +115,18 @@ export class PromptZone extends Zone {
                 entry,
             });
         });
+        eb.addEventListener("resize", () => reportResize(ifc, eb, entry));
+        // Keyboard input bubbles up from the embedded terminal (see EmbeddedTerm).
+        eb.addEventListener("term-data", (e) => {
+            ifc.interactions.push({
+                type: "user_text",
+                text: (e as CustomEvent<string>).detail,
+                entry,
+            });
+        });
+        // The embedded terminal appearing is the first moment a pty grid
+        // exists to report: announce the size then.
+        eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
         this.element.log(eb);
         this.echoMap.set(entry, eb);
         return eb;

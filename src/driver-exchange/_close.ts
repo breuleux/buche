@@ -1,5 +1,5 @@
 import type { Buche } from "../core.ts";
-import type { Echo } from "../echo.ts";
+import { killable } from "../echo.ts";
 import type { BaseMessage } from "./common.ts";
 
 /** Outcome of a process that has terminated. */
@@ -16,10 +16,6 @@ export interface CloseMessage extends BaseMessage {
 
     /** How the process terminated. */
     outcome: CloseOutcome;
-}
-
-function killable(echo: Echo) {
-    return echo.status.status === "running" || echo.status.status === "unresponsive";
 }
 
 export function handle$close(buche: Buche, obj: CloseMessage): void {
