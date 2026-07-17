@@ -452,8 +452,8 @@
           "$ref": "#/definitions/PromptBindings",
           "description": "Key-chord → action-name map for this prompt."
         },
-        "prompt_html": {
-          "type": "string",
+        "prompt": {
+          "$ref": "#/definitions/StyledText",
           "description": "HTML for the prompt's leading label/marker."
         },
         "content": {

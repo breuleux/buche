@@ -9,7 +9,7 @@ export interface PromptConfiguration {
     bindings?: PromptBindings;
 
     /** HTML for the prompt's leading label/marker. */
-    prompt_html?: string;
+    prompt?: StyledText;
 
     /** Prompt contents */
     content?: StyledText;
@@ -19,7 +19,7 @@ export class Prompt extends WithId() implements PromptConfiguration {
     address: Address;
 
     bindings: PromptBindings = {};
-    prompt_html: string = "";
+    prompt: StyledText = { text: "", ranges: [] };
     content: StyledText = { text: "", ranges: [], position: 0 };
 
     zones: { main: PromptZone };
@@ -34,7 +34,7 @@ export class Prompt extends WithId() implements PromptConfiguration {
     }
 
     configure(config: PromptConfiguration): void {
-        this.prompt_html = config.prompt_html ?? this.prompt_html;
+        this.prompt = config.prompt ?? this.prompt;
         this.bindings = config.bindings ?? this.bindings;
         if (config.content) {
             this.content.text = config.content.text;
