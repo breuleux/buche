@@ -1,3 +1,3 @@
-{"$role":"driverIn","type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}
+{"$role":"driverIn","type":"cell_send","from":["cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
 {"$role":"interfaceOut","type":"install_cell","zone":"#100","component":{"zones":{},"cell":"#101"}}
 {"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"hi"},"component":{"zones":{},"cell":"#101"}}

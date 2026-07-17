@@ -15,7 +15,7 @@ export async function* handle$signal(
     yield {
         type: "signal",
         code: obj.code,
-        from: ["$terminal"],
+        from: ["$term"],
         to: obj.element.address,
     };
 }

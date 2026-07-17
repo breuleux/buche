@@ -17,7 +17,7 @@ export async function* handle$user_command(
 ): AsyncIterable<OutM> {
     yield {
         type: "command",
-        from: ["$terminal"],
+        from: ["$term"],
         to: obj.prompt.address,
         text: obj.text,
         position: obj.position,

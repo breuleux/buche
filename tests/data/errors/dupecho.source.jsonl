@@ -1,2 +1,2 @@
-{"type":"echo","from":["cq","2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
-{"type":"echo","from":["cq","2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"type":"echo","from":["cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"type":"echo","from":["cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}

@@ -1,2 +1,2 @@
-{"type":"cell_configure","from":["cq","7"],"to":["$terminal"],"zone":null,"label":"first","background":false}
-{"type":"cell_configure","from":["cq","7"],"to":["$terminal"],"zone":null,"label":"second","background":true}
+{"type":"cell_configure","from":["cq","7"],"to":["$term"],"zone":null,"label":"first","background":false}
+{"type":"cell_configure","from":["cq","7"],"to":["$term"],"zone":null,"label":"second","background":true}

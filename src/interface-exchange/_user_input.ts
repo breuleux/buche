@@ -16,7 +16,7 @@ export async function* handle$user_input(
 ): AsyncIterable<OutM> {
     yield {
         type: "parse",
-        from: ["$terminal"],
+        from: ["$term"],
         to: obj.prompt.address,
         text: obj.text,
         position: obj.position,

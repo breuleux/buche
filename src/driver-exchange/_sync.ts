@@ -10,7 +10,7 @@ export interface SyncMessage extends BaseMessage {
 export async function* handle$sync(buche: Buche, obj: SyncMessage): AsyncIterable<OutM> {
     yield {
         type: "sync",
-        from: ["$terminal"],
+        from: ["$term"],
         to: obj.from,
         nonce: obj.nonce,
     };
