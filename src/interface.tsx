@@ -88,27 +88,22 @@ export class BucheInterface implements Interface {
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         const existing = this.map.get(message.entry);
         if (existing) {
-            buche.sendInterface({
-                type: "problem",
-                reason: "A cell already exists",
-                code: "cell_exists",
-            });
+            message.entry.fire();
+        } else {
+            const element = message.zone!.installCell(this, message.entry);
+            this.map.set(message.entry, { zone: message.zone!, element });
         }
-        const element = message.zone!.installCell(this, message.entry);
-        this.map.set(message.entry, { zone: message.zone!, element });
     }
 
     handle$update_prompt(buche: Buche, message: UpdatePromptMessage) {
         const existing = this.map.get(message.entry);
         if (existing) {
-            buche.sendInterface({
-                type: "problem",
-                reason: "A prompt already exists",
-                code: "prompt_exists",
-            });
+            message.entry.fire();
+        } else {
+            console.log("~~!", message.entry.echo.label);
+            const element = message.zone!.installPrompt(this, message.entry);
+            this.map.set(message.entry, { zone: message.zone!, element });
         }
-        const element = message.zone!.installPrompt(this, message.entry);
-        this.map.set(message.entry, { zone: message.zone!, element });
     }
 
     handle$update_entry(buche: Buche, message: UpdateEntryMessage) {
@@ -117,7 +112,7 @@ export class BucheInterface implements Interface {
 
     handle$cell_command(buche: Buche, message: CellCommandMessage) {
         const existing = this.map.get(message.entry)!;
-        message.entry.cell!.handle(message.command, existing.element as EchoBox);
+        message.entry.cell!.handle(message.command, message.entry, existing.element as EchoBox);
     }
 
     handle$problem(buche: Buche, message: ProblemMessage) {}

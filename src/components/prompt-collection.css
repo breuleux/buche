@@ -55,3 +55,12 @@ prompt-collection {
 .prompt-collection-tab.dragging {
 	opacity: 0.3;
 }
+
+/* Ghost text (filigrane): faded suggestion rendered inline after the text.
+ * Whitespace must survive — the suffix usually starts with a space. */
+.cm-filigrane {
+	color: #6f6f6f;
+	white-space: pre;
+	pointer-events: none;
+	user-select: none;
+}

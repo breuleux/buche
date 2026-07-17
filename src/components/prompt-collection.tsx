@@ -13,7 +13,10 @@
 // The tab's label and accent colour come from the Entry's {@link Echo}; the
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.content` (its text and cursor position).
+// flow back into `entry.prompt.content` (its text and cursor position). The
+// Prompt's `filigrane` (a history suggestion, see the "prompt_highlight" driver
+// message) shows as faded ghost text extending the content; ArrowRight at the
+// end of the text accepts it.
 //
 //   ┌─────────────────────────────────────────────┐
 //   │ $  │ the active prompt's CodeMirror editor  │
@@ -53,7 +56,7 @@ import {
     StateEffect,
     StateField,
 } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import type { Entry } from "../entry.ts";
@@ -159,6 +162,13 @@ export interface PromptEditor {
     setPosition?(position: number): void;
     /** The current cursor position (offset into the text). Optional. */
     getPosition?(): number;
+    /**
+     * Show ghost text: a suggestion extending the current text (e.g. a history
+     * entry). The suffix past the current text is rendered inline, faded; it
+     * hides itself whenever the text stops being a prefix of it. `null` (or a
+     * non-extension) hides the ghost. Optional; no-op if unsupported.
+     */
+    setFiligrane?(filigrane: string | null): void;
 }
 
 export type EditorFactory = (options: {
@@ -266,6 +276,83 @@ const spansField = StateField.define<DecorationSet>({
     provide: (f) => EditorView.decorations.from(f),
 });
 
+// Ghost text (filigrane): a state field holding the suggestion, providing a
+// read-only inline widget with the suffix past the current text. Recomputed on
+// every doc change, so it follows the user's typing and disappears the moment
+// the text stops extending the suggestion (the shell sends a new one per parse).
+const setFiligraneEffect = StateEffect.define<string | null>();
+
+class FiligraneWidget extends WidgetType {
+    constructor(readonly text: string) {
+        super();
+    }
+    eq(other: FiligraneWidget): boolean {
+        return other.text === this.text;
+    }
+    toDOM(): HTMLElement {
+        const span = document.createElement("span");
+        span.className = "cm-filigrane";
+        span.textContent = this.text;
+        span.setAttribute("aria-hidden", "true");
+        return span;
+    }
+}
+
+function filigraneDeco(filigrane: string | null, text: string): DecorationSet {
+    if (!filigrane?.startsWith(text) || filigrane.length <= text.length) {
+        return Decoration.none;
+    }
+    return Decoration.set([
+        Decoration.widget({
+            widget: new FiligraneWidget(filigrane.slice(text.length)),
+            side: 1,
+        }).range(text.length),
+    ]);
+}
+
+const filigraneField = StateField.define<{ filigrane: string | null; deco: DecorationSet }>({
+    create: () => ({ filigrane: null, deco: Decoration.none }),
+    update(value, tr) {
+        let filigrane = value.filigrane;
+        for (const effect of tr.effects) {
+            if (effect.is(setFiligraneEffect)) {
+                filigrane = effect.value;
+            }
+        }
+        if (!filigrane) {
+            return value.filigrane ? { filigrane: null, deco: Decoration.none } : value;
+        }
+        if (!tr.docChanged && filigrane === value.filigrane) {
+            return value;
+        }
+        return { filigrane, deco: filigraneDeco(filigrane, tr.state.doc.toString()) };
+    },
+    provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
+});
+
+// Accept the ghost text, if showing: the selection must be an empty cursor at
+// the end of the text and the filigrane must extend it. Inserts the suffix and
+// parks the cursor at the new end. The filigrane is kept: fully typed, the
+// ghost hides, and deleting back re-reveals it (the shell resends per parse).
+function acceptFiligrane(view: EditorView): boolean {
+    const { state } = view;
+    const { empty, head } = state.selection.main;
+    const text = state.doc.toString();
+    if (!empty || head !== state.doc.length) {
+        return false;
+    }
+    const filigrane = state.field(filigraneField).filigrane;
+    if (!filigrane?.startsWith(text) || filigrane.length <= text.length) {
+        return false;
+    }
+    view.dispatch({
+        changes: { from: text.length, insert: filigrane.slice(text.length) },
+        selection: { anchor: filigrane.length },
+        scrollIntoView: true,
+    });
+    return true;
+}
+
 // Default editor: a CodeMirror EditorView. Built lazily so merely importing this
 // module never touches CodeMirror's runtime (keeps injected-editor tests light).
 const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
@@ -309,12 +396,40 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                                 return true;
                             },
                         },
+                        // At the end of the text, ArrowRight accepts the ghost
+                        // text (filigrane) instead of moving past the last
+                        // character — like other ghost-text UIs. It defers to
+                        // the default cursor move whenever no ghost is showing
+                        // (cursor not at the end, or the text stopped
+                        // extending the suggestion).
+                        {
+                            key: "ArrowRight",
+                            run: (v) => acceptFiligrane(v),
+                        },
+                        // Escape clears the field (and the ghost text); a no-op
+                        // on an already-empty prompt, so the key falls through.
+                        {
+                            key: "Escape",
+                            run: (v) => {
+                                const len = v.state.doc.length;
+                                if (!len) {
+                                    return false;
+                                }
+                                v.dispatch({
+                                    changes: { from: 0, to: len, insert: "" },
+                                    selection: { anchor: 0 },
+                                    effects: setFiligraneEffect.of(null),
+                                });
+                                return true;
+                            },
+                        },
                     ]),
                 ),
                 history(),
                 keymap.of([...defaultKeymap, ...historyKeymap]),
                 EditorView.lineWrapping,
                 spansField,
+                filigraneField,
                 baseStyle.of([]),
                 darkTheme,
                 EditorView.updateListener.of((u) => {
@@ -331,6 +446,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
         setValue: (value) =>
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }),
         setHighlights: (spans) => view.dispatch({ effects: setSpansEffect.of(spans) }),
+        setFiligrane: (filigrane) => view.dispatch({ effects: setFiligraneEffect.of(filigrane) }),
         setBaseStyle: (css) =>
             view.dispatch({
                 effects: baseStyle.reconfigure(
@@ -532,6 +648,7 @@ export class PromptCollection extends HTMLElement {
         // Render the leading marker and apply the initial styled content.
         this.renderMarker(marker, entry.prompt?.prompt);
         this.applyContent(editor, content);
+        this.applyFiligrane(rowEntry);
 
         // Paint the tab (grey while inactive); activation restyles the active one.
         this.applyTabStyle(rowEntry);
@@ -678,6 +795,13 @@ export class PromptCollection extends HTMLElement {
                 this.applyingContent = false;
             }
         }
+        this.applyFiligrane(row);
+    }
+
+    // Push the Entry's ghost text (Prompt `filigrane`) into its editor; cleared
+    // when the Entry has none. No-op on editors that don't support it.
+    private applyFiligrane(row: Row): void {
+        row.editor.setFiligrane?.(row.entry.prompt?.filigrane ?? null);
     }
 
     /** Paint a tab from its Echo accent while active, or grey while inactive. The

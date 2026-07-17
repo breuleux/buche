@@ -10,6 +10,7 @@ export const incomingDriverMessageTypes = new Set<string>([
     "echo",
     "error",
     "prompt_configure",
+    "prompt_highlight",
     "sync",
     "text",
 ]);

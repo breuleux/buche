@@ -19,6 +19,12 @@ export class Prompt extends WithId() implements PromptConfiguration {
     bindings: PromptBindings = {};
     prompt: StyledText = { text: "", ranges: [] };
     content: StyledText = { text: "", ranges: [], position: 0 };
+    /**
+     * Ghost text: the most recent history entry extending the current content,
+     * offered as a completion suffix (set by "prompt_highlight"); null when
+     * there is nothing to suggest.
+     */
+    filigrane: string | null = null;
 
     zones: { main: PromptZone };
 

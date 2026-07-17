@@ -29,6 +29,7 @@ type StubEditor = ReturnType<EditorFactory> & {
     spans?: StyleSpan[];
     baseStyle?: string;
     position?: number;
+    filigrane?: string | null;
 };
 
 function stubFactory(): EditorFactory {
@@ -53,6 +54,9 @@ function stubFactory(): EditorFactory {
             },
             setPosition: (position) => {
                 editor.position = position;
+            },
+            setFiligrane: (filigrane) => {
+                editor.filigrane = filigrane;
             },
             getPosition: () => editor.position ?? value.length,
             focus: () => {},
@@ -320,6 +324,93 @@ describe("prompt-collection — editor values", () => {
         entry.fire();
         expect(events).toHaveLength(1);
         expect(pc.getValue(entry)).toBe("pushed");
+    });
+
+    test("filigrane is handed to the editor on add and refreshed on reconfigure", () => {
+        const pc = make();
+        const entry = makeEntry({ label: "a", content: plain("ls") });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry) as StubEditor;
+        expect(editor.filigrane).toBe("ls -l");
+
+        entry.prompt!.filigrane = null;
+        entry.fire();
+        expect(editor.filigrane).toBeNull();
+    });
+});
+
+describe("prompt-collection — ghost text (real CodeMirror)", () => {
+    test("the filigrane suffix past the text renders as ghost text", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls") });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const dom = pc.getEditor(entry)?.dom;
+        expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
+
+        // Typing to extend the text shrinks the ghost accordingly.
+        pc.setValue(entry, "ls -");
+        expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe("l");
+
+        // Text no longer extended by the suggestion: ghost hides.
+        pc.setValue(entry, "cat");
+        expect(dom?.querySelector(".cm-filigrane")).toBeNull();
+    });
+
+    test("ArrowRight at the end of the text accepts the ghost text", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls") });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        const press = (key: string) =>
+            editor.dom
+                .querySelector(".cm-content")!
+                .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+
+        // Cursor not at the end: plain cursor move, no acceptance.
+        editor.setPosition?.(1);
+        press("ArrowRight");
+        expect(pc.getValue(entry)).toBe("ls");
+
+        // Cursor at the end: the suffix is accepted.
+        editor.setPosition?.(2);
+        press("ArrowRight");
+        expect(pc.getValue(entry)).toBe("ls -l");
+        expect(editor.getPosition?.()).toBe(5);
+        expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
+
+        // Ghost gone (fully typed): ArrowRight is an ordinary cursor move.
+        editor.setPosition?.(2);
+        press("ArrowRight");
+        expect(pc.getValue(entry)).toBe("ls -l");
+        expect(editor.getPosition?.()).toBe(3);
+    });
+
+    test("Escape clears the field and the ghost text", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls -l") });
+        entry.prompt!.filigrane = "ls -la";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        const press = (key: string) =>
+            editor.dom
+                .querySelector(".cm-content")!
+                .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+
+        press("Escape");
+        expect(pc.getValue(entry)).toBe("");
+        expect(entry.prompt?.content.text).toBe(""); // synced back to the Entry
+        expect(editor.getPosition?.()).toBe(0);
+        expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
+
+        // Already empty: a no-op that does not throw.
+        press("Escape");
+        expect(pc.getValue(entry)).toBe("");
     });
 });
 

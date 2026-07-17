@@ -1,6 +1,9 @@
 import { BucheTerm } from "./components/buche-term.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
-import type { PromptTextChangeEvent, PromptCommandEvent } from "./components/prompt-collection.tsx";
+import type {
+    PromptCommandEvent,
+    PromptTextChangeEvent,
+} from "./components/prompt-collection.tsx";
 import type { TabPane } from "./components/tab-pane.tsx";
 import type { Entry } from "./entry.ts";
 import type { BucheInterface as Interface } from "./interface.tsx";
