@@ -15,18 +15,10 @@ export interface PromptConfiguration {
 
     /**
      * The prompt as a submission: its content (what the user is typing, with
-     * the cursor `position`) and its context (the marker text above the
-     * editor).
+     * the cursor `position`, the ghost-text `filigrane` and its `editability`)
+     * and its context (the marker text above the editor).
      */
     submission?: SubmissionConfiguration;
-
-    /**
-     * Ghost text (history suggestion): echoed back by "prompt_configure"
-     * answering a parse, and set or cleared by an authoritative one (explicit
-     * null — e.g. dropped along with the text when the prompt is submitted).
-     * Absent: left as is.
-     */
-    filigrane?: string | null;
 }
 
 export class Prompt extends WithId() implements PromptConfiguration {
@@ -35,13 +27,6 @@ export class Prompt extends WithId() implements PromptConfiguration {
         content: { text: "", ranges: [], position: 0 },
         context: { text: "", ranges: [] },
     };
-    /**
-     * Ghost text: the most recent history entry extending the current content,
-     * offered as a completion suffix (echoed by "prompt_configure"); null when
-     * there is nothing to suggest.
-     */
-    filigrane: string | null = null;
-
     /**
      * Machine bookkeeping (not configuration): the `request_id` of the last
      * parse sent for this prompt's content. A highlight echo (prompt_configure
@@ -64,8 +49,5 @@ export class Prompt extends WithId() implements PromptConfiguration {
     configure(config: PromptConfiguration): void {
         this.bindings = config.bindings ?? this.bindings;
         applySubmission(this.submission, config.submission);
-        if (config.filigrane !== undefined) {
-            this.filigrane = config.filigrane;
-        }
     }
 }

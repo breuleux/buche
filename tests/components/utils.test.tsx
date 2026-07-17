@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import { buildStyledText } from "../../src/components/utils.tsx";
+import type { InteractiveStyledText } from "../../src/types.ts";
 
 const css = (accent: string) => styleToCss(th.calculateStyle(accent));
 
@@ -110,8 +111,15 @@ describe("buildStyledText", () => {
         expect(span.getAttribute("style")).toBeNull();
     });
 
-    test("ignores the cursor position field", () => {
-        const node = buildStyledText({ text: "abc", ranges: [], position: 2 }, th);
+    test("ignores the interactive fields (position, editability, filigrane)", () => {
+        const interactive: InteractiveStyledText = {
+            text: "abc",
+            ranges: [],
+            position: 2,
+            editability: "editable",
+            filigrane: "abc -l",
+        };
+        const node = buildStyledText(interactive, th);
         expect(node.textContent).toBe("abc");
     });
 

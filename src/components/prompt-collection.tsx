@@ -40,8 +40,11 @@
 // pressing a bound chord in the editor fires a bubbling "command" event and
 // swallows the key so the editor doesn't also act on it. A binding may also be
 // an object ({ command, freeze }): when a binding with `freeze` fires, the
-// prompt turns read-only — commands keep firing but typing is dead — until the
-// next prompt_configure (the Entry's reconfiguration) unblocks it.
+// prompt's content turns "frozen" — read-only, but styled to show the
+// condition is temporary — commands keep firing but typing is dead — until the
+// next prompt_configure (the Entry's reconfiguration) resets the editability.
+// (An InteractiveStyledText carries this `editability`; a prompt defaults to
+// "editable", echos are "readonly" — all they support for now.)
 //
 // Events (all bubble):
 //   "promptchange"  detail: { entry: Entry }                      — active prompt changed
@@ -67,7 +70,7 @@ import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
-import type { HighlightRange, StyledText } from "../types.ts";
+import type { HighlightRange, InteractiveStyledText, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
 
 // ── Key bindings ────────────────────────────────────────────────────────────
@@ -122,12 +125,16 @@ export interface PromptEditor {
      */
     setFiligrane?(filigrane: string | null): void;
     /**
-     * Make the editor read-only (typing dead, cursor movement and bound
-     * commands kept). Used by bindings that `freeze` the prompt. Optional;
-     * no-op if unsupported.
+     * Apply an editability status ("editable" typing live; "readonly" and
+     * "frozen" both kill typing but keep cursor movement and bound commands
+     * — "frozen", set when a freezing binding fires, is styled differently to
+     * denote the temporary condition). Optional; no-op if unsupported.
      */
-    setReadOnly?(readOnly: boolean): void;
+    setEditability?(editability: Editability): void;
 }
+
+/** How an InteractiveStyledText (a prompt's content) can be edited. */
+export type Editability = "readonly" | "editable" | "frozen";
 
 export type EditorFactory = (options: {
     doc: string;
@@ -415,18 +422,21 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }),
         setHighlights: (spans) => view.dispatch({ effects: setSpansEffect.of(spans) }),
         setFiligrane: (filigrane) => view.dispatch({ effects: setFiligraneEffect.of(filigrane) }),
-        setReadOnly: (ro) =>
-            // The frozen class must come through the editorAttributes facet:
-            // CodeMirror rewrites the root's `class` attribute on every focus
-            // change, which would wipe a class set directly on view.dom.
+        setEditability: (editability) =>
+            // The frozen/readonly classes must come through the
+            // editorAttributes facet: CodeMirror rewrites the root's `class`
+            // attribute on every focus change, which would wipe a class set
+            // directly on view.dom.
             view.dispatch({
                 effects: readOnly.reconfigure(
-                    ro
-                        ? [
+                    editability === "editable"
+                        ? []
+                        : [
                               EditorState.readOnly.of(true),
-                              EditorView.editorAttributes.of({ class: "cm-frozen" }),
-                          ]
-                        : [],
+                              EditorView.editorAttributes.of({
+                                  class: editability === "frozen" ? "cm-frozen" : "cm-readonly",
+                              }),
+                          ],
                 ),
             }),
         setBaseStyle: (css) =>
@@ -559,7 +569,10 @@ export class PromptCollection extends HTMLElement {
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
 
-        const content: StyledText = entry.prompt?.submission.content ?? { text: "", ranges: [] };
+        const content: InteractiveStyledText = entry.prompt?.submission.content ?? {
+            text: "",
+            ranges: [],
+        };
 
         const editorHost = document.createElement("div");
         editorHost.className = "prompt-collection-editor";
@@ -574,9 +587,19 @@ export class PromptCollection extends HTMLElement {
                 }
                 const pos = this.rows.get(entry)?.editor.getPosition?.();
                 if (entry.prompt) {
-                    entry.prompt.submission.content.text = value;
+                    const promptContent = entry.prompt.submission.content;
+                    promptContent.text = value;
                     if (pos != null) {
-                        entry.prompt.submission.content.position = pos;
+                        promptContent.position = pos;
+                    }
+                    // A suggestion the text no longer extends is stale —
+                    // divergent typing and Escape (emptied text) drop it (the
+                    // fresh one comes with the next parse answer).
+                    if (
+                        promptContent.filigrane &&
+                        (value === "" || !promptContent.filigrane.startsWith(value))
+                    ) {
+                        promptContent.filigrane = undefined;
                     }
                 }
                 this.dispatchEvent(
@@ -645,6 +668,7 @@ export class PromptCollection extends HTMLElement {
         // Render the leading marker and apply the initial styled content.
         this.renderMarker(rowEntry, entry);
         this.applyContent(editor, content);
+        editor.setEditability?.(content.editability ?? "editable");
         this.applyFiligrane(rowEntry);
 
         // Paint the tab (grey while inactive); activation restyles the active one.
@@ -751,10 +775,17 @@ export class PromptCollection extends HTMLElement {
                     e.stopPropagation();
                     const command = typeof binding === "string" ? binding : binding.command;
                     const editor = this.rows.get(entry)?.editor;
-                    // A freezing binding turns the prompt read-only as the
-                    // command fires; the next reconfiguration unblocks it.
+                    // A freezing binding marks the prompt's content "frozen"
+                    // (read-only, styled as temporary) as the command fires;
+                    // the next reconfiguration resets it — the driver's
+                    // submit reset replaces the content whole, editability
+                    // (and filigrane) included.
                     if (typeof binding === "object" && binding.freeze) {
-                        editor?.setReadOnly?.(true);
+                        const content = entry.prompt?.submission.content;
+                        if (content) {
+                            content.editability = "frozen";
+                        }
+                        editor?.setEditability?.("frozen");
                     }
                     const text = editor?.getValue() ?? "";
                     const position = editor?.getPosition?.() ?? text.length;
@@ -851,7 +882,6 @@ export class PromptCollection extends HTMLElement {
             this.removePrompt(entry);
             return;
         }
-        row.editor.setReadOnly?.(false);
         row.tab.textContent = entry.echo.label;
         this.renderMarker(row, entry);
         this.applyTabStyle(row);
@@ -867,13 +897,18 @@ export class PromptCollection extends HTMLElement {
                 this.applyingContent = false;
             }
         }
+        // Reconfiguration takes the content's editability: a frozen prompt (a
+        // freezing binding fired) — or anything else the driver asked for —
+        // resets to it; a content without one is a prompt, and editable is
+        // the prompt default.
+        row.editor.setEditability?.(content?.editability ?? "editable");
         this.applyFiligrane(row);
     }
 
-    // Push the Entry's ghost text (Prompt `filigrane`) into its editor; cleared
-    // when the Entry has none. No-op on editors that don't support it.
+    // Push the Entry's ghost text (`content.filigrane`) into its editor;
+    // cleared when the Entry has none. No-op on editors that don't support it.
     private applyFiligrane(row: Row): void {
-        row.editor.setFiligrane?.(row.entry.prompt?.filigrane ?? null);
+        row.editor.setFiligrane?.(row.entry.prompt?.submission.content.filigrane ?? null);
     }
 
     /** Paint a tab from its Echo accent while active, or grey while inactive. The
@@ -910,7 +945,7 @@ export class PromptCollection extends HTMLElement {
      * accent through {@link calculateStyle}) and, when a `position` is given,
      * moves the cursor there.
      */
-    setValue(entry: Entry, value: string | StyledText): void {
+    setValue(entry: Entry, value: string | InteractiveStyledText): void {
         this.ensureSetup();
         const row = this.rows.get(entry);
         if (!row) {
@@ -924,8 +959,9 @@ export class PromptCollection extends HTMLElement {
         this.applyContent(row.editor, value);
     }
 
-    // Apply a StyledText's colorization and cursor position to an editor.
-    private applyContent(editor: PromptEditor, content: StyledText): void {
+    // Apply an InteractiveStyledText's colorization and cursor position to an
+    // editor.
+    private applyContent(editor: PromptEditor, content: InteractiveStyledText): void {
         const { base, spans } = this.resolveContent(content.ranges ?? [], content.text);
         editor.setBaseStyle?.(base);
         editor.setHighlights?.(spans);

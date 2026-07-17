@@ -39,7 +39,7 @@
       "properties": {
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
           "type": "string",
@@ -112,7 +112,7 @@
       "type": "object",
       "properties": {
         "content": {
-          "$ref": "#/definitions/StyledText",
+          "$ref": "#/definitions/InteractiveStyledText",
           "description": "Content text of the submission"
         },
         "context": {
@@ -122,7 +122,7 @@
       },
       "additionalProperties": false
     },
-    "StyledText": {
+    "InteractiveStyledText": {
       "type": "object",
       "properties": {
         "text": {
@@ -136,19 +136,32 @@
           },
           "description": "Spans to colorize."
         },
+        "editability": {
+          "type": "string",
+          "enum": [
+            "readonly",
+            "editable",
+            "frozen"
+          ],
+          "description": "Editability status of the text. Defaults to \"editable\" in a prompt, \"readonly\" in an echo (only \"readonly\" is supported in echos for now). \"frozen\" — set when a freezing binding fires — acts like \"readonly\", but is styled differently to denote a temporary condition."
+        },
         "position": {
           "type": [
             "number",
             "null"
           ],
           "description": "Position of the cursor, if applicable."
+        },
+        "filigrane": {
+          "type": "string",
+          "description": "Ghost text displayed next to the text as a completion suggestion."
         }
       },
+      "additionalProperties": false,
       "required": [
-        "text",
-        "ranges"
-      ],
-      "additionalProperties": false
+        "ranges",
+        "text"
+      ]
     },
     "HighlightRange": {
       "type": "object",
@@ -182,6 +195,27 @@
     },
     "Accent": {
       "type": "string"
+    },
+    "StyledText": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Text to style."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        }
+      },
+      "required": [
+        "text",
+        "ranges"
+      ],
+      "additionalProperties": false
     },
     "Address": {
       "type": "array",
@@ -376,7 +410,7 @@
       "properties": {
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
           "type": "string",
@@ -526,14 +560,7 @@
         },
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
-        },
-        "filigrane": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Ghost text (history suggestion), normally carried by \"prompt_highlight\"; a \"prompt_configure\" may set or clear it too (explicit null) — e.g. to drop the suggestion along with the text when the prompt is submitted. Absent: left as is."
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
           "type": "string",

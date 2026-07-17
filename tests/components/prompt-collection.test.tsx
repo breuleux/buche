@@ -12,7 +12,7 @@ import type {
 import "../../src/components/prompt-collection.tsx";
 import { Entry } from "../../src/entry.ts";
 import { Prompt, type PromptBindings } from "../../src/prompt.ts";
-import type { StyledText } from "../../src/types.ts";
+import type { InteractiveStyledText, StyledText } from "../../src/types.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -59,8 +59,8 @@ function stubFactory(): EditorFactory {
             setFiligrane: (filigrane) => {
                 editor.filigrane = filigrane;
             },
-            setReadOnly: (readOnly) => {
-                editor.readOnly = readOnly;
+            setEditability: (editability) => {
+                editor.readOnly = editability !== "editable";
             },
             getPosition: () => editor.position ?? value.length,
             focus: () => {},
@@ -89,7 +89,7 @@ function makeEntry(
         label?: string;
         color?: string;
         marker?: StyledText;
-        content?: StyledText;
+        content?: InteractiveStyledText;
         bindings?: PromptBindings;
     } = {},
 ): Entry {
@@ -364,12 +364,12 @@ describe("prompt-collection — editor values", () => {
     test("filigrane is handed to the editor on add and refreshed on reconfigure", () => {
         const pc = make();
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry) as StubEditor;
         expect(editor.filigrane).toBe("ls -l");
 
-        entry.prompt!.filigrane = null;
+        entry.prompt!.submission.content.filigrane = undefined;
         entry.fire();
         expect(editor.filigrane).toBeNull();
     });
@@ -380,7 +380,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const dom = pc.getEditor(entry)?.dom;
         expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
@@ -398,7 +398,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -433,7 +433,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
             content: plain("ls"),
             bindings: { "Ctrl+L": { command: "lock", freeze: true } },
         });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (init: KeyboardEventInit) =>
@@ -460,7 +460,11 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         press({ key: "ArrowRight" });
         expect(pc.getValue(entry)).toBe("ls");
 
-        // Reconfiguration (prompt_configure) unblocks it: dim gone.
+        // Reconfiguration (prompt_configure) unblocks it: dim gone once fresh
+        // content arrives (no editability on it: editable is the default).
+        entry.prompt!.configure({
+            submission: { content: { text: "ls", ranges: [], position: 2, filigrane: "ls -l" } },
+        });
         entry.fire();
         expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
         editor.setPosition?.(2);
@@ -468,11 +472,46 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         expect(pc.getValue(entry)).toBe("ls -l");
     });
 
+    test("editability follows the content: readonly renders, freeze overrides, reset clears", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({
+            label: "a",
+            content: { text: "ls", ranges: [], position: 2, editability: "readonly" },
+            bindings: { "Ctrl+L": { command: "lock", freeze: true } },
+        });
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        expect(editor.dom.classList.contains("cm-readonly")).toBe(true);
+
+        // The freezing binding overrides the configured state (temporary look).
+        editor.dom.querySelector(".cm-content")!.dispatchEvent(
+            new KeyboardEvent("keydown", {
+                key: "l",
+                ctrlKey: true,
+                bubbles: true,
+                cancelable: true,
+            }),
+        );
+        expect(entry.prompt!.submission.content.editability).toBe("frozen");
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
+        expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
+
+        // A content reset without an editability restores the prompt default.
+        entry.prompt!.configure({
+            submission: { content: { text: "ls", ranges: [], position: 2 } },
+        });
+        entry.fire();
+        expect(entry.prompt!.submission.content.editability).toBeUndefined();
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
+        expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
+    });
+
     test("Escape clears the field and the ghost text", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls -l") });
-        entry.prompt!.filigrane = "ls -la";
+        entry.prompt!.submission.content.filigrane = "ls -la";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -483,6 +522,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         press("Escape");
         expect(pc.getValue(entry)).toBe("");
         expect(entry.prompt?.submission.content.text).toBe(""); // synced back to the Entry
+        expect(entry.prompt?.submission.content.filigrane).toBeUndefined(); // dropped as stale
         expect(editor.getPosition?.()).toBe(0);
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
@@ -491,19 +531,21 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         expect(pc.getValue(entry)).toBe("");
     });
 
-    test("a configure with filigrane null drops the ghost (the submit reset)", () => {
+    test("a configure replacing the content drops the ghost (the submit reset)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         expect(editor.dom.querySelector(".cm-filigrane")).not.toBeNull();
 
-        // What the driver sends along with the emptied text on submit (see
-        // coquille's command$submit): an explicit null clears the ghost, and
-        // the Entry stays cleared so later updates don't re-push it.
-        entry.prompt!.configure({ filigrane: null });
+        // What the driver sends on submit (see coquille's command$submit):
+        // the content is replaced whole, so the ghost it doesn't carry goes
+        // away — and stays away through later updates.
+        entry.prompt!.configure({
+            submission: { content: { text: "", ranges: [], position: 0 } },
+        });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
         entry.fire();
@@ -514,7 +556,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.filigrane = "ls -l";
+        entry.prompt!.submission.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         entry.prompt!.configure({ bindings: {} });
@@ -911,7 +953,11 @@ describe("prompt-collection — key bindings", () => {
         expect(editor.readOnly).toBe(true);
 
         // The next prompt_configure (entry.fire() from the driver message)
-        // unblocks the editor.
+        // unblocks the editor when it brings fresh content: the whole-content
+        // replacement carries no editability, and editable is the default.
+        entry.prompt!.configure({
+            submission: { content: { text: "", ranges: [], position: 0 } },
+        });
         entry.fire();
         expect(editor.readOnly).toBe(false);
 

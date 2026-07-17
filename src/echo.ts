@@ -17,7 +17,9 @@ export interface EchoConfiguration {
      * in (e.g. the prompt it was typed at: host, path, branch). The context,
      * when present, is shown above the echo box in the accent color. A
      * configuration may give either subfield alone; the other keeps its
-     * current value.
+     * current value. Echos are read-only, always: the content's `editability`
+     * (see InteractiveStyledText) defaults to "readonly" here and any value
+     * has no effect (only "readonly" is supported for echos for now).
      */
     submission?: SubmissionConfiguration;
 

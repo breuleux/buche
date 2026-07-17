@@ -828,7 +828,9 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     /**
      * Set the echo to plain text, a rich node (e.g. a highlighted command), or a
      * {@link StyledText} — whose text and highlight ranges are rendered through
-     * {@link buildStyledText} against {@link anchors}.
+     * {@link buildStyledText} against {@link anchors}. Echos are read-only,
+     * always: an `InteractiveStyledText` content's `editability` is accepted
+     * (only "readonly" means anything here) and has no effect.
      */
     setEcho(content: string | Node | StyledText): void {
         this.ensureSetup();

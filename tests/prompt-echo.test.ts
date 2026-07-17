@@ -38,20 +38,18 @@ function type(f: Fixture, text: string): void {
     f.buche.handle({ type: "user_input", entry: prompt(f), text, position: text.length } as never);
 }
 
-function echo(
-    f: Fixture,
-    requestId: string,
-    text: string,
-    extra: Record<string, unknown> = {},
-): void {
+// The highlight echo: a prompt_configure answering the parse, carrying its
+// request_id; the filigrane travels inside the content (absent: nothing to
+// suggest — the whole-content replacement is the clear).
+function echo(f: Fixture, requestId: string, text: string, filigrane?: string): void {
     f.buche.handle({
         type: "prompt_configure",
         from: PROMPT,
         to: ["$term"],
         request_id: requestId,
-        submission: { content: { text, ranges: [] } },
-        filigrane: `${text} -l`,
-        ...extra,
+        submission: {
+            content: { text, ranges: [], ...(filigrane === undefined ? {} : { filigrane }) },
+        },
     } as never);
 }
 
@@ -71,10 +69,10 @@ describe("prompt_configure echo", () => {
         type(f, "ls");
         prompt(f).echo.status = { status: "unresponsive" }; // whatever mirrors it
         f.interfaceOut.length = 0;
-        echo(f, "r1", "ls");
+        echo(f, "r1", "ls", "ls -l");
         const p = prompt(f).prompt!;
         expect(p.submission.content.text).toBe("ls");
-        expect(p.filigrane).toBe("ls -l");
+        expect(p.submission.content.filigrane).toBe("ls -l");
         expect(prompt(f).echo.status.status).toBe("unresponsive"); // untouched
         expect(f.interfaceOut).toEqual([
             { type: "update_prompt", zone: p.zones.main, entry: prompt(f) },
@@ -85,33 +83,43 @@ describe("prompt_configure echo", () => {
         resetId(100);
         const f = machine();
         type(f, "ls");
-        echo(f, "r1", "ls");
+        echo(f, "r1", "ls", "ls -l");
         type(f, "ls -a"); // typed on before r1's answer (r2) — here, r1 late
         f.interfaceOut.length = 0;
-        echo(f, "r1", "ls", { filigrane: "stale" }); // stale: dropped
-        expect(prompt(f).prompt!.filigrane).toBe("ls -l");
+        echo(f, "r1", "ls", "stale"); // stale: dropped
+        expect(prompt(f).prompt!.submission.content.filigrane).toBe("ls -l");
         expect(f.interfaceOut).toEqual([]);
-        echo(f, "r2", "ls -a"); // the fresh one applies
-        expect(prompt(f).prompt!.filigrane).toBe("ls -a -l");
+        echo(f, "r2", "ls -a", "ls -a -l"); // the fresh one applies
+        expect(prompt(f).prompt!.submission.content.filigrane).toBe("ls -a -l");
+    });
+
+    test("an echo without a suggestion clears the ghost", () => {
+        resetId(100);
+        const f = machine();
+        type(f, "ls");
+        echo(f, "r1", "ls", "ls -l");
+        type(f, "ls -lx");
+        echo(f, "r2", "ls -lx"); // nothing extends it: the content carries no filigrane
+        expect(prompt(f).prompt!.submission.content.filigrane).toBeUndefined();
     });
 
     test("an authoritative configure takes over and voids the outstanding echo", () => {
         resetId(100);
         const f = machine();
         type(f, "ls");
+        echo(f, "r1", "ls", "ls -l");
         f.buche.handle({
             type: "prompt_configure", // the submit reset
             from: PROMPT,
             to: ["$term"],
             submission: { content: { text: "", ranges: [], position: 0 } },
-            filigrane: null,
         } as never);
         const p = prompt(f).prompt!;
         expect(p.submission.content.text).toBe("");
-        expect(p.filigrane).toBeNull();
+        expect(p.submission.content.filigrane).toBeUndefined(); // replaced whole
         f.interfaceOut.length = 0;
-        echo(f, "r1", "ls"); // the pre-submit echo: now void
-        expect(p.filigrane).toBeNull();
+        echo(f, "r1", "ls", "ls -l"); // the pre-submit echo: now void
+        expect(p.submission.content.filigrane).toBeUndefined();
         expect(f.interfaceOut).toEqual([]);
     });
 

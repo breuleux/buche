@@ -112,8 +112,34 @@ prompt-collection {
 }
 
 /* Frozen prompt (a `freeze` binding fired, until the next prompt_configure):
- * dimmed to signal the text is dead while commands still fire. Opacity (not
- * color) so it also dims inline-styled content. */
+ * dimmed and slowly throbing to signal the text is temporarily dead while
+ * commands still fire. Opacity (not color) so it also dims inline-styled
+ * content; the base opacity is the throb's median. The caret goes away:
+ * there is nothing left to type until the reset. */
 .cm-editor.cm-frozen {
-	opacity: 0.45;
+	opacity: 0.55;
+	animation: prompt-frozen-throb 2.5s ease-in-out infinite;
+}
+.cm-editor.cm-frozen .cm-cursor,
+.cm-editor.cm-frozen .cm-dropCursor {
+	display: none;
+}
+/* The theme gives .cm-content an explicit caret color, so hiding CodeMirror's
+ * own cursor layer is not enough — silence the native caret too. */
+.cm-editor.cm-frozen .cm-content {
+	caret-color: transparent;
+}
+@keyframes prompt-frozen-throb {
+	0%,
+	100% {
+		opacity: 0.7;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.cm-editor.cm-frozen {
+		animation: none;
+	}
 }
