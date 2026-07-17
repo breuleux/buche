@@ -15,7 +15,7 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 
-const DIVIDER_PX = 6;
+const DIVIDER_PX = 4;
 
 interface Axis {
     // The flex/grid track property that holds the pane sizes.

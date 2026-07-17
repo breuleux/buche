@@ -23,7 +23,7 @@ grid-columns > * {
 
 .grid-divider-row,
 .grid-divider-col {
-	background: #c4c9d4;
+	background: #3a3d44;
 	overflow: hidden;
 	align-self: stretch;
 	justify-self: stretch;

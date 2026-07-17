@@ -54,16 +54,16 @@ describe("grid-rows / grid-columns", () => {
 
     test("starts with equal fractions", () => {
         const parts = firstPart(grid.style.gridTemplateRows);
-        // 0.333..fr 6px 0.333..fr 6px 0.333..fr
+        // 0.333..fr 4px 0.333..fr 4px 0.333..fr
         expect(parts.filter((p) => p.endsWith("fr")).length).toBe(3);
-        expect(parts.filter((p) => p === "6px").length).toBe(2);
+        expect(parts.filter((p) => p === "4px").length).toBe(2);
     });
 
     function drag(dividerIndex: number, deltaPx: number) {
         const divider = grid.querySelectorAll<HTMLElement>(".grid-divider-row")[dividerIndex];
         // Give the container a measurable size for the fraction math.
         stubExtent(grid, "clientHeight", 300);
-        // 300 total - 2*6px dividers = 288 flexible px.
+        // 300 total - 2*4px dividers = 292 flexible px.
         divider.setPointerCapture = () => {};
         divider.releasePointerCapture = () => {};
         divider.dispatchEvent(new PointerEvent("pointerdown", { clientY: 100 }));
@@ -79,7 +79,7 @@ describe("grid-rows / grid-columns", () => {
 
     test("dragging the first divider only resizes its two neighbours", () => {
         const before = fractions();
-        drag(0, 72); // +72px of 288 flexible px = +0.25 fraction
+        drag(0, 73); // +73px of 292 flexible px = +0.25 fraction
         const after = fractions();
         expect(after[0]).toBeCloseTo(before[0] + 0.25, 5);
         expect(after[1]).toBeCloseTo(before[1] - 0.25, 5);
