@@ -13,7 +13,7 @@
 // The tab's label and accent colour come from the Entry's {@link Echo}; the
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.content.text`.
+// flow back into `entry.prompt.content` (its text and cursor position).
 //
 //   ┌─────────────────────────────────────────────┐
 //   │ $  │ the active prompt's CodeMirror editor  │
@@ -28,7 +28,7 @@
 //
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
-// marker (the editor content is left alone so it never clobbers user edits).
+// marker, and to reset the editor's text and cursor from `entry.prompt.content`.
 //
 // A prompt heeds its Entry's Prompt `bindings` map (e.g. { "Ctrl+L": "clear" }):
 // pressing a bound chord in the editor fires a bubbling "command" event and
@@ -36,6 +36,7 @@
 //
 // Events (all bubble):
 //   "promptchange"  detail: { entry: Entry }                      — active prompt changed
+//   "textchange"    detail: { entry, text, position }              — a prompt's editor text changed
 //   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
 //   "command"       detail: { command, event, entry, text, position }
 //                                                                  — a bound chord was pressed
@@ -187,6 +188,15 @@ interface Row {
 export interface PromptChangeDetail {
     entry: Entry;
 }
+/** `detail` of the "textchange" event: a prompt's editor text changed. */
+export interface PromptTextChangeDetail {
+    /** The Entry of the prompt whose text changed (not necessarily the active one). */
+    entry: Entry;
+    /** The editor's new full text. */
+    text: string;
+    /** The cursor position (offset into `text`); 0 if the editor can't report it. */
+    position: number;
+}
 /** `detail` of the "reorder" event: the tabs were reordered. */
 export interface PromptReorderDetail {
     order: Entry[];
@@ -206,12 +216,14 @@ export interface PromptCommandDetail {
 }
 
 export type PromptChangeEvent = CustomEvent<PromptChangeDetail>;
+export type PromptTextChangeEvent = CustomEvent<PromptTextChangeDetail>;
 export type PromptReorderEvent = CustomEvent<PromptReorderDetail>;
 export type PromptCommandEvent = CustomEvent<PromptCommandDetail>;
 
 /** Typed event map for {@link PromptCollection} (drives `addEventListener`). */
 export interface PromptCollectionEventMap {
     promptchange: PromptChangeEvent;
+    textchange: PromptTextChangeEvent;
     reorder: PromptReorderEvent;
     command: PromptCommandEvent;
 }
@@ -356,6 +368,9 @@ export class PromptCollection extends HTMLElement {
     private active: Entry | null = null;
     private seq = 0;
     private dragEntry: Entry | null = null;
+    // True while pushing an Entry's content into an editor, to suppress the
+    // editor's change→content sync (which would otherwise feed back on a reset).
+    private applyingContent = false;
 
     connectedCallback(): void {
         this.ensureSetup();
@@ -449,11 +464,26 @@ export class PromptCollection extends HTMLElement {
         editorHost.className = "prompt-collection-editor";
         const editor = this.editorFactory({
             doc: content.text,
-            // Keep the Entry's Prompt content text in sync with the editor.
+            // Keep the Entry's Prompt content (text and cursor) in sync with the
+            // editor as the user edits. Suppressed while we push content into the
+            // editor ourselves (see `applyingContent`), so a reset can't feed back.
             onChange: (value) => {
+                if (this.applyingContent) {
+                    return;
+                }
+                const pos = this.rows.get(entry)?.editor.getPosition?.();
                 if (entry.prompt) {
                     entry.prompt.content.text = value;
+                    if (pos != null) {
+                        entry.prompt.content.position = pos;
+                    }
                 }
+                this.dispatchEvent(
+                    new CustomEvent<PromptTextChangeDetail>("textchange", {
+                        detail: { entry, text: value, position: pos ?? 0 },
+                        bubbles: true,
+                    }),
+                );
             },
             onNavigate: (dir) => this.rotate(dir),
         });
@@ -626,8 +656,8 @@ export class PromptCollection extends HTMLElement {
 
     // ── Reconfiguration ─────────────────────────────────────────────────────
 
-    // Re-read an Entry's label, accent and marker after its Echo was reconfigured.
-    // The editor content is left untouched so live edits are never clobbered.
+    // Re-read an Entry's label, accent and marker after it was reconfigured, and
+    // reset the editor's text and cursor from the Prompt's `content` (if any).
     private reconfigure(entry: Entry): void {
         const row = this.rows.get(entry);
         if (!row) {
@@ -636,6 +666,18 @@ export class PromptCollection extends HTMLElement {
         row.tab.textContent = entry.echo.label;
         this.renderMarker(row.marker, entry.prompt?.prompt);
         this.applyTabStyle(row);
+
+        // Reset the editor from `content`: its text, colorization and cursor
+        // position. Guarded so the resulting change doesn't sync back into it.
+        const content = entry.prompt?.content;
+        if (content) {
+            this.applyingContent = true;
+            try {
+                this.setValue(entry, content);
+            } finally {
+                this.applyingContent = false;
+            }
+        }
     }
 
     /** Paint a tab from its Echo accent while active, or grey while inactive. The

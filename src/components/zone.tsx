@@ -51,7 +51,7 @@ export class TabbedZoneElement extends ZoneElement {
 
     ensureSetup() {
         const tb = this.tabs;
-        // this.tabs.setAttribute("hide-single", "");
+        this.tabs.setAttribute("hide-single", "");
         this.appendChild(tb);
     }
 

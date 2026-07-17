@@ -94,6 +94,9 @@ export class EmbeddedTerm extends HTMLElement {
     private queue: (string | Uint8Array)[] = [];
     private writing = false;
     private cursorHidden = false;
+    // When false, the real xterm cursor is kept hidden and the squashed cursor
+    // is suppressed (see setCursorEnabled).
+    private cursorEnabled = true;
 
     connectedCallback(): void {
         this.ensureSetup();
@@ -181,6 +184,35 @@ export class EmbeddedTerm extends HTMLElement {
         this.fixedHeight = height;
         this.resizeTerminal(height === null ? this.maxRows : this.rowsForHeight(height));
         this.measure();
+    }
+
+    /**
+     * Enable or disable the terminal's cursor. When disabled, the real xterm
+     * cursor is hidden and kept hidden across writes, and the squashed (sliver)
+     * cursor is suppressed too; when re-enabled, both resume their normal
+     * behaviour (the real cursor stays hidden only while a newline is held).
+     */
+    setCursorEnabled(on: boolean): void {
+        this.ensureSetup();
+        on = Boolean(on);
+        if (on === this.cursorEnabled) {
+            return;
+        }
+        this.cursorEnabled = on;
+        this.term.options.cursorBlink = on;
+        if (!on) {
+            // Hide the real cursor now; the pump won't re-show it while disabled.
+            if (!this.cursorHidden) {
+                this.cursorHidden = true;
+                this.term.write("\x1b[?25l");
+            }
+            this.stubOn = false;
+        } else if (this.cursorHidden && !this.holding()) {
+            // Re-show unless a held newline is currently standing in for it.
+            this.cursorHidden = false;
+            this.term.write("\x1b[?25h");
+        }
+        this.apply();
     }
 
     // ----------------------------------------------------------------- setup
@@ -357,7 +389,7 @@ export class EmbeddedTerm extends HTMLElement {
             return;
         }
         this.writing = true;
-        if (this.cursorHidden) {
+        if (this.cursorHidden && this.cursorEnabled) {
             this.cursorHidden = false;
             this.term.write("\x1b[?25h");
         }
@@ -560,7 +592,7 @@ export class EmbeddedTerm extends HTMLElement {
         const clipHeight = Math.round(this.visibleRows() * cell.height);
         this.clip.style.height = `${clipHeight}px`;
 
-        if (this.stubOn && !this.inAlt) {
+        if (this.stubOn && !this.inAlt && this.cursorEnabled) {
             // The CR was written through, so the real column is where the
             // phantom cursor belongs.
             const cursorX = this.term.buffer.active.cursorX;

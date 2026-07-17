@@ -50,8 +50,8 @@ export class Echo extends WithId() {
     }
 
     configure(config: EchoConfiguration) {
-        this.label = config.label ?? `%${this.serialId}`;
-        this.color = config.color ?? "purple";
-        this.echo = config.echo;
+        this.label = config.label ?? this.label ?? `%${this.serialId}`;
+        this.color = config.color ?? this.color ?? "purple";
+        this.echo = config.echo ?? this.echo;
     }
 }

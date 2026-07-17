@@ -1,5 +1,6 @@
 import type { EchoBox } from "./components/echo-box.tsx";
 import { EmbeddedTerm } from "./components/embedded-term.tsx";
+import type { Entry } from "./entry.ts";
 import type { Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
@@ -45,26 +46,35 @@ export class Cell extends WithId() implements CellConfiguration {
         Object.assign(this, config);
     }
 
-    handle(message: CellCommand, box: EchoBox) {
-        type HT = (m: CellCommand, box: EchoBox) => void;
+    handle(message: CellCommand, entry: Entry, box: EchoBox) {
+        type HT = (m: CellCommand, entry: Entry, box: EchoBox) => void;
         const handler = this[`handle$${message.type}`];
-        (handler as HT).call(this, message, box);
+        (handler as HT).call(this, message, entry, box);
     }
 
-    handle$text(message: TextCommand, box: EchoBox) {
+    handle$text(message: TextCommand, entry: Entry, box: EchoBox) {
         let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
         if (!view) {
             view = new EmbeddedTerm();
+            const cursorTerm = view;
+            entry.listeners.push((entry: Entry) => {
+                const st = entry.echo.status.status;
+                if (st === "done" || st === "error") {
+                    cursorTerm.setCursorEnabled(false);
+                } else {
+                    cursorTerm.setCursorEnabled(true);
+                }
+            });
             box.setView("pty", view);
         }
         view.write(message.text);
     }
 
-    handle$data(message: TextCommand, box: EchoBox) {
+    handle$data(message: TextCommand, entry: Entry, box: EchoBox) {
         throw Error("not implemented");
     }
 
-    handle$exec(message: TextCommand, box: EchoBox) {
+    handle$exec(message: TextCommand, entry: Entry, box: EchoBox) {
         throw Error("not implemented");
     }
 }

@@ -1,6 +1,6 @@
 import { BucheTerm } from "./components/buche-term.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
-import type { PromptCommandEvent } from "./components/prompt-collection.tsx";
+import type { PromptTextChangeEvent, PromptCommandEvent } from "./components/prompt-collection.tsx";
 import type { TabPane } from "./components/tab-pane.tsx";
 import type { Entry } from "./entry.ts";
 import type { BucheInterface as Interface } from "./interface.tsx";
@@ -60,6 +60,15 @@ export class TabbedZone extends Zone {
                 text: event.detail.text,
                 position: event.detail.position,
                 command: event.detail.command,
+            });
+        });
+        bt.prompts.addEventListener("textchange", (event: PromptTextChangeEvent) => {
+            const entry = event.detail.entry;
+            ifc.interactions.push({
+                type: "user_input",
+                entry: entry,
+                text: event.detail.text,
+                position: event.detail.position,
             });
         });
         bt.prompts.addPrompt(entry);

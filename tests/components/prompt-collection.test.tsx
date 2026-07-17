@@ -6,6 +6,7 @@ import type {
     EditorFactory,
     PromptCollection,
     PromptCommandDetail,
+    PromptTextChangeDetail,
     StyleSpan,
 } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
@@ -207,6 +208,32 @@ describe("prompt-collection — reconfiguration", () => {
         );
     });
 
+    test("firing the Entry resets the editor text and cursor from content", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("first") }));
+        const editor = pc.getEditor(entry) as StubEditor;
+        expect(pc.getValue(entry)).toBe("first");
+
+        // Mutate the Prompt's content and fire: the editor resets to it.
+        entry.prompt!.content.text = "reset";
+        entry.prompt!.content.position = 2;
+        entry.fire();
+
+        expect(pc.getValue(entry)).toBe("reset");
+        expect(editor.position).toBe(2);
+    });
+
+    test("resetting from content does not feed back into content", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
+        entry.prompt!.content.text = "reset";
+        entry.prompt!.content.position = 1;
+        entry.fire();
+        // The reset is applied to the editor but the stored content is preserved.
+        expect(entry.prompt?.content.text).toBe("reset");
+        expect(entry.prompt?.content.position).toBe(1);
+    });
+
     test("active tab wears its accent; inactive tabs are grey", () => {
         const pc = make();
         const a = pc.addPrompt(makeEntry({ label: "a", color: "green" }));
@@ -243,6 +270,56 @@ describe("prompt-collection — editor values", () => {
         expect(pc.getValue(entry)).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
         expect(entry.prompt?.content.text).toBe("two");
+    });
+
+    test("editing updates the Entry's content text and cursor position", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
+        const editor = pc.getEditor(entry) as StubEditor;
+
+        editor.setPosition?.(3); // move the cursor
+        editor.setValue("hello"); // simulate a user edit
+
+        expect(entry.prompt?.content.text).toBe("hello");
+        expect(entry.prompt?.content.position).toBe(3);
+    });
+
+    test("editing fires textchange with entry, text and position", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
+        const editor = pc.getEditor(entry) as StubEditor;
+
+        const events: PromptTextChangeDetail[] = [];
+        pc.addEventListener("textchange", (e) => {
+            events.push((e as CustomEvent<PromptTextChangeDetail>).detail);
+        });
+
+        editor.setPosition?.(2);
+        editor.setValue("hello");
+
+        expect(events).toHaveLength(1);
+        expect(events[0].entry).toBe(entry);
+        expect(events[0].text).toBe("hello");
+        expect(events[0].position).toBe(2);
+    });
+
+    test("setValue fires textchange; an entry.fire() reset does not", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
+
+        const events: PromptTextChangeDetail[] = [];
+        pc.addEventListener("textchange", (e) => {
+            events.push((e as CustomEvent<PromptTextChangeDetail>).detail);
+        });
+
+        pc.setValue(entry, "pushed");
+        expect(events).toHaveLength(1);
+
+        // Reconfiguration pushes content back into the editor; that reset must
+        // not feed back as a user edit.
+        entry.fire();
+        expect(events).toHaveLength(1);
+        expect(pc.getValue(entry)).toBe("pushed");
     });
 });
 
