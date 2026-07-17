@@ -3,22 +3,30 @@ import driverSchema from "./driver-exchange/incoming.schema.json" with { type: "
 import { type IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import { readFileSync } from "node:fs";
 
-export class MessageValidationError extends Error {
-    readonly input: unknown;
-    constructor(message: string, input: unknown) {
-        super(message);
-        this.name = "MessageValidationError";
-        this.input = input;
-    }
+export interface ValidationErrorMessage {
+    type: "invalid_message";
+    code: string;
+    reason: string;
+    input: any;
 }
 
 class BasicParser<T> {
-    validate(input: unknown) {
+    validate(input: unknown): T | ValidationErrorMessage {
         return input as T;
     }
 
-    parse(input: string): T {
-        return this.validate(JSON.parse(input));
+    parse(input: string): T | ValidationErrorMessage {
+        try {
+            return this.validate(JSON.parse(input));
+        }
+        catch (e) {
+            return {
+                type: "invalid_message",
+                code: "notjson",
+                reason: "message must be parsable as JSON",
+                input: input,
+            }
+        }
     }
 
     async* stream(
@@ -26,7 +34,7 @@ class BasicParser<T> {
             | string
             | Iterable<string | Uint8Array>
             | AsyncIterable<string | Uint8Array>,
-    ): AsyncIterable<T> {
+    ): AsyncIterable<T | ValidationErrorMessage> {
         if (typeof source === "string") {
             source = [source];
         }
@@ -77,20 +85,40 @@ class Parser<T> extends BasicParser<T> {
         this.validators = validators;
     }
 
-    validate(input: unknown): T {
+    validate(input: unknown): T | ValidationErrorMessage {
         if (typeof input !== "object" || input === null || Array.isArray(input)) {
-            throw new MessageValidationError("message must be a JSON object", input);
+            return {
+                type: "invalid_message",
+                code: "notobject",
+                reason: "message must be a JSON object",
+                input: input,
+            };
         }
         const type = (input as { type?: unknown }).type;
         if (typeof type !== "string") {
-            throw new MessageValidationError("message is missing a string `type` field", input);
+            return {
+                type: "invalid_message",
+                code: "notype",
+                reason: "message is missing a string `type` field",
+                input: input,
+            };
         }
         const validate = this.validators[type];
         if (!validate) {
-            throw new MessageValidationError(`unknown message type: ${JSON.stringify(type)}`, input);
+            return {
+                type: "invalid_message",
+                code: "unknowntype",
+                reason: `unknown message type: ${JSON.stringify(type)}`,
+                input: input,
+            };
         }
         if (!validate(input)) {
-            throw new MessageValidationError(this.ajv.errorsText(validate.errors), input);
+            return {
+                type: "invalid_message",
+                code: "invalid",
+                reason: this.ajv.errorsText(validate.errors),
+                input: input,
+            };
         }
         return input as T;
     }
