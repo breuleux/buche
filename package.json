@@ -6,10 +6,10 @@
   "scripts": {
     "gen": "bun run scripts/gen-messages.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import ./tests/setup.ts --test \"tests/**/*.test.ts\" \"tests/**/*.test.tsx\"",
-    "test:update": "UPDATE_EXPECTED=1 node --import ./tests/setup.ts --test \"tests/**/*.test.ts\" \"tests/**/*.test.tsx\"",
-    "coverage": "node --import ./tests/setup.ts --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-exclude='scripts/**' --test-coverage-exclude='**/incoming.ts' --test \"tests/**/*.test.ts\" \"tests/**/*.test.tsx\"",
-    "coverage:lcov": "node --import ./tests/setup.ts --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-exclude='scripts/**' --test-coverage-exclude='**/incoming.ts' --test-reporter=lcov --test-reporter-destination=lcov.info --test-reporter=spec --test-reporter-destination=stdout --test \"tests/**/*.test.ts\" \"tests/**/*.test.tsx\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:update": "UPDATE_EXPECTED=1 vitest run -u",
+    "coverage": "vitest run --coverage",
     "format": "biome check --write .",
     "format:check": "biome check ."
   },
@@ -17,10 +17,12 @@
     "@biomejs/biome": "^2.4.8",
     "@types/bun": "^1.3.14",
     "@types/node": "^26.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
     "happy-dom": "^20.11.6",
     "ts-json-schema-generator": "^2.9.0",
     "ts-morph": "^28.0.0",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "ajv": "^8.20.0"

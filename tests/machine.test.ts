@@ -1,4 +1,4 @@
-import { describe, test } from "node:test";
+import { describe, expect, test } from "vitest";
 import { Buche, type HandlerT } from "../src/core.ts";
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
@@ -29,7 +29,8 @@ describe("Sanity check Machine", () => {
 
     for (const { name, relpath } of getCases(base)) {
         test(`Conformity of machine on '${relpath}'`, async () => {
-            await machine.test(name);
+            const { input, expected } = machine.testFiles(name);
+            await expect(await machine.render(input)).toMatchFileSnapshot(expected);
         });
     }
 });
@@ -45,7 +46,8 @@ for (const base of ["data/runs", "data/errors"]) {
                     initialZones: { "@": new Zone() },
                 });
                 const machine = new MachinePlayer(buche, base);
-                await machine.test(name);
+                const { input, expected } = machine.testFiles(name);
+                await expect(await machine.render(input)).toMatchFileSnapshot(expected);
             });
         }
     });

@@ -1,8 +1,7 @@
-import assert from "node:assert";
 import { cpSync, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, test } from "node:test";
+import { describe, test } from "vitest";
 import { ProcessCommunicator } from "../src/process.ts";
 import { resetId } from "../src/utils.ts";
 import { readJsonlWithBoot, simulate, writeJsonl } from "./sim.ts";
@@ -26,7 +25,11 @@ describe("Full runs", () => {
 
             const { boot, items: messages } = readJsonlWithBoot(sourcePath);
             const command = boot?.command;
-            assert.ok(command, `${name}.source.jsonl must start with a boot line with a command`);
+            // Throw (rather than expect(...).toBeTruthy()) so TS narrows `command`
+            // to string for the ProcessCommunicator call below.
+            if (!command) {
+                throw new Error(`${name}.source.jsonl must start with a boot line with a command`);
+            }
             const pause = boot?.pause ?? 0;
 
             // Copy fakehome so the command runs against a throwaway directory and

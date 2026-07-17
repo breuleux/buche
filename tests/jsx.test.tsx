@@ -1,6 +1,13 @@
-import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+// @vitest-environment happy-dom
+
+import { afterEach, describe, expect, test } from "vitest";
 import { Fragment } from "../src/jsx/jsx-runtime.ts";
+
+// Vitest's happy-dom environment is created once per file, so reset the shared
+// document between tests to keep them isolated.
+afterEach(() => {
+    document.body.replaceChildren();
+});
 
 // A function component, to check that `<Foo/>` calls it.
 function Badge({ label }: { label: string }) {
@@ -8,11 +15,22 @@ function Badge({ label }: { label: string }) {
 }
 
 describe("jsx dom runtime", () => {
+    test("document is isolated: mount into body", () => {
+        expect(document.body.childNodes.length).toBe(0);
+        document.body.append(<div id="mounted">x</div>);
+        expect(document.body.childNodes.length).toBe(1);
+    });
+
+    test("document is isolated: body is empty again", () => {
+        // Would be 1 if the previous test's mount leaked into this one.
+        expect(document.body.childNodes.length).toBe(0);
+    });
+
     test("intrinsic element with attributes and text", () => {
         const el = (<div id="root">hello</div>) as HTMLElement;
-        assert.equal(el.tagName, "DIV");
-        assert.equal(el.id, "root");
-        assert.equal(el.textContent, "hello");
+        expect(el.tagName).toBe("DIV");
+        expect(el.id).toBe("root");
+        expect(el.textContent).toBe("hello");
     });
 
     test("nested children and numbers", () => {
@@ -22,8 +40,8 @@ describe("jsx dom runtime", () => {
                 <li>{2}</li>
             </ul>
         ) as HTMLElement;
-        assert.equal(el.querySelectorAll("li").length, 2);
-        assert.equal(el.textContent, "a2");
+        expect(el.querySelectorAll("li")).toHaveLength(2);
+        expect(el.textContent).toBe("a2");
     });
 
     test("event handlers are attached", () => {
@@ -34,14 +52,14 @@ describe("jsx dom runtime", () => {
             </button>
         ) as HTMLElement;
         el.dispatchEvent(new Event("click"));
-        assert.equal(clicks, 1);
+        expect(clicks).toBe(1);
     });
 
     test("function components render", () => {
         const el = (<Badge label="new" />) as HTMLElement;
-        assert.equal(el.tagName, "SPAN");
-        assert.equal(el.className, "badge");
-        assert.equal(el.textContent, "new");
+        expect(el.tagName).toBe("SPAN");
+        expect(el.className).toBe("badge");
+        expect(el.textContent).toBe("new");
     });
 
     test("fragments group children without a wrapper", () => {
@@ -51,7 +69,7 @@ describe("jsx dom runtime", () => {
                 <i>y</i>
             </>
         ) as DocumentFragment;
-        assert.equal(frag.childNodes.length, 2);
-        assert.equal(Fragment.toString(), "Symbol(myjsx.fragment)");
+        expect(frag.childNodes).toHaveLength(2);
+        expect(Fragment.toString()).toBe("Symbol(myjsx.fragment)");
     });
 });

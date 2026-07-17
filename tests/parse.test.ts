@@ -1,5 +1,4 @@
-import assert from "node:assert";
-import { describe, test } from "node:test";
+import { describe, expect, test } from "vitest";
 import type { IncomingDriverMessage } from "../src/driver-exchange/incoming.ts";
 import { driverParser } from "../src/parse.ts";
 import type { BucheErrorMessage } from "../src/utils.ts";
@@ -19,7 +18,7 @@ async function validateMessages(
 ) {
     const errors = [];
     for await (const msg of messages) {
-        assert.ok(processable(msg), "Parser output is unprocessable");
+        expect(processable(msg), "Parser output is unprocessable").toBeTruthy();
         if (msg.type === "buche_error") {
             errors.push(msg);
         }
@@ -31,7 +30,7 @@ describe("Invalid messages", () => {
     for (const { path, relpath } of getCases("data/invalid")) {
         test(`Errors in '${relpath}'`, async () => {
             const { errors } = await validateMessages(driverParser.streamFromFile(path));
-            assert.notStrictEqual(errors.length, 0, "Expected an error, but none was found");
+            expect(errors.length, "Expected an error, but none was found").toBeGreaterThan(0);
         });
     }
 });
@@ -40,11 +39,7 @@ describe("Parse IncomingDriverMessage", () => {
     for (const { path, relpath } of getCases("data/runs")) {
         test(`Can parse '${relpath}'`, async () => {
             const { errors } = await validateMessages(driverParser.streamFromFile(path));
-            assert.strictEqual(
-                errors.length,
-                0,
-                `Some messages were invalid:\n${JSON.stringify(errors, null, 2)}`,
-            );
+            expect(errors, "Some messages were invalid").toHaveLength(0);
         });
     }
 });
