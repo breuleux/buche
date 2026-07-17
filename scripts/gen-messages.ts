@@ -166,3 +166,9 @@ const dr = new Generator(
     "IncomingDriverMessage",
 )
 dr.run();
+
+const ifc = new Generator(
+    join(ROOT, "src", "interface-exchange"),
+    "IncomingInterfaceMessage",
+)
+ifc.run();

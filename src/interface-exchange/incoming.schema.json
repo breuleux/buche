@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/IncomingInterfaceMessage",
+  "definitions": {
+    "IncomingInterfaceMessage": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/UserFocusMessage"
+        },
+        {
+          "$ref": "#/definitions/UserPromptMessage"
+        }
+      ],
+      "description": "Union of every message type."
+    },
+    "UserFocusMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "user_focus"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "UserPromptMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "user_prompt"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
