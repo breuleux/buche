@@ -7,6 +7,8 @@
     "gen": "bun run scripts/gen-messages.ts",
     "test": "node --test",
     "test:update": "UPDATE_EXPECTED=1 node --test",
+    "coverage": "node --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-exclude='scripts/**' --test-coverage-exclude='**/incoming.ts' --test",
+    "coverage:lcov": "node --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-exclude='scripts/**' --test-coverage-exclude='**/incoming.ts' --test-reporter=lcov --test-reporter-destination=lcov.info --test-reporter=spec --test-reporter-destination=stdout --test",
     "format": "biome check --write .",
     "format:check": "biome check ."
   },
