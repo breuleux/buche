@@ -1,10 +1,12 @@
 import { cpSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bucheStream } from "../src/core.ts";
+import { bucheRun } from "../src/core.ts";
+import { InertInterface } from "../src/interface.tsx";
 import type { IncomingInterfaceMessage } from "../src/interface-exchange/incoming.ts";
 import { AsyncQueue, ProcessCommunicator } from "../src/process.ts";
 import { resetId } from "../src/utils.ts";
+import { Zone } from "../src/zone.ts";
 
 interface _Common {
     messages: Array<IncomingInterfaceMessage>;
@@ -187,25 +189,20 @@ export async function* simulate(args: SimulateArgs | ReplayArgs): AsyncGenerator
         },
     } as unknown as ProcessCommunicator;
 
-    const run = bucheStream({
-        process,
-        interactionStream: replay ? staggerByReplay() : staggerByPause(),
-        loggers: {
-            driverIn: tagAndPush("driverIn"),
-            driverOut: tagAndPush("driverOut"),
-            interfaceIn: tagAndPush("interfaceIn"),
-            interfaceOut: tagAndPush("interfaceOut"),
-        },
-    });
-
-    // Drive bucheRun to completion in the background. Its outputs are already
-    // captured through the loggers, so we only need to pull it along and close
-    // the queue when the run finishes.
     void (async () => {
         try {
-            for await (const _ of run) {
-                // Already pushed via loggers.
-            }
+            await bucheRun({
+                process,
+                interface: new InertInterface(replay ? staggerByReplay() : staggerByPause(), [
+                    new Zone("@"),
+                ]),
+                loggers: {
+                    driverIn: tagAndPush("driverIn"),
+                    driverOut: tagAndPush("driverOut"),
+                    interfaceIn: tagAndPush("interfaceIn"),
+                    interfaceOut: tagAndPush("interfaceOut"),
+                },
+            });
         } finally {
             if (replay && !replayError && cursor < replay.length) {
                 replayError = new Error(

@@ -42,12 +42,9 @@ export class BucheError extends Error {
 }
 
 export async function* mergeIterables<T, U>(
-    ts: AsyncGenerator<T>,
-    us: AsyncGenerator<U>,
+    iteratorT: AsyncIterator<T>,
+    iteratorU: AsyncIterator<U>,
 ): AsyncGenerator<T | U> {
-    const iteratorT = ts[Symbol.asyncIterator]();
-    const iteratorU = us[Symbol.asyncIterator]();
-
     type TaggedResult =
         | { source: "T"; result: IteratorResult<T> }
         | { source: "U"; result: IteratorResult<U> };

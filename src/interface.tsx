@@ -5,12 +5,12 @@ import type {
     ProblemMessage,
     UpdateComponentMessage,
 } from "./interface-exchange/outgoing";
-import type { AsyncQueue } from "./process";
+import { AsyncQueue } from "./process";
 import type { BucheErrorMessage } from "./utils";
 import { extractZones, type Zone } from "./zone";
 
 export interface Interface {
-    interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
+    interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
     processMessage: (message: OutgoingInterfaceMessage) => void;
     zones: Array<Zone>;
 }
@@ -18,6 +18,21 @@ export interface Interface {
 export interface BucheInterfaceArguments {
     container: Element;
     template: Element | string;
+}
+
+export class InertInterface implements Interface {
+    interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
+    zones: Array<Zone>;
+
+    constructor(
+        interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>,
+        zones: Array<Zone>,
+    ) {
+        this.interactions = interactions;
+        this.zones = zones;
+    }
+
+    processMessage(message: OutgoingInterfaceMessage) {}
 }
 
 function reifyTemplate(template: Element | string): Element {
@@ -33,14 +48,17 @@ function reifyTemplate(template: Element | string): Element {
     return element;
 }
 
-export class BucheInterface {
+export class BucheInterface implements Interface {
     container: Element;
     area: Element;
+    interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
     zones: Array<Zone>;
+
     constructor(args: BucheInterfaceArguments) {
         this.container = args.container;
         this.area = reifyTemplate(args.template);
         this.zones = extractZones(this.area as HTMLElement);
+        this.interactions = new AsyncQueue();
     }
     processMessage(message: OutgoingInterfaceMessage) {
         const handler = this[`handle$${message.type}`];

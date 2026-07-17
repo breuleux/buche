@@ -2,7 +2,11 @@ import fs, { readdirSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
-import type { Buche, InM } from "../src/core.ts";
+import { Buche, type InM } from "../src/core.ts";
+import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
+import type { OutgoingInterfaceMessage } from "../src/interface-exchange/outgoing.ts";
+import { AsyncQueue } from "../src/process.ts";
+import { Zone, zoneMap } from "../src/zone.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {
     const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
@@ -23,9 +27,15 @@ export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<
 export class MachinePlayer {
     machine: Buche;
     datadir: string;
+    driverQueue: AsyncQueue<OutgoingDriverMessage> = new AsyncQueue();
+    interfaceQueue: AsyncQueue<OutgoingInterfaceMessage> = new AsyncQueue();
 
-    constructor(machine: Buche, datadir: string) {
-        this.machine = machine;
+    constructor(datadir: string) {
+        this.machine = new Buche({
+            initialZones: zoneMap([new Zone("@")]),
+            sendDriver: this.driverQueue.push.bind(this.driverQueue),
+            sendInterface: this.interfaceQueue.push.bind(this.interfaceQueue),
+        });
         this.datadir = path.join(import.meta.dirname, datadir);
     }
 
@@ -49,10 +59,10 @@ export class MachinePlayer {
         for await (const inObj of readJsonl<InM>(infile)) {
             write({ $role: "driverIn", ...inObj });
             this.machine.handle(inObj);
-            for await (const outObj of this.machine.driverQueue.purge()) {
+            for await (const outObj of this.driverQueue.purge()) {
                 write({ $role: "driverOut", ...outObj });
             }
-            for await (const outObj of this.machine.interfaceQueue.purge()) {
+            for await (const outObj of this.interfaceQueue.purge()) {
                 write({ $role: "interfaceOut", ...outObj });
             }
         }

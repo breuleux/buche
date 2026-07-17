@@ -8,18 +8,19 @@ import type { Echo } from "./echo.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
-import { AsyncQueue, type ProcessCommunicator } from "./process.ts";
+import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
-import { Zone, zoneMap } from "./zone.ts";
+import { type Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage;
 export type HandlerT = Record<string, (buche: Buche, message: InM) => void>;
 
 export interface BucheArguments {
-    handlers: HandlerT;
     initialZones: Record<string, Zone>;
+    sendDriver: (message: OutgoingDriverMessage) => void;
+    sendInterface: (message: OutgoingInterfaceMessage) => void;
 }
 
 export interface LocationResult {
@@ -70,24 +71,20 @@ export class Hierarchy {
 }
 
 export class Buche {
-    handlers!: HandlerT;
+    handlers: HandlerT = Object.assign(
+        {} as HandlerT,
+        baseHandlers,
+        driverHandlers,
+        interfaceHandlers,
+    );
     hierarchy: Hierarchy;
-    driverQueue: AsyncQueue<OutgoingDriverMessage>;
-    interfaceQueue: AsyncQueue<OutgoingInterfaceMessage>;
+    sendDriver: (message: OutgoingDriverMessage) => void;
+    sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.handlers = args.handlers;
         this.hierarchy = new Hierarchy({ zones: args.initialZones });
-        this.driverQueue = new AsyncQueue();
-        this.interfaceQueue = new AsyncQueue();
-    }
-
-    sendDriver(message: OutgoingDriverMessage) {
-        this.driverQueue.push(message);
-    }
-
-    sendInterface(message: OutgoingInterfaceMessage) {
-        this.interfaceQueue.push(message);
+        this.sendDriver = args.sendDriver;
+        this.sendInterface = args.sendInterface;
     }
 
     handle(input: InM) {
@@ -258,8 +255,9 @@ const baseHandlers = {
     },
 };
 
-export interface BucheFunctionArguments {
+export interface BucheRunArguments {
     process: ProcessCommunicator;
+    interface: Interface;
     loggers: {
         driverIn?: (arg: InM) => void;
         interfaceIn?: (arg: InM) => void;
@@ -268,27 +266,10 @@ export interface BucheFunctionArguments {
     };
 }
 
-export interface BucheStreamArguments extends BucheFunctionArguments {
-    interactionStream: AsyncGenerator<IncomingInterfaceMessage | BucheErrorMessage>;
-    initialZones?: Array<Zone>;
-}
-
-export async function* bucheStream(args: BucheStreamArguments) {
+export async function bucheRun(args: BucheRunArguments) {
     const buche = new Buche({
-        handlers: Object.assign(
-            baseHandlers as unknown as HandlerT,
-            driverHandlers,
-            interfaceHandlers,
-        ),
-        initialZones: zoneMap(args.initialZones ?? [new Zone("@")]),
-    });
-    const instream = mergeIterables(
-        _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
-        _awrap(args.interactionStream, args.loggers.interfaceIn),
-    );
-    for await (const inMessage of instream) {
-        buche.handle(inMessage);
-        for (const outMessage of buche.driverQueue.purge()) {
+        initialZones: zoneMap(args.interface.zones),
+        sendDriver(outMessage: OutgoingDriverMessage) {
             args.loggers.driverOut?.(outMessage);
             if (
                 outMessage.type === "signal" &&
@@ -300,39 +281,17 @@ export async function* bucheStream(args: BucheStreamArguments) {
             } else {
                 args.process.send(outMessage);
             }
-        }
-        for (const outMessage of buche.interfaceQueue.purge()) {
+        },
+        sendInterface(outMessage: OutgoingInterfaceMessage) {
             args.loggers.interfaceOut?.(outMessage);
-            yield outMessage;
-        }
-    }
-}
-
-export interface BucheRunArguments extends BucheFunctionArguments {
-    interface: Interface;
-}
-
-export async function bucheRun(args: BucheRunArguments) {
-    const sargs: BucheStreamArguments = Object.assign(args, {
-        interactionStream: args.interface.interactions[Symbol.asyncIterator](),
-        initialZones: args.interface.zones,
+            args.interface.processMessage(outMessage);
+        },
     });
-    for await (const message of bucheStream(sargs as BucheStreamArguments)) {
-        args.interface.processMessage(message);
+    const instream = mergeIterables(
+        _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
+        _awrap(args.interface.interactions as AsyncGenerator<InM>, args.loggers.interfaceIn),
+    );
+    for await (const inMessage of instream) {
+        buche.handle(inMessage);
     }
 }
-
-// export interface BucheConfig {
-//     cellTypes: Record<string, new (config: CellConfiguration) => Cell>;
-// }
-
-// export class Buche extends Machine<InM, OutM> implements BucheConfig {
-//     cellTypes!: Record<string, new (config: CellConfiguration) => Cell>;
-
-//     cells: Record<string, Cell> = {};
-
-//     constructor(config: BucheConfig) {
-//         super();
-//         Object.assign(this, config);
-//     }
-// }
