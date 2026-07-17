@@ -1048,3 +1048,26 @@ describe("prompt-collection — previous/next virtual chords", () => {
         expect(editor.getPosition?.()).toBe(0);
     });
 });
+
+describe("prompt-collection — pop slot", () => {
+    test("the slot is a child of the collection, not of the prompt row", () => {
+        const pc = make();
+        const a = pc.addPrompt(makeEntry({ label: "a" }));
+        const pop = pc.popElement(a)!;
+        expect(pop.parentElement).toBe(pc);
+        expect(pc.promptElement(a)?.contains(pop)).toBe(false);
+    });
+
+    test("the slot shows only while its prompt is active", () => {
+        const pc = make();
+        const a = pc.addPrompt(makeEntry({ label: "a" }));
+        const b = pc.addPrompt(makeEntry({ label: "b" }));
+        expect(pc.popElement(a)?.hidden).toBe(false);
+        expect(pc.popElement(b)?.hidden).toBe(true);
+        pc.showPrompt(b, false);
+        expect(pc.popElement(a)?.hidden).toBe(true);
+        expect(pc.popElement(b)?.hidden).toBe(false);
+        pc.removePrompt(b);
+        expect(pc.popElement(b)).toBeNull();
+    });
+});

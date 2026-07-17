@@ -1,4 +1,4 @@
 {"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq"}
-{"$role":"interfaceOut","type":"update_prompt","zone":"#100","entry":{"echo":"#103","cell":null,"prompt":"#104","zones":{"@":"#105","Z105":"#105"}}}
+{"$role":"interfaceOut","type":"update_prompt","zone":"#100","entry":{"echo":"#103","cell":null,"prompt":"#104","zones":{"@":"#105","Z105":"#105","pop":"#106","Z106":"#106"}}}
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq"],"to":["$term"],"zone":null,"background":false}
-{"$role":"interfaceOut","type":"update_cell","zone":"#100","entry":{"echo":"#103","cell":"#106","prompt":"#104","zones":{"@":"#105","Z105":"#105"}}}
+{"$role":"interfaceOut","type":"update_cell","zone":"#100","entry":{"echo":"#103","cell":"#107","prompt":"#104","zones":{"@":"#105","Z105":"#105","pop":"#106","Z106":"#106"}}}

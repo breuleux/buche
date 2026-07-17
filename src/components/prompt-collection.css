@@ -2,6 +2,7 @@
  * Prompts (marker above a CodeMirror editor) with a tab zone of labels below. */
 
 prompt-collection {
+	position: relative; /* anchor for the pop float (see .prompt-collection-pop) */
 	display: block;
 	color: #d4d4d4;
 	font-family: "Menlo", "Consolas", monospace;
@@ -27,6 +28,34 @@ prompt-collection {
 
 .prompt-collection-prompt[hidden] {
 	display: none;
+}
+
+/* ── Pop float: the prompt's PopZone slot, floating just above the prompts ── */
+
+/* One slot per prompt, a child of the collection (not of the focusable prompt
+ * row, which would otherwise resolve to the pop's cell — see focus.ts's
+ * resolve). Hidden unless it is the active prompt's slot ([hidden] toggled by
+ * activate) and holds a cell (:empty while the pop is closed). Taken out of
+ * the flow, it overlays the cells above without displacing them. */
+.prompt-collection-pop {
+	display: none;
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	right: 0;
+	z-index: 20;
+	margin-bottom: 4px;
+	max-height: 240px;
+	overflow: hidden;
+	background: #242424;
+	border: 1px solid #3c3c3c;
+	border-radius: 4px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+	padding: 2px 0;
+}
+
+.prompt-collection-pop:not(:empty):not([hidden]) {
+	display: block;
 }
 
 /* The marker: the prompt text, in small type above the editor. Its extra 4px

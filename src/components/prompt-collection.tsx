@@ -141,6 +141,9 @@ interface Row {
     /** Stable DOM id (for the `data-prompt` attribute and drag reordering). */
     id: string;
     row: HTMLElement; // [marker; editor]
+    /** The prompt's floating slot (the PopZone's element): a child of the
+     *  collection, shown while this prompt is active. */
+    pop: HTMLElement;
     marker: HTMLElement;
     tab: HTMLElement;
     editor: PromptEditor;
@@ -587,6 +590,15 @@ export class PromptCollection extends HTMLElement {
         });
         editorHost.appendChild(editor.dom);
 
+        // The pop float: a child of the collection, *not* of the row — the row
+        // is a focusable leaf (focus.ts), and a focusable box inside it would
+        // make the prompt resolve to the pop instead of the editor. It floats
+        // above the collection and shows only while its prompt is active.
+        const pop = document.createElement("div");
+        pop.className = "prompt-collection-pop";
+        pop.hidden = true;
+        this.appendChild(pop);
+
         const row = document.createElement("div");
         row.className = "prompt-collection-prompt";
         row.setAttribute("data-prompt", id);
@@ -625,7 +637,7 @@ export class PromptCollection extends HTMLElement {
         const listener = (): void => this.reconfigure(entry);
         entry.listeners.push(listener);
 
-        const rowEntry: Row = { entry, id, row, marker, tab, editor, listener };
+        const rowEntry: Row = { entry, id, row, pop, marker, tab, editor, listener };
         this.rows.set(entry, rowEntry);
         this.byId.set(id, entry);
         this.order.push(entry);
@@ -654,6 +666,7 @@ export class PromptCollection extends HTMLElement {
         entry.listeners = entry.listeners.filter((l) => l !== row.listener);
         row.editor.destroy();
         row.row.remove();
+        row.pop.remove();
         row.tab.remove();
         this.rows.delete(entry);
         this.byId.delete(row.id);
@@ -680,6 +693,13 @@ export class PromptCollection extends HTMLElement {
         return this.rows.get(entry)?.row ?? null;
     }
 
+    /** The floating slot above a prompt's row (where its PopZone installs),
+     *  or null. */
+    popElement(entry: Entry): HTMLElement | null {
+        this.ensureSetup();
+        return this.rows.get(entry)?.pop ?? null;
+    }
+
     private activate(entry: Entry, focus: boolean): void {
         this.ensureSetup();
         if (!this.rows.has(entry)) {
@@ -691,6 +711,7 @@ export class PromptCollection extends HTMLElement {
         for (const [e, row] of this.rows) {
             const on = e === entry;
             row.row.hidden = !on;
+            row.pop.hidden = !on;
             row.tab.classList.toggle("active", on);
             row.tab.setAttribute("aria-selected", String(on));
             // Active tab wears its accent; inactive tabs go grey.

@@ -1,6 +1,6 @@
 import type { StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
-import { PromptZone } from "./zone.ts";
+import { PopZone, PromptZone } from "./zone.ts";
 
 export interface PromptBinding {
     command: string;
@@ -31,13 +31,14 @@ export class Prompt extends WithId() implements PromptConfiguration {
      */
     filigrane: string | null = null;
 
-    zones: { main: PromptZone };
+    zones: { main: PromptZone; pop: PopZone };
 
     constructor(config: PromptConfiguration) {
         super();
         this.configure(config);
         this.zones = {
             main: new PromptZone({ names: ["@"] }),
+            pop: new PopZone({ names: ["pop"] }),
         };
     }
 

@@ -8,6 +8,7 @@ import type {
 import type { TabCloseEvent, TabPane } from "./components/tab-pane.tsx";
 import { echoElementId } from "./echo.ts";
 import type { Entry } from "./entry.ts";
+import type { FocusChangeDetail } from "./focus.ts";
 import type { BucheInterface as Interface } from "./interface.tsx";
 import { WithId } from "./utils.ts";
 
@@ -162,6 +163,7 @@ export class TabbedZone extends Zone {
         });
         bt.prompts.addPrompt(entry);
         pz.element = bt;
+        attachPopZone(entry.prompt!.zones.pop, bt, entry);
         row.pane.appendChild(bt);
         return row.pane;
     }
@@ -202,6 +204,16 @@ function reportResize(ifc: Interface, eb: EchoBox, entry: Entry): void {
         lastReported.set(eb, sig);
         ifc.interactions.push({ type: "user_resize", pixel, pty, entry });
     });
+}
+
+/** Give a prompt's PopZone its float slot in the <buche-term> hosting the
+ *  prompt (the per-row slot above the prompt row, see prompt-collection). The
+ *  first slot a prompt gets is its own (re-installs don't move the pop). */
+function attachPopZone(pop: PopZone, bt: BucheTerm, entry: Entry): void {
+    const slot = bt.prompts.popElement(entry);
+    if (slot && !pop.element) {
+        pop.element = slot;
+    }
 }
 
 export class PromptZone extends Zone {
@@ -254,11 +266,92 @@ export class PromptZone extends Zone {
         const bt = this.element!;
         bt.prompts.addPrompt(entry);
         pz.element = bt;
+        attachPopZone(entry.prompt!.zones.pop, bt, entry);
         return bt;
     }
 
     revealPrompt(entry: Entry): HTMLElement | null {
         this.element.prompts.showPrompt(entry, false);
         return this.element.prompts.promptElement(entry);
+    }
+}
+
+/**
+ * A floating zone pinned right above its prompt's row (its element is the
+ * prompt's float slot in the <prompt-collection>, wired at prompt install). It
+ * holds a single cell, shown as a compact echo box floating over the rest of
+ * the interface:
+ *   * installing a cell closes (signals, like ✕) whatever the pop held before;
+ *   * the box's own ✕ closes it the same way;
+ *   * whenever the focus leaves the cell, the pop closes and the float
+ *     disappears (the slot hides itself when empty).
+ */
+export class PopZone extends Zone {
+    declare element: HTMLElement;
+    private current: EchoBox | null = null;
+    // What closing the current cell does (signal + removal); null when empty.
+    private closer: (() => void) | null = null;
+    // The focus manager's root, while a cell is open (see onFocusChange).
+    private watched: HTMLElement | null = null;
+
+    installCell(ifc: Interface, entry: Entry): HTMLElement {
+        // One cell at a time: the previous pop closes before the new one shows.
+        this.dismiss();
+        const eb = new EchoBox();
+        eb.setCompact(true);
+        eb.bindEntry(entry);
+        this.closer = () => {
+            const code = eb.status === "unresponsive" ? 9 : 15;
+            ifc.interactions.push({ type: "user_signal", code, entry });
+            eb.remove();
+        };
+        eb.addEventListener("close", () => this.dismiss());
+        eb.addEventListener("resize", () => reportResize(ifc, eb, entry));
+        // Keyboard input bubbles up from the embedded terminal (see EmbeddedTerm).
+        eb.addEventListener("term-data", (e) => {
+            ifc.interactions.push({
+                type: "user_text",
+                text: (e as CustomEvent<string>).detail,
+                entry,
+            });
+        });
+        eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
+        this.element.append(eb);
+        this.current = eb;
+        tagCell(eb, entry);
+        // Focus leaving the cell closes the pop. "focus-change" is dispatched
+        // on the focus manager's root (see focus.ts) and bubbles *up* from
+        // there, so the listener goes on the root itself, not on the slot.
+        this.watched = ifc.focus.root;
+        this.watched.addEventListener("focus-change", this.onFocusChange);
+        return eb;
+    }
+
+    installEcho(ifc: Interface, entry: Entry): HTMLElement {
+        // The pop shows its cell's echo: same single slot, same box.
+        return this.installCell(ifc, entry);
+    }
+
+    private onFocusChange = (event: Event): void => {
+        const pop = this.current;
+        if (!pop?.isConnected) {
+            return;
+        }
+        const { previous, current } = (event as CustomEvent<FocusChangeDetail>).detail;
+        const wasIn = previous !== null && (previous === pop || pop.contains(previous));
+        const nowIn = current !== null && (current === pop || pop.contains(current));
+        if (wasIn && !nowIn) {
+            this.dismiss();
+        }
+    };
+
+    /** Close the current cell, if any (signal it, like its ✕, and unfloat). */
+    private dismiss(): void {
+        const closer = this.closer;
+        this.closer = null;
+        this.current = null;
+        this.watched?.removeEventListener("focus-change", this.onFocusChange);
+        this.watched = null;
+        closer?.();
     }
 }
