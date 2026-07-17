@@ -370,14 +370,34 @@ echo-box[compact][data-alt] .echo-box-handle {
 }
 
 /* ── Keyboard selection (interface capture mode) ──────────────────────────
- * The capture-mode bindings (Ctrl+Q, then ↑/↓) highlight the selected cell
- * with a tinted outline; once Ctrl is released the DOM focus lands on it too,
- * without adding the browser's own outline. */
+ * The capture-mode bindings (Ctrl+Q, then ↑/↓) highlight the selected cell:
+ * the gutter bar widens and brightens and the background lightens a touch;
+ * once Ctrl is released the DOM focus lands on it too, without adding the
+ * browser's own outline. */
 echo-box:focus {
 	outline: none;
 }
 
+/* #262626 = the default background (#1c1c1c) lightened by ~4.5% white; solid
+ * so the embedded terminal can match it exactly (its canvas background comes
+ * from a colour, not from compositing). */
 echo-box.cell-focused {
-	outline: 1px solid var(--echo-color, #6ea8fe);
-	outline-offset: -1px;
+	--echo-bg: #262626;
+	background: #262626;
+}
+
+echo-box.cell-focused .echo-box-gutter::before,
+echo-box.cell-focused .echo-box-status {
+	filter: brightness(1.35);
+}
+
+echo-box.cell-focused .echo-box-gutter::before {
+	width: 4px;
+}
+
+/* embedded-term declares its own --embedded-term-bg, so the cascade needs to
+ * target the element itself; embedded-term.tsx's refreshBackground() pushes
+ * the same colour into the xterm theme. */
+echo-box.cell-focused embedded-term {
+	--embedded-term-bg: #262626;
 }

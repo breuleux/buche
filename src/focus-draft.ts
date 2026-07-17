@@ -117,17 +117,32 @@ export class FocusManager {
     /** Select a cell: highlight it and move the DOM focus into its active view
      *  (the embedded terminal, so keystrokes reach the pty). */
     setFocusedCell(box: EchoBox | null): void {
-        if (this.focusedCell && this.focusedCell !== box) {
-            this.focusedCell.classList.remove("cell-focused");
+        const previous = this.focusedCell;
+        if (previous && previous !== box) {
+            previous.classList.remove("cell-focused");
         }
         this.focusedCell = box;
+        box?.classList.add("cell-focused");
+        // The focused cell's background brightens (echo-box.css); repaint the
+        // embedded terminals of both cells so their canvas matches.
+        this.refreshCellBackground(previous);
+        this.refreshCellBackground(box);
         if (!box) {
             return;
         }
-        box.classList.add("cell-focused");
         // Environments without layout (tests) may lack scrollIntoView.
         box.scrollIntoView?.({ block: "nearest" });
         this.focusCellContent(box);
+    }
+
+    private refreshCellBackground(box: EchoBox | null): void {
+        // Stub terminals without the real element (tests) may lack the method.
+        const terms = (box?.querySelectorAll("embedded-term") ?? []) as Array<
+            Partial<EmbeddedTerm>
+        >;
+        for (const term of terms) {
+            term.refreshBackground?.();
+        }
     }
 
     /** Drop the cell selection (highlight and reference), leaving focus alone. */

@@ -116,6 +116,7 @@ export class EmbeddedTerm extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
+        this.refreshBackground();
         this.startPolling();
         this.dispatchEvent(new CustomEvent("term-appear", { bubbles: true }));
     }
@@ -254,6 +255,23 @@ export class EmbeddedTerm extends HTMLElement {
         this.term.focus();
         if (options) {
             super.focus(options);
+        }
+    }
+
+    /**
+     * Re-read `--embedded-term-bg` (the containing echo-box overrides it while
+     * the cell is focused) and push it into the xterm theme, so the canvas
+     * background matches the brightened cell. The host background and the
+     * scroll fades follow the same variable from CSS.
+     */
+    refreshBackground(): void {
+        if (!this.isConnected) {
+            return;
+        }
+        this.ensureSetup();
+        const background = getComputedStyle(this).getPropertyValue("--embedded-term-bg").trim();
+        if (background && background !== this.term.options.theme?.background) {
+            this.term.options.theme = { ...THEME, background };
         }
     }
 
