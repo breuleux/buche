@@ -27,6 +27,10 @@
 // circle and closing icon change appearance with the cell's `status`; the circle
 // and line colour are configurable via the `color` attribute / `--echo-color`.
 //
+// The left gutter doubles as a resize handle: press on it and drag up to grow
+// the cell, down to shrink it. Set the `reverse` attribute to swap those
+// directions (drag up to shrink, down to grow).
+//
 // Events (both bubble):
 //   "viewchange"  detail: { view: string }   — the active view changed
 //   "close"                                   — the closing icon was clicked
@@ -104,9 +108,11 @@ export class EchoBox extends HTMLElement {
         this.replaceChildren();
 
         // Gutter: status circle at the top, line drawn beside the cell (CSS ::before).
+        // It also acts as a drag handle to resize the cell.
         this.gutter = div("echo-box-gutter");
         this.statusEl = div("echo-box-status");
         this.gutter.append(this.statusEl);
+        this.gutter.addEventListener("pointerdown", (e) => this.startResize(e));
 
         // Header: echo text + controls (view icons, then the closing icon).
         this.echoEl = div("echo-box-echo");
@@ -153,6 +159,49 @@ export class EchoBox extends HTMLElement {
             });
         }
         this.updateControlsState();
+    }
+
+    // ── Resize (drag the gutter handle) ───────────────────────────────────────
+
+    /** Drag the gutter up/down to grow/shrink the cell (reversed with `reverse`). */
+    private startResize(event: PointerEvent): void {
+        // Ignore anything but a primary-button / touch / pen press.
+        if (event.button !== 0) {
+            return;
+        }
+        event.preventDefault();
+        const gutter = this.gutter;
+        gutter.setPointerCapture(event.pointerId);
+        gutter.classList.add("resizing");
+
+        const startY = event.clientY;
+        // Continue from the last explicit height if we set one (keeps repeated
+        // drags exact); otherwise start from the cell's current rendered height.
+        const explicit = Number.parseFloat(this.cellEl.style.height);
+        const startHeight = Number.isFinite(explicit)
+            ? explicit
+            : this.cellEl.getBoundingClientRect().height;
+        const reverse = this.hasAttribute("reverse");
+
+        const onMove = (e: PointerEvent) => {
+            // Moving up (clientY decreases) grows the cell, down shrinks it; the
+            // `reverse` attribute swaps those directions.
+            const delta = (startY - e.clientY) * (reverse ? -1 : 1);
+            const height = Math.max(0, startHeight + delta);
+            this.cellEl.style.height = `${height}px`;
+        };
+
+        const onUp = (e: PointerEvent) => {
+            gutter.releasePointerCapture(e.pointerId);
+            gutter.classList.remove("resizing");
+            gutter.removeEventListener("pointermove", onMove);
+            gutter.removeEventListener("pointerup", onUp);
+            gutter.removeEventListener("pointercancel", onUp);
+        };
+
+        gutter.addEventListener("pointermove", onMove);
+        gutter.addEventListener("pointerup", onUp);
+        gutter.addEventListener("pointercancel", onUp);
     }
 
     // ── Status ──────────────────────────────────────────────────────────────

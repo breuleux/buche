@@ -21,6 +21,9 @@ echo-box {
 .echo-box-gutter {
 	position: relative;
 	grid-column: 1;
+	/* The gutter is a drag handle: resize the cell by dragging it up/down. */
+	cursor: ns-resize;
+	touch-action: none;
 }
 
 .echo-box-gutter::before {
@@ -127,6 +130,8 @@ echo-box {
 .echo-box-cell {
 	padding: 0 2px 2px;
 	min-width: 0;
+	/* When the gutter handle sets an explicit height, keep content contained. */
+	overflow: auto;
 }
 
 .echo-box-view[hidden] {

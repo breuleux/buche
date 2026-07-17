@@ -165,6 +165,48 @@ describe("echo-box — views", () => {
     });
 });
 
+describe("echo-box — resize handle", () => {
+    function drag(box: EchoBox, fromY: number, toY: number): void {
+        const gutter = q(box, ".echo-box-gutter") as HTMLElement;
+        gutter.dispatchEvent(
+            new PointerEvent("pointerdown", {
+                clientY: fromY,
+                button: 0,
+                pointerId: 1,
+                bubbles: true,
+            }),
+        );
+        gutter.dispatchEvent(
+            new PointerEvent("pointermove", { clientY: toY, pointerId: 1, bubbles: true }),
+        );
+        gutter.dispatchEvent(
+            new PointerEvent("pointerup", { clientY: toY, pointerId: 1, bubbles: true }),
+        );
+    }
+
+    test("dragging the gutter up grows the cell, down shrinks it", () => {
+        const box = make();
+        const cell = q(box, ".echo-box-cell") as HTMLElement;
+        // Drag up by 40px from a 0-height baseline → +40px.
+        drag(box, 100, 60);
+        expect(cell.style.height).toBe("40px");
+        // Drag down 20px from that height → 20px.
+        drag(box, 60, 80);
+        expect(cell.style.height).toBe("20px");
+        // Never goes below 0.
+        drag(box, 80, 300);
+        expect(cell.style.height).toBe("0px");
+    });
+
+    test("the reverse attribute swaps the drag directions", () => {
+        const box = make({ reverse: "" });
+        const cell = q(box, ".echo-box-cell") as HTMLElement;
+        // With reverse, dragging down grows the cell.
+        drag(box, 100, 140);
+        expect(cell.style.height).toBe("40px");
+    });
+});
+
 describe("echo-box — closing", () => {
     test("clicking the closing icon dispatches a bubbling 'close' event", () => {
         const box = make();
