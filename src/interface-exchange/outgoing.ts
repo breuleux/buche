@@ -1,28 +1,19 @@
-import type { CellCommand, ComponentStatus } from "../cell.ts";
+import type { CellCommand } from "../cell.ts";
 import type { ComponentData } from "../core.ts";
-import type { Zone } from "../zone.ts";
 
-export interface InstallMessage {
-    zone: Zone;
+/**
+ * Install or update a component (echo, cell and/or prompt) at a location.
+ *
+ * This single message replaces the former `install_echo`, `install_cell`,
+ * `install_prompt` and `update_status` messages: the interface (re)renders the
+ * component from `component`, reading any status directly from its echo. The
+ * zone the component lives in is available on the echo/cell/prompt themselves.
+ */
+export interface UpdateComponentMessage {
+    type: "update_component";
+
+    /** The component's current state (echo, cell, prompt, zones). */
     component: ComponentData;
-}
-
-export interface InstallEchoMessage extends InstallMessage {
-    type: "install_echo";
-}
-
-export interface InstallCellMessage extends InstallMessage {
-    type: "install_cell";
-}
-
-export interface InstallPromptMessage extends InstallMessage {
-    type: "install_prompt";
-}
-
-export interface UpdateStatusMessage {
-    type: "update_status";
-    component: ComponentData;
-    status: ComponentStatus;
 }
 
 export interface CellCommandMessage {
@@ -32,17 +23,5 @@ export interface CellCommandMessage {
     component: ComponentData;
 }
 
-export interface PromptSubmitMessage {
-    type: "prompt_submit";
-
-    // TODO
-}
-
 /** Union of every message type. */
-export type OutgoingInterfaceMessage =
-    | InstallEchoMessage
-    | InstallCellMessage
-    | InstallPromptMessage
-    | UpdateStatusMessage
-    | CellCommandMessage
-    | PromptSubmitMessage;
+export type OutgoingInterfaceMessage = UpdateComponentMessage | CellCommandMessage;

@@ -185,8 +185,7 @@ export class Buche extends Machine<InM, OutM> {
             }
         }
         yield {
-            type: `install_${type}`,
-            zone: zone,
+            type: "update_component",
             component: component,
         };
         return component;

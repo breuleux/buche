@@ -20,8 +20,7 @@ export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterabl
     const echo = new Echo(obj, { zone, prompt });
     Object.assign(component, { echo });
     yield {
-        type: "install_echo",
-        zone: zone,
+        type: "update_component",
         component: component,
     };
 }

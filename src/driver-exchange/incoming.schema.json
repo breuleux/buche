@@ -135,9 +135,6 @@
         },
         {
           "$ref": "#/definitions/ExecCommand"
-        },
-        {
-          "$ref": "#/definitions/ErrorCommand"
         }
       ]
     },
@@ -222,37 +219,6 @@
       "required": [
         "type",
         "code"
-      ],
-      "additionalProperties": false
-    },
-    "ErrorCommand": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "error"
-        },
-        "error_type": {
-          "type": "string",
-          "description": "Class/kind of the error, e.g. the exception type."
-        },
-        "message": {
-          "type": "string",
-          "description": "Human-readable error message."
-        },
-        "traceback": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Traceback lines, when available."
-        }
-      },
-      "required": [
-        "type",
-        "error_type",
-        "message",
-        "traceback"
       ],
       "additionalProperties": false
     },
@@ -440,7 +406,7 @@
         "type"
       ],
       "additionalProperties": false,
-      "description": "An error reported by the process (as opposed to a Buche-side `buche_error`)."
+      "description": "An error reported by the process"
     },
     "PromptConfigureMessage": {
       "type": "object",

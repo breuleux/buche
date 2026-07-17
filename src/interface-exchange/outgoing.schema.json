@@ -5,55 +5,29 @@
     "OutgoingInterfaceMessage": {
       "anyOf": [
         {
-          "$ref": "#/definitions/InstallEchoMessage"
-        },
-        {
-          "$ref": "#/definitions/InstallCellMessage"
-        },
-        {
-          "$ref": "#/definitions/InstallPromptMessage"
-        },
-        {
-          "$ref": "#/definitions/UpdateStatusMessage"
+          "$ref": "#/definitions/UpdateComponentMessage"
         },
         {
           "$ref": "#/definitions/CellCommandMessage"
-        },
-        {
-          "$ref": "#/definitions/PromptSubmitMessage"
         }
       ],
       "description": "Union of every message type."
     },
-    "InstallEchoMessage": {
+    "UpdateComponentMessage": {
       "type": "object",
       "properties": {
-        "zone": {
-          "$ref": "#/definitions/Zone"
-        },
-        "component": {
-          "$ref": "#/definitions/ComponentData"
-        },
         "type": {
           "type": "string",
-          "const": "install_echo"
-        }
-      },
-      "required": ["component", "type", "zone"],
-      "additionalProperties": false
-    },
-    "Zone": {
-      "type": "object",
-      "properties": {
-        "_id": {
-          "type": "number"
+          "const": "update_component"
         },
-        "parent": {
-          "$ref": "#/definitions/Zone"
+        "component": {
+          "$ref": "#/definitions/ComponentData",
+          "description": "The component's current state (echo, cell, prompt, zones)."
         }
       },
+      "required": ["type", "component"],
       "additionalProperties": false,
-      "required": ["_id"]
+      "description": "Install or update a component (echo, cell and/or prompt) at a location.\n\nThis single message replaces the former `install_echo`, `install_cell`, `install_prompt` and `update_status` messages: the interface (re)renders the component from `component`, reading any status directly from its echo. The zone the component lives in is available on the echo/cell/prompt themselves."
     },
     "ComponentData": {
       "type": "object",
@@ -140,6 +114,17 @@
           "type": "string",
           "description": "HTML for the prompt's leading label/marker."
         },
+        "text": {
+          "type": ["string", "null"],
+          "description": "Text in the prompt."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        },
         "_id": {
           "type": "number"
         },
@@ -173,12 +158,6 @@
       },
       "additionalProperties": false
     },
-    "Address": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "HighlightRange": {
       "type": "object",
       "properties": {
@@ -198,6 +177,25 @@
       "required": ["start", "end", "cls"],
       "additionalProperties": false,
       "description": "A syntax-highlight span over the prompt text"
+    },
+    "Zone": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "number"
+        },
+        "parent": {
+          "$ref": "#/definitions/Zone"
+        }
+      },
+      "additionalProperties": false,
+      "required": ["_id"]
+    },
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "ComponentStatus": {
       "type": "object",
@@ -249,57 +247,6 @@
         }
       },
       "required": ["_id", "address", "prompt", "zone"],
-      "additionalProperties": false
-    },
-    "InstallCellMessage": {
-      "type": "object",
-      "properties": {
-        "zone": {
-          "$ref": "#/definitions/Zone"
-        },
-        "component": {
-          "$ref": "#/definitions/ComponentData"
-        },
-        "type": {
-          "type": "string",
-          "const": "install_cell"
-        }
-      },
-      "required": ["component", "type", "zone"],
-      "additionalProperties": false
-    },
-    "InstallPromptMessage": {
-      "type": "object",
-      "properties": {
-        "zone": {
-          "$ref": "#/definitions/Zone"
-        },
-        "component": {
-          "$ref": "#/definitions/ComponentData"
-        },
-        "type": {
-          "type": "string",
-          "const": "install_prompt"
-        }
-      },
-      "required": ["component", "type", "zone"],
-      "additionalProperties": false
-    },
-    "UpdateStatusMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "update_status"
-        },
-        "component": {
-          "$ref": "#/definitions/ComponentData"
-        },
-        "status": {
-          "$ref": "#/definitions/ComponentStatus"
-        }
-      },
-      "required": ["type", "component", "status"],
       "additionalProperties": false
     },
     "CellCommandMessage": {
@@ -404,17 +351,6 @@
         }
       },
       "required": ["type", "code"],
-      "additionalProperties": false
-    },
-    "PromptSubmitMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "prompt_submit"
-        }
-      },
-      "required": ["type"],
       "additionalProperties": false
     }
   }

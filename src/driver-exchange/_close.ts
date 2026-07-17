@@ -25,9 +25,8 @@ export async function* handle$close(buche: Buche, obj: CloseMessage): AsyncItera
         if (echo && (echo.status.status === "running" || echo.status.status === "unresponsive")) {
             echo.status = { status, code: obj.outcome.code };
             yield {
-                type: "update_status",
+                type: "update_component",
                 component: component,
-                status: echo.status,
             };
         }
     }

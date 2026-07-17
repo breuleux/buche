@@ -1,4 +1,4 @@
-import type { Address } from "./driver-exchange/common.ts";
+import type { Address, HighlightRange } from "./driver-exchange/common.ts";
 import { IdClass } from "./utils.ts";
 import { PromptZone, type Zone } from "./zone.ts";
 
@@ -24,6 +24,12 @@ export interface PromptConfiguration {
 
     /** HTML for the prompt's leading label/marker. */
     prompt_html?: string;
+
+    /** Text in the prompt. */
+    text?: string | null;
+
+    /** Spans to colorize. */
+    ranges?: HighlightRange[];
 }
 
 export class Prompt extends IdClass implements PromptConfiguration {
@@ -41,6 +47,7 @@ export class Prompt extends IdClass implements PromptConfiguration {
         this.address = location.address;
         this.configure(config);
     }
+
     configure(config: PromptConfiguration): void {
         Object.assign(this, config);
     }

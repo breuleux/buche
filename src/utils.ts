@@ -90,6 +90,6 @@ export async function* mergeIterables<T, U>(
         }
     } finally {
         // Ensure active iterators are closed if the consumer aborts early (e.g. break)
-        await Promise.allSettled([iteratorT.return?.(), iteratorU.return?.()]);
+        await Promise.allSettled([iteratorT.return?.(null), iteratorU.return?.(null)]);
     }
 }
