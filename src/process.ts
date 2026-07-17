@@ -80,6 +80,14 @@ export class ProcessCommunicator {
     private pending = 0;
     private exitCode: number | null = null;
     private exitSignal: NodeJS.Signals | null = null;
+    private notifyExit: () => void = () => {};
+
+    /**
+     * Resolves when the process exits. Unlike the end of {@link messages} (which
+     * waits for every pipe to reach EOF — and a grandchild may hold one open
+     * after inheriting it), this tracks the raw exit of the process itself.
+     */
+    readonly exited: Promise<void> = new Promise((resolve) => (this.notifyExit = resolve));
 
     /**
      * @param command  A list of `[program, ...args]` to execute directly, or a
@@ -151,6 +159,11 @@ export class ProcessCommunicator {
 
         // Process lifecycle.
         this.pending += 1;
+        child.on("exit", (code, signal) => {
+            this.exitCode = code;
+            this.exitSignal = signal;
+            this.notifyExit();
+        });
         child.on("close", (code, signal) => {
             this.exitCode = code;
             this.exitSignal = signal;
@@ -164,7 +177,8 @@ export class ProcessCommunicator {
                 reason: err.message,
                 input: this.command,
             });
-            // A failed spawn may never emit "close"; make sure we terminate.
+            // A failed spawn may never emit "exit" or "close"; make sure we terminate.
+            this.notifyExit();
             this.queue.end();
         });
 

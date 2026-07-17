@@ -25,6 +25,8 @@ import {
 interface RunConfig {
     /** Shell command driving the session. */
     command?: string;
+    /** Pid of the launcher (scripts/electron.ts); the app quits when it dies. */
+    parent?: number;
     /** The directory the build script wrote the bundles and pages into. */
     dir?: string;
     /** Working directory for the process. */
@@ -71,7 +73,8 @@ async function start(): Promise<void> {
     // The default menu binds Cmd+W to "close window"; this one hands it to the
     // renderer instead (close the current tab — see src/interface.tsx). The
     // roles keep the usual shortcuts, which macOS routes through the menu
-    // (copy/paste in particular).
+    // (copy/paste in particular). On macOS the accelerator is Cmd only, so
+    // Ctrl+W reaches the page — prompts use it to delete a word, as in a shell.
     Menu.setApplicationMenu(
         Menu.buildFromTemplate([
             { role: "appMenu" },
@@ -82,7 +85,7 @@ async function start(): Promise<void> {
                 submenu: [
                     {
                         label: "Close Current Tab",
-                        accelerator: "CmdOrCtrl+W",
+                        accelerator: process.platform === "darwin" ? "Cmd+W" : "CmdOrCtrl+W",
                         click: (_item, win) => {
                             if (win instanceof BrowserWindow && !win.isDestroyed()) {
                                 win.webContents.send("window:closeTab");
@@ -124,10 +127,14 @@ async function start(): Promise<void> {
         win.webContents.openDevTools({ mode: "detach" });
     }
 
-    // One driver process per window; it dies with the window (like the WebSocket
-    // session of scripts/view.ts dies with its socket).
+    // One driver process per window; they die with each other (like the
+    // WebSocket session of scripts/view.ts dies with its socket). The window
+    // closes on the process's raw exit — not on the pipes reaching EOF, since
+    // a grandchild inheriting them could hold the window open past the exit
+    // (e.g. after Ctrl+D closes the shell).
     const proc = new ProcessCommunicator(command, { cwd: config.cwd });
     let closed = false;
+    void proc.exited.then(() => shutdown());
 
     function sendToRenderer(message: unknown): void {
         if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
@@ -176,6 +183,21 @@ async function start(): Promise<void> {
     win.on("closed", shutdown);
     app.on("before-quit", shutdown);
     app.on("window-all-closed", shutdown);
+
+    // Die with the launcher. Ctrl+C reaches Electron through the shared process
+    // group, but a launcher killed by other means (SIGKILL, a crashed parent)
+    // would otherwise orphan the window: on Unix an orphan is reparented, so a
+    // ppid that stopped matching the launcher's means the launcher exited.
+    if (config.parent !== undefined) {
+        const parent = config.parent;
+        const watch = setInterval(() => {
+            if (process.ppid !== parent) {
+                clearInterval(watch);
+                app.quit();
+            }
+        }, 500);
+        watch.unref();
+    }
 }
 
 void start();

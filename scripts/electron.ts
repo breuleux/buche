@@ -15,8 +15,9 @@
  * Everything is bundled into dist/electron (main, preload, renderer, the page
  * with the component stylesheets inlined, and the GUI runtime document served
  * at proc://…/), then Electron is started on it. Each run opens a new window;
- * instances already running are left alone. Ctrl+C quits both this script and
- * the Electron window it started.
+ * instances already running are left alone. The window dies with this script —
+ * Ctrl+C through the shared process group, or the ppid check in
+ * electron/main.ts when the script exits by other means.
  *
  * The renderer is the browser client of scripts/view.ts with the WebSocket
  * replaced by the preload's IPC bridge; the driver process lives in the main
@@ -132,7 +133,16 @@ writeFileSync(join(outDir, "index.html"), page);
 // The document the native `proc://<cell-id>/` origin serves (see proc-protocol.ts).
 writeFileSync(join(outDir, "runtime.html"), guiRuntimeDocument());
 
-const electronBin = join(root, "node_modules/.bin/electron");
+// Spawn the Electron binary directly rather than through node_modules/.bin —
+// the .bin entry is a node wrapper that would sit between this process and
+// Electron, breaking the ppid check main.ts uses to die with this launcher.
+// `path.txt` (at the package root) names the binary inside `dist/`.
+const electronPackage = join(root, "node_modules/electron");
+const electronBin = join(
+    electronPackage,
+    "dist",
+    readFileSync(join(electronPackage, "path.txt"), "utf8").trim(),
+);
 const child = Bun.spawn([electronBin, join(outDir, "main.cjs")], {
     stdio: ["inherit", "inherit", "inherit"],
     env: {
@@ -141,6 +151,7 @@ const child = Bun.spawn([electronBin, join(outDir, "main.cjs")], {
             dir: outDir,
             command: values.command ?? "cq",
             cwd: values.dir,
+            parent: process.pid,
             devtools: values.devtools ?? false,
             printMessages: values["print-messages"] ?? false,
         }),

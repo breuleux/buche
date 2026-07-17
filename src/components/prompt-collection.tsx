@@ -57,7 +57,7 @@
 // Appearance lives in the companion stylesheet `prompt-collection.css` (or the
 // consolidated components.css).
 
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, deleteGroupBackward, history, historyKeymap } from "@codemirror/commands";
 import {
     Compartment,
     EditorState,
@@ -403,7 +403,12 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                     ]),
                 ),
                 history(),
-                keymap.of([...defaultKeymap, ...historyKeymap]),
+                keymap.of([
+                    // C-w deletes the word before the cursor, as in a shell.
+                    { key: "Ctrl-w", run: deleteGroupBackward },
+                    ...defaultKeymap,
+                    ...historyKeymap,
+                ]),
                 EditorView.lineWrapping,
                 spansField,
                 filigraneField,
