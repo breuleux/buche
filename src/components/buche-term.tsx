@@ -48,6 +48,10 @@ export class BucheTerm extends HTMLElement {
         this.append(this.fader, this.promptCollection);
     }
 
+    log(node: Node): void {
+        this.cells.inner.appendChild(node);
+    }
+
     /** The <scroll-fader> holding cell content. */
     get cells(): ScrollFader {
         this.ensureSetup();

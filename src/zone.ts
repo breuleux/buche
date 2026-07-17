@@ -74,10 +74,9 @@ export class PromptZone extends Zone {
     echoMap: Map<Entry, EchoBox> = new Map();
 
     installEcho(ifc: Interface, entry: Entry): HTMLElement {
-        const cells = this.element.cells;
         const eb = new EchoBox();
         eb.bindEntry(entry);
-        cells.appendChild(eb);
+        this.element.log(eb);
         this.echoMap.set(entry, eb);
         return eb;
     }
