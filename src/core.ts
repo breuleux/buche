@@ -257,6 +257,7 @@ export interface BucheFunctionArguments {
 
 export interface BucheStreamArguments extends BucheFunctionArguments {
     interactionStream: AsyncGenerator<IncomingInterfaceMessage | BucheErrorMessage>;
+    initialZones?: Array<Zone>;
 }
 
 export async function* bucheStream(args: BucheStreamArguments) {
@@ -266,7 +267,7 @@ export async function* bucheStream(args: BucheStreamArguments) {
             driverHandlers,
             interfaceHandlers,
         ),
-        initialZones: zoneMap([new Zone("@")]),
+        initialZones: zoneMap(args.initialZones ?? [new Zone("@")]),
     });
     const instream = mergeIterables(
         _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
@@ -301,6 +302,7 @@ export interface BucheRunArguments extends BucheFunctionArguments {
 export async function bucheRun(args: BucheRunArguments) {
     const sargs: BucheStreamArguments = Object.assign(args, {
         interactionStream: args.interface.interactions[Symbol.asyncIterator](),
+        initialZones: args.interface.zones,
     });
     for await (const message of bucheStream(sargs as BucheStreamArguments)) {
         args.interface.processMessage(message);

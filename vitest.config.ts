@@ -12,8 +12,9 @@ export default defineConfig({
     },
     test: {
         include: ["tests/**/*.test.{ts,tsx}"],
-        // Node by default; DOM-touching files opt in with `// @vitest-environment happy-dom`.
-        environment: "node",
+        // DOM globals (HTMLElement, customElements, …) available everywhere.
+        // Individual files can still opt out with `// @vitest-environment node`.
+        environment: "happy-dom",
         // Full runs spawn a real child process; give them room beyond the 5s default.
         testTimeout: 20_000,
         coverage: {
