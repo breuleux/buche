@@ -1,0 +1,54 @@
+/* Styles for the <scroll-fader> custom element (scroll-fader.tsx).
+ * A scroll region with fading top/bottom edge shadows that stays pinned to the
+ * bottom as content is added. Set --scroll-fader-bg to the surrounding
+ * background colour so the shadows fade into it. */
+
+scroll-fader {
+	--scroll-fader-bg: #fff;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+.scroll-fader-inner {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	/* column-reverse pins the view to the bottom as content grows. */
+	display: flex;
+	flex-direction: column-reverse;
+	/* Hide the scrollbar without preventing wheel scrolling. */
+	scrollbar-width: none;
+}
+
+.scroll-fader-inner::-webkit-scrollbar {
+	display: none;
+}
+
+.scroll-shadow {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 48px;
+	pointer-events: none;
+	z-index: 1;
+	opacity: 0;
+	transition: opacity 0.2s;
+}
+
+.scroll-shadow-top {
+	top: 0;
+	background: linear-gradient(var(--scroll-fader-bg), transparent);
+}
+
+.scroll-shadow-bottom {
+	bottom: 0;
+	background: linear-gradient(transparent, var(--scroll-fader-bg));
+}
+
+.scroll-shadow.visible {
+	opacity: 1;
+}

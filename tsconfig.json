@@ -13,7 +13,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "myjsx",
     "paths": {
-      "myjsx/jsx-runtime": ["./src/jsx/jsx-runtime.ts"]
+      "myjsx/jsx-runtime": ["./src/jsx/jsx-runtime.ts"],
+      "myjsx/jsx-dev-runtime": ["./src/jsx/jsx-dev-runtime.ts"]
     }
   },
   "include": ["src", "scripts", "tests", "*.ts"]

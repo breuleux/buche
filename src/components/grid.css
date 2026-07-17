@@ -1,0 +1,46 @@
+/* Styles for the <grid-rows> / <grid-columns> custom elements (grid.tsx).
+ * Include this stylesheet (or the consolidated components.css) wherever those
+ * elements are used. The element's own sizes (the `fr`/`px` tracks) are set
+ * inline by the component; everything else — layout mode, pane clipping, divider
+ * appearance — lives here. */
+
+grid-rows,
+grid-columns {
+	display: grid;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Panes must be allowed to shrink below their content size, and should clip
+ * rather than force the whole grid to grow. */
+grid-rows > *,
+grid-columns > * {
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+}
+
+.grid-divider-row,
+.grid-divider-col {
+	background: #c4c9d4;
+	overflow: hidden;
+	align-self: stretch;
+	justify-self: stretch;
+	transition: background 0.12s;
+}
+
+.grid-divider-row {
+	cursor: row-resize;
+}
+
+.grid-divider-col {
+	cursor: col-resize;
+}
+
+.grid-divider-row:hover,
+.grid-divider-col:hover,
+.grid-divider-row.dragging,
+.grid-divider-col.dragging {
+	background: #5b8def;
+}

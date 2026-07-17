@@ -1,0 +1,7 @@
+/* Consolidated stylesheet for all custom-element components. Link this single
+ * file to pull in the styling for every component:
+ *   <link rel="stylesheet" href="/src/components/components.css" />
+ * Each component's styles live next to its .tsx file. */
+
+@import "./grid.css";
+@import "./scroll-fader.css";

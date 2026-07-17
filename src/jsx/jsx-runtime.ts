@@ -63,6 +63,16 @@ function applyProp(el: Element, key: string, value: unknown): void {
         Object.assign((el as HTMLElement).style, value);
         return;
     }
+    // Rich values (objects, arrays, non-event functions) can't be represented as
+    // string attributes — `setAttribute` would stringify them to "[object Object]".
+    // Assign them as JS properties instead, so custom elements can receive live
+    // data: `<tabbed-zone buche={buche} />` sets `el.buche = buche`. The element
+    // must already be upgraded for a setter to fire (true when its tag is used,
+    // since that requires importing — and thus defining — the component).
+    if (typeof value === "object" || typeof value === "function") {
+        (el as unknown as Record<string, unknown>)[key] = value;
+        return;
+    }
     // JSX ergonomics: accept the React-style aliases too.
     const name = key === "className" ? "class" : key === "htmlFor" ? "for" : key;
     el.setAttribute(name, value === true ? "" : String(value));
@@ -90,14 +100,30 @@ type DomProps<E> = Omit<Partial<E>, "children" | "style"> & {
     [attr: `aria-${string}`]: string | number | boolean;
 };
 
+// Extension point for custom elements: modules that register their own tags
+// (e.g. `<grid-rows>`) augment this interface so `<my-tag>` type-checks.
+//
+//   declare module "myjsx/jsx-runtime" {
+//       namespace JSX {
+//           interface CustomElements { "my-tag": DomProps<MyEl> }
+//       }
+//   }
+export type { DomProps };
+
 // Types the compiler looks for on `<foo>` when jsxImportSource = "myjsx".
 export namespace JSX {
     // Result of evaluating a JSX expression.
     export type Element = Node;
-    // One entry per standard tag, keyed by name; unknown tags are rejected.
+    // Registration slot for custom-element tags (see CustomElements above).
+    // Must be an `interface` (not a `type`) so other modules can add tags via
+    // declaration merging; biome's empty-interface rule is disabled here.
+    // biome-ignore lint/suspicious/noEmptyInterface: extension point for module augmentation
+    export interface CustomElements {}
+    // One entry per standard tag, keyed by name, plus any registered custom
+    // tags; unknown tags are rejected.
     export type IntrinsicElements = {
         [K in keyof TagMap]: DomProps<TagMap[K]>;
-    };
+    } & CustomElements;
     // Tells the checker which prop carries children.
     export interface ElementChildrenAttribute {
         children: unknown;
