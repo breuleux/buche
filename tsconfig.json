@@ -17,5 +17,5 @@
       "myjsx/jsx-dev-runtime": ["./src/jsx/jsx-dev-runtime.ts"]
     }
   },
-  "include": ["src", "scripts", "tests", "*.ts"]
+  "include": ["src", "scripts", "tests", "electron", "*.ts"]
 }
