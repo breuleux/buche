@@ -19,7 +19,8 @@
 //     removed — unless `holdCommits` is set (e.g. during a navigation, which
 //     will commit when it ends).
 //   * `move(direction, mode)` moves the focus, in one of three modes (binding
-//     keys to it is up to the caller):
+//     keys to it is up to the caller); `find(from, direction, mode)` tells
+//     where that would go from any focusable, without moving anything:
 //       - "neighbour": the flex step below only.
 //       - "jump": the layout jump below only, restricted to elements outside
 //         the focused element's closest focusable container, so that it always
@@ -174,9 +175,13 @@ export class FocusManager {
         this.observer.disconnect();
     }
 
-    /** The focused leaf. */
+    /**
+     * The focused leaf, or null. Also null in the brief window after the
+     * focused element was removed or hidden, before the focus is moved on.
+     */
     get current(): HTMLElement | null {
-        return this.currentEl;
+        const el = this.currentEl;
+        return el && this.valid(el) ? el : null;
     }
 
     /** Past focuses, most recent last (the current one included). */
@@ -195,15 +200,12 @@ export class FocusManager {
 
     /** Let the focused element finish taking the focus (see {@link FocusCommittable}). */
     commitFocus(): void {
-        const el = this.currentEl;
-        if (el && this.valid(el)) {
-            (el as Partial<FocusCommittable> & HTMLElement).commitFocus?.();
-        }
+        (this.current as (HTMLElement & Partial<FocusCommittable>) | null)?.commitFocus?.();
     }
 
     /** Move the focus in a direction. Returns whether the focus moved. */
     move(direction: Direction, mode: NavigationMode = "mix"): boolean {
-        const current = this.currentEl && this.valid(this.currentEl) ? this.currentEl : null;
+        const current = this.current;
         if (!current) {
             const first = this.topLevel(this.root)[0];
             if (first) {
@@ -212,16 +214,34 @@ export class FocusManager {
             }
             return false;
         }
-        const target =
-            (mode !== "jump" ? this.flexStep(current, direction) : null) ??
-            (mode !== "neighbour"
-                ? this.spatialStep(current, direction, this.focusableParent(current))
-                : null);
+        const target = this.find(current, direction, mode);
         if (!target) {
             return false;
         }
         this.focus(target, "nav");
         return true;
+    }
+
+    /**
+     * The focusable that `move(direction, mode)` would go to from `from` (a
+     * visible focusable within the root), without moving the focus; null if
+     * there is none. It is returned as is: a container is not resolved to the
+     * leaf that focusing it would pick.
+     */
+    find(
+        from: HTMLElement,
+        direction: Direction,
+        mode: NavigationMode = "mix",
+    ): HTMLElement | null {
+        if (!this.isFocusable(from) || !this.valid(from)) {
+            return null;
+        }
+        return (
+            (mode !== "jump" ? this.flexStep(from, direction) : null) ??
+            (mode !== "neighbour"
+                ? this.spatialStep(from, direction, this.focusableParent(from))
+                : null)
+        );
     }
 
     // ── Structure ───────────────────────────────────────────────────────────
