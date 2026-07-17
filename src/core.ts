@@ -8,16 +8,14 @@ import type { Echo } from "./echo.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
-import { Machine } from "./machine.ts";
-import { outgoingDriverMessageTypes } from "./message-directory.ts";
-import type { ProcessCommunicator } from "./process.ts";
+import { AsyncQueue, type ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
 import { Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage;
-export type HandlerT = Record<string, (buche: Buche, message: InM) => AsyncIterable<OutM>>;
+export type HandlerT = Record<string, (buche: Buche, message: InM) => void>;
 
 export interface BucheArguments {
     handlers: HandlerT;
@@ -71,28 +69,40 @@ export class Hierarchy {
     }
 }
 
-export class Buche extends Machine<InM, OutM> {
+export class Buche {
     handlers!: HandlerT;
     hierarchy: Hierarchy;
+    driverQueue: AsyncQueue<OutgoingDriverMessage>;
+    interfaceQueue: AsyncQueue<OutgoingInterfaceMessage>;
 
     constructor(args: BucheArguments) {
-        super();
         this.handlers = args.handlers;
         this.hierarchy = new Hierarchy({ zones: args.initialZones });
+        this.driverQueue = new AsyncQueue();
+        this.interfaceQueue = new AsyncQueue();
     }
 
-    async *process(input: InM): AsyncIterable<OutM> {
+    sendDriver(message: OutgoingDriverMessage) {
+        this.driverQueue.push(message);
+    }
+
+    sendInterface(message: OutgoingInterfaceMessage) {
+        this.interfaceQueue.push(message);
+    }
+
+    handle(input: InM) {
         try {
-            yield* this.handlers[input.type](this, input);
+            this.handlers[input.type](this, input);
         } catch (err: any) {
+            let problem: ProblemMessage;
             if (err instanceof BucheError) {
                 err.errorData.input = input;
-                yield Object.assign({}, err.errorData, {
+                problem = Object.assign({}, err.errorData, {
                     type: "problem",
                 }) as unknown as ProblemMessage;
             } else {
                 /* node:coverage disable */
-                yield {
+                problem = {
                     type: "problem",
                     code: "internal",
                     reason: err.toString(),
@@ -100,6 +110,7 @@ export class Buche extends Machine<InM, OutM> {
                 };
                 /* node:coverage enable */
             }
+            this.sendInterface(problem);
         }
     }
 
@@ -156,12 +167,12 @@ export class Buche extends Machine<InM, OutM> {
      * same kind already lives there. Throws `exists` only when the other kind
      * occupies the address (a cell where a prompt lives, or vice versa).
      */
-    configure(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    async *configure(
+    configure(type: "cell", obj: CellConfiguration & BaseMessage): ComponentData;
+    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): ComponentData;
+    configure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
-    ): AsyncGenerator<OutM> {
+    ): ComponentData {
         const component = this.get(obj.from, true);
         const other = type === "cell" ? "prompt" : "cell";
         if (component[other]) {
@@ -188,24 +199,24 @@ export class Buche extends Machine<InM, OutM> {
                 Object.assign(component, { prompt, zones: zoneMap(prompt.makeZones(zone)) });
             }
         }
-        yield {
+        this.sendInterface({
             type: "update_component",
             component: component,
-        };
+        });
         return component;
     }
 
-    ensure(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    async *ensure(
+    ensure(type: "cell", obj: CellConfiguration & BaseMessage): ComponentData;
+    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): ComponentData;
+    ensure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
-    ): AsyncGenerator<OutM> {
+    ): ComponentData {
         const c = this.get(obj.from, true);
         if (type === "cell" && !c.cell) {
-            return yield* this.configure(type, obj);
+            return this.configure(type, obj);
         } else if (type === "prompt" && !c.prompt) {
-            return yield* this.configure(type, obj);
+            return this.configure(type, obj);
         }
         return c;
     }
@@ -223,7 +234,7 @@ async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
 }
 
 const baseHandlers = {
-    async *buche_error(buche: Buche, obj: BucheErrorMessage): AsyncGenerator<OutM> {
+    buche_error(buche: Buche, obj: BucheErrorMessage): void {
         let component: ComponentData | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest
@@ -238,10 +249,12 @@ const baseHandlers = {
             }
             component = node.component;
         }
-        yield Object.assign({}, obj, {
-            type: "problem",
-            component: component,
-        }) as unknown as ProblemMessage;
+        buche.sendInterface(
+            Object.assign({}, obj, {
+                type: "problem",
+                component: component,
+            }) as unknown as ProblemMessage,
+        );
     },
 };
 
@@ -273,24 +286,24 @@ export async function* bucheStream(args: BucheStreamArguments) {
         _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
         _awrap(args.interactionStream, args.loggers.interfaceIn),
     );
-    const stream = buche.stream(instream);
-    for await (const message of stream) {
-        if (
-            message.type === "signal" &&
-            (message as SignalRequest).to.length === 1 &&
-            (message as SignalRequest).to[0] === "$proc"
-        ) {
-            const signal = message as SignalRequest;
-            args.loggers.driverOut?.(signal);
-            args.process.kill(signal.code);
-            continue;
+    for await (const inMessage of instream) {
+        buche.handle(inMessage);
+        for (const outMessage of buche.driverQueue.purge()) {
+            args.loggers.driverOut?.(outMessage);
+            if (
+                outMessage.type === "signal" &&
+                (outMessage as SignalRequest).to.length === 1 &&
+                (outMessage as SignalRequest).to[0] === "$proc"
+            ) {
+                const signal = outMessage as SignalRequest;
+                args.process.kill(signal.code);
+            } else {
+                args.process.send(outMessage);
+            }
         }
-        if (outgoingDriverMessageTypes.has(message.type)) {
-            args.loggers.driverOut?.(message);
-            args.process.send(message as OutgoingDriverMessage);
-        } else {
-            args.loggers.interfaceOut?.(message);
-            yield message as OutgoingInterfaceMessage;
+        for (const outMessage of buche.interfaceQueue.purge()) {
+            args.loggers.interfaceOut?.(outMessage);
+            yield outMessage;
         }
     }
 }

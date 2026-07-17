@@ -154,10 +154,10 @@ class Generator {
                 if (!fn.isExported()) {
                     errors.push(`${file}: function \`${handlerName}\` must be exported`);
                 }
-                // Handlers must be async (return a Promise).
-                if (fn.getReturnType().getSymbol()?.getName() !== "AsyncIterable") {
+                // Handlers dispatch via buche.sendDriver/sendInterface and return void.
+                if (!fn.getReturnType().isVoid()) {
                     errors.push(
-                        `${file}: function \`${handlerName}\` must be async* (return a AsyncIterable)`,
+                        `${file}: function \`${handlerName}\` must return void (dispatch via buche.sendDriver/sendInterface)`,
                     );
                 }
             }

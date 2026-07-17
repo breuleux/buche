@@ -2,8 +2,7 @@ import fs, { readdirSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
-import type { Machine } from "../src/machine.ts";
-import { outgoingDriverMessageTypes } from "../src/message-directory.ts";
+import type { Buche, InM } from "../src/core.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {
     const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
@@ -21,11 +20,11 @@ export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<
     }
 }
 
-export class MachinePlayer<In, Out> {
-    machine: Machine<In, Out>;
+export class MachinePlayer {
+    machine: Buche;
     datadir: string;
 
-    constructor(machine: Machine<In, Out>, datadir: string) {
+    constructor(machine: Buche, datadir: string) {
         this.machine = machine;
         this.datadir = path.join(import.meta.dirname, datadir);
     }
@@ -47,13 +46,14 @@ export class MachinePlayer<In, Out> {
         const lines: string[] = [];
         const write = (data: Record<string, any>) => lines.push(JSON.stringify(data));
 
-        for await (const inObj of readJsonl<In>(infile)) {
+        for await (const inObj of readJsonl<InM>(infile)) {
             write({ $role: "driverIn", ...inObj });
-            for await (const outObj of this.machine.process(inObj)) {
-                const role = outgoingDriverMessageTypes.has((outObj as any).type)
-                    ? "driverOut"
-                    : "interfaceOut";
-                write({ $role: role, ...outObj });
+            this.machine.handle(inObj);
+            for await (const outObj of this.machine.driverQueue.purge()) {
+                write({ $role: "driverOut", ...outObj });
+            }
+            for await (const outObj of this.machine.interfaceQueue.purge()) {
+                write({ $role: "interfaceOut", ...outObj });
             }
         }
         // Trailing newline so the snapshot matches the recorded `.jsonl` files.

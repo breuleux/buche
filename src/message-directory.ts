@@ -26,4 +26,8 @@ export const incomingInterfaceMessageTypes = new Set<string>([
 ]);
 
 /** Message `type` names for interface outgoing messages. */
-export const outgoingInterfaceMessageTypes = new Set<string>(["cell_command", "update_component"]);
+export const outgoingInterfaceMessageTypes = new Set<string>([
+    "cell_command",
+    "problem",
+    "update_component",
+]);

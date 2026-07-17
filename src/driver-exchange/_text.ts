@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
 export interface TextMessage extends BaseMessage {
@@ -11,9 +11,9 @@ export interface TextMessage extends BaseMessage {
     text: string;
 }
 
-export async function* handle$text(buche: Buche, obj: TextMessage): AsyncIterable<OutM> {
-    const component = yield* buche.ensure("cell", obj);
-    yield {
+export function handle$text(buche: Buche, obj: TextMessage): void {
+    const component = buche.ensure("cell", obj);
+    buche.sendInterface({
         type: "cell_command",
         command: {
             type: "text",
@@ -21,5 +21,5 @@ export async function* handle$text(buche: Buche, obj: TextMessage): AsyncIterabl
             text: obj.text,
         },
         component: component,
-    };
+    });
 }

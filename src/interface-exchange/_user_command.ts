@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { Prompt } from "../prompt.ts";
 
 export interface UserCommandMessage {
@@ -11,16 +11,13 @@ export interface UserCommandMessage {
     command: string;
 }
 
-export async function* handle$user_command(
-    buche: Buche,
-    obj: UserCommandMessage,
-): AsyncIterable<OutM> {
-    yield {
+export function handle$user_command(buche: Buche, obj: UserCommandMessage): void {
+    buche.sendDriver({
         type: "command",
         from: ["$term"],
         to: obj.prompt.address,
         text: obj.text,
         position: obj.position,
         command: obj.command,
-    };
+    });
 }

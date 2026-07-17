@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
 /** An error reported by the process */
@@ -15,14 +15,14 @@ export interface ErrorMessage extends BaseMessage {
     traceback?: string[];
 }
 
-export async function* handle$error(buche: Buche, obj: ErrorMessage): AsyncIterable<OutM> {
+export function handle$error(buche: Buche, obj: ErrorMessage): void {
     const component = buche.hierarchy.getAt(obj.from, false)?.component;
 
-    yield {
+    buche.sendInterface({
         type: "problem",
         code: "process",
         reason: obj.message,
         input: obj,
         component: component,
-    };
+    });
 }

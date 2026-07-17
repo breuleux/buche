@@ -1,5 +1,5 @@
 import type { CellCommand } from "../cell.ts";
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
 export interface CellSendMessage extends BaseMessage {
@@ -9,11 +9,11 @@ export interface CellSendMessage extends BaseMessage {
     message: CellCommand;
 }
 
-export async function* handle$cell_send(buche: Buche, obj: CellSendMessage): AsyncIterable<OutM> {
-    const component = yield* buche.ensure("cell", obj);
-    yield {
+export function handle$cell_send(buche: Buche, obj: CellSendMessage): void {
+    const component = buche.ensure("cell", obj);
+    buche.sendInterface({
         type: "cell_command",
         command: obj.message,
         component: component,
-    };
+    });
 }

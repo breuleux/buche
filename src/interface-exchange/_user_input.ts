@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { Prompt } from "../prompt.ts";
 
 export interface UserInputMessage {
@@ -10,15 +10,12 @@ export interface UserInputMessage {
     position: number;
 }
 
-export async function* handle$user_input(
-    buche: Buche,
-    obj: UserInputMessage,
-): AsyncIterable<OutM> {
-    yield {
+export function handle$user_input(buche: Buche, obj: UserInputMessage): void {
+    buche.sendDriver({
         type: "parse",
         from: ["$term"],
         to: obj.prompt.address,
         text: obj.text,
         position: obj.position,
-    };
+    });
 }

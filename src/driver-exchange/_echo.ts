@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import { Echo, type EchoConfiguration } from "../echo.ts";
 import { BucheError } from "../utils.ts";
 import type { BaseMessage } from "./common.ts";
@@ -7,7 +7,7 @@ export interface EchoMessage extends BaseMessage, EchoConfiguration {
     type: "echo";
 }
 
-export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterable<OutM> {
+export function handle$echo(buche: Buche, obj: EchoMessage): void {
     const component = buche.get(obj.from, true);
     if (component.echo || component.cell || component.prompt) {
         throw new BucheError({
@@ -19,8 +19,8 @@ export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterabl
     const { zone, prompt } = buche.findPlace(obj);
     const echo = new Echo(obj, { zone, prompt });
     Object.assign(component, { echo });
-    yield {
+    buche.sendInterface({
         type: "update_component",
         component: component,
-    };
+    });
 }

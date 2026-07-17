@@ -1,5 +1,5 @@
 import type { Cell } from "../cell.ts";
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { Prompt } from "../prompt.ts";
 
 export interface SignalMessage {
@@ -8,11 +8,11 @@ export interface SignalMessage {
     element: Prompt | Cell;
 }
 
-export async function* handle$signal(buche: Buche, obj: SignalMessage): AsyncIterable<OutM> {
-    yield {
+export function handle$signal(buche: Buche, obj: SignalMessage): void {
+    buche.sendDriver({
         type: "signal",
         code: obj.code,
         from: ["$term"],
         to: obj.element.address,
-    };
+    });
 }

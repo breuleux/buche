@@ -82,6 +82,12 @@ export class AsyncQueue<T> {
         this.waiting = [];
     }
 
+    *purge() {
+        while (this.items.length > 0) {
+            yield this.items.shift() as T;
+        }
+    }
+
     async *[Symbol.asyncIterator](): AsyncGenerator<T> {
         while (true) {
             if (this.items.length > 0) {

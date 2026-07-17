@@ -1,4 +1,4 @@
-import type { Buche, OutM } from "../core.ts";
+import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
 /** Outcome of a process that has terminated. */
@@ -17,17 +17,17 @@ export interface CloseMessage extends BaseMessage {
     outcome: CloseOutcome;
 }
 
-export async function* handle$close(buche: Buche, obj: CloseMessage): AsyncIterable<OutM> {
+export function handle$close(buche: Buche, obj: CloseMessage): void {
     const status = obj.outcome.type === "success" ? "done" : "error";
     const h = buche.hierarchy.getAt(obj.from);
     for (const component of h ? h.iterateComponents() : []) {
         const echo = component.echo;
         if (echo && (echo.status.status === "running" || echo.status.status === "unresponsive")) {
             echo.status = { status, code: obj.outcome.code };
-            yield {
+            buche.sendInterface({
                 type: "update_component",
                 component: component,
-            };
+            });
         }
     }
 }
