@@ -13,7 +13,7 @@ echo-box {
 	color: #d4d4d4;
 	font-family: "Menlo", "Consolas", monospace;
 	font-size: 13px;
-	line-height: 1.5;
+	/* line-height: 1.5; */
 	/* Ceiling for the cell; embedded views size their grid to it. */
 	max-height: 300px;
 }
@@ -90,7 +90,7 @@ echo-box {
 	grid-column: 1 / -1;
 	display: flex;
 	align-items: center;
-	line-height: 16px;
+	line-height: 14px;
 	font-size: 11px;
 	flex: 0 0 auto;
 }
@@ -170,6 +170,7 @@ echo-box[compact] .echo-box-context {
 
 .echo-box-echo {
 	padding: 2px;
+	padding-left: 8px;
 	padding-right: var(--echo-echo-pad, 68px); /* leave room for the controls */
 	white-space: pre-wrap;
 	word-break: break-word;

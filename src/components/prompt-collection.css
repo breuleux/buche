@@ -64,8 +64,8 @@ prompt-collection {
  * puts it where the echo-box context text sits (22px from the left edge). */
 .prompt-collection-marker {
 	flex: 0 0 auto;
-	padding-left: 4px;
-	line-height: 16px;
+	margin-left: -4px;
+	line-height: 14px;
 	font-size: 11px;
 	white-space: pre;
 }
