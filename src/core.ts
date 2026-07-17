@@ -4,7 +4,7 @@ import { Cell, type CellConfiguration } from "./cell.ts";
 import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import { ComponentData } from "./exchange.ts";
+import { Post } from "./post.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
@@ -36,12 +36,12 @@ export class Buche {
         driverHandlers,
         interfaceHandlers,
     );
-    hierarchy: Hierarchy<ComponentData>;
+    hierarchy: Hierarchy<Post>;
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.hierarchy = new Hierarchy(new ComponentData(args.initialZones));
+        this.hierarchy = new Hierarchy(new Post(args.initialZones));
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -75,7 +75,7 @@ export class Buche {
      * `missingcell` if there is none. When `create` is true, an empty container
      * is created and returned if one does not already exist.
      */
-    get(addr: Address, create: boolean = false): ComponentData {
+    get(addr: Address, create: boolean = false): Post {
         const node = this.hierarchy.getAt(addr, create);
         let c = node?.entry;
         if (!c) {
@@ -86,7 +86,7 @@ export class Buche {
                     reason: `Cell at ${JSON.stringify(addr)} is missing`,
                 });
             }
-            c = (node as Hierarchy<ComponentData>).entry = new ComponentData();
+            c = (node as Hierarchy<Post>).entry = new Post();
         }
         return c;
     }
@@ -97,7 +97,7 @@ export class Buche {
         let prompt: Prompt | null = null;
         let zone: Zone | null = null;
 
-        let node: Hierarchy<ComponentData> | undefined = this.hierarchy;
+        let node: Hierarchy<Post> | undefined = this.hierarchy;
         for (let i = 0; node; node = node.children[arr[i++]]) {
             const data = node.entry;
             if (data?.prompt) {
@@ -123,53 +123,53 @@ export class Buche {
      * same kind already lives there. Throws `exists` only when the other kind
      * occupies the address (a cell where a prompt lives, or vice versa).
      */
-    configure(type: "cell", obj: CellConfiguration & BaseMessage): ComponentData;
-    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): ComponentData;
+    configure(type: "cell", obj: CellConfiguration & BaseMessage): Post;
+    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): Post;
     configure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & CreationInfo & BaseMessage,
-    ): ComponentData {
-        const component = this.get(obj.from, true);
+    ): Post {
+        const post = this.get(obj.from, true);
         const other = type === "cell" ? "prompt" : "cell";
-        if (component[other]) {
+        if (post[other]) {
             throw new BucheError({
                 type: "buche_error",
                 code: "exists",
                 reason: `A ${other} already exists at address ${obj.from}, cannot configure a ${type}`,
             });
         }
-        const { prompt: parentPrompt, zone } = this.findPlace(obj);
+        const { zone } = this.findPlace(obj);
         if (type === "cell") {
             const cconf: CellConfiguration = obj as CellConfiguration;
-            if (component.cell) {
-                component.cell.configure(cconf);
+            if (post.cell) {
+                post.cell.configure(cconf);
             } else {
                 const cell = new Cell(cconf, { address: obj.from });
-                component.setCell(cell);
+                post.setCell(cell);
             }
         } else {
             const pconf: PromptConfiguration = obj as PromptConfiguration;
-            if (component.prompt) {
-                component.prompt.configure(pconf);
+            if (post.prompt) {
+                post.prompt.configure(pconf);
             } else {
                 const prompt = new Prompt(pconf, { address: obj.from });
-                component.setPrompt(prompt);
+                post.setPrompt(prompt);
             }
         }
         this.sendInterface({
             type: "update_component",
             zone: zone,
-            component: component,
+            component: post,
         });
-        return component;
+        return post;
     }
 
-    ensure(type: "cell", obj: CellConfiguration & BaseMessage): ComponentData;
-    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): ComponentData;
+    ensure(type: "cell", obj: CellConfiguration & BaseMessage): Post;
+    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): Post;
     ensure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
-    ): ComponentData {
+    ): Post {
         const c = this.get(obj.from, true);
         if (type === "cell" && !c.cell) {
             return this.configure(type, obj);
@@ -182,11 +182,11 @@ export class Buche {
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {
-        let component: ComponentData | undefined;
+        let post: Post | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest
             // non-null component in the hierarchy.
-            let node: Hierarchy<ComponentData> = buche.hierarchy;
+            let node: Hierarchy<Post> = buche.hierarchy;
             for (const segment of obj.input.from) {
                 const child = node.children[segment];
                 if (!child) {
@@ -194,12 +194,12 @@ const baseHandlers = {
                 }
                 node = child;
             }
-            component = node.entry;
+            post = node.entry;
         }
         buche.sendInterface(
             Object.assign({}, obj, {
                 type: "problem",
-                component: component,
+                component: post,
             }) as unknown as ProblemMessage,
         );
     },

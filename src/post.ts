@@ -3,7 +3,7 @@ import type { Echo } from "./echo";
 import type { Prompt } from "./prompt";
 import { type Zone, zoneMap } from "./zone";
 
-export class ComponentData {
+export class Post {
     echo: Echo | null = null;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
