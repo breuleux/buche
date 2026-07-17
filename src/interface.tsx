@@ -9,7 +9,7 @@ import type {
     OutgoingInterfaceMessage,
     ProblemMessage,
     UpdateCellMessage,
-    UpdateComponentMessage,
+    UpdateEntryMessage,
     UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
 import type { BucheErrorMessage } from "./utils";
@@ -111,7 +111,9 @@ export class BucheInterface implements Interface {
         this.map.set(message.entry, { zone: message.zone!, element });
     }
 
-    handle$update_component(buche: Buche, message: UpdateComponentMessage) {}
+    handle$update_entry(buche: Buche, message: UpdateEntryMessage) {
+        message.entry.fire();
+    }
 
     handle$cell_command(buche: Buche, message: CellCommandMessage) {
         const existing = this.map.get(message.entry)!;

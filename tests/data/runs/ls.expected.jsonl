@@ -7,4 +7,4 @@
 {"$role":"driverIn","type":"text","from":["$proc","cq","2"],"to":["$term"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
 {"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"},"entry":{"echo":"#107","cell":"#108","prompt":null,"zones":{}}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","2"],"to":["$term"],"outcome":{"type":"success","code":0}}
-{"$role":"interfaceOut","type":"update_component","component":{"echo":"#107","cell":"#108","prompt":null,"zones":{}}}
+{"$role":"interfaceOut","type":"update_entry","entry":{"echo":"#107","cell":"#108","prompt":null,"zones":{}}}

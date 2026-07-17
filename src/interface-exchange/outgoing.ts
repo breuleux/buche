@@ -33,14 +33,11 @@ export interface UpdateCellMessage {
     entry: Entry;
 }
 
-export interface UpdateComponentMessage {
-    type: "update_component";
-
-    /** The zone in which to install or move the component. */
-    zone?: Zone | null;
+export interface UpdateEntryMessage {
+    type: "update_entry";
 
     /** The component's entry (echo, cell, prompt, zones). */
-    component: Entry;
+    entry: Entry;
 }
 
 export interface CellCommandMessage {
@@ -62,6 +59,6 @@ export type OutgoingInterfaceMessage =
     | InstallEchoMessage
     | UpdatePromptMessage
     | UpdateCellMessage
-    | UpdateComponentMessage
+    | UpdateEntryMessage
     | CellCommandMessage
     | ProblemMessage;

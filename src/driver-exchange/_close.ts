@@ -25,13 +25,13 @@ function killable(echo: Echo) {
 export function handle$close(buche: Buche, obj: CloseMessage): void {
     const status = obj.outcome.type === "success" ? "done" : "error";
     const h = buche.hierarchy.getAt(obj.from);
-    for (const component of h ? h.walk() : []) {
-        const echo = component.echo;
+    for (const entry of h ? h.walk() : []) {
+        const echo = entry.echo;
         if (killable(echo)) {
             echo.status = { status, code: obj.outcome.code };
             buche.sendInterface({
-                type: "update_component",
-                component: component,
+                type: "update_entry",
+                entry: entry,
             });
         }
     }

@@ -31,6 +31,6 @@ export const outgoingInterfaceMessageTypes = new Set<string>([
     "install_echo",
     "problem",
     "update_cell",
-    "update_component",
+    "update_entry",
     "update_prompt",
 ]);
