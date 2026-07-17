@@ -22,16 +22,8 @@ export interface BaseMessage {
     type: string;
 
     /** Address of the issuing process. */
-    address: Address;
+    from: Address;
 
     /** Target of the message. */
     to: To;
 }
-
-
-// export interface Address {
-//   /** Process id that owns the message (assigned by the shell). */
-//   process?: string;
-//   /** The process's own inner address, nested under `process`. */
-//   subaddress?: Address;
-// }
