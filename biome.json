@@ -18,7 +18,8 @@
         "noUnusedFunctionParameters": "off"
       },
       "style": {
-        "useBlockStatements": "error"
+        "useBlockStatements": "error",
+        "noNonNullAssertion": "off"
       },
       "suspicious": {
         "noAssignInExpressions": "off",

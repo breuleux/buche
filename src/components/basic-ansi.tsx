@@ -493,31 +493,48 @@ export class BasicAnsi extends HTMLElement {
         let lines = 0;
         let bytes = 0;
 
-        while (
-            (this.byteLength > maxBytes || this.completedLines > maxLines) &&
-            this.linesEl.firstChild &&
-            this.linesEl.firstChild !== this.currentEl
-        ) {
-            const el = this.linesEl.firstChild as LineSpan;
+        // The first completed line, or null if only the current partial line is
+        // left (which we never prune).
+        const firstCompleted = (): LineSpan | null => {
+            const el = this.linesEl.firstChild as LineSpan | null;
+            return el && el !== this.currentEl ? el : null;
+        };
+        const dropLine = (el: LineSpan): void => {
             const b = el._bytes ?? el.textContent?.length ?? 0;
             this.linesEl.removeChild(el);
             this.completedLines--;
             this.completedBytes -= b;
             lines++;
             bytes += b;
+        };
+
+        // 1. Enforce the line budget by dropping whole leading lines.
+        while (this.completedLines > maxLines) {
+            const el = firstCompleted();
+            if (!el) {
+                break;
+            }
+            dropLine(el);
         }
 
-        // A single leading line still over budget: trim its leading characters.
-        if (
-            this.byteLength > maxBytes &&
-            this.linesEl.firstChild &&
-            this.linesEl.firstChild !== this.currentEl
-        ) {
-            const el = this.linesEl.firstChild as LineSpan;
-            const removed = trimLineFront(el, this.byteLength - maxBytes);
-            el._bytes = (el._bytes ?? 0) - removed;
-            this.completedBytes -= removed;
-            bytes += removed;
+        // 2. Enforce the byte budget. Drop whole leading lines while doing so still
+        //    leaves us over budget; trim (rather than drop) the line that straddles
+        //    the boundary so we keep as much recent content as possible.
+        while (this.byteLength > maxBytes) {
+            const el = firstCompleted();
+            if (!el) {
+                break; // only the current line remains; it is never trimmed here
+            }
+            const b = el._bytes ?? el.textContent?.length ?? 0;
+            if (this.byteLength - b >= maxBytes) {
+                dropLine(el);
+            } else {
+                const removed = trimLineFront(el, this.byteLength - maxBytes);
+                el._bytes = b - removed;
+                this.completedBytes -= removed;
+                bytes += removed;
+                break;
+            }
         }
 
         return { lines, bytes };
