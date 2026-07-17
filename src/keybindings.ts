@@ -8,10 +8,13 @@
 //   - Chords: always-live bindings like "Mod+p" (Cmd on Mac, Ctrl elsewhere),
 //     matched against the full modifier set of the event.
 //   - Capture mode: `enter` (default Ctrl+Q) starts capturing every non-modifier
-//     keydown — swallowing it — regardless of modifiers, until Ctrl is
-//     released, which runs the `release` handlers (e.g. move focus onto the
-//     focused cell). Keys are matched by name ("p", "ArrowUp", …); handlers are
-//     registered with `onCapture`.
+//     keydown — swallowing it — until Ctrl is released, which runs the
+//     `release` handlers (e.g. commit the focus). Entering runs the `enter`
+//     handlers (`onEnter`). Keys are registered with `onCapture`, by name ("p",
+//     "ArrowUp", …) or with modifiers other than Ctrl ("Shift+ArrowUp"), Ctrl
+//     being held throughout: a key pressed with modifiers first tries the
+//     binding with those modifiers, then the bare key's, whatever modifiers
+//     ride along.
 //
 // The keydown listener runs in the *capture* phase so global chords and capture
 // mode win over descendants (CodeMirror stops propagation of keys it handles).
@@ -41,6 +44,14 @@ function normalizeKey(key: string): string {
     return key.toLowerCase();
 }
 
+// A canonical chord without Ctrl, which is held throughout capture mode.
+function captureKey(chord: string): string {
+    return chord
+        .split("+")
+        .filter((part) => part !== "ctrl")
+        .join("+");
+}
+
 export interface ModalKeysConfig {
     /** Always-live chords, e.g. { "Mod+p": focusPrompt }. */
     chords?: Record<string, KeyHandler>;
@@ -48,6 +59,8 @@ export interface ModalKeysConfig {
     enter?: string;
     /** Keys captured while in capture mode, e.g. { "ArrowDown": moveDown }. */
     capture?: Record<string, KeyHandler>;
+    /** Handlers run when capture mode is entered. */
+    onEnter?: KeyHandler | Array<KeyHandler>;
     /** Handlers run when Ctrl is released after entering capture mode. */
     release?: KeyHandler | Array<KeyHandler>;
 }
@@ -60,6 +73,7 @@ export class ModalKeys {
 
     chords = new Map<string, KeyHandler>();
     capture = new Map<string, KeyHandler>();
+    enters: KeyHandler[] = [];
     releases: KeyHandler[] = [];
 
     private detachFn: (() => void) | null = null;
@@ -76,6 +90,10 @@ export class ModalKeys {
         if (release) {
             this.releases.push(...(Array.isArray(release) ? release : [release]));
         }
+        const onEnter = config.onEnter;
+        if (onEnter) {
+            this.enters.push(...(Array.isArray(onEnter) ? onEnter : [onEnter]));
+        }
     }
 
     /** Bind an always-live chord (e.g. "Mod+p", "Ctrl+Shift+k"). */
@@ -84,9 +102,16 @@ export class ModalKeys {
         return this;
     }
 
-    /** Bind a key handled while in capture mode (e.g. "p", "ArrowDown"). */
+    /** Bind a key handled while in capture mode (e.g. "p", "ArrowDown",
+     *  "Shift+ArrowDown"; Ctrl, held throughout, is ignored). */
     onCapture(key: string, handler: KeyHandler): this {
-        this.capture.set(normalizeKey(key), handler);
+        this.capture.set(captureKey(normalizeChord(key)), handler);
+        return this;
+    }
+
+    /** Add a handler run when capture mode is entered. */
+    onEnter(handler: KeyHandler): this {
+        this.enters.push(handler);
         return this;
     }
 
@@ -127,7 +152,10 @@ export class ModalKeys {
             }
             e.preventDefault();
             e.stopPropagation();
-            this.capture.get(normalizeKey(e.key))?.(e);
+            const handler =
+                this.capture.get(captureKey(chordFromEvent(e))) ??
+                this.capture.get(normalizeKey(e.key));
+            handler?.(e);
             return;
         }
         const chord = chordFromEvent(e);
@@ -135,6 +163,9 @@ export class ModalKeys {
             e.preventDefault();
             e.stopPropagation();
             this.capturing = true;
+            for (const handler of this.enters) {
+                handler(e);
+            }
             return;
         }
         const handler = this.chords.get(chord);

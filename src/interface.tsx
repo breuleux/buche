@@ -1,9 +1,9 @@
-import type { EchoBox } from "./components/echo-box.tsx";
+import { EchoBox } from "./components/echo-box.tsx";
 import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
 import type { Entry } from "./entry.ts";
-import { FocusManager } from "./focus-draft.ts";
+import { type Direction, FocusManager, type NavigationMode } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
@@ -14,7 +14,7 @@ import type {
     UpdateEntryMessage,
     UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
-import { ModalKeys } from "./keybindings.ts";
+import { type KeyHandler, ModalKeys } from "./keybindings.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 import type { Zone } from "./zone";
@@ -58,6 +58,16 @@ function reifyTemplate(template: Element | string): Element {
     return element;
 }
 
+const ARROWS: Record<string, Direction> = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+};
+
+const isVisible = (el: HTMLElement): boolean =>
+    typeof el.checkVisibility === "function" ? el.checkVisibility() : true;
+
 interface Reification {
     zone: Zone;
     element: HTMLElement;
@@ -71,7 +81,7 @@ export class BucheInterface implements Interface {
     map: Map<Entry, Reification> = new Map();
     /** Global keyboard bindings installed on the container (see keybindings.ts). */
     keys: ModalKeys;
-    /** Cell selection / prompt focus (see focus-draft.ts — draft, to rethink). */
+    /** Focus navigation across cells, prompts and zones (see focus.ts). */
     focus: FocusManager;
 
     constructor(args: BucheInterfaceArguments) {
@@ -79,37 +89,119 @@ export class BucheInterface implements Interface {
         this.area = reifyTemplate(args.template);
         this.zones = extractZones(this.area as HTMLElement);
         this.interactions = new AsyncQueue();
-        this.focus = new FocusManager({
-            container: this.container,
-            zones: this.zones,
-            interactions: this.interactions,
-        });
+        this.focus = new FocusManager(this.container as HTMLElement);
         this.keys = this.installKeys();
     }
 
     // ── Global key bindings ───────────────────────────────────────────────────
-    // Chords ("Mod+p") are always live; capture mode (Ctrl+Q, held) taps keys —
-    // p, ↑/↓, k, d — until Ctrl is released. Extend or override through
-    // `iface.keys.on(...) / .onCapture(...) / .onRelease(...)`.
+    // Chords ("Mod+p") are always live; capture mode (Ctrl+Q, held) taps keys
+    // until Ctrl is released, which commits the focus (e.g. into the focused
+    // cell's terminal):
+    //   arrows        move the focus (neighbour, else layout jump)
+    //   Shift+arrows  layout jump (out of the current zone)
+    //   p             focus the latest prompt
+    //   k / d         kill / close the focused cell — from a prompt, the cell
+    //                 right above it
+    // Extend or override through `iface.keys.on(...) / .onCapture(...) /
+    // .onRelease(...)`.
 
     installKeys(): ModalKeys {
-        const focus = this.focus;
+        const fm = this.focus;
+        const move =
+            (direction: Direction, mode: NavigationMode): KeyHandler =>
+            () =>
+                fm.move(direction, mode);
+        const capture: Record<string, KeyHandler> = {
+            p: () => this.focusPrompt(),
+            k: () => this.killCell(),
+            d: () => this.closeCell(),
+        };
+        for (const [key, direction] of Object.entries(ARROWS)) {
+            capture[key] = move(direction, "mix");
+            capture[`Shift+${key}`] = move(direction, "jump");
+        }
         const keys = new ModalKeys({
             chords: {
-                "Mod+p": () => focus.focusPrompt(),
+                "Mod+p": () => this.focusPrompt(),
             },
             enter: "Ctrl+q",
-            capture: {
-                p: () => focus.focusPrompt(),
-                ArrowUp: () => focus.moveCellFocus(-1),
-                ArrowDown: () => focus.moveCellFocus(1),
-                k: () => focus.killFocusedCell(),
-                d: () => focus.closeFocusedCell(),
+            capture,
+            // Removing the focused cell mid-navigation must not commit the
+            // focus that replaces it: releasing Ctrl will.
+            onEnter: () => {
+                fm.holdCommits = true;
             },
-            release: () => focus.focusFocusedCell(),
+            release: () => {
+                fm.holdCommits = false;
+                fm.commitFocus();
+            },
         });
         keys.attach(this.container);
         return keys;
+    }
+
+    // ── Focus actions ─────────────────────────────────────────────────────────
+
+    /** Focus the latest prompt focused in the history (or, if none, the first
+     *  visible one). A prompt whose collection has since switched to another
+     *  prompt stands for that collection's active prompt. */
+    focusPrompt(): void {
+        const prompt = this.latestPrompt();
+        if (!prompt) {
+            return;
+        }
+        this.focus.focus(prompt, "nav");
+        if (!this.focus.holdCommits) {
+            this.focus.commitFocus();
+        }
+    }
+
+    private latestPrompt(): HTMLElement | null {
+        for (const { element, tags } of [...this.focus.history].reverse()) {
+            if (!tags.includes("prompt")) {
+                continue;
+            }
+            if (isVisible(element)) {
+                return element;
+            }
+            // const active = element
+            //     .closest("prompt-collection")
+            //     ?.querySelector<HTMLElement>('[focusable="prompt"]:not([hidden])');
+            // if (active && isVisible(active)) {
+            //     return active;
+            // }
+        }
+        // const prompts = this.container.querySelectorAll<HTMLElement>('[focusable="prompt"]');
+        // return [...prompts].find(isVisible) ?? null;
+        return null;
+    }
+
+    /** The cell that cell actions apply to: the focused one or, when a prompt
+     *  has the focus, the cell right above it (e.g. its latest output). */
+    targetCell(): EchoBox | null {
+        const fm = this.focus;
+        let target = fm.current;
+        if (target && fm.currentTags.includes("prompt")) {
+            target = fm.find(target, "up", "neighbour");
+        }
+        return target instanceof EchoBox ? target : null;
+    }
+
+    /** SIGTERM (SIGKILL when already unresponsive) to the target cell, like
+     *  its ✕ button, but without arming destroy-when-done. */
+    killCell(): void {
+        const box = this.targetCell();
+        const entry = box?.boundEntry;
+        if (!box || !entry) {
+            return;
+        }
+        const code = box.status === "unresponsive" ? 9 : 15;
+        this.interactions.push({ type: "user_signal", code, entry });
+    }
+
+    /** Behave exactly like clicking the target cell's ✕ button. */
+    closeCell(): void {
+        this.targetCell()?.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
     }
 
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {

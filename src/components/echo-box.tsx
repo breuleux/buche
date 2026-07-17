@@ -50,6 +50,12 @@
 // The `destroy-when-done` attribute (or `box.destroyWhenDone = true`) makes the
 // box remove itself from the DOM once its status reaches `done` or `error`.
 //
+// Focus: the box is a focusable cell for the FocusManager (focus.ts): it is
+// tagged `focusable="cell"` and takes the DOM focus itself while navigated
+// onto, so the page keeps the keys; `commitFocus()` then moves the focus into
+// the active view (its embedded terminal or <buche-gui>). While it is the
+// focus (the manager's `focused` attribute), the box is highlighted.
+//
 // Events (both bubble). See the exported detail/event types below
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "viewchange"  detail: { view: ViewLabel }  — the active view changed
@@ -69,6 +75,7 @@ import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
 import type { Status, StatusString, ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
+import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
 
@@ -134,7 +141,7 @@ function div(className: string): HTMLElement {
     return el;
 }
 
-export class EchoBox extends HTMLElement {
+export class EchoBox extends HTMLElement implements FocusCommittable {
     /**
      * Background/foreground lightness anchors used to resolve a {@link StyledText}
      * echo's accents into concrete colors. Defaults to the dark echo surface.
@@ -174,7 +181,7 @@ export class EchoBox extends HTMLElement {
     private onAltBlur = () => this.syncAlt(false);
 
     static get observedAttributes(): string[] {
-        return ["status", "color", "echo", "compact", "destroy-when-done"];
+        return ["status", "color", "echo", "compact", "destroy-when-done", "focused"];
     }
 
     connectedCallback(): void {
@@ -296,6 +303,10 @@ export class EchoBox extends HTMLElement {
         } else if (name === "destroy-when-done") {
             this._destroyWhenDone = value !== null;
             this.applyStatus();
+        } else if (name === "focused") {
+            // The focused cell's background brightens (echo-box.css); repaint
+            // the embedded terminals so their canvas matches.
+            this.refreshTermBackgrounds();
         }
     }
 
@@ -304,6 +315,13 @@ export class EchoBox extends HTMLElement {
             return;
         }
         this.initialized = true;
+
+        if (!this.hasAttribute("focusable")) {
+            this.setAttribute("focusable", "cell");
+        }
+        if (!this.hasAttribute("tabindex")) {
+            this.tabIndex = -1;
+        }
 
         // Capture authored `[data-view]` children as views before rebuilding.
         const authored = Array.from(this.children).filter(
@@ -332,6 +350,8 @@ export class EchoBox extends HTMLElement {
         this.closeEl.type = "button";
         this.closeEl.className = "echo-box-close";
         this.closeEl.textContent = "✕";
+        // Closing a cell shouldn't focus it first (see focus.ts).
+        this.closeEl.setAttribute("nofocus", "");
         this.closeEl.addEventListener("click", (e) => {
             e.stopPropagation();
             this.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
@@ -400,6 +420,35 @@ export class EchoBox extends HTMLElement {
 
         if (this.hasAttribute("compact")) {
             this.setCompact(true);
+        }
+    }
+
+    // ── Focus ─────────────────────────────────────────────────────────────────
+
+    /** Move the DOM focus into the active view: its embedded terminal (so
+     *  keystrokes reach the pty) or <buche-gui>. Otherwise the box keeps it. */
+    commitFocus(): void {
+        const view = this._activeView !== null ? this.getView(this._activeView) : null;
+        const target = view?.querySelector("embedded-term, buche-gui") as
+            | (HTMLElement & Partial<FocusCommittable>)
+            | null;
+        if (!target) {
+            return;
+        }
+        if (target.commitFocus) {
+            target.commitFocus();
+        } else {
+            target.focus();
+        }
+    }
+
+    private refreshTermBackgrounds(): void {
+        // Stub terminals without the real element (tests) may lack the method.
+        const terms = this.querySelectorAll("embedded-term") as NodeListOf<
+            HTMLElement & { refreshBackground?: () => void }
+        >;
+        for (const term of terms) {
+            term.refreshBackground?.();
         }
     }
 

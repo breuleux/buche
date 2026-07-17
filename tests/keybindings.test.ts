@@ -76,6 +76,28 @@ describe("ModalKeys", () => {
         keys.detach();
     });
 
+    test("capture keys can be bound with modifiers other than Ctrl", () => {
+        const box = document.createElement("div");
+        document.body.append(box);
+        const hits: string[] = [];
+        const keys = new ModalKeys({
+            capture: {
+                ArrowUp: () => hits.push("up"),
+                "Shift+ArrowUp": () => hits.push("shift+up"),
+            },
+            onEnter: () => hits.push("enter"),
+        });
+        keys.attach(box);
+
+        key(box, "keydown", { key: "q", ctrlKey: true });
+        key(box, "keydown", { key: "ArrowUp", ctrlKey: true });
+        key(box, "keydown", { key: "ArrowUp", ctrlKey: true, shiftKey: true });
+        // No Alt binding: falls back to the bare key's.
+        key(box, "keydown", { key: "ArrowUp", ctrlKey: true, altKey: true });
+        expect(hits).toEqual(["enter", "up", "shift+up", "up"]);
+        keys.detach();
+    });
+
     test("Mod expands per-platform in chords", () => {
         const box = document.createElement("div");
         document.body.append(box);
@@ -127,37 +149,48 @@ function makePromptCollection(): [PromptCollection, Entry] {
     return [pc, entry];
 }
 
+// The interface's FocusManager navigates by layout; happy-dom has none (all
+// rects are empty), but it does compute inline `display`/`flex-direction`, and
+// empty rects keep flex items in DOM order — enough for a flex column.
+function column(container: HTMLElement): void {
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+}
+
+const promptRow = (pc: PromptCollection) =>
+    pc.querySelector<HTMLElement>('[focusable="prompt"]:not([hidden])')!;
+
 describe("BucheInterface global bindings", () => {
     test("Ctrl+Q then ↓/↓ navigates and highlights cells", () => {
         const [iface, container] = makeInterface();
+        column(container);
         const [b1] = makeCell();
         const [b2] = makeCell();
         container.append(b1, b2);
 
         key(container, "keydown", { key: "q", ctrlKey: true });
         key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b1);
-        expect(b1.classList.contains("cell-focused")).toBe(true);
+        expect(iface.focus.current).toBe(b1);
+        expect(b1.hasAttribute("focused")).toBe(true);
         key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b2);
-        expect(b1.classList.contains("cell-focused")).toBe(false);
-        // Clamped at the ends.
+        expect(iface.focus.current).toBe(b2);
+        expect(b1.hasAttribute("focused")).toBe(false);
+        // Nothing past the end.
         key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b2);
+        expect(iface.focus.current).toBe(b2);
         iface.keys.detach();
     });
 
-    test("'k' signals the focused cell's entry", async () => {
+    test("'k' signals the focused cell's entry", () => {
         const [iface, container] = makeInterface();
         const [b1, entry] = makeCell();
         container.append(b1);
+        iface.focus.focus(b1);
 
         key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
         b1.status = "running";
         key(container, "keydown", { key: "k", ctrlKey: true });
         // An unresponsive cell gets SIGKILL instead (like the ✕ handler).
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
         b1.status = "unresponsive";
         key(container, "keydown", { key: "k", ctrlKey: true });
 
@@ -173,19 +206,45 @@ describe("BucheInterface global bindings", () => {
         const [iface, container] = makeInterface();
         const [b1] = makeCell();
         container.append(b1);
+        iface.focus.focus(b1);
 
         let closes = 0;
         container.addEventListener("close", () => closes++);
 
         key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
         key(container, "keydown", { key: "d", ctrlKey: true });
         expect(closes).toBe(1);
         iface.keys.detach();
     });
 
-    test("selecting a cell focuses the embedded term inside it", () => {
+    test("from a prompt, 'k' and 'd' apply to the cell right above it", () => {
         const [iface, container] = makeInterface();
+        column(container);
+        const [b1] = makeCell();
+        const [b2, entry2] = makeCell();
+        const [pc] = makePromptCollection();
+        container.append(b1, b2, pc);
+        b2.status = "running";
+        iface.focus.focus(promptRow(pc));
+
+        const closed: EventTarget[] = [];
+        container.addEventListener("close", (e) => closed.push(e.target!));
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "k", ctrlKey: true });
+        key(container, "keydown", { key: "d", ctrlKey: true });
+        expect(Array.from(iface.interactions.purge())).toEqual([
+            { type: "user_signal", code: 15, entry: entry2 },
+        ]);
+        expect(closed).toEqual([b2]);
+        // The focus stays on the prompt.
+        expect(iface.focus.current).toBe(promptRow(pc));
+        iface.keys.detach();
+    });
+
+    test("the focused cell holds the DOM focus; releasing Ctrl moves it into the terminal", () => {
+        const [iface, container] = makeInterface();
+        column(container);
         const [b1] = makeCell();
         const term = document.createElement("embedded-term");
         let focused = 0;
@@ -196,53 +255,57 @@ describe("BucheInterface global bindings", () => {
         container.append(b1);
 
         key(container, "keydown", { key: "q", ctrlKey: true });
+        expect(iface.focus.holdCommits).toBe(true);
         key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(focused).toBe(1);
-        // Ctrl-release does not steal focus back from the terminal.
-        key(window, "keyup", { key: "Control" });
-        expect(focused).toBe(1);
-        iface.keys.detach();
-    });
-
-    test("down steps from the last cell onto the prompt; up steps back", () => {
-        const [iface, container] = makeInterface();
-        const [b1] = makeCell();
-        const [b2] = makeCell();
-        const [pc] = makePromptCollection();
-        container.append(b1, b2, pc);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b1);
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b2);
-        // Down past the last cell: the prompt takes focus, selection cleared.
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.promptHasFocus()).toBe(true);
-        expect(iface.focus.focusedCell).toBeNull();
-        expect(b2.classList.contains("cell-focused")).toBe(false);
-        // Up from the prompt: back to the last cell.
-        key(container, "keydown", { key: "ArrowUp", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b2);
-        // Down to the prompt again, then down wraps to the first cell.
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.focusedCell).toBe(b1);
-        iface.keys.detach();
-    });
-
-    test("releasing Ctrl focuses the selected cell", () => {
-        const [iface, container] = makeInterface();
-        const [b1] = makeCell();
-        container.append(b1);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        key(window, "keyup", { key: "Control" });
-
-        expect(iface.keys.capturing).toBe(false);
         expect(document.activeElement).toBe(b1);
         expect(b1.tabIndex).toBe(-1);
+        expect(focused).toBe(0);
+
+        key(window, "keyup", { key: "Control" });
+        expect(iface.keys.capturing).toBe(false);
+        expect(iface.focus.holdCommits).toBe(false);
+        expect(focused).toBe(1);
+        iface.keys.detach();
+    });
+
+    test("Mod+p and Ctrl+Q p focus the latest prompt in the history", () => {
+        const [iface, container] = makeInterface();
+        column(container);
+        const [pc1] = makePromptCollection();
+        const [b1] = makeCell();
+        const [pc2] = makePromptCollection();
+        container.append(pc1, b1, pc2);
+        const mod = isMac() ? { metaKey: true } : { ctrlKey: true };
+
+        // No prompt in the history yet: nothing to go back to.
+        key(container, "keydown", { key: "p", ...mod });
+        expect(iface.focus.current).toBeNull();
+
+        iface.focus.focus(promptRow(pc2));
+        iface.focus.focus(b1);
+        key(container, "keydown", { key: "p", ...mod });
+        expect(iface.focus.current).toBe(promptRow(pc2));
+
+        iface.focus.focus(b1);
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "p", ctrlKey: true });
+        expect(iface.focus.current).toBe(promptRow(pc2));
+        iface.keys.detach();
+    });
+
+    test("the latest prompt is remembered beyond the history size", () => {
+        const [iface, container] = makeInterface();
+        const [pc] = makePromptCollection();
+        const cells = Array.from({ length: 15 }, () => makeCell()[0]);
+        container.append(pc, ...cells);
+
+        iface.focus.focus(promptRow(pc), "click");
+        for (const cell of cells) {
+            iface.focus.focus(cell, "click");
+        }
+        const mod = isMac() ? { metaKey: true } : { ctrlKey: true };
+        key(container, "keydown", { key: "p", ...mod });
+        expect(iface.focus.current).toBe(promptRow(pc));
         iface.keys.detach();
     });
 });

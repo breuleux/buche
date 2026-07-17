@@ -369,10 +369,10 @@ echo-box[compact][data-alt] .echo-box-handle {
 	display: block;
 }
 
-/* ── Keyboard selection (interface capture mode) ──────────────────────────
- * The capture-mode bindings (Ctrl+Q, then ↑/↓) highlight the selected cell:
- * the gutter bar widens and brightens and the background lightens a touch;
- * once Ctrl is released the DOM focus lands on it too, without adding the
+/* ── Focus (focus.ts) ──────────────────────────────────────────────────────
+ * The focused cell (the FocusManager's `focused` attribute) is highlighted:
+ * the gutter bar widens and brightens and the background lightens a touch.
+ * The box itself takes the DOM focus while navigated onto, without the
  * browser's own outline. */
 echo-box:focus {
 	outline: none;
@@ -381,23 +381,23 @@ echo-box:focus {
 /* #262626 = the default background (#1c1c1c) lightened by ~4.5% white; solid
  * so the embedded terminal can match it exactly (its canvas background comes
  * from a colour, not from compositing). */
-echo-box.cell-focused {
+echo-box[focused] {
 	--echo-bg: #262626;
 	background: #262626;
 }
 
-echo-box.cell-focused .echo-box-gutter::before,
-echo-box.cell-focused .echo-box-status {
+echo-box[focused] .echo-box-gutter::before,
+echo-box[focused] .echo-box-status {
 	filter: brightness(1.35);
 }
 
-echo-box.cell-focused .echo-box-gutter::before {
+echo-box[focused] .echo-box-gutter::before {
 	width: 4px;
 }
 
 /* embedded-term declares its own --embedded-term-bg, so the cascade needs to
  * target the element itself; embedded-term.tsx's refreshBackground() pushes
  * the same colour into the xterm theme. */
-echo-box.cell-focused embedded-term {
+echo-box[focused] embedded-term {
 	--embedded-term-bg: #262626;
 }

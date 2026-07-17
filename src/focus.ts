@@ -96,7 +96,10 @@ export interface FocusChangeDetail {
 }
 
 export interface FocusManagerOptions {
-    /** Number of past focuses to remember (default 10). */
+    /**
+     * Number of past focuses to remember (default 10). On top of those, the
+     * latest focus for each combination of tags is always kept.
+     */
     historySize?: number;
     /** Attribute that marks elements as focusable (default "focusable"). */
     attribute?: string;
@@ -182,6 +185,13 @@ export class FocusManager {
     get current(): HTMLElement | null {
         const el = this.currentEl;
         return el && this.valid(el) ? el : null;
+    }
+
+    /** Tags of the current focus (see {@link FocusRecord}); empty when there is none. */
+    get currentTags(): readonly string[] {
+        const current = this.current;
+        const record = this.past.at(-1);
+        return current && record?.element === current ? [...record.tags] : [];
     }
 
     /** Past focuses, most recent last (the current one included). */
@@ -341,9 +351,7 @@ export class FocusManager {
             }
             this.past = this.past.filter((r) => r.element !== el && r.element.isConnected);
             this.past.push({ element: el, tags: this.tagsFor(el, source) });
-            if (this.past.length > this.historySize) {
-                this.past.splice(0, this.past.length - this.historySize);
-            }
+            this.trimHistory();
             if (domFocus) {
                 this.applyDomFocus(el);
             }
@@ -356,6 +364,32 @@ export class FocusManager {
                 bubbles: true,
             }),
         );
+    }
+
+    // Drop the oldest records beyond `historySize`, except that the latest
+    // record for each combination of tags is kept regardless (so that e.g. the
+    // last focused prompt is always remembered).
+    private trimHistory(): void {
+        let excess = this.past.length - this.historySize;
+        if (excess <= 0) {
+            return;
+        }
+        const latest = new Set<FocusRecord>();
+        const seen = new Set<string>();
+        for (let i = this.past.length - 1; i >= 0; i--) {
+            const key = this.past[i].tags.join(" ");
+            if (!seen.has(key)) {
+                seen.add(key);
+                latest.add(this.past[i]);
+            }
+        }
+        this.past = this.past.filter((r) => {
+            if (excess > 0 && !latest.has(r)) {
+                excess--;
+                return false;
+            }
+            return true;
+        });
     }
 
     private tagsFor(el: HTMLElement, source: FocusSource): string[] {
