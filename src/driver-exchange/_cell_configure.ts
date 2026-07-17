@@ -1,4 +1,4 @@
-import type { CellConfiguration } from "../cell.ts";
+import { Cell, type CellConfiguration } from "../cell.ts";
 import type { Buche } from "../core.ts";
 import type { EchoConfiguration } from "../echo.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
@@ -12,5 +12,18 @@ export interface CellConfigureMessage
 }
 
 export function handle$cell_configure(buche: Buche, obj: CellConfigureMessage): void {
-    buche.configure("cell", obj);
+    const entry = buche.ensure2(obj);
+    const zone = buche.findPlace2(entry, obj);
+    if (entry.cell) {
+        entry.cell.configure(obj);
+    } else {
+        const cell = new Cell(obj);
+        entry.setCell(cell);
+    }
+    entry.echo.status = {status: "running"};
+    buche.sendInterface({
+        type: "update_cell",
+        zone: zone,
+        entry: entry,
+    });
 }

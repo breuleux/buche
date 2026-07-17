@@ -4,10 +4,11 @@ import { Cell, type CellConfiguration } from "./cell.ts";
 import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
+import type { EchoConfiguration } from "./echo.ts";
+import { Entry } from "./entry.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
-import { Entry } from "./entry.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import type { Address } from "./types.ts";
@@ -113,6 +114,29 @@ export class Buche {
             });
         }
         return { prompt, zone };
+    }
+
+    findPlace2(post: Entry, info: CreationInfo): Zone {
+        const zoneName = info.zone || "@";
+        let p: Entry | undefined = post.parent;
+        while (p) {
+            if (p.zones && zoneName in p.zones) {
+                return p.zones[zoneName];
+            }
+            p = p.parent;
+        }
+        throw new BucheError({
+            type: "buche_error",
+            code: "nozone",
+            reason: `No zone named ${zoneName} could be found`,
+            input: info,
+        });
+    }
+
+    ensure2(message: EchoConfiguration & CreationInfo) {
+        const post = this.hierarchy.getAt(message.from.slice(1), true)!;
+        post.echo.configure(message);
+        return post;
     }
 
     /**

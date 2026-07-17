@@ -1,6 +1,6 @@
 import type { Buche } from "../core.ts";
 import type { EchoConfiguration } from "../echo.ts";
-import type { PromptConfiguration } from "../prompt.ts";
+import { Prompt, type PromptConfiguration } from "../prompt.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
 
 export interface PromptConfigureMessage
@@ -12,5 +12,18 @@ export interface PromptConfigureMessage
 }
 
 export function handle$prompt_configure(buche: Buche, obj: PromptConfigureMessage): void {
-    buche.configure("prompt", obj);
+    const entry = buche.ensure2(obj);
+    const zone = buche.findPlace2(entry, obj);
+    if (entry.prompt) {
+        entry.prompt.configure(obj);
+    } else {
+        const prompt = new Prompt(obj);
+        entry.setPrompt(prompt);
+    }
+    entry.echo.status = {status: "running"};
+    buche.sendInterface({
+        type: "update_prompt",
+        zone: zone,
+        entry: entry,
+    });
 }

@@ -3,6 +3,26 @@ import type { Entry } from "../entry.ts";
 import type { BucheErrorFields } from "../utils.ts";
 import type { Zone } from "../zone.ts";
 
+export interface UpdatePromptMessage {
+    type: "update_prompt";
+
+    /** The zone in which to install or move the component. */
+    zone?: Zone | null;
+
+    /** The component's entry (echo, cell, prompt, zones). */
+    entry: Entry;
+}
+
+export interface UpdateCellMessage {
+    type: "update_cell";
+
+    /** The zone in which to install or move the component. */
+    zone?: Zone | null;
+
+    /** The component's entry (echo, cell, prompt, zones). */
+    entry: Entry;
+}
+
 export interface UpdateComponentMessage {
     type: "update_component";
 
@@ -29,6 +49,8 @@ export interface ProblemMessage extends BucheErrorFields {
 
 /** Union of every message type. */
 export type OutgoingInterfaceMessage =
+    | UpdatePromptMessage
+    | UpdateCellMessage
     | UpdateComponentMessage
     | CellCommandMessage
     | ProblemMessage;
