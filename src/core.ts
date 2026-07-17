@@ -7,7 +7,7 @@ import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/out
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
-import { Post } from "./post.ts";
+import { Entry } from "./entry.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import type { Address } from "./types.ts";
@@ -36,12 +36,12 @@ export class Buche {
         driverHandlers,
         interfaceHandlers,
     );
-    hierarchy: Post;
+    hierarchy: Entry;
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.hierarchy = new Post({ zones: args.initialZones });
+        this.hierarchy = new Entry({ zones: args.initialZones });
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -75,7 +75,7 @@ export class Buche {
      * `missingcell` if there is none. When `create` is true, an empty container
      * is created and returned if one does not already exist.
      */
-    get(addr: Address, create: boolean = false): Post {
+    get(addr: Address, create: boolean = false): Entry {
         const node = this.hierarchy.getAt(addr, create);
         const c = node;
         if (!c) {
@@ -94,7 +94,7 @@ export class Buche {
         let prompt: Prompt | null = null;
         let zone: Zone | null = null;
 
-        let node: Post | undefined = this.hierarchy;
+        let node: Entry | undefined = this.hierarchy;
         for (let i = 0; node; node = node.children[arr[i++]]) {
             const data = node;
             if (data?.prompt) {
@@ -120,12 +120,12 @@ export class Buche {
      * same kind already lives there. Throws `exists` only when the other kind
      * occupies the address (a cell where a prompt lives, or vice versa).
      */
-    configure(type: "cell", obj: CellConfiguration & BaseMessage): Post;
-    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): Post;
+    configure(type: "cell", obj: CellConfiguration & BaseMessage): Entry;
+    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): Entry;
     configure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & CreationInfo & BaseMessage,
-    ): Post {
+    ): Entry {
         const post = this.get(obj.from, true);
         const other = type === "cell" ? "prompt" : "cell";
         if (post[other]) {
@@ -161,12 +161,12 @@ export class Buche {
         return post;
     }
 
-    ensure(type: "cell", obj: CellConfiguration & BaseMessage): Post;
-    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): Post;
+    ensure(type: "cell", obj: CellConfiguration & BaseMessage): Entry;
+    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): Entry;
     ensure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
-    ): Post {
+    ): Entry {
         const c = this.get(obj.from, true);
         if (type === "cell" && !c.cell) {
             return this.configure(type, obj);
@@ -179,11 +179,11 @@ export class Buche {
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {
-        let post: Post | undefined;
+        let post: Entry | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest
             // non-null component in the hierarchy.
-            let node: Hierarchy<Post> = buche.hierarchy;
+            let node: Hierarchy<Entry> = buche.hierarchy;
             for (const segment of obj.input.from) {
                 const child = node.children[segment];
                 if (!child) {

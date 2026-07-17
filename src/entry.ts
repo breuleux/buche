@@ -4,17 +4,17 @@ import type { Prompt } from "./prompt";
 import { Hierarchy, type HierarchyArgs } from "./utils";
 import { type Zone, zoneMap } from "./zone";
 
-interface PostArgs extends HierarchyArgs {
+interface EntryArgs extends HierarchyArgs {
     zones?: Record<string, Zone>;
 }
 
-export class Post extends Hierarchy {
+export class Entry extends Hierarchy {
     echo: Echo;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
     zones: Record<string, Zone> = {};
 
-    constructor(args: PostArgs) {
+    constructor(args: EntryArgs) {
         super(args);
         this.echo = new Echo({
             from: this.address(),

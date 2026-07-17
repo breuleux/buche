@@ -9,7 +9,7 @@ import type {
     ProblemMessage,
     UpdateComponentMessage,
 } from "./interface-exchange/outgoing";
-import type { Post } from "./post.ts";
+import type { Entry } from "./entry.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 import { extractZones, type Zone } from "./zone";
