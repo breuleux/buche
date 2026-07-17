@@ -1,10 +1,6 @@
-/** Any JSON-serializable value (payloads exchanged over the FDs). */
-export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+import type { Address, To, ZoneDescriptor } from "../types.ts";
 
-export type Address = Array<string>;
-export type To = Address;
-
-export type ZoneDescriptor = string;
+export type { Address, Json, To, ZoneDescriptor } from "../types.ts";
 
 export interface BaseMessage {
     /** Type of the message. */

@@ -1,7 +1,6 @@
 import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import * as readline from "node:readline";
 import type { Readable, Writable } from "node:stream";
-import { AsyncQueue } from "./async-queue.ts";
 import type { DataMessage } from "./driver-exchange/_data.ts";
 import type { TextMessage } from "./driver-exchange/_text.ts";
 import type { Address, Json, To } from "./driver-exchange/common.ts";
@@ -9,6 +8,7 @@ import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
 import { driverParser } from "./parse.ts";
 import type { BucheErrorMessage } from "./utils.ts";
+import { AsyncQueue } from "./utils.ts";
 
 /** A message produced by the process: either a valid driver message or a parse error. */
 export type ProcessMessage = IncomingDriverMessage | BucheErrorMessage;
@@ -49,10 +49,6 @@ export interface ProcessCommunicatorOptions {
 function stdioEntry(mode: StreamMode): "pipe" | "inherit" {
     return mode === "ignore" ? "inherit" : "pipe";
 }
-
-// Re-exported for existing importers; the implementation lives in its own
-// (node-free) module so it can be bundled for the browser too.
-export { AsyncQueue };
 
 /**
  * Spawns a child process wired up with the Buche file-descriptor protocol and

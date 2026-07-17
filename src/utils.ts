@@ -1,3 +1,5 @@
+import type { Address } from "./types.ts";
+
 var _CURRENT_ID = 0;
 
 export function resetId(n: number = 0) {
@@ -96,5 +98,103 @@ export async function* mergeIterables<T, U>(
     } finally {
         // Ensure active iterators are closed if the consumer aborts early (e.g. break)
         await Promise.allSettled([iteratorT.return?.(null), iteratorU.return?.(null)]);
+    }
+}
+
+export class Hierarchy<T> {
+    entry?: T;
+    children: Record<string, Hierarchy<T>>;
+
+    constructor(entry?: T) {
+        this.entry = entry;
+        this.children = {};
+    }
+
+    getAt(addr: Address, create: boolean = false): Hierarchy<T> | null {
+        let node: Hierarchy<T> = this;
+        for (const segment of addr) {
+            let child = node.children[segment];
+            if (!child) {
+                if (!create) {
+                    return null;
+                }
+                child = node.children[segment] = new Hierarchy();
+            }
+            node = child;
+        }
+        return node;
+    }
+
+    *walk(): Generator<T> {
+        if (this.entry) {
+            yield this.entry;
+        }
+        for (const child of Object.values(this.children)) {
+            yield* child.walk();
+        }
+    }
+}
+
+export class AsyncQueue<T> {
+    private items: T[] = [];
+    private waiting: ((result: IteratorResult<T>) => void)[] = [];
+    private ended = false;
+
+    push(item: T): void {
+        if (this.ended) {
+            return;
+        }
+        const resolve = this.waiting.shift();
+        if (resolve) {
+            resolve({ value: item, done: false });
+        } else {
+            this.items.push(item);
+        }
+    }
+
+    end(): void {
+        if (this.ended) {
+            return;
+        }
+        this.ended = true;
+        for (const resolve of this.waiting) {
+            resolve({ value: undefined as never, done: true });
+        }
+        this.waiting = [];
+    }
+
+    *purge() {
+        while (this.items.length > 0) {
+            yield this.items.shift() as T;
+        }
+    }
+
+    async *[Symbol.asyncIterator](): AsyncGenerator<T> {
+        while (true) {
+            if (this.items.length > 0) {
+                yield this.items.shift() as T;
+            } else if (this.ended) {
+                return;
+            } else {
+                const result = await new Promise<IteratorResult<T>>((resolve) => {
+                    this.waiting.push(resolve);
+                });
+                if (result.done) {
+                    return;
+                }
+                yield result.value;
+            }
+        }
+    }
+}
+
+export async function* awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
+    if (fn) {
+        for await (const x of stream) {
+            fn(x);
+            yield x;
+        }
+    } else {
+        yield* stream;
     }
 }

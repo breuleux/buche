@@ -5,7 +5,7 @@ import readline from "node:readline";
 import { Buche, type InM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import type { OutgoingInterfaceMessage } from "../src/interface-exchange/outgoing.ts";
-import { AsyncQueue } from "../src/process.ts";
+import { AsyncQueue } from "../src/utils.ts";
 import { Zone, zoneMap } from "../src/zone.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {

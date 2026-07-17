@@ -16,7 +16,7 @@ export interface ErrorMessage extends BaseMessage {
 }
 
 export function handle$error(buche: Buche, obj: ErrorMessage): void {
-    const component = buche.hierarchy.getAt(obj.from, false)?.component;
+    const component = buche.hierarchy.getAt(obj.from, false)?.entry;
 
     buche.sendInterface({
         type: "problem",

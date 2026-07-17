@@ -4,13 +4,13 @@ import { Cell, type CellConfiguration } from "./cell.ts";
 import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import type { Echo } from "./echo.ts";
+import { ComponentData } from "./exchange.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
-import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
+import { awrap, BucheError, type BucheErrorMessage, Hierarchy, mergeIterables } from "./utils.ts";
 import { type Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
@@ -28,48 +28,6 @@ export interface LocationResult {
     zone: Zone;
 }
 
-export interface ComponentData {
-    echo?: Echo;
-    cell?: Cell;
-    prompt?: Prompt;
-    zones: Record<string, Zone> | null;
-}
-
-export class Hierarchy {
-    component?: ComponentData;
-    children: Record<string, Hierarchy>;
-
-    constructor(component?: ComponentData) {
-        this.component = component;
-        this.children = {};
-    }
-
-    getAt(addr: Address, create: boolean = false): Hierarchy | null {
-        let node: Hierarchy = this;
-        for (const segment of addr) {
-            let child = node.children[segment];
-            if (!child) {
-                if (!create) {
-                    return null;
-                }
-                child = node.children[segment] = new Hierarchy();
-            }
-            node = child;
-        }
-        return node;
-    }
-
-    /** Yield every component in this subtree (this node first, then descendants). */
-    *iterateComponents(): Generator<ComponentData> {
-        if (this.component) {
-            yield this.component;
-        }
-        for (const child of Object.values(this.children)) {
-            yield* child.iterateComponents();
-        }
-    }
-}
-
 export class Buche {
     handlers: HandlerT = Object.assign(
         {} as HandlerT,
@@ -77,12 +35,12 @@ export class Buche {
         driverHandlers,
         interfaceHandlers,
     );
-    hierarchy: Hierarchy;
+    hierarchy: Hierarchy<ComponentData>;
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.hierarchy = new Hierarchy({ zones: args.initialZones });
+        this.hierarchy = new Hierarchy(new ComponentData(args.initialZones));
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -118,7 +76,7 @@ export class Buche {
      */
     get(addr: Address, create: boolean = false): ComponentData {
         const node = this.hierarchy.getAt(addr, create);
-        let c = node?.component;
+        let c = node?.entry;
         if (!c) {
             if (!create) {
                 throw new BucheError({
@@ -127,7 +85,7 @@ export class Buche {
                     reason: `Cell at ${JSON.stringify(addr)} is missing`,
                 });
             }
-            c = (node as Hierarchy).component = { zones: {} };
+            c = (node as Hierarchy<ComponentData>).entry = new ComponentData();
         }
         return c;
     }
@@ -138,9 +96,9 @@ export class Buche {
         let prompt: Prompt | null = null;
         let zone: Zone | null = null;
 
-        let node: Hierarchy | undefined = this.hierarchy;
+        let node: Hierarchy<ComponentData> | undefined = this.hierarchy;
         for (let i = 0; node; node = node.children[arr[i++]]) {
-            const data = node.component;
+            const data = node.entry;
             if (data?.prompt) {
                 prompt = data.prompt;
             }
@@ -186,16 +144,14 @@ export class Buche {
             } else {
                 const cell = new Cell(obj, { address: obj.from });
                 cell.prompt = parentPrompt;
-                component.cell = cell;
-                component.zones = zoneMap(Object.values(cell.zones));
+                component.setCell(cell);
             }
         } else {
             if (component.prompt) {
                 component.prompt.configure(obj);
             } else {
                 const prompt = new Prompt(obj, { address: obj.from });
-                component.prompt = prompt;
-                component.zones = zoneMap(Object.values(prompt.zones));
+                component.setPrompt(prompt);
             }
         }
         this.sendInterface({
@@ -222,24 +178,13 @@ export class Buche {
     }
 }
 
-async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
-    if (fn) {
-        for await (const x of stream) {
-            fn(x);
-            yield x;
-        }
-    } else {
-        yield* stream;
-    }
-}
-
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {
         let component: ComponentData | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest
             // non-null component in the hierarchy.
-            let node: Hierarchy = buche.hierarchy;
+            let node: Hierarchy<ComponentData> = buche.hierarchy;
             for (const segment of obj.input.from) {
                 const child = node.children[segment];
                 if (!child) {
@@ -247,7 +192,7 @@ const baseHandlers = {
                 }
                 node = child;
             }
-            component = node.component;
+            component = node.entry;
         }
         buche.sendInterface(
             Object.assign({}, obj, {
@@ -291,8 +236,8 @@ export async function bucheRun(args: BucheRunArguments) {
         },
     });
     const instream = mergeIterables(
-        _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
-        _awrap(args.interface.interactions as AsyncGenerator<InM>, args.loggers.interfaceIn),
+        awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
+        awrap(args.interface.interactions as AsyncGenerator<InM>, args.loggers.interfaceIn),
     );
     for await (const inMessage of instream) {
         buche.handle(inMessage);

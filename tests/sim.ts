@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { bucheRun } from "../src/core.ts";
 import { InertInterface } from "../src/interface.tsx";
 import type { IncomingInterfaceMessage } from "../src/interface-exchange/incoming.ts";
-import { AsyncQueue, ProcessCommunicator } from "../src/process.ts";
-import { resetId } from "../src/utils.ts";
+import { ProcessCommunicator } from "../src/process.ts";
+import { AsyncQueue, resetId } from "../src/utils.ts";
 import { Zone } from "../src/zone.ts";
 
 interface _Common {
