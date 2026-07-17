@@ -12,7 +12,15 @@ export class Entry extends Hierarchy {
     echo: Echo;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
+    /** Zones this entry defines (e.g. its prompt's "@"), by name. */
     zones: Record<string, Zone> = {};
+    /**
+     * The zone this entry's prompt or cell was placed in, if any. Zone lookups
+     * from its descendants consider that zone's names too (see
+     * Buche.findPlace), so that e.g. a sub-shell living in some zone finds
+     * the zones there before those elsewhere.
+    */
+    placement: Zone | null = null;  // INELEGANCE: I would like all this logic to be in zone
 
     /** Listeners */
     listeners: Array<(entry: this) => void> = [];

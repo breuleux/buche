@@ -21,9 +21,21 @@ tab-pane {
 	flex: 0 0 auto;
 	flex-direction: row;
 	background: var(--tab-pane-bg);
-	/* The dim line running along the bottom of the tabs. */
-	border-bottom: 1px solid oklch(from var(--tab-pane-bg) calc(l + 0.2) c h);
+	/* The dim line running along the bottom of the tabs. An inset shadow
+	 * rather than a border: the row scrolls, which clips its content to the
+	 * padding box, and the active tab's underline must be drawn over it. */
+	box-shadow: inset 0 -1px 0 oklch(from var(--tab-pane-bg) calc(l + 0.2) c h);
 	padding: 0 4px;
+	/* Too many tabs scroll the row, not the whole pane. The scrollbar is
+	 * hidden (like scroll-fader's); the wheel scrolls it sideways. */
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.tab-pane-tabs::-webkit-scrollbar {
+	display: none;
 }
 
 .tab-pane-tab {
@@ -34,10 +46,11 @@ tab-pane {
 	gap: 5px;
 	background: none;
 	border: none;
-	/* Sits on top of the tab bar's bottom line; coloured when active. */
+	/* Sits on top of the tab bar's bottom line (so the accent replaces the
+	 * dim line); coloured when active. */
 	border-bottom: 2px solid transparent;
-	/* Overlap the 1px baseline so the accent replaces the dim line. */
-	margin-bottom: -1px;
+	/* Keep its size when the row overflows: the row scrolls instead. */
+	flex: 0 0 auto;
 	color: #555;
 	cursor: default;
 	font-size: 11px;

@@ -91,12 +91,21 @@ export class Buche {
         return c;
     }
 
+    /**
+     * The zone named by `info.zone` (default "@") for `entry`, looked up by
+     * bubbling up its ancestors: at each one, the zones it defines, then the
+     * zone it was placed in (its names). The root defines every zone of the
+     * layout, as a last resort.
+     */
     findPlace(entry: Entry, info: CreationInfo): Zone {
         const zoneName = info.zone || "@";
         let e: Entry | undefined = entry.parent;
         while (e) {
             if (e.zones && zoneName in e.zones) {
                 return e.zones[zoneName];
+            }
+            if (e.placement?.names.includes(zoneName)) {
+                return e.placement;
             }
             e = e.parent;
         }

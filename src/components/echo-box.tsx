@@ -75,7 +75,7 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
-import { echoElementId, type Status, type StatusString, type ViewLabel } from "../echo.ts";
+import type { Status, StatusString, ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
@@ -820,11 +820,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     private applyEntry(entry: Entry): void {
         const echo = entry.echo;
-        // The element answering a user command can be found (and expected, see
-        // FocusManager.expect) by that command's id.
-        if (echo.id !== undefined) {
-            this.id = echoElementId(echo.id);
-        }
         if (echo?.echo !== undefined) {
             this.setEcho(echo.echo);
         }

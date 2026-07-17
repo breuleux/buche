@@ -1,5 +1,5 @@
 import { EchoBox } from "./components/echo-box.tsx";
-import type { PromptCommandDetail } from "./components/prompt-collection.tsx";
+import type { PromptCollection, PromptCommandDetail } from "./components/prompt-collection.tsx";
 import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
@@ -168,6 +168,12 @@ export class BucheInterface implements Interface {
             if (isVisible(element)) {
                 return element;
             }
+            // Still there, but e.g. in a tab that was switched away from (a
+            // cell took the focus in a new tab): bring it back into view.
+            const revealed = element.isConnected ? this.revealPrompt(element) : null;
+            if (revealed && isVisible(revealed)) {
+                return revealed;
+            }
             // const active = element
             //     .closest("prompt-collection")
             //     ?.querySelector<HTMLElement>('[focusable="prompt"]:not([hidden])');
@@ -178,6 +184,15 @@ export class BucheInterface implements Interface {
         // const prompts = this.container.querySelectorAll<HTMLElement>('[focusable="prompt"]');
         // return [...prompts].find(isVisible) ?? null;
         return null;
+    }
+
+    // Make a prompt's element visible again through its zone (see
+    // Zone.revealPrompt), given the element.
+    private revealPrompt(element: HTMLElement): HTMLElement | null {
+        const pc = element.closest("prompt-collection") as PromptCollection | null;
+        const entry = pc?.prompts.find((e) => pc.promptElement(e) === element);
+        const zone = entry && this.map.get(entry)?.zone;
+        return entry && zone ? zone.revealPrompt(entry) : null;
     }
 
     /** The cell that cell actions apply to: the focused one or, when a prompt

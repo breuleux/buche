@@ -30,6 +30,10 @@
 // line takes on the tab's accent color (reproducing the zone-tab look from the
 // original buche styles.css).
 //
+// When the tabs don't fit, the tab bar scrolls horizontally on its own (the
+// panes don't move); a vertical wheel over it scrolls it too, and showing a tab
+// scrolls it into view.
+//
 // `<tab-pane hide-single>` hides the tab bar while there is at most one tab.
 //
 // Events (all bubble):
@@ -164,6 +168,9 @@ export class TabPane extends HTMLElement {
 
         this.tabsEl = document.createElement("div");
         this.tabsEl.className = "tab-pane-tabs";
+        // The row scrolls horizontally when there are too many tabs (see
+        // tab-pane.css); let a vertical wheel scroll it too.
+        this.tabsEl.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
         this.bodyEl = document.createElement("div");
         this.bodyEl.className = "tab-pane-body";
         this.append(this.tabsEl, this.bodyEl);
@@ -302,6 +309,7 @@ export class TabPane extends HTMLElement {
         row.tab.classList.add("active");
         row.pane.style.display = "";
         this.applyUnderline(row);
+        this.revealTab(row.tab);
         this.dispatchEvent(
             new CustomEvent<TabChangeDetail>("tabchange", { detail: { entry }, bubbles: true }),
         );
@@ -396,6 +404,28 @@ export class TabPane extends HTMLElement {
         } else {
             row.tab.style.removeProperty("border-bottom-color");
         }
+    }
+
+    // Scroll the tab row (only) so that `tab` is fully visible.
+    private revealTab(tab: HTMLElement): void {
+        const bar = this.tabsEl.getBoundingClientRect();
+        const r = tab.getBoundingClientRect();
+        if (r.left < bar.left) {
+            this.tabsEl.scrollLeft -= bar.left - r.left;
+        } else if (r.right > bar.right) {
+            this.tabsEl.scrollLeft += r.right - bar.right;
+        }
+    }
+
+    // A vertical wheel over an overflowing tab row scrolls it sideways.
+    // (Horizontal scrolling, e.g. from a trackpad, is native.)
+    private onWheel(e: WheelEvent): void {
+        const bar = this.tabsEl;
+        if (bar.scrollWidth <= bar.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
+            return;
+        }
+        e.preventDefault();
+        bar.scrollLeft += e.deltaY;
     }
 
     // Hide the tab bar when `hide-single` is set and there is at most one tab.

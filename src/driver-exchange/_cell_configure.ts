@@ -14,6 +14,8 @@ export interface CellConfigureMessage
 export function handle$cell_configure(buche: Buche, obj: CellConfigureMessage): void {
     const entry = buche.ensure(obj);
     const zone = buche.findPlace(entry, obj);
+    // Where the cell is installed (a reconfiguration doesn't move it).
+    entry.placement ??= zone;
     if (entry.cell) {
         entry.cell.configure(obj);
     } else {

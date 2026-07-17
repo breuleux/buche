@@ -14,6 +14,8 @@ export interface PromptConfigureMessage
 export function handle$prompt_configure(buche: Buche, obj: PromptConfigureMessage): void {
     const entry = buche.ensure(obj);
     const zone = buche.findPlace(entry, obj);
+    // Where the prompt is installed (a reconfiguration doesn't move it).
+    entry.placement ??= zone;
     if (entry.prompt) {
         entry.prompt.configure(obj);
     } else {

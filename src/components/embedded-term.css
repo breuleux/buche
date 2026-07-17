@@ -30,7 +30,6 @@ embedded-term {
 	position: relative;
 	z-index: 0;
 	overflow: hidden;
-	transition: height 90ms ease-out;
 }
 
 .embedded-term-clip .xterm {

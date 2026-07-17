@@ -65,6 +65,7 @@ function prompt(container: HTMLElement, label = "cq"): HTMLElement {
 function run(
     ctx: ReturnType<typeof setup>,
     echo: Record<string, unknown> = {},
+    cell: Record<string, unknown> = {},
 ): { id: string; box: () => EchoBox | null } {
     const { iface, sent, flush, driver, container } = ctx;
     const entry = (prompt(container).closest("prompt-collection") as PromptCollection).prompts[0];
@@ -81,7 +82,7 @@ function run(
     const id = request.id as string;
     const from = [...SHELL, "2"];
     driver({ type: "echo", from, id, echo: { text: "ls", ranges: [] }, ...echo });
-    driver({ type: "cell_configure", from, zone: null });
+    driver({ type: "cell_configure", from, zone: null, ...cell });
     return { id, box: () => container.querySelector(`#echo-${id}`) };
 }
 
@@ -196,5 +197,141 @@ describe("automatic focus", () => {
         await settle();
         expect(ctx.container.querySelector(`#echo-${id}`)).not.toBeNull();
         expect(ctx.iface.focus.current).toBe(other);
+    });
+
+    test("a cell in a new tab takes the focus there (not its echo in the log)", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
+        await settle();
+        const cell = box();
+        expect(cell?.closest(".tab-pane-pane")).not.toBeNull();
+        expect(ctx.iface.focus.current).toBe(cell);
+        // Only the cell carries the id; the echo in the prompt's log doesn't.
+        expect(ctx.container.querySelectorAll(`#${cell?.id}`)).toHaveLength(1);
+    });
+
+    test("focusPrompt brings the prompt's tab back after a cell took the focus in a new tab", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        run(ctx, { label: "sleep" }, { zone: "tab" });
+        await settle();
+        expect(prompt(ctx.container).checkVisibility()).toBe(false);
+
+        ctx.iface.focusPrompt();
+        expect(prompt(ctx.container).checkVisibility()).toBe(true);
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+
+    test("a background cell's new tab stays in the background", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "sleep", background: true }, { zone: "tab" });
+        await settle();
+        expect(box()?.checkVisibility()).toBe(false);
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+});
+
+describe("tab ✕", () => {
+    const tabClose = (container: HTMLElement, label: string) => {
+        const tab = [...container.querySelectorAll(".tab-pane-tab")].find(
+            (t) => t.querySelector(".tab-pane-tab-label")?.textContent === label,
+        );
+        return tab?.querySelector<HTMLElement>(".tab-pane-tab-close") ?? null;
+    };
+
+    test("on a cell's tab, acts like the cell's ✕; the tab goes when the cell does", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
+        await settle();
+        const entry = box()?.boundEntry;
+        ctx.iface.interactions.purge();
+
+        tabClose(ctx.container, "sleep")?.click();
+        expect([...ctx.iface.interactions.purge()]).toEqual([
+            // Running (cell_configure says so): SIGTERM, as from the cell's ✕.
+            { type: "user_signal", code: 15, entry },
+        ]);
+        expect(tabClose(ctx.container, "sleep")).not.toBeNull();
+
+        ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "error" } });
+        await settle();
+        expect(box()).toBeNull();
+        expect(tabClose(ctx.container, "sleep")).toBeNull();
+        // The tab that was shown before comes back, with the focus.
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+
+    test("on an ended cell's tab, removes it right away", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        run(ctx, { label: "sleep", background: true }, { zone: "tab" });
+        ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        await settle();
+        expect(tabClose(ctx.container, "sleep")).not.toBeNull();
+
+        tabClose(ctx.container, "sleep")?.click();
+        expect(tabClose(ctx.container, "sleep")).toBeNull();
+    });
+});
+
+describe("zone lookup", () => {
+    test("bubbles up through the zones entries were placed in, before the layout's", () => {
+        const container = document.createElement("div");
+        // Two tabbed zones, both named "tab" among others; in the layout-wide
+        // registry, "tab" is the last one (main).
+        const left = new TabbedZoneElement(["left"]);
+        const main = new TabbedZoneElement(["@", "main"]);
+        container.append(left, main);
+        document.body.append(container);
+        const iface = new BucheInterface({ container, template: container });
+        const buche: Buche = new Buche({
+            initialZones: zoneMap(iface.zones),
+            sendDriver: () => {},
+            sendInterface: (m) => iface.processMessage(buche, m),
+        });
+        const driver = (m: Record<string, unknown>) => buche.handle({ to: TERM, ...m } as InM);
+        const zoneOf = (label: string) =>
+            [...container.querySelectorAll("echo-box")]
+                .find((b) => (b as EchoBox).boundEntry?.echo.label === label)
+                ?.closest("tabbed-zone");
+
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        // `@left coquille`: the sub-shell's cell and prompt go to the left zone.
+        const sub = [...SHELL, "1"];
+        driver({ type: "cell_configure", from: sub, zone: "left", label: "coquille" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], zone: "left", label: "sub" });
+
+        // In the sub-shell: `@tab ls` goes to a tab of the left zone, where the
+        // sub-shell lives; a plain command goes to the sub-shell's log.
+        driver({
+            type: "cell_configure",
+            from: [...sub, "cq", "2"],
+            zone: "tab",
+            label: "tabbed",
+        });
+        driver({ type: "cell_configure", from: [...sub, "cq", "3"], zone: null, label: "plain" });
+        expect(zoneOf("tabbed")).toBe(left);
+        expect(zoneOf("plain")).toBe(left);
+        expect(
+            [...container.querySelectorAll("echo-box")]
+                .find((b) => (b as EchoBox).boundEntry?.echo.label === "plain")
+                ?.closest("buche-term")
+                ?.querySelector(".prompt-collection-tab")?.textContent,
+        ).toBe("sub");
+
+        // From the main shell, `@tab ls` goes to the main zone's tabs.
+        driver({ type: "cell_configure", from: [...SHELL, "4"], zone: "tab", label: "main-tab" });
+        expect(zoneOf("main-tab")).toBe(main);
+        // And explicit names still resolve from anywhere.
+        driver({ type: "cell_configure", from: [...sub, "cq", "5"], zone: "main", label: "far" });
+        expect(zoneOf("far")).toBe(main);
     });
 });
