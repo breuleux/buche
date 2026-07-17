@@ -14,7 +14,7 @@
           "$ref": "#/definitions/InstallPromptMessage"
         },
         {
-          "$ref": "#/definitions/CloseComponentMessage"
+          "$ref": "#/definitions/UpdateStatusMessage"
         },
         {
           "$ref": "#/definitions/CellCommandMessage"
@@ -99,9 +99,26 @@
               "type": "null"
             }
           ]
+        },
+        "zone": {
+          "$ref": "#/definitions/Zone"
+        },
+        "text": {
+          "type": ["string", "null"],
+          "description": "Text of the command."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        },
+        "status": {
+          "$ref": "#/definitions/ComponentStatus"
         }
       },
-      "required": ["_id", "prompt"],
+      "required": ["_id", "prompt", "ranges", "status", "text", "zone"],
       "additionalProperties": false
     },
     "Prompt": {
@@ -161,6 +178,40 @@
       "items": {
         "type": "string"
       }
+    },
+    "HighlightRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive start offset into the prompt text."
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive end offset."
+        },
+        "cls": {
+          "type": "string",
+          "description": "CSS class."
+        }
+      },
+      "required": ["start", "end", "cls"],
+      "additionalProperties": false,
+      "description": "A syntax-highlight span over the prompt text"
+    },
+    "ComponentStatus": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["running", "done", "error", "unresponsive"]
+        },
+        "code": {
+          "type": ["number", "string", "null"]
+        }
+      },
+      "required": ["status"],
+      "additionalProperties": false
     },
     "Cell": {
       "type": "object",
@@ -234,18 +285,21 @@
       "required": ["component", "type", "zone"],
       "additionalProperties": false
     },
-    "CloseComponentMessage": {
+    "UpdateStatusMessage": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "close_component"
+          "const": "update_status"
         },
         "component": {
           "$ref": "#/definitions/ComponentData"
+        },
+        "status": {
+          "$ref": "#/definitions/ComponentStatus"
         }
       },
-      "required": ["type", "component"],
+      "required": ["type", "component", "status"],
       "additionalProperties": false
     },
     "CellCommandMessage": {

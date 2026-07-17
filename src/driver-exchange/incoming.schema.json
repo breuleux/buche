@@ -302,19 +302,6 @@
     "EchoMessage": {
       "type": "object",
       "properties": {
-        "type": {
-          "type": "string",
-          "const": "echo",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
         "text": {
           "type": [
             "string",
@@ -328,6 +315,19 @@
             "$ref": "#/definitions/HighlightRange"
           },
           "description": "Spans to colorize."
+        },
+        "type": {
+          "type": "string",
+          "const": "echo",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
         }
       },
       "required": [

@@ -7,4 +7,4 @@
 {"$role":"driverIn","type":"text","from":["cq","2"],"to":["$terminal"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
 {"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"},"component":{"zones":{},"echo":"#103","cell":"#104"}}
 {"$role":"driverIn","type":"close","from":["cq","2"],"to":["$terminal"],"outcome":{"type":"success","code":0}}
-{"$role":"interfaceOut","type":"close_component","component":{"zones":{},"echo":"#103","cell":"#104"}}
+{"$role":"interfaceOut","type":"update_status","component":{"zones":{},"echo":"#103","cell":"#104"},"status":{"status":"done","code":0}}

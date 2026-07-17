@@ -18,11 +18,17 @@ export interface CloseMessage extends BaseMessage {
 }
 
 export async function* handle$close(buche: Buche, obj: CloseMessage): AsyncIterable<OutM> {
+    const status = obj.outcome.type === "success" ? "done" : "error";
     const h = buche.hierarchy.getAt(obj.from);
     for (const component of h ? h.iterateComponents() : []) {
-        yield {
-            type: "close_component",
-            component: component,
-        };
+        const echo = component.echo;
+        if (echo && (echo.status.status === "running" || echo.status.status === "unresponsive")) {
+            echo.status = { status, code: obj.outcome.code };
+            yield {
+                type: "update_status",
+                component: component,
+                status: echo.status,
+            };
+        }
     }
 }

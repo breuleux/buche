@@ -1,0 +1,3 @@
+{"type":"echo","from":["cq","3"],"to":["$terminal"],"text":"boom","ranges":[]}
+{"type":"close","from":["cq","3"],"to":["$terminal"],"outcome":{"type":"error","code":1}}
+{"type":"close","from":["cq","3"],"to":["$terminal"],"outcome":{"type":"success","code":0}}

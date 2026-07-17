@@ -1,16 +1,10 @@
-import { Echo } from "../cell.ts";
+import { Echo, type EchoConfiguration } from "../cell.ts";
 import type { Buche, OutM } from "../core.ts";
 import { BucheError } from "../utils.ts";
-import type { BaseMessage, HighlightRange } from "./common.ts";
+import type { BaseMessage } from "./common.ts";
 
-export interface EchoMessage extends BaseMessage {
+export interface EchoMessage extends BaseMessage, EchoConfiguration {
     type: "echo";
-
-    /** Text of the command. */
-    text: string | null;
-
-    /** Spans to colorize. */
-    ranges: HighlightRange[];
 }
 
 export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterable<OutM> {
@@ -23,8 +17,7 @@ export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterabl
         });
     }
     const { zone, prompt } = buche.findPlace(obj);
-    const echo = new Echo();
-    echo.prompt = prompt;
+    const echo = new Echo(obj, { zone, prompt });
     Object.assign(component, { echo });
     yield {
         type: "install_echo",

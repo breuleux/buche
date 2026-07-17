@@ -1,4 +1,4 @@
-import type { CellCommand } from "../cell.ts";
+import type { CellCommand, ComponentStatus } from "../cell.ts";
 import type { ComponentData } from "../core.ts";
 import type { Zone } from "../zone.ts";
 
@@ -19,9 +19,10 @@ export interface InstallPromptMessage extends InstallMessage {
     type: "install_prompt";
 }
 
-export interface CloseComponentMessage {
-    type: "close_component";
+export interface UpdateStatusMessage {
+    type: "update_status";
     component: ComponentData;
+    status: ComponentStatus;
 }
 
 export interface CellCommandMessage {
@@ -42,6 +43,6 @@ export type OutgoingInterfaceMessage =
     | InstallEchoMessage
     | InstallCellMessage
     | InstallPromptMessage
-    | CloseComponentMessage
+    | UpdateStatusMessage
     | CellCommandMessage
     | PromptSubmitMessage;
