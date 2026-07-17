@@ -15,23 +15,35 @@
  *
  * Usage:
  *   bun run scripts/view.ts -c COMMAND [-l LAYOUT] [--port PORT] [-d DIR]
+ *   bun run scripts/view.ts -i INPUT.jsonl        # command comes from a boot line
  *
  * Options (the command/dir/… set mirrors scripts/shallow.ts):
- *   -c, --command COMMAND   Shell command to run as the driver process (required).
+ *   -c, --command COMMAND   Shell command to run as the driver process.
+ *   -i, --input   FILE      JSONL of interface messages to replay into each
+ *                           session. Each is injected over the socket once the
+ *                           session has been quiet (no message either way) for
+ *                           --pause seconds, so an action waits for the previous
+ *                           one to settle. A leading `boot` line — {"type":"boot",
+ *                           "command":"…","pause":0.1} — supplies the command and
+ *                           pause, so `-i FILE` can stand in for `-c`.
+ *       --replay  FILE      JSONL whose leading `boot` line may supply the command
+ *                           and pause (its recorded body is not replayed here,
+ *                           since the interface runs in the browser).
+ *   -p, --pause   PAUSE     Seconds of quiet required before each injected
+ *                           interface message. Default: 0.5 (or boot line pause).
  *   -d, --dir     DIR       A directory to copy; the copy becomes the command's
  *                           working directory. Must point to a directory.
  *   -l, --layout  FILE      HTML layout whose zones seed the interface.
  *                           Default: layouts/standard.html.
  *       --port    PORT      Port to listen on. Default: 0 (pick a free port).
- *   -p, --pause   PAUSE     Accepted for CLI compatibility (unused here).
- *       --replay  FILE      Accepted for CLI compatibility (unused here).
- *   -i, --input   FILE      Accepted for CLI compatibility (unused here).
  *   -o, --output  FILE      Accepted for CLI compatibility (unused here).
  *   -v, --verbose           Expand full field values when pretty-printing the
  *                           driver message stream (which is always logged).
  *
- * The driver messages the server relays in each direction are printed to the
- * console; the interface-side stream is logged in the browser's devtools.
+ * Command precedence: -c/--command, then the input file's boot line, then the
+ * replay file's boot line. The driver messages the server relays in each
+ * direction are printed to the console; the interface-side stream is logged in
+ * the browser's devtools.
  */
 
 import { spawn } from "node:child_process";
@@ -43,6 +55,33 @@ import type { ServerWebSocket } from "bun";
 import type { OutgoingDriverMessage, SignalRequest } from "../src/driver-exchange/outgoing.ts";
 import { ProcessCommunicator } from "../src/process.ts";
 import { formatMessage } from "./format.ts";
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** An optional leading line of an input/replay file supplying the command/pause. */
+interface BootLine {
+    type: "boot";
+    command?: string;
+    pause?: number;
+}
+
+/** Read a JSONL file into an array of parsed objects (blank lines skipped). */
+function readJsonl(path: string): unknown[] {
+    return readFileSync(path, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line));
+}
+
+/** Read a JSONL file, splitting off a leading `boot` line if present. */
+function readJsonlWithBoot(path: string): { boot: BootLine | null; items: unknown[] } {
+    const items = readJsonl(path);
+    if (items.length > 0 && (items[0] as { type?: string })?.type === "boot") {
+        return { boot: items[0] as BootLine, items: items.slice(1) };
+    }
+    return { boot: null, items };
+}
 
 const { values } = parseArgs({
     options: {
@@ -58,11 +97,24 @@ const { values } = parseArgs({
     },
 });
 
-const command = values.command;
+// Read the interface-message file (-i) and/or replay file (--replay). A leading
+// `boot` line in either supplies the command and pause, so `-i FILE` can stand
+// in for `-c`. Explicit flags win; an input boot line beats a replay one.
+const input = values.input ? readJsonlWithBoot(values.input) : { boot: null, items: [] };
+const replayFile = values.replay ? readJsonlWithBoot(values.replay) : null;
+const boot = input.boot ?? replayFile?.boot ?? null;
+
+const command = values.command ?? boot?.command;
 if (!command) {
-    console.error("error: no command given (use -c/--command)");
+    console.error("error: no command given (use -c/--command, or -i/--replay with a boot line)");
     process.exit(1);
 }
+
+const pause = values.pause !== undefined ? Number.parseFloat(values.pause) : (boot?.pause ?? 0.5);
+
+// Interface messages replayed into each session (from the -i file). They are
+// sent over the socket so the browser-side Buche handles them as user actions.
+const injectedMessages = input.items;
 
 // When --dir is given, it must be a directory. Copy it to a fresh temp location
 // so the command runs against a throwaway copy and the original is untouched.
@@ -130,8 +182,15 @@ const page = `<!doctype html>
 </html>
 `;
 
-// One driver process per open socket, torn down when the socket closes.
-const processes = new WeakMap<ServerWebSocket<unknown>, ProcessCommunicator>();
+/** Per-connection state: the driver process plus a timestamp of the last
+ *  message seen in *either* direction, used to pace injected messages. */
+interface Session {
+    proc: ProcessCommunicator;
+    lastActivity: number;
+}
+
+// One session per open socket, torn down when the socket closes.
+const sessions = new WeakMap<ServerWebSocket<unknown>, Session>();
 
 // On a tty, pretty-print the message stream for humans; otherwise emit JSONL.
 const pretty = Boolean(process.stdout.isTTY);
@@ -150,11 +209,13 @@ function logMessage(role: string, message: unknown): void {
 /** Spawn the driver process for a connection and relay its output to the page. */
 function startSession(ws: ServerWebSocket<unknown>): void {
     const proc = new ProcessCommunicator(command as string, { cwd });
-    processes.set(ws, proc);
+    const session: Session = { proc, lastActivity: Date.now() };
+    sessions.set(ws, session);
 
     void (async () => {
         try {
             for await (const message of proc.messages()) {
+                session.lastActivity = Date.now();
                 logMessage("driverIn", message);
                 if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify(message));
@@ -162,6 +223,39 @@ function startSession(ws: ServerWebSocket<unknown>): void {
             }
         } catch (err) {
             console.error("[buche] process stream error:", err);
+        }
+    })();
+
+    injectMessages(ws, session);
+}
+
+/** Replay the -i interface messages into a session by sending each over the
+ *  socket for the browser-side Buche to handle as a user action (which drives
+ *  the process back through the client). Each is held until the session has been
+ *  quiet — no message in either direction — for `pause` seconds, so a following
+ *  action (e.g. a kill signal) waits for the previous one's round-trip to settle
+ *  rather than firing on a fixed timer. */
+function injectMessages(ws: ServerWebSocket<unknown>, session: Session): void {
+    if (injectedMessages.length === 0) {
+        return;
+    }
+    const pauseMs = pause * 1000;
+    void (async () => {
+        for (const message of injectedMessages) {
+            // Wait until it has been quiet for `pause` seconds.
+            for (;;) {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+                const quietFor = Date.now() - session.lastActivity;
+                if (quietFor >= pauseMs) {
+                    break;
+                }
+                await sleep(pauseMs - quietFor);
+            }
+            logMessage("interfaceIn", message);
+            session.lastActivity = Date.now();
+            ws.send(JSON.stringify(message));
         }
     })();
 }
@@ -176,23 +270,24 @@ function handleClientMessage(ws: ServerWebSocket<unknown>, raw: string): void {
         console.error("[buche] ignoring unparseable client message:", err);
         return;
     }
-    logMessage("driverOut", message);
-    const proc = processes.get(ws);
-    if (!proc) {
+    const session = sessions.get(ws);
+    if (!session) {
         return;
     }
+    session.lastActivity = Date.now();
+    logMessage("driverOut", message);
     const signal = message as SignalRequest;
     if (message.type === "signal" && signal.to?.length === 1 && signal.to[0] === "$proc") {
-        proc.kill(signal.code);
+        session.proc.kill(signal.code);
     } else {
-        proc.send(message);
+        session.proc.send(message);
     }
 }
 
 function endSession(ws: ServerWebSocket<unknown>): void {
-    const proc = processes.get(ws);
-    processes.delete(ws);
-    proc?.kill();
+    const session = sessions.get(ws);
+    sessions.delete(ws);
+    session?.proc.kill();
 }
 
 const CONTENT_TYPES: Record<string, string> = {
