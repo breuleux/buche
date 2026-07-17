@@ -1,6 +1,8 @@
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection, PromptCommandDetail } from "./components/prompt-collection.tsx";
+import type { TabPane } from "./components/tab-pane.tsx";
+import { refocusTitleEditor, showTitleEditor } from "./components/title-editor.ts";
 import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
@@ -82,7 +84,7 @@ export class BucheInterface implements Interface {
     interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
     zones: Array<Zone>;
     map: Map<Entry, Reification> = new Map();
-    /** Global keyboard bindings installed on the container (see keybindings.ts). */
+    /** Global keyboard bindings, listened for on `window` (see keybindings.ts). */
     keys: ModalKeys;
     /** Focus navigation across cells, prompts and zones (see focus.ts). */
     focus: FocusManager;
@@ -151,7 +153,8 @@ export class BucheInterface implements Interface {
         });
         // In Electron, `proc://` requests answered by the natively registered
         // scheme are relayed from the main process by the preload bridge (see
-        // electron/preload.ts); route them like any other GUI message.
+        // electron/preload.ts); route them like any other GUI message. The
+        // bridge also relays the menu's Cmd+W (close the current tab).
         window.addEventListener("message", (e: MessageEvent) => {
             if (e.source !== window) {
                 return;
@@ -164,6 +167,10 @@ export class BucheInterface implements Interface {
                 params?: Json;
                 method?: string;
             } | null;
+            if (d?.__buche === "window:closeTab") {
+                this.closeCurrentTab();
+                return;
+            }
             if (d?.__buche !== "proc:request" || !d.cellId) {
                 return;
             }
@@ -197,6 +204,8 @@ export class BucheInterface implements Interface {
     // Chords ("Mod+p") are always live; capture mode (Ctrl+Q, held) taps keys
     // until Ctrl is released, which commits the focus (e.g. into the focused
     // cell's terminal):
+    //   Ctrl+Tab /          switch to the next / previous tab of the current
+    //   Ctrl+Shift+Tab      tabbed zone (the focus follows into the new tab)
     //   arrows        move the focus (neighbour, else layout jump)
     //   Shift+arrows  layout jump (out of the current zone)
     //   p             focus the latest prompt
@@ -204,6 +213,7 @@ export class BucheInterface implements Interface {
     //                 right above it
     //   l             clear all spent cells (Ctrl+L does the same, but only
     //                 while typing in a prompt)
+    //   t             rename the window (popup, see title-editor.ts)
     // Extend or override through `iface.keys.on(...) / .onCapture(...) /
     // .onRelease(...)`.
 
@@ -218,6 +228,19 @@ export class BucheInterface implements Interface {
             k: () => this.killCell(),
             d: () => this.closeCell(),
             l: () => this.clearSpentCells(),
+            t: () => {
+                // The popup takes the DOM focus (outside the container); when
+                // it closes, the focus goes back where it was.
+                const previous = this.focus.current;
+                showTitleEditor(() => {
+                    if (previous?.isConnected) {
+                        this.focus.focus(previous, "restore");
+                        if (!this.focus.holdCommits) {
+                            this.focus.commitFocus();
+                        }
+                    }
+                });
+            },
         };
         for (const [key, direction] of Object.entries(ARROWS)) {
             capture[key] = move(direction, "mix");
@@ -235,6 +258,8 @@ export class BucheInterface implements Interface {
                     }
                     this.clearSpentCells();
                 },
+                "Ctrl+Tab": () => this.cycleTabs(true),
+                "Ctrl+Shift+Tab": () => this.cycleTabs(false),
             },
             enter: "Ctrl+q",
             capture,
@@ -248,15 +273,56 @@ export class BucheInterface implements Interface {
                 fm.commitFocus();
             },
         });
-        keys.attach(this.container);
-        // Every GUI iframe hands the capture-mode chord to the page: Ctrl+Q
-        // typed inside a GUI escapes the iframe and enters nav mode, exactly
-        // as it does elsewhere.
-        BucheGui.defaultInterceptChords = () => [keys.enter];
+        // Releasing Ctrl commits the focus, which can pull the DOM focus into a
+        // terminal or an editor — back to the title popup's input, if it is up.
+        keys.onRelease(() => refocusTitleEditor());
+        keys.attach();
+        // Every GUI iframe hands the capture-mode chord and the tab-switching
+        // chords to the page: typed inside a GUI, they escape the iframe and
+        // run exactly as they do elsewhere.
+        BucheGui.defaultInterceptChords = () => [keys.enter, "Ctrl+Tab", "Ctrl+Shift+Tab"];
         return keys;
     }
 
     // ── Focus actions ─────────────────────────────────────────────────────────
+
+    /** The tab zone tab actions apply to: the one the focus is in, else the
+     *  first one holding tabs. */
+    private currentTabPane(): TabPane | null {
+        const current = this.focus.current;
+        const inside = current?.closest("tab-pane") as TabPane | null;
+        return (
+            inside ??
+            [...this.container.querySelectorAll<TabPane>("tab-pane")].find((tp) => !tp.isEmpty) ??
+            null
+        );
+    }
+
+    /** Switch to the next (or previous) tab of the current tabbed zone. The
+     *  focus follows into the new tab when it was inside the zone; the rest of
+     *  the layout keeps it otherwise (Ctrl+Tab then only switches the view,
+     *  like clicking a tab). */
+    cycleTabs(forward: boolean): void {
+        const current = this.focus.current;
+        const pane = this.currentTabPane();
+        if (pane === null || pane.cycleTab(forward) === null) {
+            return;
+        }
+        if (current !== null && pane.contains(current)) {
+            this.focus.focus(pane, "nav");
+            if (!this.focus.holdCommits) {
+                this.focus.commitFocus();
+            }
+        }
+    }
+
+    /** Behave like the current tab's ✕ button (SIGTERM the process, the tab
+     *  goes when the box is gone). Bound to Cmd+W in Electron, where the menu
+     *  routes it to `closeCurrentTab` through the preload bridge (the default
+     *  menu's Cmd+W would close the whole window). */
+    closeCurrentTab(): void {
+        this.currentTabPane()?.closeActiveTab();
+    }
 
     /** Focus the latest prompt focused in the history (or, if none, the first
      *  visible one). A prompt whose collection has since switched to another

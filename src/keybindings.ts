@@ -1,9 +1,9 @@
-// Global, container-level keyboard bindings for the interface.
+// Global keyboard bindings for the interface.
 //
-// Two layers, both installed with plain `keydown`/`keyup` listeners on a
-// container element (tinykeys was considered and dropped: it matches static
-// chords and timed sequences, but not the "hold Ctrl, tap keys, act on Ctrl
-// release" mode needed here — that needs raw keyup tracking anyway):
+// Two layers, both installed with plain `keydown`/`keyup` listeners on
+// `window` (tinykeys was considered and dropped: it matches static chords and
+// timed sequences, but not the "hold Ctrl, tap keys, act on Ctrl release" mode
+// needed here — that needs raw keyup tracking anyway):
 //
 //   - Chords: always-live bindings like "Mod+p" (Cmd on Mac, Ctrl elsewhere),
 //     matched against the full modifier set of the event. A chord handler
@@ -18,8 +18,10 @@
 //     binding with those modifiers, then the bare key's, whatever modifiers
 //     ride along.
 //
-// The keydown listener runs in the *capture* phase so global chords and capture
-// mode win over descendants (CodeMirror stops propagation of keys it handles).
+// The keydown listener runs in the *capture* phase on window so global chords
+// and capture mode win over descendants (CodeMirror stops propagation of keys
+// it handles) — and still see every key, even when the DOM focus sits outside
+// the interface altogether (a click in empty space leaves it on `body`).
 
 import { chordFromEvent, expandMod, normalizeChord } from "./keychord.ts";
 
@@ -126,17 +128,20 @@ export class ModalKeys {
         return this;
     }
 
-    /** Install the listeners on `container`; returns the detach function. */
-    attach(container: Element): () => void {
+    /** Install the window-level listeners; returns the detach function. Keys
+     *  are listened for on `window` rather than the interface container: after
+     *  a click in empty space (or any blur) the DOM focus sits on `body`, and
+     *  events from there never reach a container listener. */
+    attach(): () => void {
         this.detach();
         const onKeyDown = (e: Event) => this.handleKeyDown(e as KeyboardEvent);
         const onKeyUp = (e: Event) => this.handleKeyUp(e as KeyboardEvent);
         // Capture phase: run before descendants (editors) can swallow the key.
-        container.addEventListener("keydown", onKeyDown, true);
-        // Ctrl may be released with focus anywhere; listen on window.
+        window.addEventListener("keydown", onKeyDown, true);
+        // Ctrl may be released with focus anywhere; likewise keyup.
         window.addEventListener("keyup", onKeyUp);
         this.detachFn = () => {
-            container.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("keydown", onKeyDown, true);
             window.removeEventListener("keyup", onKeyUp);
         };
         return this.detachFn;

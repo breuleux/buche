@@ -58,6 +58,74 @@ describe("tab-pane — removing", () => {
     });
 });
 
+describe("tab-pane — cycling", () => {
+    test("cycleTab steps through the tabs, wrapping around", () => {
+        const tp = make();
+        const a = add(tp, "a"); // active: added first
+        const b = add(tp, "b");
+        const c = add(tp, "c");
+
+        expect(tp.cycleTab(true)).toBe(b);
+        expect(tp.activeTab).toBe(b);
+        expect(tp.cycleTab(true)).toBe(c);
+        expect(tp.cycleTab(true)).toBe(a); // wraps
+        expect(tp.cycleTab(false)).toBe(c); // wraps backwards
+    });
+
+    test("nothing to cycle with one tab", () => {
+        const tp = make();
+        add(tp, "a");
+        expect(tp.cycleTab(true)).toBeNull();
+        expect(tp.cycleTab(false)).toBeNull();
+    });
+});
+
+describe("tab-pane — drag reordering", () => {
+    function tabOf(tp: TabPane, label: string): HTMLElement {
+        return [...tp.querySelectorAll<HTMLElement>(".tab-pane-tab")].find(
+            (t) => t.querySelector(".tab-pane-tab-label")?.textContent === label,
+        )!;
+    }
+
+    test("the tab order follows the DOM after a drag", () => {
+        const tp = make();
+        const a = add(tp, "a");
+        const b = add(tp, "b");
+        const c = add(tp, "c");
+
+        const cTab = tabOf(tp, "c");
+        cTab.dispatchEvent(new Event("dragstart"));
+        expect(cTab.classList.contains("dragging")).toBe(true);
+        tp.querySelector(".tab-pane-tabs")!.insertBefore(cTab, tabOf(tp, "a"));
+        cTab.dispatchEvent(new Event("dragend"));
+
+        expect(cTab.classList.contains("dragging")).toBe(false);
+        expect(tp.tabs).toEqual([c, a, b]);
+        // Cycling follows the new order.
+        tp.showTab(c);
+        expect(tp.cycleTab(true)).toBe(a);
+    });
+});
+
+describe("tab-pane — closing", () => {
+    test("closeActiveTab dispatches tabclose for the active tab only", () => {
+        const tp = make();
+        const a = add(tp, "a"); // active: added first
+        const b = add(tp, "b");
+        const closed: Entry[] = [];
+        tp.addEventListener("tabclose", (e) => closed.push(e.detail.entry));
+
+        expect(tp.closeActiveTab()).toBe(a);
+        tp.showTab(b);
+        expect(tp.closeActiveTab()).toBe(b);
+        expect(closed).toEqual([a, b]);
+
+        tp.removeTab(a);
+        tp.removeTab(b);
+        expect(tp.closeActiveTab()).toBeNull();
+    });
+});
+
 describe("tab-pane — status", () => {
     test("status dots get a shared animation phase, stamped only on change", () => {
         const tp = make();

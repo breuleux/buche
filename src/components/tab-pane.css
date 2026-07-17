@@ -67,6 +67,11 @@ tab-pane {
 	color: #999;
 }
 
+/* Being dragged to reorder: dimmed ghost. */
+.tab-pane-tab.dragging {
+	opacity: 0.4;
+}
+
 .tab-pane-tab.active {
 	color: #d4d4d4;
 	/* border-bottom-color is set inline from the tab's accent. */

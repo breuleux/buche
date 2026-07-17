@@ -36,6 +36,9 @@
 //
 // `<tab-pane hide-single>` hides the tab bar while there is at most one tab.
 //
+// Tabs can be dragged along the bar to reorder them (the panes keep their
+// place: only one is ever shown).
+//
 // Events (all bubble):
 //   "tabchange"  detail: { entry: Entry }                — the active tab changed
 //   "tabclose"   detail: { entry: Entry }                — a tab's ✕ was clicked
@@ -111,6 +114,8 @@ export class TabPane extends HTMLElement {
     // Activation history, most recent last: removing the active tab falls back
     // to the one active before it.
     private history: Entry[] = [];
+    // The tab being dragged along the bar, while a reorder drag is underway.
+    private dragEntry: Entry | null = null;
 
     static get observedAttributes(): string[] {
         return ["hide-single"];
@@ -175,6 +180,9 @@ export class TabPane extends HTMLElement {
         // The row scrolls horizontally when there are too many tabs (see
         // tab-pane.css); let a vertical wheel scroll it too.
         this.tabsEl.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+        // Live reordering while dragging a tab along the bar.
+        this.tabsEl.addEventListener("dragover", (e) => this.onDragOver(e));
+        this.tabsEl.addEventListener("drop", (e) => e.preventDefault());
         this.bodyEl = document.createElement("div");
         this.bodyEl.className = "tab-pane-body";
         this.append(this.tabsEl, this.bodyEl);
@@ -219,6 +227,9 @@ export class TabPane extends HTMLElement {
                 this.showTab(entry);
             }
         });
+        tab.draggable = true;
+        tab.addEventListener("dragstart", (e) => this.onDragStart(e, entry));
+        tab.addEventListener("dragend", () => this.onDragEnd());
 
         const statusEl = document.createElement("span");
         statusEl.className = "tab-pane-tab-status";
@@ -325,6 +336,34 @@ export class TabPane extends HTMLElement {
         this.dispatchEvent(
             new CustomEvent<TabChangeDetail>("tabchange", { detail: { entry }, bubbles: true }),
         );
+    }
+
+    /** Activate the next (or previous, when `forward` is false) tab, wrapping
+     *  around; returns its entry, or null when there is nothing to switch to. */
+    cycleTab(forward: boolean): Entry | null {
+        this.ensureSetup();
+        if (this.order.length <= 1 || this.active === null) {
+            return null;
+        }
+        const i = this.order.indexOf(this.active);
+        const next = this.order[(i + (forward ? 1 : -1) + this.order.length) % this.order.length];
+        this.showTab(next);
+        return next;
+    }
+
+    /** Behave like the active tab's ✕: dispatch "tabclose" for it (the zone
+     *  owns the actual close). Returns the entry, or null when there is no
+     *  tab. */
+    closeActiveTab(): Entry | null {
+        this.ensureSetup();
+        const entry = this.active;
+        if (entry === null) {
+            return null;
+        }
+        this.dispatchEvent(
+            new CustomEvent<TabCloseDetail>("tabclose", { detail: { entry }, bubbles: true }),
+        );
+        return entry;
     }
 
     /** The pane element for a tab, so callers can fill it with content. */
@@ -444,6 +483,69 @@ export class TabPane extends HTMLElement {
         }
         e.preventDefault();
         bar.scrollLeft += e.deltaY;
+    }
+
+    // ── Drag reordering ───────────────────────────────────────────────────
+    // Dragging a tab along the bar moves it live under the pointer; the tab
+    // order is adopted from the DOM when the drag ends.
+
+    private onDragStart(e: DragEvent, entry: Entry): void {
+        this.dragEntry = entry;
+        const tab = this.rows.get(entry)?.tab;
+        tab?.classList.add("dragging");
+        if (e.dataTransfer && tab) {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", tab.textContent ?? "");
+        }
+    }
+
+    // While dragging, move the dragged tab to the pointer's position.
+    private onDragOver(e: DragEvent): void {
+        if (!this.dragEntry) {
+            return;
+        }
+        e.preventDefault();
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = "move";
+        }
+        const dragging = this.rows.get(this.dragEntry)?.tab;
+        if (!dragging) {
+            return;
+        }
+        const others = Array.from(
+            this.tabsEl.querySelectorAll<HTMLElement>(".tab-pane-tab:not(.dragging)"),
+        );
+        const after = others.find((t) => {
+            const r = t.getBoundingClientRect();
+            return e.clientX < r.left + r.width / 2;
+        });
+        if (after) {
+            this.tabsEl.insertBefore(dragging, after);
+        } else {
+            this.tabsEl.appendChild(dragging);
+        }
+    }
+
+    // After a drag ends, adopt the DOM tab order as the canonical order.
+    private onDragEnd(): void {
+        const entry = this.dragEntry;
+        this.dragEntry = null;
+        if (entry === null) {
+            return;
+        }
+        this.rows.get(entry)?.tab.classList.remove("dragging");
+        const order: Entry[] = [];
+        for (const el of this.tabsEl.children) {
+            for (const [ent, row] of this.rows) {
+                if (row.tab === el) {
+                    order.push(ent);
+                    break;
+                }
+            }
+        }
+        if (order.length === this.order.length) {
+            this.order = order;
+        }
     }
 
     // Hide the tab bar when `hide-single` is set and there is at most one tab.

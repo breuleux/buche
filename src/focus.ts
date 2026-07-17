@@ -269,13 +269,16 @@ export class FocusManager {
         (this.current as (HTMLElement & Partial<FocusCommittable>) | null)?.commitFocus?.();
     }
 
-    /** Move the focus in a direction. Returns whether the focus moved. */
+    /** Move the focus in a direction. Returns whether the focus moved. With
+     *  nothing focused, the focus lands on the most recent still-valid element
+     *  of the history (what was focused before it vanished), else on the first
+     *  focusable — the direction then applies from there on the next press. */
     move(direction: Direction, mode: NavigationMode = "mix"): boolean {
         const current = this.current;
         if (!current) {
-            const first = this.topLevel(this.root)[0];
-            if (first) {
-                this.focus(first, "nav");
+            const target = this.previousValid() ?? this.topLevel(this.root)[0];
+            if (target) {
+                this.focus(target, "nav");
                 return true;
             }
             return false;

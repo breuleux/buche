@@ -851,7 +851,13 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
             return;
         }
         if (type === "resize") {
-            this.style.height = `${Math.max(0, Math.ceil(data.height as number))}px`;
+            const px = `${Math.max(0, Math.ceil(data.height as number))}px`;
+            if (this.style.height !== px) {
+                this.style.height = px;
+                // Let containers that size other views against this one refit
+                // (the terminal matching the GUI's height, see cell.ts).
+                this.dispatchEvent(new CustomEvent("gui-resize", { bubbles: true }));
+            }
             return;
         }
         if (type === "send") {

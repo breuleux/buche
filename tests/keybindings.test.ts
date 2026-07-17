@@ -37,7 +37,7 @@ describe("ModalKeys", () => {
                 },
             },
         });
-        keys.attach(box);
+        keys.attach();
 
         const ev = key(box, "keydown", { key: "p", ctrlKey: true });
         expect(hits).toEqual(["p"]);
@@ -45,6 +45,26 @@ describe("ModalKeys", () => {
 
         // Wrong modifier set → no match.
         key(box, "keydown", { key: "p", ctrlKey: true, metaKey: true });
+        expect(hits).toEqual(["p"]);
+        keys.detach();
+    });
+
+    test("keys are seen even when the DOM focus is outside the interface", () => {
+        // After a click in empty space the DOM focus sits on `body`: keydowns
+        // from there never go through the container — the window listener
+        // still sees them.
+        document.body.append(document.createElement("div"));
+        const hits: string[] = [];
+        const keys = new ModalKeys({
+            chords: {
+                "Ctrl+p": () => {
+                    hits.push("p");
+                },
+            },
+        });
+        keys.attach();
+
+        key(document.body, "keydown", { key: "p", ctrlKey: true });
         expect(hits).toEqual(["p"]);
         keys.detach();
     });
@@ -63,7 +83,7 @@ describe("ModalKeys", () => {
                 hits.push("release");
             },
         });
-        keys.attach(box);
+        keys.attach();
 
         expect(key(box, "keydown", { key: "q", ctrlKey: true }).defaultPrevented).toBe(true);
         expect(keys.capturing).toBe(true);
@@ -105,7 +125,7 @@ describe("ModalKeys", () => {
                 hits.push("enter");
             },
         });
-        keys.attach(box);
+        keys.attach();
 
         key(box, "keydown", { key: "q", ctrlKey: true });
         key(box, "keydown", { key: "ArrowUp", ctrlKey: true });
@@ -127,7 +147,7 @@ describe("ModalKeys", () => {
                 },
             },
         });
-        keys.attach(box);
+        keys.attach();
         key(box, "keydown", { key: "p", ...(isMac() ? { metaKey: true } : { ctrlKey: true }) });
         expect(hits).toBe(1);
         keys.detach();

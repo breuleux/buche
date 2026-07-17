@@ -15,19 +15,21 @@
 // Layout:
 //
 //   ┌────┬───────────────────────────────────────────┐
-//   │ ●  │ context (the prompt, submission, opt.)  │  ╷ when there is a context:
-//   │ │  │ echo (the command line just submitted)  ▤◧✕│  ╯ one dim accent rectangle,
-//   │ │  ├───────────────────────────────────────────┤    circle riding on top
+//   │ ●  │ context (the prompt, submission, opt.)  ▤◧✕│  ╷ when there is a context:
+//   │ │  ├───────────────────────────────────────────┤    one dim accent rectangle,
+//   │ │  │ echo (the command line just submitted)      │    circle riding on top,
+//   │ │  ├───────────────────────────────────────────┤    controls on the context
 //   │ │  │ cell — the active view's content            │  ← line runs down the gutter
 //   └────┴───────────────────────────────────────────┘
 //
 // The left gutter is drawn (not a CSS margin): a status circle at the top and a
 // straight line running down beside the cell. The cell holds one or more views
 // (keyed by ViewLabel — pty, gui); each gets an icon button (glyph from a static
-// map) at the top-right, and clicking one switches the visible view. A view can
-// be flagged as holding unseen content with bump(label): while it is not the
-// selected view its icon shows bright white. A closing icon sits after the view
-// icons. The status
+// map) at the top-right of the box — on the context line when there is one, on
+// the echo row otherwise — and clicking one switches the visible view. A view
+// can be flagged as holding unseen content with bump(label): while it is not
+// the selected view its icon shows bright white. A closing icon sits after the
+// view icons. The status
 // circle and closing icon change appearance with the cell's `status`; the circle
 // and line colour are configurable via the `color` attribute / `--echo-color`.
 //
@@ -367,9 +369,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.gutter.addEventListener("dblclick", () => this.resetHeight());
 
         // Header: a status dot, the echo text, then controls (view icons, then
-        // the closing icon). In compact mode this row becomes a right-aligned
-        // overlay: status · echo · buttons — so an empty echo just closes up and
-        // the status stays put beside the buttons.
+        // the closing icon). With a context line, CSS lifts the controls up onto
+        // it (their right end); in compact mode this row becomes a
+        // right-aligned overlay: status · echo · buttons — so an empty echo
+        // just closes up and the status stays put beside the buttons.
         this.echoEl = div("echo-box-echo");
         this.controlsEl = div("echo-box-controls");
         // A second status dot that only shows in compact mode, where the gutter

@@ -216,3 +216,33 @@ describe("FocusManager.back", () => {
         expect(fm.current).toBe(other);
     });
 });
+
+describe("FocusManager.move with nothing focused", () => {
+    test("lands on the most recent still-valid element of the history", () => {
+        const [fm, root] = setup();
+        const a = cell("a");
+        const b = cell("b");
+        root.append(a, b);
+        fm.focus(a, "api");
+        fm.focus(b, "api");
+        // `b` disappears from sight: the focus is nowhere.
+        b.style.display = "none";
+        expect(fm.current).toBeNull();
+
+        expect(fm.move("right")).toBe(true);
+        expect(fm.current).toBe(a);
+    });
+
+    test("falls back to the first focusable with an empty history", () => {
+        const [fm, root] = setup();
+        const a = cell("a");
+        root.append(cell("gone"), a);
+        const gone = document.getElementById("gone")!;
+        fm.focus(gone, "api");
+        gone.remove();
+        expect(fm.current).toBeNull();
+
+        expect(fm.move("right")).toBe(true);
+        expect(fm.current).toBe(a);
+    });
+});

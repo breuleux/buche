@@ -1,0 +1,45 @@
+/* Styles for the window-title popup (title-editor.ts). A dimmed full-screen
+ * overlay with a small box near the top: one input and a hint. */
+
+.buche-title-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	background: rgba(0, 0, 0, 0.3);
+}
+
+.buche-title-editor {
+	margin-top: 15vh;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 340px;
+	max-width: 70vw;
+	background: #1c1c1c;
+	border: 1px solid #333;
+	border-radius: 6px;
+	padding: 10px 12px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.buche-title-input {
+	background: #141414;
+	color: #d4d4d4;
+	border: 1px solid #3a3a3a;
+	border-radius: 4px;
+	font: inherit;
+	padding: 5px 8px;
+	outline: none;
+}
+
+.buche-title-input:focus {
+	border-color: #555;
+}
+
+.buche-title-hint {
+	font-size: 10px;
+	color: #777;
+}

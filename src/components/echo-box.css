@@ -135,6 +135,17 @@ echo-box:has(.echo-box-context:not(:empty)) .echo-box-gutter::before {
 	top: -8px;
 }
 
+/* With a context, the controls (view switches + close) ride on its right end
+ * rather than on the echo row above the cell, and the echo gets back the width
+ * it reserves for them. The custom properties keep the low specificity the
+ * :where() pattern needs; without a context — and in compact mode, where the
+ * context is hidden and the controls live in the Alt overlay — the fallbacks
+ * keep everything on the echo row. */
+:where(echo-box:has(.echo-box-context:not(:empty))) {
+	--echo-controls-top: -15px; /* the context row (16px) sits above the header */
+	--echo-echo-pad: 2px;
+}
+
 /* Compact mode hides the chrome entirely: no context either. */
 echo-box[compact] .echo-box-context {
 	display: none;
@@ -159,14 +170,14 @@ echo-box[compact] .echo-box-context {
 
 .echo-box-echo {
 	padding: 2px;
-	padding-right: 68px; /* leave room for the controls */
+	padding-right: var(--echo-echo-pad, 68px); /* leave room for the controls */
 	white-space: pre-wrap;
 	word-break: break-word;
 }
 
 .echo-box-controls {
 	position: absolute;
-	top: 3px;
+	top: var(--echo-controls-top, 3px);
 	right: 4px;
 	display: flex;
 	align-items: center;
@@ -184,6 +195,13 @@ echo-box:not([compact]) .echo-box-controls {
 
 echo-box:not([compact]):hover .echo-box-controls,
 echo-box:not([compact]):focus-within .echo-box-controls {
+	visibility: visible;
+	opacity: 1;
+}
+
+/* Unseen content announces itself without waiting for a hover: an unseen view
+ * icon (bright white, see below) reveals the controls — it is the notice. */
+echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
 	visibility: visible;
 	opacity: 1;
 }

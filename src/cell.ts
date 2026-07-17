@@ -237,23 +237,38 @@ export class Cell extends WithId() implements CellConfiguration {
             // A box placed directly in a tab-pane pane fills it, so with no
             // drag height the grid is pinned to the rendered cell height — the
             // terminal spans the whole pane (see the `.tab-pane-pane > echo-box`
-            // CSS). Boxes inside a <buche-term> keep dynamic sizing.
+            // CSS). Boxes inside a <buche-term> keep dynamic sizing — except
+            // when there is a GUI view: then the terminal matches the GUI's
+            // height, so switching views does not change the box's size.
             const fillsPane = box.parentElement?.classList.contains("tab-pane-pane") ?? false;
             const fit = () => {
-                if (fillsPane && box.cellContentHeight === null) {
+                const explicit = box.cellContentHeight;
+                if (explicit !== null) {
+                    view.fit(explicit, box.maxContentHeight);
+                    return;
+                }
+                if (fillsPane) {
                     const height = box.cellSize.height;
                     view.fit(height > 0 ? height : null, box.maxContentHeight);
                     return;
                 }
-                view.fit(box.cellContentHeight, box.maxContentHeight);
+                // The GUI's reported height, read from the inline the iframe
+                // reporting left (offsetHeight is 0 while the GUI view is the
+                // hidden one).
+                const gui = box.getView("gui")?.firstElementChild as HTMLElement | null;
+                const reported = Number.parseFloat(gui?.style.height ?? "");
+                const height = Number.isFinite(reported) && reported > 0 ? reported : null;
+                view.fit(height, box.maxContentHeight);
             };
             box.addEventListener("resize", fit);
+            // A GUI that grows or shrinks takes the terminal's height with it.
+            box.addEventListener("gui-resize", fit);
             fit();
         }
         view.write(message.text);
-        if (box.views.includes("gui")) {
-            box.bump("pty");
-        }
+        // A message landing in a view that is not shown flags it unseen
+        // (no-op when the terminal is the active — or only — view).
+        box.bump("pty");
     }
 
     handle$data(message: DataCommand, entry: Entry, box: EchoBox) {
