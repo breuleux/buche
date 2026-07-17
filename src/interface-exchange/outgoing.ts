@@ -7,7 +7,7 @@ export interface UpdateComponentMessage {
     type: "update_component";
 
     /** The zone in which to install or move the component. */
-    zone: Zone;
+    zone?: Zone;
 
     /** The component's current state (echo, cell, prompt, zones). */
     component: ComponentData;

@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "gen": "bun run scripts/gen-messages.ts",
+    "sim": "bun run scripts/sim.ts",
+    "view": "bun run scripts/view.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

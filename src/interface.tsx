@@ -62,7 +62,7 @@ export class BucheInterface implements Interface {
         this.interactions = new AsyncQueue();
     }
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {
-        type HT = (buche: Buche, m: OutgoingInterfaceMessage) => void
+        type HT = (buche: Buche, m: OutgoingInterfaceMessage) => void;
         const handler = this[`handle$${message.type}`];
         (handler as HT)(buche, message);
     }

@@ -52,19 +52,34 @@ export function zoneMap(zones: Array<Zone>): Record<string, Zone> {
 }
 
 export class Zone extends WithId(HTMLElement) {
-    names: Array<string>;
     parent?: Zone;
+    // Names given explicitly to the constructor. When absent (e.g. the element
+    // was upgraded from declarative markup like `<tabbed-zone names="left">`),
+    // the `names` getter falls back to the `names` attribute.
+    private _names?: Array<string>;
 
-    constructor(name: string | Array<string>, parent?: Zone) {
+    constructor(name?: string | Array<string>, parent?: Zone) {
         super();
-        this.names = typeof name === "string" ? name.split(/ +/) : name;
-        this.names.push(`Z${this.serialId}`);
+        if (name !== undefined) {
+            this._names = typeof name === "string" ? name.split(/ +/) : [...name];
+        }
         this.parent = parent;
     }
 
     effectiveZone(element: Cell | Prompt) {
         return this;
     }
+    get names(): Array<string> {
+        const base =
+            this._names ?? this.getAttribute?.("names")?.split(/ +/).filter(Boolean) ?? [];
+        // The auto-generated `Z<id>` name is always addressable.
+        return [...base, `Z${this.serialId}`];
+    }
+
+    set names(value: Array<string>) {
+        this._names = value;
+    }
+
 }
 
 export class TabbedZone extends Zone {}
