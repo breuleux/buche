@@ -4,7 +4,7 @@ import { IdClass } from "./utils.ts";
 import type { Zone } from "./zone.ts";
 
 export interface ComponentStatus {
-    status: "running" | "done" | "error" | "unresponsive";
+    status: "running" | "standby" | "done" | "error" | "unresponsive";
     code?: number | string | null;
 }
 

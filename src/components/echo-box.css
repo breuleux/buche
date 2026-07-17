@@ -1,0 +1,210 @@
+/* Styles for the <echo-box> custom element (echo-box.tsx).
+ * A submitted command (echo) with a drawn left gutter — status circle + line —
+ * and a cell holding one or more switchable views. */
+
+echo-box {
+	/* Configurable colour of the status circle and the gutter line. */
+	--echo-color: #6ea8fe;
+	/* Surrounding background; the "done" circle fills with this to cap the bar. */
+	--echo-bg: #1c1c1c;
+
+	display: grid;
+	grid-template-columns: 16px 1fr;
+	color: #d4d4d4;
+	font-family: "Menlo", "Consolas", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+/* ── Gutter: status circle at the top, line running down beside the cell ── */
+
+.echo-box-gutter {
+	position: relative;
+	grid-column: 1;
+}
+
+.echo-box-gutter::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	/* Start at the circle's centre so the bar joins it; the circle is painted on
+	 * top of this pseudo-element, so the visible bar emerges from the circle. */
+	top: 14px;
+	bottom: 8px;
+	width: 2px;
+	background: var(--echo-color);
+}
+
+.echo-box-status {
+	position: absolute;
+	left: 50%;
+	top: 8px;
+	transform: translateX(-50%);
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	/* The circle is always the same size; its outline is always the bar colour.
+	 * The status-varying "inside" is drawn by ::after so the outline stays steady. */
+	border: 2px solid var(--echo-color);
+	background: transparent;
+}
+
+/* The inner fill/dot. Hidden by default; each status sizes/colours it. */
+.echo-box-status::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 0;
+	height: 0;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+	background: transparent;
+}
+
+/* ── Body: header (echo + controls) then the cell ── */
+
+.echo-box-body {
+	grid-column: 2;
+	min-width: 0;
+}
+
+.echo-box-header {
+	position: relative;
+}
+
+.echo-box-echo {
+	padding: 2px;
+	padding-right: 68px; /* leave room for the controls */
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.echo-box-controls {
+	position: absolute;
+	top: 3px;
+	right: 4px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.echo-box-view-btn,
+.echo-box-close {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 12px;
+	line-height: 1;
+	padding: 2px 5px;
+	border-radius: 3px;
+	color: #888;
+	transition:
+		color 0.15s,
+		background 0.15s;
+}
+
+.echo-box-view-btn:hover {
+	color: #ccc;
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.echo-box-view-btn.active {
+	color: var(--echo-color);
+	background: rgba(255, 255, 255, 0.08);
+}
+
+/* Nothing to switch between with a single view: hide the view icons. */
+.echo-box-controls.single-view .echo-box-view-btn {
+	display: none;
+}
+
+/* ── Cell + views ── */
+
+.echo-box-cell {
+	padding: 0 2px 2px;
+	min-width: 0;
+}
+
+.echo-box-view[hidden] {
+	display: none;
+}
+
+/* ── Status-dependent appearance: status circle ── */
+
+/* running: a fixed-size dot slowly throbbing white → grey. */
+echo-box[data-status="running"] .echo-box-status::after {
+	width: 5px;
+	height: 5px;
+	background: #fff;
+	animation: echo-box-throb 2.4s ease-in-out infinite;
+}
+
+/* done: filled with the background colour, capping the bar where it overlaps. */
+echo-box[data-status="done"] .echo-box-status::after {
+	width: 100%;
+	height: 100%;
+	background: var(--echo-bg);
+}
+
+/* standby: filled light blue (idle / waiting). */
+echo-box[data-status="standby"] .echo-box-status::after {
+	width: 100%;
+	height: 100%;
+	background: #7fd4ff;
+}
+
+/* error: filled red. */
+echo-box[data-status="error"] .echo-box-status::after {
+	width: 100%;
+	height: 100%;
+	background: #f44;
+}
+
+/* unresponsive: blinking between yellow and the background colour. */
+echo-box[data-status="unresponsive"] .echo-box-status::after {
+	width: 100%;
+	height: 100%;
+	background: #f5c542;
+	animation: echo-box-blink 0.8s steps(1, end) infinite;
+}
+
+@keyframes echo-box-throb {
+	0%,
+	100% {
+		background: #fff;
+	}
+	50% {
+		background: #888;
+	}
+}
+
+@keyframes echo-box-blink {
+	0%,
+	100% {
+		background: #f5c542;
+	}
+	50% {
+		background: var(--echo-bg);
+	}
+}
+
+/* ── Status-dependent appearance: closing icon ── */
+
+.echo-box-close:hover {
+	color: #f48771;
+	background: #3a0000;
+}
+
+echo-box[data-status="running"] .echo-box-close,
+echo-box[data-status="unresponsive"] .echo-box-close,
+echo-box[data-status="standby"] .echo-box-close {
+	color: #bbb;
+}
+
+echo-box[data-status="error"] .echo-box-close {
+	color: #f88;
+}
