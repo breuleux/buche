@@ -1,3 +1,5 @@
+import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
+import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
 import type { Cell, Echo } from "./cell.ts";
 import type { Address, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
@@ -5,9 +7,10 @@ import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
+import type { ProcessCommunicator } from "./process.ts";
 import type { Prompt } from "./prompt.ts";
-import { BucheError, type ErrorMessage } from "./utils.ts";
-import type { Zone } from "./zone.ts";
+import { BucheError, type ErrorMessage, mergeIterables } from "./utils.ts";
+import { Zone } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | ErrorMessage;
@@ -153,6 +156,61 @@ export class Buche extends Machine<InM, OutM> {
             });
         }
         return { prompt, zone };
+    }
+}
+
+async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
+    if (fn) {
+        for await (const x of stream) {
+            fn(x);
+            yield x;
+        }
+    } else {
+        yield* stream;
+    }
+}
+
+const baseHandlers = {
+    async *error(buche: Buche, obj: ErrorMessage): AsyncGenerator<OutM> {
+        console.log("TODO");
+    },
+};
+
+interface BucheRunArguments {
+    process: ProcessCommunicator;
+    interface: AsyncGenerator<InM>;
+    loggers: {
+        driverIn?: (arg: InM) => void;
+        interfaceIn?: (arg: InM) => void;
+        driverOut?: (arg: OutM) => void;
+        interfaceOut?: (arg: OutM) => void;
+    };
+    // inLogger?: (arg: InM) => void;
+    // outLogger?: (arg: OutM) => void;
+}
+
+export async function* bucheRun(args: BucheRunArguments) {
+    const buche = new Buche({
+        handlers: Object.assign(
+            baseHandlers as unknown as HandlerT,
+            driverHandlers,
+            interfaceHandlers,
+        ),
+        initialZones: { "@": new Zone() },
+    });
+    const instream = mergeIterables(
+        _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
+        _awrap(args.interface, args.loggers.interfaceIn),
+    );
+    const stream = buche.stream(instream);
+    for await (const message of stream) {
+        if (message.type in driverHandlers) {
+            args.loggers.driverOut?.(message);
+            args.process.send(message as OutgoingDriverMessage);
+        } else {
+            args.loggers.interfaceOut?.(message);
+            yield message;
+        }
     }
 }
 
