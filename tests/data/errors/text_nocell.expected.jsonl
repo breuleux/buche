@@ -1,2 +1,2 @@
-{"$role":"in","type":"text","from":["cq","50"],"to":["$terminal"],"stream":"stdout","text":"orphan output"}
-{"$role":"out","type":"error","code":"missingcell","reason":"Cell at [\"cq\",\"50\"] is missing","input":{"type":"text","from":["cq","50"],"to":["$terminal"],"stream":"stdout","text":"orphan output"}}
+{"$role":"driverIn","type":"text","from":["cq","50"],"to":["$terminal"],"stream":"stdout","text":"orphan output"}
+{"$role":"interfaceOut","type":"error","code":"missingcell","reason":"Cell at [\"cq\",\"50\"] is missing","input":{"type":"text","from":["cq","50"],"to":["$terminal"],"stream":"stdout","text":"orphan output"}}

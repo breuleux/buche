@@ -1,2 +1,2 @@
-{"$role":"in","type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}
-{"$role":"out","type":"error","code":"missingcell","reason":"Cell at [\"cq\",\"52\"] is missing","input":{"type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}}
+{"$role":"driverIn","type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}
+{"$role":"interfaceOut","type":"error","code":"missingcell","reason":"Cell at [\"cq\",\"52\"] is missing","input":{"type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}}

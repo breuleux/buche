@@ -6,6 +6,7 @@ import path from "node:path";
 import readline from "node:readline";
 
 import type { Machine } from "../src/machine.ts";
+import { outgoingDriverMessageTypes } from "../src/message-directory.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {
     const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
@@ -56,12 +57,17 @@ export class MachinePlayer<In, Out> {
         };
         try {
             for await (const inObj of inputStream) {
-                // 1. Write the input object with $role: "in"
-                await writeLine({ $role: "in", ...inObj });
+                // 1. Write the input object with $role: "driverIn"
+                await writeLine({ $role: "driverIn", ...inObj });
 
-                // 2. Feed to generator and write generated outputs with $role: "out"
+                // 2. Feed to generator and write generated outputs, tagged by
+                //    destination: driver-outgoing types go to the driver, the
+                //    rest (interface messages, errors) to the interface.
                 for await (const outObj of this.machine.process(inObj)) {
-                    await writeLine({ $role: "out", ...outObj });
+                    const role = outgoingDriverMessageTypes.has((outObj as any).type)
+                        ? "driverOut"
+                        : "interfaceOut";
+                    await writeLine({ $role: role, ...outObj });
                 }
             }
         } finally {

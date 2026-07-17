@@ -1,2 +1,2 @@
-{"$role":"in","type":"cell_create","from":["cq","53"],"to":["$terminal"],"zone":"bogus","background":false}
-{"$role":"out","type":"error","code":"nozone","reason":"No zone named bogus could be found","input":{"type":"cell_create","from":["cq","53"],"to":["$terminal"],"zone":"bogus","background":false}}
+{"$role":"driverIn","type":"cell_create","from":["cq","53"],"to":["$terminal"],"zone":"bogus","background":false}
+{"$role":"interfaceOut","type":"error","code":"nozone","reason":"No zone named bogus could be found","input":{"type":"cell_create","from":["cq","53"],"to":["$terminal"],"zone":"bogus","background":false}}

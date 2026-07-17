@@ -1,7 +1,7 @@
-{"$role":"in","value":"hell"}
-{"$role":"out","value":104}
-{"$role":"out","value":101}
-{"$role":"out","value":108}
-{"$role":"out","value":108}
-{"$role":"in","value":"o"}
-{"$role":"out","value":111}
+{"$role":"driverIn","value":"hell"}
+{"$role":"interfaceOut","value":104}
+{"$role":"interfaceOut","value":101}
+{"$role":"interfaceOut","value":108}
+{"$role":"interfaceOut","value":108}
+{"$role":"driverIn","value":"o"}
+{"$role":"interfaceOut","value":111}
