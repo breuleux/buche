@@ -1,5 +1,6 @@
 /* Styles for the <tab-pane> custom element (tab-pane.tsx).
- * A tab bar on top of a set of panes. A dim line runs along the bottom of the
+ * A tab bar on top of a set of panes. Each tab shows a status dot, a label, a row
+ * of view icons and an ✕ close button. A dim line runs along the bottom of the
  * tabs; the active tab paints that line with its accent color (the underline is
  * set inline from the tab's Echo accent). Reproduces the zone-tab look from the
  * original buche src/terminal/styles.css. Set --tab-pane-bg to the surrounding
@@ -25,6 +26,11 @@ tab-pane {
 }
 
 .tab-pane-tab {
+	/* Default per-tab accent, overridden inline from the Echo's colour. */
+	--tab-accent: #888;
+	display: flex;
+	align-items: center;
+	gap: 5px;
 	background: none;
 	border: none;
 	/* Sits on top of the tab bar's bottom line; coloured when active. */
@@ -35,7 +41,7 @@ tab-pane {
 	cursor: default;
 	font-size: 11px;
 	font-family: inherit;
-	padding: 4px 12px 3px;
+	padding: 4px 10px 3px;
 	line-height: 1;
 	user-select: none;
 	transition:
@@ -51,6 +57,124 @@ tab-pane {
 	color: #d4d4d4;
 	/* border-bottom-color is set inline from the tab's accent. */
 }
+
+.tab-pane-tab-label {
+	flex: 0 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── Status dot ── */
+
+.tab-pane-tab-status {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	/* Default / absent: a hollow ring in the tab's accent colour. */
+	background: transparent;
+	border: 1.5px solid var(--tab-accent);
+}
+
+.tab-pane-tab[data-status="running"] .tab-pane-tab-status {
+	border-color: transparent;
+	background: #fff;
+	animation: tab-pane-throb 2.4s ease-in-out infinite;
+}
+
+.tab-pane-tab[data-status="standby"] .tab-pane-tab-status {
+	border-color: transparent;
+	background: #7fd4ff;
+}
+
+.tab-pane-tab[data-status="done"] .tab-pane-tab-status {
+	border-color: transparent;
+	background: #8ae234;
+}
+
+.tab-pane-tab[data-status="error"] .tab-pane-tab-status {
+	border-color: transparent;
+	background: #f44;
+}
+
+.tab-pane-tab[data-status="unresponsive"] .tab-pane-tab-status {
+	border-color: transparent;
+	background: #f5c542;
+	animation: tab-pane-blink 0.8s steps(1, end) infinite;
+}
+
+@keyframes tab-pane-throb {
+	0%,
+	100% {
+		background: #fff;
+	}
+	50% {
+		background: #888;
+	}
+}
+
+@keyframes tab-pane-blink {
+	0%,
+	100% {
+		background: #f5c542;
+	}
+	50% {
+		background: var(--tab-pane-bg);
+	}
+}
+
+/* ── View icons + close button ── */
+
+.tab-pane-tab-views {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+}
+
+.tab-pane-view-btn,
+.tab-pane-tab-close {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 11px;
+	line-height: 1;
+	padding: 1px 3px;
+	border-radius: 3px;
+	color: #666;
+	transition:
+		color 0.15s,
+		background 0.15s;
+}
+
+.tab-pane-view-btn:hover {
+	color: #ccc;
+	background: rgba(255, 255, 255, 0.06);
+}
+
+/* The close button stays discreet until the tab is hovered or active. */
+.tab-pane-tab-close {
+	opacity: 0;
+	transition:
+		color 0.15s,
+		background 0.15s,
+		opacity 0.12s;
+}
+
+.tab-pane-tab:hover .tab-pane-tab-close,
+.tab-pane-tab.active .tab-pane-tab-close,
+.tab-pane-tab:focus-within .tab-pane-tab-close {
+	opacity: 1;
+}
+
+.tab-pane-tab-close:hover {
+	color: #f48771;
+	background: #3a0000;
+}
+
+/* ── Body / panes ── */
 
 .tab-pane-body {
 	display: flex;

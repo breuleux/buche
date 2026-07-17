@@ -1,15 +1,15 @@
 // A submitted command and its output, as a custom element: `<echo-box>`.
 //
 //   <echo-box echo="ls -la" status="running" color="#6ea8fe">
-//     <div data-view="stdout" data-icon="▤" data-label="Output">…</div>
-//     <div data-view="gui"    data-icon="◧" data-label="GUI">…</div>
+//     <div data-view="pty">…</div>
+//     <div data-view="gui">…</div>
 //   </echo-box>
 //
 //   const box = document.createElement("echo-box") as EchoBox;
 //   box.echo = "make build";
 //   box.color = "#8ae234";
-//   const out = box.addView({ id: "stdout", icon: "▤", label: "Output" });
-//   out.appendChild(term);            // fill the view with content
+//   box.setView("pty", term);         // fill a view with content (icon from the map)
+//   box.bump("gui");                  // flag the gui view as holding unseen content
 //   box.status = "done";
 //
 // Layout:
@@ -22,8 +22,11 @@
 //
 // The left gutter is drawn (not a CSS margin): a status circle at the top and a
 // straight line running down beside the cell. The cell holds one or more views
-// (stdout, gui, …); each gets an icon button at the top-right, and clicking one
-// switches the visible view. A closing icon sits after the view icons. The status
+// (keyed by ViewLabel — pty, gui); each gets an icon button (glyph from a static
+// map) at the top-right, and clicking one switches the visible view. A view can
+// be flagged as holding unseen content with bump(label): while it is not the
+// selected view its icon shows bright white. A closing icon sits after the view
+// icons. The status
 // circle and closing icon change appearance with the cell's `status`; the circle
 // and line colour are configurable via the `color` attribute / `--echo-color`.
 //
@@ -53,20 +56,37 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
+import type { Echo, Status, StatusString, ViewLabel } from "../echo.ts";
 import type { StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
 
-export type EchoStatus = "running" | "done" | "error" | "unresponsive" | "standby";
+/** Map an {@link Echo}'s status onto the box's visual status. `absent` (an echo
+ *  that hasn't started) is shown as `unresponsive`. */
+function echoStatus(status: Status): StatusString {
+    return status.status === "absent" ? "unresponsive" : status.status;
+}
 
-export interface EchoView {
-    /** Stable identifier used to switch to / address the view. */
-    id: string;
-    /** Glyph (or short text) for the view's icon button. */
-    icon?: string;
-    /** Tooltip / accessible label for the icon button. */
-    label?: string;
-    /** Initial content node placed inside the view. */
-    content?: Node;
+/** The icon glyph shown for each {@link ViewLabel}. */
+export const VIEW_ICONS: Record<ViewLabel, string> = {
+    pty: "▤",
+    gui: "◧",
+};
+
+/** The tooltip / accessible label shown for each {@link ViewLabel}. */
+export const VIEW_TITLES: Record<ViewLabel, string> = {
+    pty: "Output",
+    gui: "GUI",
+};
+
+export function isViewLabel(s: string): s is ViewLabel {
+    return s in VIEW_ICONS;
+}
+
+interface ViewEntry {
+    btn: HTMLButtonElement;
+    view: HTMLElement;
+    /** Whether the view may hold content the user hasn't seen yet. */
+    unseen: boolean;
 }
 
 const STATUSES: readonly EchoStatus[] = ["running", "done", "error", "unresponsive", "standby"];
@@ -93,10 +113,13 @@ export class EchoBox extends HTMLElement {
     private inlineStatusEl!: HTMLElement;
     private handleTop!: HTMLElement;
     private handleBottom!: HTMLElement;
-    private viewMap = new Map<string, { btn: HTMLButtonElement; view: HTMLElement }>();
-    private _activeView: string | null = null;
+    private viewMap = new Map<ViewLabel, ViewEntry>();
+    private _activeView: ViewLabel | null = null;
     private _status: EchoStatus = "running";
     private _compact = false;
+    // The bound Echo (if configured from one) and the listener registered on it.
+    private _echo: Echo | null = null;
+    private echoListener: ((echo: Echo) => void) | null = null;
     // Whether the pointer is currently over this box. The compact overlay and
     // handles are shown only while Alt is held *and* the pointer is over the box,
     // so Alt-tracking is per-box (not global) and scoped to the hover.
@@ -216,12 +239,10 @@ export class EchoBox extends HTMLElement {
         }
 
         for (const child of authored) {
-            this.addView({
-                id: child.getAttribute("data-view") ?? "",
-                icon: child.getAttribute("data-icon") ?? undefined,
-                label: child.getAttribute("data-label") ?? undefined,
-                content: child,
-            });
+            const lbl = child.getAttribute("data-view") ?? "";
+            if (isViewLabel(lbl)) {
+                this.setView(lbl, child);
+            }
         }
         this.updateControlsState();
 
@@ -496,74 +517,95 @@ export class EchoBox extends HTMLElement {
         }
     }
 
+    // ── Echo object binding ─────────────────────────────────────────────────────
+
+    /** The bound {@link Echo}, if the box was configured from one. */
+    get boundEcho(): Echo | null {
+        this.ensureSetup();
+        return this._echo;
+    }
+
+    /**
+     * Configure the box from an {@link Echo}: apply its command text, colour,
+     * status and views now, and re-apply on every subsequent `echo.fire()`. Any
+     * previously bound echo is detached first.
+     */
+    bindEcho(echo: Echo): void {
+        this.ensureSetup();
+        this.unbindEcho();
+        this._echo = echo;
+        this.echoListener = () => this.applyEcho(echo);
+        echo.listeners.push(this.echoListener);
+        this.applyEcho(echo);
+    }
+
+    /** Detach the current echo's reconfiguration listener (if any). */
+    unbindEcho(): void {
+        if (this._echo && this.echoListener) {
+            this._echo.listeners = this._echo.listeners.filter((l) => l !== this.echoListener);
+        }
+        this._echo = null;
+        this.echoListener = null;
+    }
+
+    private applyEcho(echo: Echo): void {
+        this.setEcho(echo.echo ?? echo.label ?? "");
+        this.color = echo.color ?? "";
+        this.status = echoStatus(echo.status);
+        // The echo's `views` set drives which view icons exist.
+        if (echo.views) {
+            for (const lbl of echo.views) {
+                this.ensureView(lbl);
+            }
+        }
+    }
+
     // ── Views ─────────────────────────────────────────────────────────────────
 
-    /** The registered view ids, in insertion order. */
-    get views(): string[] {
+    /** The registered view labels, in insertion order. */
+    get views(): ViewLabel[] {
         this.ensureSetup();
         return [...this.viewMap.keys()];
     }
 
-    /** The currently visible view id, or null if there are no views. */
-    get activeView(): string | null {
+    /** The currently visible view, or null if there are no views. */
+    get activeView(): ViewLabel | null {
         this.ensureSetup();
         return this._activeView;
     }
 
-    /** Add a view (and its icon button). The first view added becomes active.
-     *  If the id already exists, its content is replaced. Returns the view's
-     *  content container to append into. */
-    addView(spec: EchoView): HTMLElement {
+    /** Set (replace) a view's content, creating the view — and its icon, from the
+     *  static {@link VIEW_ICONS} map — if it doesn't exist yet. The first view
+     *  created becomes active. Returns the view's content container. */
+    setView(lbl: ViewLabel, content: Node): HTMLElement {
         this.ensureSetup();
-        const id = spec.id;
-        const existing = this.viewMap.get(id);
-        if (existing) {
-            if (spec.content) {
-                existing.view.replaceChildren(spec.content);
-            }
-            return existing.view;
-        }
+        const entry = this.ensureView(lbl);
+        entry.view.replaceChildren(content);
+        return entry.view;
+    }
 
-        const view = div("echo-box-view");
-        view.setAttribute("data-view", id);
-        view.hidden = true;
-        if (spec.content) {
-            view.append(spec.content);
-        }
-        this.cellEl.append(view);
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "echo-box-view-btn";
-        btn.setAttribute("data-view", id);
-        btn.textContent = spec.icon ?? id.slice(0, 1).toUpperCase();
-        btn.title = spec.label ?? id;
-        btn.setAttribute("aria-label", btn.title);
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.showView(id);
-        });
-        this.controlsEl.insertBefore(btn, this.closeEl);
-
-        this.viewMap.set(id, { btn, view });
-        if (this._activeView === null) {
-            this.showView(id);
-        }
-        this.updateControlsState();
-        return view;
+    /** Flag that a view may hold content the user hasn't seen yet: its icon is
+     *  shown in bright white while the view is not the selected one. Selecting
+     *  the view (see {@link showView}) clears the flag. */
+    bump(lbl: ViewLabel): void {
+        this.ensureSetup();
+        const entry = this.ensureView(lbl);
+        // The active view's content is already on screen, so nothing is unseen.
+        entry.unseen = this._activeView !== lbl;
+        this.updateViewStyles();
     }
 
     /** Remove a view; if it was active, the next view (if any) becomes active. */
-    removeView(id: string): void {
+    removeView(lbl: ViewLabel): void {
         this.ensureSetup();
-        const entry = this.viewMap.get(id);
+        const entry = this.viewMap.get(lbl);
         if (!entry) {
             return;
         }
         entry.btn.remove();
         entry.view.remove();
-        this.viewMap.delete(id);
-        if (this._activeView === id) {
+        this.viewMap.delete(lbl);
+        if (this._activeView === lbl) {
             this._activeView = null;
             const next = this.viewMap.keys().next();
             if (!next.done) {
@@ -573,26 +615,74 @@ export class EchoBox extends HTMLElement {
         this.updateControlsState();
     }
 
-    /** Switch to a view by id. No-op for an unknown id. */
-    showView(id: string): void {
+    /** Switch to a view. No-op for a view that doesn't exist. */
+    showView(lbl: ViewLabel): void {
         this.ensureSetup();
-        if (!this.viewMap.has(id)) {
+        const entry = this.viewMap.get(lbl);
+        if (!entry) {
             return;
         }
-        this._activeView = id;
-        for (const [vid, { btn, view }] of this.viewMap) {
-            const active = vid === id;
-            view.hidden = !active;
-            btn.classList.toggle("active", active);
-            btn.setAttribute("aria-pressed", String(active));
+        this._activeView = lbl;
+        // Viewing it means its content is now seen.
+        entry.unseen = false;
+        for (const [vid, e] of this.viewMap) {
+            e.view.hidden = vid !== lbl;
         }
-        this.dispatchEvent(new CustomEvent("viewchange", { detail: { view: id }, bubbles: true }));
+        this.updateViewStyles();
+        this.dispatchEvent(
+            new CustomEvent("viewchange", { detail: { view: lbl }, bubbles: true }),
+        );
     }
 
     /** The content container for a view, or null if unknown. */
-    getView(id: string): HTMLElement | null {
+    getView(lbl: ViewLabel): HTMLElement | null {
         this.ensureSetup();
-        return this.viewMap.get(id)?.view ?? null;
+        return this.viewMap.get(lbl)?.view ?? null;
+    }
+
+    // Create a view (and its icon button) if it doesn't exist yet.
+    private ensureView(lbl: ViewLabel): ViewEntry {
+        const existing = this.viewMap.get(lbl);
+        if (existing) {
+            return existing;
+        }
+
+        const view = div("echo-box-view");
+        view.setAttribute("data-view", lbl);
+        view.hidden = true;
+        this.cellEl.append(view);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "echo-box-view-btn";
+        btn.setAttribute("data-view", lbl);
+        btn.textContent = VIEW_ICONS[lbl];
+        btn.title = VIEW_TITLES[lbl];
+        btn.setAttribute("aria-label", btn.title);
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.showView(lbl);
+        });
+        this.controlsEl.insertBefore(btn, this.closeEl);
+
+        const entry: ViewEntry = { btn, view, unseen: false };
+        this.viewMap.set(lbl, entry);
+        if (this._activeView === null) {
+            this.showView(lbl);
+        }
+        this.updateControlsState();
+        return entry;
+    }
+
+    // Reflect the active view and the per-view "unseen" flag onto the icons. A
+    // view flagged unseen shows bright white until it becomes the selected one.
+    private updateViewStyles(): void {
+        for (const [vid, { btn, unseen }] of this.viewMap) {
+            const active = vid === this._activeView;
+            btn.classList.toggle("active", active);
+            btn.classList.toggle("has-unseen", unseen && !active);
+            btn.setAttribute("aria-pressed", String(active));
+        }
     }
 
     // With 0 or 1 views there is nothing to switch between, so hide the icons.

@@ -135,6 +135,11 @@ echo-box:not([compact]):focus-within .echo-box-controls {
 	background: rgba(255, 255, 255, 0.08);
 }
 
+/* A non-selected view that may hold unseen content: bright white icon. */
+.echo-box-view-btn.has-unseen {
+	color: #fff;
+}
+
 /* Nothing to switch between with a single view: hide the view icons. */
 .echo-box-controls.single-view .echo-box-view-btn {
 	display: none;

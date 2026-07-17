@@ -2,8 +2,10 @@ import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { Accent, Address, StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
 
+export type StatusString = "absent" | "running" | "done" | "error" | "unresponsive" | "standby";
+
 export interface Status {
-    status: "absent" | "running" | "standby" | "done" | "error" | "unresponsive";
+    status: StatusString;
     code?: number | string | null;
 }
 
@@ -17,6 +19,8 @@ export interface EchoConfiguration {
     /** Accent color for the component. */
     color?: Accent;
 }
+
+export type ViewLabel = "pty" | "gui";
 
 export class Echo extends WithId() {
     /** Text of the command */
@@ -35,7 +39,10 @@ export class Echo extends WithId() {
     status: Status;
 
     /** List of views. */
-    views?: Set<string>;
+    views?: Set<ViewLabel>;
+
+    /** Listeners */
+    listeners: Array<(echo: this) => void> = [];
 
     constructor(config: EchoConfiguration & CreationInfo) {
         super();
@@ -49,5 +56,11 @@ export class Echo extends WithId() {
         this.label = config.label ?? `%${this.serialId}`;
         this.color = config.color ?? "purple";
         this.echo = config.echo;
+    }
+
+    fire() {
+        for (const listener of this.listeners) {
+            listener(this);
+        }
     }
 }
