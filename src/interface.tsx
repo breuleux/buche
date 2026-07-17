@@ -1,3 +1,4 @@
+import { AsyncQueue } from "./async-queue";
 import type { Buche } from "./core";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
@@ -6,7 +7,6 @@ import type {
     ProblemMessage,
     UpdateComponentMessage,
 } from "./interface-exchange/outgoing";
-import { AsyncQueue } from "./process";
 import type { BucheErrorMessage } from "./utils";
 import { extractZones, type Zone } from "./zone";
 
