@@ -13,7 +13,7 @@ import { outgoingDriverMessageTypes } from "./message-directory.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
-import { Zone } from "./zone.ts";
+import { Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage;
@@ -178,14 +178,14 @@ export class Buche extends Machine<InM, OutM> {
             } else {
                 const cell = new Cell(obj, { zone, address: obj.from });
                 cell.prompt = parentPrompt;
-                Object.assign(component, { cell, zones: cell.makeZones(zone) });
+                Object.assign(component, { cell, zones: zoneMap(cell.makeZones(zone)) });
             }
         } else {
             if (component.prompt) {
                 component.prompt.configure(obj);
             } else {
                 const prompt = new Prompt(obj, { zone, address: obj.from });
-                Object.assign(component, { prompt, zones: prompt.makeZones(zone) });
+                Object.assign(component, { prompt, zones: zoneMap(prompt.makeZones(zone)) });
             }
         }
         yield {
@@ -266,7 +266,7 @@ export async function* bucheStream(args: BucheStreamArguments) {
             driverHandlers,
             interfaceHandlers,
         ),
-        initialZones: { "@": new Zone() },
+        initialZones: zoneMap([new Zone("@")]),
     });
     const instream = mergeIterables(
         _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),

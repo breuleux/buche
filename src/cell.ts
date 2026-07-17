@@ -56,7 +56,7 @@ export class Cell extends IdClass implements CellConfiguration {
         Object.assign(this, config);
     }
 
-    makeZones(parentZone: Zone): Record<string, Zone> {
-        return {};
+    makeZones(parentZone: Zone): Array<Zone> {
+        return [];
     }
 }

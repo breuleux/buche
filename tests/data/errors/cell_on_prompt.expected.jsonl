@@ -1,4 +1,4 @@
 {"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq"}
-{"$role":"interfaceOut","type":"update_component","component":{"zones":{"@":"#102"},"prompt":"#101"}}
+{"$role":"interfaceOut","type":"update_component","component":{"zones":{"@":"#102","Z102":"#102"},"prompt":"#101"}}
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq"],"to":["$term"],"zone":null,"background":false}
 {"$role":"interfaceOut","type":"problem","code":"exists","reason":"A prompt already exists at address $proc,cq, cannot configure a cell","input":{"type":"cell_configure","from":["$proc","cq"],"to":["$term"],"zone":null,"background":false}}

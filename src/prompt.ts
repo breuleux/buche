@@ -52,7 +52,7 @@ export class Prompt extends IdClass implements PromptConfiguration {
         Object.assign(this, config);
     }
 
-    makeZones(parentZone: Zone): Record<string, Zone> {
-        return { "@": new PromptZone(parentZone) };
+    makeZones(parentZone: Zone): Array<Zone> {
+        return [new PromptZone("@", parentZone)];
     }
 }

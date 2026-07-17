@@ -1,5 +1,5 @@
 {"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"prompt_html":"<span style='color:#569cd6;'>&gt;&gt;</span>","label":"cq","bindings":{"Control+T":"bbd0e542-5313-469f-8a3a-9d2b3af60d3a","Meta+E":"cac6171e-0ed4-47c0-ae92-96d0f530ac04","Meta+D":"91948b0d-2c16-4dab-9696-eec55a667986","Tab Tab":"0f50ed65-3f2b-47c1-b7e5-5772a6eab293"}}
-{"$role":"interfaceOut","type":"update_component","component":{"zones":{"@":"#102"},"prompt":"#101"}}
+{"$role":"interfaceOut","type":"update_component","component":{"zones":{"@":"#102","Z102":"#102"},"prompt":"#101"}}
 {"$role":"driverIn","type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
 {"$role":"interfaceOut","type":"update_component","component":{"zones":{},"echo":"#103"}}
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq","2"],"to":["$term"],"zone":null,"background":false}

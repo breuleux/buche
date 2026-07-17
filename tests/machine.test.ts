@@ -4,7 +4,7 @@ import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
 import { Machine } from "../src/machine.ts";
 import { resetId } from "../src/utils.ts";
-import { Zone } from "../src/zone.ts";
+import { Zone, zoneMap } from "../src/zone.ts";
 import { getCases, MachinePlayer } from "./utils.ts";
 
 interface InM {
@@ -43,7 +43,7 @@ for (const base of ["data/runs", "data/errors"]) {
                 resetId(100);
                 const buche = new Buche({
                     handlers: Object.assign({}, driverHandlers, interfaceHandlers) as HandlerT,
-                    initialZones: { "@": new Zone() },
+                    initialZones: zoneMap([new Zone("@")]),
                 });
                 const machine = new MachinePlayer(buche, base);
                 const { input, expected } = machine.testFiles(name);
