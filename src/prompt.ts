@@ -1,16 +1,8 @@
-import type { Address, HighlightRange } from "./driver-exchange/common.ts";
+import type { Address, ColorDef, HighlightRange } from "./types.ts";
 import { WithId } from "./utils.ts";
 import { PromptZone } from "./zone.ts";
 
 export type PromptBindings = Record<string, string>;
-
-export interface PromptColor {
-    /** OKLCH hue */
-    hue?: number;
-
-    /** OKLCH chroma */
-    chroma?: number;
-}
 
 export interface PromptConfiguration {
     /** The prompt/tab label. */
@@ -20,7 +12,7 @@ export interface PromptConfiguration {
     bindings?: PromptBindings;
 
     /** Accent color for the prompt. */
-    color?: PromptColor;
+    color?: ColorDef;
 
     /** HTML for the prompt's leading label/marker. */
     prompt_html?: string;
@@ -37,7 +29,7 @@ export class Prompt extends WithId() implements PromptConfiguration {
 
     label?: string | null;
     bindings?: PromptBindings;
-    color?: PromptColor;
+    color?: ColorDef;
     prompt_html?: string;
 
     zones: { main: PromptZone };

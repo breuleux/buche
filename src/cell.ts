@@ -1,5 +1,5 @@
-import type { Address, Json } from "./driver-exchange/common.ts";
 import type { Prompt } from "./prompt.ts";
+import type { Address, Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
 export interface ComponentStatus {

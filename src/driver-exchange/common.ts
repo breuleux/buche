@@ -1,6 +1,6 @@
 import type { Address, To, ZoneDescriptor } from "../types.ts";
 
-export type { Address, Json, To, ZoneDescriptor } from "../types.ts";
+export type { Address, HighlightRange, Json, To, ZoneDescriptor } from "../types.ts";
 
 export interface BaseMessage {
     /** Type of the message. */
@@ -19,16 +19,4 @@ export interface CreationInfo {
 
     /** Which zone to put the element in. */
     zone?: ZoneDescriptor | null;
-}
-
-/** A syntax-highlight span over the prompt text */
-export interface HighlightRange {
-    /** Inclusive start offset into the prompt text. */
-    start: number;
-
-    /** Exclusive end offset. */
-    end: number;
-
-    /** CSS class. */
-    cls: string;
 }

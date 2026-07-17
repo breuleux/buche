@@ -1,7 +1,7 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
 import { Cell, type CellConfiguration } from "./cell.ts";
-import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
+import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
 import { ComponentData } from "./exchange.ts";
@@ -10,6 +10,7 @@ import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts"
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
+import type { Address } from "./types.ts";
 import { awrap, BucheError, type BucheErrorMessage, Hierarchy, mergeIterables } from "./utils.ts";
 import { type Zone, zoneMap } from "./zone.ts";
 
