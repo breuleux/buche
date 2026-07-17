@@ -5,6 +5,9 @@
     "IncomingInterfaceMessage": {
       "anyOf": [
         {
+          "$ref": "#/definitions/SignalMessage"
+        },
+        {
           "$ref": "#/definitions/UserCommandMessage"
         },
         {
@@ -16,32 +19,31 @@
       ],
       "description": "Union of every message type."
     },
-    "UserCommandMessage": {
+    "SignalMessage": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "user_command"
+          "const": "signal"
         },
-        "prompt": {
-          "$ref": "#/definitions/Prompt"
-        },
-        "text": {
-          "type": "string"
-        },
-        "position": {
+        "code": {
           "type": "number"
         },
-        "command": {
-          "type": "string"
+        "element": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Prompt"
+            },
+            {
+              "$ref": "#/definitions/Cell"
+            }
+          ]
         }
       },
       "required": [
         "type",
-        "prompt",
-        "text",
-        "position",
-        "command"
+        "code",
+        "element"
       ],
       "additionalProperties": false
     },
@@ -66,6 +68,20 @@
         "prompt_html": {
           "type": "string",
           "description": "HTML for the prompt's leading label/marker."
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Text in the prompt."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
         },
         "_id": {
           "type": "number"
@@ -104,6 +120,30 @@
       },
       "additionalProperties": false
     },
+    "HighlightRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive start offset into the prompt text."
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive end offset."
+        },
+        "cls": {
+          "type": "string",
+          "description": "CSS class."
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "cls"
+      ],
+      "additionalProperties": false,
+      "description": "A syntax-highlight span over the prompt text"
+    },
     "Zone": {
       "type": "object",
       "properties": {
@@ -124,6 +164,81 @@
       "items": {
         "type": "string"
       }
+    },
+    "Cell": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The cell/tab label."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, do not automatically focus the cell."
+        },
+        "_id": {
+          "type": "number"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Prompt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zone": {
+          "$ref": "#/definitions/Zone"
+        },
+        "address": {
+          "$ref": "#/definitions/Address"
+        }
+      },
+      "required": [
+        "_id",
+        "address",
+        "prompt",
+        "zone"
+      ],
+      "additionalProperties": false
+    },
+    "UserCommandMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "user_command"
+        },
+        "prompt": {
+          "$ref": "#/definitions/Prompt"
+        },
+        "text": {
+          "type": "string"
+        },
+        "position": {
+          "type": "number"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "prompt",
+        "text",
+        "position",
+        "command"
+      ],
+      "additionalProperties": false
     },
     "UserFocusMessage": {
       "type": "object",

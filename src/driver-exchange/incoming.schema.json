@@ -385,6 +385,20 @@
           "type": "string",
           "description": "HTML for the prompt's leading label/marker."
         },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Text in the prompt."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        },
         "from": {
           "$ref": "#/definitions/Address",
           "description": "Address of the issuing process."

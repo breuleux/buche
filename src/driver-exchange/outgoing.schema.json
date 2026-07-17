@@ -11,6 +11,9 @@
           "$ref": "#/definitions/CommandRequest"
         },
         {
+          "$ref": "#/definitions/SignalRequest"
+        },
+        {
           "$ref": "#/definitions/SyncRequest"
         }
       ],
@@ -36,7 +39,13 @@
           "type": "number"
         }
       },
-      "required": ["type", "from", "to", "text", "position"],
+      "required": [
+        "type",
+        "from",
+        "to",
+        "text",
+        "position"
+      ],
       "additionalProperties": false
     },
     "Address": {
@@ -68,7 +77,39 @@
           "type": "string"
         }
       },
-      "required": ["type", "from", "to", "text", "position", "command"],
+      "required": [
+        "type",
+        "from",
+        "to",
+        "text",
+        "position",
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "SignalRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "signal"
+        },
+        "from": {
+          "$ref": "#/definitions/Address"
+        },
+        "to": {
+          "$ref": "#/definitions/Address"
+        },
+        "code": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "from",
+        "to",
+        "code"
+      ],
       "additionalProperties": false
     },
     "SyncRequest": {
@@ -94,7 +135,12 @@
           "type": "string"
         }
       },
-      "required": ["from", "nonce", "to", "type"],
+      "required": [
+        "from",
+        "nonce",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "To": {
