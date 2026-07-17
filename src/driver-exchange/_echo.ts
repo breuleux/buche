@@ -1,4 +1,4 @@
-import { type Buche } from "../core.ts";
+import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage, type HighlightRange } from "./common.ts";
 
 export interface EchoMessage extends BaseMessage {
@@ -14,9 +14,9 @@ export interface EchoMessage extends BaseMessage {
   ranges: HighlightRange[];
 }
 
-export async function handle$echo(
+export async function* handle$echo(
     buche: Buche,
     obj: EchoMessage
-): Promise<void> {
+): AsyncIterable<OutM> {
   // TODO
 }

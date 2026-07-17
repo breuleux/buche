@@ -1,4 +1,4 @@
-import { type Buche } from "../core.ts";
+import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage } from "./common.ts";
 
 export interface SyncMessage extends BaseMessage {
@@ -7,10 +7,10 @@ export interface SyncMessage extends BaseMessage {
   nonce: string;
 }
 
-export async function handle$sync(
+export async function* handle$sync(
     buche: Buche,
     obj: SyncMessage
-): Promise<void> {
+): AsyncIterable<OutM> {
     // buche.send({
     //     type: "sync",
     //     from: ["$terminal"],

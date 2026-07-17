@@ -1,4 +1,4 @@
-import { type Buche } from "../core.ts";
+import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage } from "./common.ts";
 
 export interface TextMessage extends BaseMessage {
@@ -11,9 +11,9 @@ export interface TextMessage extends BaseMessage {
   text: string;
 }
 
-export async function handle$text(
+export async function* handle$text(
     buche: Buche,
     obj: TextMessage
-): Promise<void> {
+): AsyncIterable<OutM> {
   // TODO
 }

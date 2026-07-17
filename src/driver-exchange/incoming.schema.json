@@ -119,7 +119,7 @@
           "type": "string",
           "description": "Which cell handler to instantiate. Unknown modes are ignored with an error."
         },
-        "prompt_id": {
+        "parent_prompt": {
           "type": [
             "string",
             "null"
@@ -475,6 +475,10 @@
           "description": "Target of the message."
         },
         "prompt_id": {
+          "type": "string",
+          "description": "Prompt id."
+        },
+        "parent_prompt": {
           "type": [
             "string",
             "null"
@@ -495,6 +499,7 @@
       },
       "required": [
         "from",
+        "prompt_id",
         "to",
         "type"
       ],

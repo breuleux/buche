@@ -100,9 +100,9 @@ class Generator {
                     errors.push(`${file}: function \`${handlerName}\` must be exported`);
                 }
                 // Handlers must be async (return a Promise).
-                if (fn.getReturnType().getSymbol()?.getName() !== "Promise") {
+                if (fn.getReturnType().getSymbol()?.getName() !== "AsyncIterable") {
                     errors.push(
-                        `${file}: function \`${handlerName}\` must be async (return a Promise)`,
+                        `${file}: function \`${handlerName}\` must be async* (return a AsyncIterable)`,
                     );
                 }
             }
