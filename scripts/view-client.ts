@@ -17,8 +17,6 @@
 import "../src/components/grid.tsx";
 import "../src/components/zone.tsx";
 import "../src/components/scroll-fader.tsx";
-import "../src/components/basic-ansi.tsx";
-import "../src/components/basic-term.tsx";
 import "../src/components/echo-box.tsx";
 
 import { Buche, type InM } from "../src/core.ts";
