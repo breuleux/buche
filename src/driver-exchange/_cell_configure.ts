@@ -1,8 +1,8 @@
 import type { CellConfiguration } from "../cell.ts";
 import type { Buche, OutM } from "../core.ts";
-import type { BaseMessage } from "./common.ts";
+import type { BaseMessage, CreationInfo } from "./common.ts";
 
-export interface CellConfigureMessage extends BaseMessage, CellConfiguration {
+export interface CellConfigureMessage extends BaseMessage, CreationInfo, CellConfiguration {
     type: "cell_configure";
 }
 
@@ -10,10 +10,5 @@ export async function* handle$cell_configure(
     buche: Buche,
     obj: CellConfigureMessage,
 ): AsyncIterable<OutM> {
-    // const key = JSON.stringify(obj.from);
-    // const cell = buche.cells[key];
-    // if (!cell) {
-    //     throw Error(`No cell to configure at address: ${key}`);
-    // }
-    // cell.configure(obj);
+    yield* buche.configure("cell", obj);
 }

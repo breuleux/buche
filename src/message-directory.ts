@@ -4,13 +4,11 @@
 /** Message `type` names for driver incoming messages. */
 export const incomingDriverMessageTypes = new Set<string>([
     "cell_configure",
-    "cell_create",
     "cell_send",
     "close",
     "data",
     "echo",
     "prompt_configure",
-    "prompt_create",
     "sync",
     "text",
 ]);

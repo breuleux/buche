@@ -8,9 +8,6 @@
           "$ref": "#/definitions/CellConfigureMessage"
         },
         {
-          "$ref": "#/definitions/CellCreateMessage"
-        },
-        {
           "$ref": "#/definitions/CellSendMessage"
         },
         {
@@ -26,9 +23,6 @@
           "$ref": "#/definitions/PromptConfigureMessage"
         },
         {
-          "$ref": "#/definitions/PromptCreateMessage"
-        },
-        {
           "$ref": "#/definitions/SyncMessage"
         },
         {
@@ -38,54 +32,6 @@
       "description": "Union of every message type."
     },
     "CellConfigureMessage": {
-      "type": "object",
-      "properties": {
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "The cell/tab label."
-        },
-        "sticky": {
-          "type": "boolean",
-          "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
-        },
-        "background": {
-          "type": "boolean",
-          "description": "If true, do not automatically focus the cell."
-        },
-        "type": {
-          "type": "string",
-          "const": "cell_configure",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        }
-      },
-      "required": [
-        "from",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "Address": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "To": {
-      "$ref": "#/definitions/Address"
-    },
-    "CellCreateMessage": {
       "type": "object",
       "properties": {
         "label": {
@@ -120,7 +66,7 @@
         },
         "type": {
           "type": "string",
-          "const": "cell_create",
+          "const": "cell_configure",
           "description": "Type of the message."
         },
         "to": {
@@ -135,8 +81,17 @@
       ],
       "additionalProperties": false
     },
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "ZoneDescriptor": {
       "type": "string"
+    },
+    "To": {
+      "$ref": "#/definitions/Address"
     },
     "CellSendMessage": {
       "type": "object",
@@ -430,14 +385,25 @@
           "type": "string",
           "description": "HTML for the prompt's leading label/marker."
         },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ZoneDescriptor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which zone to put the element in."
+        },
         "type": {
           "type": "string",
           "const": "prompt_configure",
           "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
         },
         "to": {
           "$ref": "#/definitions/To",
@@ -469,60 +435,6 @@
           "description": "OKLCH chroma"
         }
       },
-      "additionalProperties": false
-    },
-    "PromptCreateMessage": {
-      "type": "object",
-      "properties": {
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "The prompt/tab label."
-        },
-        "bindings": {
-          "$ref": "#/definitions/PromptBindings",
-          "description": "Key-chord → action-name map for this prompt."
-        },
-        "color": {
-          "$ref": "#/definitions/PromptColor",
-          "description": "Accent color for the prompt."
-        },
-        "prompt_html": {
-          "type": "string",
-          "description": "HTML for the prompt's leading label/marker."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "zone": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ZoneDescriptor"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Which zone to put the element in."
-        },
-        "type": {
-          "type": "string",
-          "const": "prompt_create",
-          "description": "Type of the message."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        }
-      },
-      "required": [
-        "from",
-        "to",
-        "type"
-      ],
       "additionalProperties": false
     },
     "SyncMessage": {

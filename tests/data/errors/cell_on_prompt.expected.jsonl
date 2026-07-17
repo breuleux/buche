@@ -1,0 +1,4 @@
+{"$role":"driverIn","type":"prompt_configure","from":["cq"],"to":["$terminal"],"label":"cq"}
+{"$role":"interfaceOut","type":"install_prompt","zone":"#100","component":{"zones":{"@":"#102"},"prompt":"#101"}}
+{"$role":"driverIn","type":"cell_configure","from":["cq"],"to":["$terminal"],"zone":null,"background":false}
+{"$role":"interfaceOut","type":"error","code":"exists","reason":"A prompt already exists at address cq, cannot configure a cell","input":{"type":"cell_configure","from":["cq"],"to":["$terminal"],"zone":null,"background":false}}

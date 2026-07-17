@@ -99,31 +99,23 @@ export class Buche extends Machine<InM, OutM> {
         }
     }
 
-    get(addr: Address): ComponentData {
-        const node = this.hierarchy.getAt(addr, false);
-        if (!node?.component) {
-            throw new BucheError({
-                type: "error",
-                code: "missingcell",
-                reason: `Cell at ${JSON.stringify(addr)} is missing`,
-            });
-        }
-        return node.component;
-    }
-
-    fresh(addr: Address, allowEcho: boolean = true): ComponentData {
-        const node = this.hierarchy.getAt(addr, true) as Hierarchy;
-        let c = node.component;
-        if (c) {
-            if (c.cell || c.prompt || (!allowEcho && c.echo)) {
+    /**
+     * Get the component container at `addr`. When `create` is false, throws
+     * `missingcell` if there is none. When `create` is true, an empty container
+     * is created and returned if one does not already exist.
+     */
+    get(addr: Address, create: boolean = false): ComponentData {
+        const node = this.hierarchy.getAt(addr, create);
+        let c = node?.component;
+        if (!c) {
+            if (!create) {
                 throw new BucheError({
                     type: "error",
-                    code: "exists",
-                    reason: `An element already exists at address ${addr}`,
+                    code: "missingcell",
+                    reason: `Cell at ${JSON.stringify(addr)} is missing`,
                 });
             }
-        } else {
-            c = node.component = { zones: {} };
+            c = (node as Hierarchy).component = { zones: {} };
         }
         return c;
     }
@@ -155,21 +147,42 @@ export class Buche extends Machine<InM, OutM> {
         return { prompt, zone };
     }
 
-    create(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    create(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
-    async *create(
+    /**
+     * Create the cell/prompt at `obj.from`, or reconfigure it if one of the
+     * same kind already lives there. Throws `exists` only when the other kind
+     * occupies the address (a cell where a prompt lives, or vice versa).
+     */
+    configure(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    async *configure(
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
     ): AsyncGenerator<OutM> {
-        const component = this.fresh(obj.from);
+        const component = this.get(obj.from, true);
+        const other = type === "cell" ? "prompt" : "cell";
+        if (component[other]) {
+            throw new BucheError({
+                type: "error",
+                code: "exists",
+                reason: `A ${other} already exists at address ${obj.from}, cannot configure a ${type}`,
+            });
+        }
         const { prompt: parentPrompt, zone } = this.findPlace(obj);
         if (type === "cell") {
-            const cell = new Cell(obj, { zone, address: obj.from });
-            cell.prompt = parentPrompt;
-            Object.assign(component, { cell, zones: cell.makeZones() });
-        } else if (type === "prompt") {
-            const prompt = new Prompt(obj, { zone, address: obj.from });
-            Object.assign(component, { prompt, zones: prompt.makeZones() });
+            if (component.cell) {
+                component.cell.configure(obj);
+            } else {
+                const cell = new Cell(obj, { zone, address: obj.from });
+                cell.prompt = parentPrompt;
+                Object.assign(component, { cell, zones: cell.makeZones() });
+            }
+        } else {
+            if (component.prompt) {
+                component.prompt.configure(obj);
+            } else {
+                const prompt = new Prompt(obj, { zone, address: obj.from });
+                Object.assign(component, { prompt, zones: prompt.makeZones() });
+            }
         }
         yield {
             type: `install_${type}`,
@@ -185,12 +198,11 @@ export class Buche extends Machine<InM, OutM> {
         type: "cell" | "prompt",
         obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
     ): AsyncGenerator<OutM> {
-        const node = this.hierarchy.getAt(obj.from, true) as Hierarchy;
-        let c = node.component;
-        if (type === "cell" && !c?.cell) {
-            c = yield* this.create(type, obj);
-        } else if (type === "prompt" && !c?.prompt) {
-            c = yield* this.create(type, obj);
+        const c = this.get(obj.from, true);
+        if (type === "cell" && !c.cell) {
+            return yield* this.configure(type, obj);
+        } else if (type === "prompt" && !c.prompt) {
+            return yield* this.configure(type, obj);
         }
         return c;
     }
@@ -209,7 +221,7 @@ async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
 
 const baseHandlers = {
     async *error(buche: Buche, obj: ErrorMessage): AsyncGenerator<OutM> {
-        console.log("TODO");
+        // TODO
     },
 };
 
@@ -239,7 +251,7 @@ export async function* bucheRun(args: BucheRunArguments) {
     );
     const stream = buche.stream(instream);
     for await (const message of stream) {
-        if (message.type in outgoingDriverMessageTypes) {
+        if (outgoingDriverMessageTypes.has(message.type)) {
             args.loggers.driverOut?.(message);
             args.process.send(message as OutgoingDriverMessage);
         } else {
