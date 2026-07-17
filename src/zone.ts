@@ -88,6 +88,15 @@ export class PromptZone extends Zone {
     installEcho(ifc: Interface, entry: Entry): HTMLElement {
         const eb = new EchoBox();
         eb.bindEntry(entry);
+        eb.addEventListener("close", () => {
+            eb.destroyWhenDone = true;
+            const code = eb.status === "unresponsive" ? 9 : 15;
+            ifc.interactions.push({
+                type: "user_signal",
+                code,
+                entry,
+            });
+        });
         this.element.log(eb);
         this.echoMap.set(entry, eb);
         return eb;
@@ -95,7 +104,7 @@ export class PromptZone extends Zone {
 
     installCell(ifc: Interface, entry: Entry): HTMLElement {
         let eb = this.echoMap.get(entry);
-        if (!eb) {
+        if (!eb?.isConnected) {
             eb = this.installEcho(ifc, entry) as EchoBox;
             this.echoMap.set(entry, eb);
         }

@@ -20,10 +20,10 @@ export const outgoingDriverMessageTypes = new Set<string>(["command", "parse", "
 
 /** Message `type` names for interface incoming messages. */
 export const incomingInterfaceMessageTypes = new Set<string>([
-    "signal",
     "user_command",
     "user_focus",
     "user_input",
+    "user_signal",
 ]);
 
 /** Message `type` names for interface outgoing messages. */

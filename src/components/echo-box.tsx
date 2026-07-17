@@ -47,6 +47,9 @@
 // that box (it is per-box, not global). The same gesture reveals short resize
 // handles centred at the top and bottom edges.
 //
+// The `destroy-when-done` attribute (or `box.destroyWhenDone = true`) makes the
+// box remove itself from the DOM once its status reaches `done` or `error`.
+//
 // Events (both bubble). See the exported detail/event types below
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "viewchange"  detail: { view: ViewLabel }  — the active view changed
@@ -141,6 +144,7 @@ export class EchoBox extends HTMLElement {
     private _activeView: ViewLabel | null = null;
     private _status: EchoStatus = "running";
     private _compact = false;
+    private _destroyWhenDone = false;
     // The bound Entry (if configured from one) and the listener registered on it.
     private _entry: Entry | null = null;
     private entryListener: ((entry: Entry) => void) | null = null;
@@ -152,7 +156,7 @@ export class EchoBox extends HTMLElement {
     private onAltBlur = () => this.syncAlt(false);
 
     static get observedAttributes(): string[] {
-        return ["status", "color", "echo", "compact"];
+        return ["status", "color", "echo", "compact", "destroy-when-done"];
     }
 
     connectedCallback(): void {
@@ -217,6 +221,9 @@ export class EchoBox extends HTMLElement {
             if (want !== this._compact) {
                 this.setCompact(want);
             }
+        } else if (name === "destroy-when-done") {
+            this._destroyWhenDone = value !== null;
+            this.applyStatus();
         }
     }
 
@@ -290,6 +297,7 @@ export class EchoBox extends HTMLElement {
 
         // Apply initial configuration from attributes.
         this._status = (this.getAttribute("status") as EchoStatus) ?? "running";
+        this._destroyWhenDone = this.hasAttribute("destroy-when-done");
         this.applyStatus();
         const color = this.getAttribute("color");
         if (color) {
@@ -419,6 +427,16 @@ export class EchoBox extends HTMLElement {
         this.applyStatus();
     }
 
+    /** Whether the box removes itself from the DOM once its status reaches
+     *  `done` or `error`. Backed by the `destroy-when-done` attribute. */
+    get destroyWhenDone(): boolean {
+        return this._destroyWhenDone;
+    }
+
+    set destroyWhenDone(on: boolean) {
+        this.toggleAttribute("destroy-when-done", Boolean(on));
+    }
+
     private applyStatus(): void {
         // A data-attribute on the host drives all status-dependent CSS.
         this.setAttribute("data-status", this._status);
@@ -428,6 +446,15 @@ export class EchoBox extends HTMLElement {
             this._status === "standby";
         this.closeEl.title = alive ? "Kill" : "Close";
         this.closeEl.setAttribute("aria-label", this.closeEl.title);
+        if (this._destroyWhenDone && (this._status === "done" || this._status === "error")) {
+            this.destroy();
+        }
+    }
+
+    /** Remove the box from the DOM and detach from its bound entry. */
+    destroy(): void {
+        this.unbindEntry();
+        this.remove();
     }
 
     // ── Colour ──────────────────────────────────────────────────────────────
