@@ -213,6 +213,7 @@ function attachPopZone(pop: PopZone, bt: BucheTerm, entry: Entry): void {
     const slot = bt.prompts.popElement(entry);
     if (slot && !pop.element) {
         pop.element = slot;
+        pop.promptRow = bt.prompts.promptElement(entry);
     }
 }
 
@@ -283,20 +284,30 @@ export class PromptZone extends Zone {
  * the interface:
  *   * installing a cell closes (signals, like ✕) whatever the pop held before;
  *   * the box's own ✕ closes it the same way;
- *   * whenever the focus leaves the cell, the pop closes and the float
- *     disappears (the slot hides itself when empty).
+ *   * whenever the focus *explicitly* leaves the cell, the pop closes and the
+ *     float disappears (the slot hides itself when empty);
+ *   * unlike other cells, the end of the process (done/error) does not shift
+ *     the focus on its own — the pop holds it until it is moved (Esc brings
+ *     it back to the prompt once the process is spent).
  */
 export class PopZone extends Zone {
     declare element: HTMLElement;
+    /** The prompt row this pop floats above (set with the slot by
+     *  attachPopZone); Esc on a spent cell sends the focus back to it. */
+    promptRow: HTMLElement | null = null;
     private current: EchoBox | null = null;
     // What closing the current cell does (signal + removal); null when empty.
     private closer: (() => void) | null = null;
     // The focus manager's root, while a cell is open (see onFocusChange).
     private watched: HTMLElement | null = null;
+    // The interface the current cell was installed through (Esc refocuses via
+    // its focus manager); cleared when the pop closes.
+    private ifc: Interface | null = null;
 
     installCell(ifc: Interface, entry: Entry): HTMLElement {
         // One cell at a time: the previous pop closes before the new one shows.
         this.dismiss();
+        this.ifc = ifc;
         const eb = new EchoBox();
         eb.setCompact(true);
         eb.bindEntry(entry);
@@ -316,16 +327,52 @@ export class PopZone extends Zone {
             });
         });
         eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
+        // A pop cell ends without shifting the focus on its own (the interface
+        // releases ended cells unless sticky, see releaseEndedCell): it holds
+        // the focus until it is moved explicitly.
+        entry.echo.sticky = true;
         this.element.append(eb);
         this.current = eb;
         tagCell(eb, entry);
         // Focus leaving the cell closes the pop. "focus-change" is dispatched
         // on the focus manager's root (see focus.ts) and bubbles *up* from
         // there, so the listener goes on the root itself, not on the slot.
+        // Esc rides on the same root: in *capture*, so it is seen before
+        // xterm's textarea handler can turn it into pty input.
         this.watched = ifc.focus.root;
         this.watched.addEventListener("focus-change", this.onFocusChange);
+        this.watched.addEventListener("keydown", this.onKeyDown, true);
         return eb;
     }
+
+    // Esc on a spent pop (done or error) brings the focus back to the prompt —
+    // which, the focus having moved, also closes the pop. While the process
+    // runs, Escape belongs to the app and passes through.
+    private onKeyDown = (event: Event): void => {
+        const key = event as KeyboardEvent;
+        const pop = this.current;
+        if (key.key !== "Escape" || !pop?.isConnected || !pop.contains(key.target as Node)) {
+            return;
+        }
+        if (pop.status !== "done" && pop.status !== "error") {
+            return;
+        }
+        const ifc = this.ifc;
+        if (!ifc) {
+            return;
+        }
+        key.preventDefault();
+        key.stopPropagation();
+        const row = this.promptRow;
+        if (row) {
+            ifc.focus.focus(row, "nav");
+            if (!ifc.focus.holdCommits) {
+                ifc.focus.commitFocus();
+            }
+        } else {
+            ifc.focusPrompt();
+        }
+    };
 
     installEcho(ifc: Interface, entry: Entry): HTMLElement {
         // The pop shows its cell's echo: same single slot, same box.
@@ -351,7 +398,9 @@ export class PopZone extends Zone {
         this.closer = null;
         this.current = null;
         this.watched?.removeEventListener("focus-change", this.onFocusChange);
+        this.watched?.removeEventListener("keydown", this.onKeyDown, true);
         this.watched = null;
+        this.ifc = null;
         closer?.();
     }
 }

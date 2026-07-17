@@ -33,16 +33,31 @@ import { PopZone } from "../../src/zone.ts";
 
 interface FakeIfc {
     pushed: any[];
+    focused: (HTMLElement | null)[];
     interactions: { push: (m: any) => void };
-    focus: { root: HTMLElement };
+    focus: {
+        root: HTMLElement;
+        focus: (el: HTMLElement, source: string) => void;
+        commitFocus: () => void;
+        holdCommits: boolean;
+    };
+    focusPrompt: () => void;
 }
 
 function fakeIfc(root: HTMLElement): FakeIfc {
     const pushed: any[] = [];
+    const focused: (HTMLElement | null)[] = [];
     return {
         pushed,
+        focused,
         interactions: { push: (m: any) => pushed.push(m) },
-        focus: { root },
+        focus: {
+            root,
+            focus: (el: HTMLElement) => focused.push(el),
+            commitFocus: () => {},
+            holdCommits: false,
+        },
+        focusPrompt: () => focused.push(null),
     };
 }
 
@@ -106,5 +121,23 @@ describe("pop-zone", () => {
         expect(box.isConnected).toBe(false);
         expect(slot.children).toHaveLength(0);
         expect(ifc.pushed.some((m) => m.type === "user_signal" && m.entry === entry)).toBe(true);
+    });
+
+    test("a spent pop holds the focus; Esc sends it back to the prompt", () => {
+        const { pop, ifc } = popInSlot();
+        const entry = new Entry({});
+        const box = pop.installCell(ifc as any, entry) as EchoBox;
+        // Ends without the interface releasing the ended cell's focus.
+        expect(entry.echo.sticky).toBe(true);
+
+        // Running: Esc belongs to the app, the focus stays put.
+        box.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(ifc.focused).toHaveLength(0);
+
+        // Done: Esc refocuses (the prompt row, or the latest prompt).
+        box.status = "done";
+        box.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(ifc.focused).toHaveLength(1);
+        expect(ifc.focused[0]).toBeNull(); // no row wired: the fallback prompt
     });
 });

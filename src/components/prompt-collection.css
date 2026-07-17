@@ -45,8 +45,10 @@ prompt-collection {
 	right: 0;
 	z-index: 20;
 	margin-bottom: 4px;
-	max-height: 240px;
-	overflow: hidden;
+	/* No height ceiling of its own: the echo-box's own max-height sizes the
+	 * cell, and the terminal fits to that — a second, smaller cap here would
+	 * clip the rows the terminal believes are on screen. */
+	overflow: hidden; /* only to clip the corners of the box */
 	background: #242424;
 	border: 1px solid #3c3c3c;
 	border-radius: 4px;
