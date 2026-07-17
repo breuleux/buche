@@ -1,0 +1,5 @@
+{"type":"prompt_create","from":["cq"],"to":["$terminal"],"prompt_html":"<span style='color:#569cd6;'>&gt;&gt;</span>","label":"cq","zone":"main","bindings":{"Control+T":"843952d8-742f-4fd8-acab-5c10ae6e359b","Meta+E":"e052a829-62db-4e0e-84f3-862dfd41f73d","Meta+D":"c0187ac7-f05a-4c77-9f40-dd75d91a9acb","Tab Tab":"ac82dc37-233b-474b-97d9-1435bf5c47cb"}}
+{"type":"echo","from":["cq", "2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"type":"cell_create","from":["cq", "3"],"to":["$terminal"],"zone":"main","background":false}
+{"type":"text","from":["cq", "3"],"to":["$terminal"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
+{"type":"close","from":["cq", "3"],"to":["$terminal"],"outcome":{"type":"success","code":0}}

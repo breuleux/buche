@@ -32,7 +32,7 @@ describe("Invalid messages", () => {
 });
 
 describe("Parse IncomingDriverMessage", () => {
-    for (const { path, relpath } of getCases("data/plays")) {
+    for (const { path, relpath } of getCases("data/runs")) {
         test(`Can parse '${relpath}'`, async () => {
             const { errors } = await validateMessages(driverParser.streamFromFile(path));
             assert.strictEqual(errors.length, 0, `Some messages were invalid:\n${JSON.stringify(errors, null, 2)}`);
