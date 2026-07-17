@@ -3,7 +3,7 @@ import { handlers as interfaceHandlers } from "../src/interface-exchange/incomin
 import { Cell, type CellConfiguration, type Echo } from "./cell.ts";
 import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
-import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
+import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
@@ -251,6 +251,12 @@ export async function* bucheRun(args: BucheRunArguments) {
     );
     const stream = buche.stream(instream);
     for await (const message of stream) {
+        if (message.type === "signal" && (message as SignalRequest).to.length === 0) {
+            const signal = message as SignalRequest;
+            args.loggers.driverOut?.(signal);
+            args.process.kill(signal.code);
+            continue;
+        }
         if (outgoingDriverMessageTypes.has(message.type)) {
             args.loggers.driverOut?.(message);
             args.process.send(message as OutgoingDriverMessage);
