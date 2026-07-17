@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
-import { calculateStyle, styleToCss } from "../../src/color.ts";
+import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import type {
     EditorFactory,
     PromptCollection,
@@ -100,7 +100,7 @@ describe("prompt-collection — adding prompts", () => {
         // The active tab wears its accent, resolved through the color grammar.
         const t = tab(pc, id)!;
         expect(t.textContent).toBe("sh");
-        expect(t.getAttribute("style")).toBe(styleToCss(calculateStyle("green", pc.anchors)));
+        expect(t.getAttribute("style")).toBe(styleToCss(th.calculateStyle("green")));
         expect(t.draggable).toBe(true);
 
         // First prompt is active and shown.
@@ -155,9 +155,7 @@ describe("prompt-collection — per-prompt config", () => {
         pc.setPromptHtml(id, "<i>&gt;</i>");
         expect(tab(pc, id)?.textContent).toBe("renamed");
         // Active tab: accent resolved via the color grammar.
-        expect(tab(pc, id)?.getAttribute("style")).toBe(
-            styleToCss(calculateStyle("red", pc.anchors)),
-        );
+        expect(tab(pc, id)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("red")));
         expect(row(pc, id)?.querySelector(".prompt-collection-marker")?.innerHTML).toBe(
             "<i>&gt;</i>",
         );
@@ -168,20 +166,16 @@ describe("prompt-collection — per-prompt config", () => {
         const a = pc.addPrompt({ label: "a", color: "green" });
         const b = pc.addPrompt({ label: "b", color: "blue" });
 
-        const grey = styleToCss(calculateStyle("grey", pc.anchors));
+        const grey = styleToCss(th.calculateStyle("grey"));
 
         // 'a' is active (its accent), 'b' is inactive (grey) — even though it has one.
-        expect(tab(pc, a)?.getAttribute("style")).toBe(
-            styleToCss(calculateStyle("green", pc.anchors)),
-        );
+        expect(tab(pc, a)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("green")));
         expect(tab(pc, b)?.getAttribute("style")).toBe(grey);
 
         // Switch: the accents follow the active tab.
         pc.showPrompt(b);
         expect(tab(pc, a)?.getAttribute("style")).toBe(grey);
-        expect(tab(pc, b)?.getAttribute("style")).toBe(
-            styleToCss(calculateStyle("blue", pc.anchors)),
-        );
+        expect(tab(pc, b)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("blue")));
     });
 
     test("an accent may carry style beyond color (e.g. bold)", () => {
@@ -229,14 +223,14 @@ describe("prompt-collection — styled values", () => {
             {
                 start: 0,
                 end: 3,
-                css: styleToCss(calculateStyle("green bold", pc.anchors)),
+                css: styleToCss(th.calculateStyle("green bold")),
                 inclusiveStart: false,
                 inclusiveEnd: false,
             },
             {
                 start: 4,
                 end: 10,
-                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                css: styleToCss(th.calculateStyle("blue")),
                 inclusiveStart: false,
                 inclusiveEnd: false,
             },
@@ -266,14 +260,14 @@ describe("prompt-collection — styled values", () => {
             {
                 start: 0,
                 end: 3,
-                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                css: styleToCss(th.calculateStyle("blue")),
                 inclusiveStart: true,
                 inclusiveEnd: false,
             },
             {
                 start: 3,
                 end: 6,
-                css: styleToCss(calculateStyle("green", pc.anchors)),
+                css: styleToCss(th.calculateStyle("green")),
                 inclusiveStart: false,
                 inclusiveEnd: true,
             },
@@ -295,12 +289,12 @@ describe("prompt-collection — styled values", () => {
             ],
         });
 
-        expect(editor.baseStyle).toBe(styleToCss(calculateStyle("red bold", pc.anchors)));
+        expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("red bold")));
         expect(editor.spans).toEqual([
             {
                 start: 0,
                 end: 3,
-                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                css: styleToCss(th.calculateStyle("blue")),
                 inclusiveStart: false,
                 inclusiveEnd: false,
             },
@@ -315,7 +309,7 @@ describe("prompt-collection — styled values", () => {
         pc.setValue(id, { text: "", ranges: [{ start: null, end: null, style: "green" }] });
 
         expect(pc.getValue(id)).toBe("");
-        expect(editor.baseStyle).toBe(styleToCss(calculateStyle("green", pc.anchors)));
+        expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("green")));
         expect(editor.spans).toEqual([]);
     });
 
@@ -360,7 +354,7 @@ describe("prompt-collection — styled values", () => {
             {
                 start: 2,
                 end: 4,
-                css: styleToCss(calculateStyle("red", pc.anchors)),
+                css: styleToCss(th.calculateStyle("red")),
                 inclusiveStart: false,
                 inclusiveEnd: false,
             },

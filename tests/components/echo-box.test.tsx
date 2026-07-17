@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
-import { calculateStyle, styleToCss } from "../../src/color.ts";
+import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import type { EchoBox } from "../../src/components/echo-box.tsx";
 import "../../src/components/echo-box.tsx";
 
@@ -70,9 +70,7 @@ describe("echo-box — echo text", () => {
         const spans = container.querySelectorAll("span");
         expect(spans.length).toBe(2);
         expect(spans[0].textContent).toBe("git");
-        expect(spans[0].getAttribute("style")).toBe(
-            styleToCss(calculateStyle("green bold", box.anchors)),
-        );
+        expect(spans[0].getAttribute("style")).toBe(styleToCss(th.calculateStyle("green bold")));
         expect(spans[1].textContent).toBe("commit");
         expect(box.echo).toBe("git commit");
     });

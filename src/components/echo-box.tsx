@@ -52,7 +52,7 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
-import type { Anchors } from "../color.ts";
+import { defaultTheme } from "../color.ts";
 import type { StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
 
@@ -82,8 +82,6 @@ export class EchoBox extends HTMLElement {
      * Background/foreground lightness anchors used to resolve a {@link StyledText}
      * echo's accents into concrete colors. Defaults to the dark echo surface.
      */
-    anchors: Anchors = { bg: 0.18, fg: 0.9 };
-
     private initialized = false;
     private gutter!: HTMLElement;
     private statusEl!: HTMLElement;
@@ -479,7 +477,7 @@ export class EchoBox extends HTMLElement {
         } else if (content instanceof Node) {
             this.echoEl.replaceChildren(content);
         } else {
-            this.echoEl.replaceChildren(buildStyledText(content, this.anchors));
+            this.echoEl.replaceChildren(buildStyledText(content, defaultTheme));
         }
     }
 

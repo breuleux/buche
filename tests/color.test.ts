@@ -1,149 +1,156 @@
 import { describe, expect, test } from "vitest";
 import {
-    type Anchors,
-    calculateColor,
-    calculateStyle,
-    coordsToCss,
-    parseColor,
+    // type Anchors,
+    // calculateColor,
+    // calculateStyle,
+    // coordsToCss,
+    // parseColor,
     styleToCss,
+    Theme,
+    defaultTheme as th,
 } from "../src/color.ts";
 
-const LIGHT: Anchors = { bg: 0.93, fg: 0.2 };
-const DARK: Anchors = { bg: 0.22, fg: 0.95 };
+// const LIGHT: Anchors = { bg: 0.93, fg: 0.2 };
+// const DARK: Anchors = { bg: 0.22, fg: 0.95 };
+
+const lth = new Theme({ bgLum: 0.93, fgLum: 0.2 });
+const dth = new Theme({ bgLum: 0.22, fgLum: 0.95 });
+const dth2 = new Theme({ bgLum: 0.2, fgLum: 0.9 });
+const eth = new Theme({ bgLum: 0.5, fgLum: 0.5 });
 
 describe("parseColor — channels", () => {
     test("defaults when nothing is specified", () => {
-        expect(parseColor("")).toEqual({ h: 0, s: 60, l: 60 });
+        expect(th.parse("")).toEqual({ h: 0, s: 60, l: 60 });
     });
 
     test("absolute channels set coordinates", () => {
-        expect(parseColor("H120 S40 L80")).toEqual({ h: 120, s: 40, l: 80 });
+        expect(th.parse("H120 S40 L80")).toEqual({ h: 120, s: 40, l: 80 });
     });
 
     test("relative channels nudge from the current value", () => {
-        expect(parseColor("L+10")).toMatchObject({ l: 70 });
-        expect(parseColor("L-20")).toMatchObject({ l: 40 });
-        expect(parseColor("S-30")).toMatchObject({ s: 30 });
+        expect(th.parse("L+10")).toMatchObject({ l: 70 });
+        expect(th.parse("L-20")).toMatchObject({ l: 40 });
+        expect(th.parse("S-30")).toMatchObject({ s: 30 });
     });
 
     test("channels apply in order (absolute then relative)", () => {
-        expect(parseColor("L50 L+5")).toMatchObject({ l: 55 });
+        expect(th.parse("L50 L+5")).toMatchObject({ l: 55 });
         // Absolute after relative wins.
-        expect(parseColor("L+5 L50")).toMatchObject({ l: 50 });
+        expect(th.parse("L+5 L50")).toMatchObject({ l: 50 });
     });
 
     test("hue wraps into [0, 360)", () => {
-        expect(parseColor("H400").h).toBeCloseTo(40, 6);
-        expect(parseColor("H-30").h).toBeCloseTo(330, 6);
+        expect(th.parse("H400").h).toBeCloseTo(40, 6);
+        expect(th.parse("H-30").h).toBeCloseTo(330, 6);
     });
 
     test("saturation and luminosity clamp to [0, 100]", () => {
-        expect(parseColor("S200")).toMatchObject({ s: 100 });
-        expect(parseColor("S-200")).toMatchObject({ s: 0 });
-        expect(parseColor("L500")).toMatchObject({ l: 100 });
-        expect(parseColor("L-500")).toMatchObject({ l: 0 });
+        expect(th.parse("S200")).toMatchObject({ s: 100 });
+        expect(th.parse("S-200")).toMatchObject({ s: 0 });
+        expect(th.parse("L500")).toMatchObject({ l: 100 });
+        expect(th.parse("L-500")).toMatchObject({ l: 0 });
     });
 
     test("decimals are accepted", () => {
-        expect(parseColor("H12.5").h).toBeCloseTo(12.5, 6);
+        expect(th.parse("H12.5").h).toBeCloseTo(12.5, 6);
     });
 });
 
 describe("parseColor — named colors", () => {
     test("a name sets hue and saturation but keeps default luminosity", () => {
-        expect(parseColor("red")).toEqual({ h: 29, s: 95, l: 60 });
+        expect(th.parse("red")).toEqual({ h: 29, s: 95, l: 60 });
     });
 
     test("gray is achromatic and does not skew hue", () => {
-        expect(parseColor("gray")).toEqual({ h: 0, s: 0, l: 60 });
+        expect(th.parse("gray")).toEqual({ h: 0, s: 0, l: 60 });
         // gray contributes brightness/saturation but no hue direction
-        expect(parseColor("blue gray").h).toBeCloseTo(255, 6);
+        expect(th.parse("blue gray").h).toBeCloseTo(255, 6);
     });
 
     test("channels override a named color's hue/saturation", () => {
-        expect(parseColor("red H200 S10")).toMatchObject({ h: 200, s: 10 });
+        expect(th.parse("red H200 S10")).toMatchObject({ h: 200, s: 10 });
     });
 
     test("unknown names throw", () => {
-        expect(() => parseColor("chartreuse")).toThrow(/Unknown color name/);
+        expect(() => th.parse("chartreuse")).toThrow(/Unknown color name/);
     });
 });
 
 describe("parseColor — mixing", () => {
     test("equal-weight midpoint of two hues", () => {
         // blue (255) and indigo (275) share saturation, so the mean is 265.
-        expect(parseColor("blue indigo").h).toBeCloseTo(265, 4);
+        expect(th.parse("blue indigo").h).toBeCloseTo(265, 4);
     });
 
     test("saturation is a weighted mean", () => {
         // blue s88, indigo s88 → 88
-        expect(parseColor("blue indigo").s).toBeCloseTo(88, 6);
+        expect(th.parse("blue indigo").s).toBeCloseTo(88, 6);
     });
 
     test("hue averaging wraps around 360 rather than through 180", () => {
         // red (~29) + pink (~350): the circular mean sits near 0, NOT near 190.
-        const h = parseColor("red pink").h;
+        const h = th.parse("red pink").h;
         expect(h > 340 || h < 40).toBe(true);
     });
 
     test("numeric suffix weights a color in the mix", () => {
-        const even = parseColor("orange red").h;
-        const heavy = parseColor("orange4 red").h;
+        const even = th.parse("orange red").h;
+        const heavy = th.parse("orange4 red").h;
         // Weighting orange more pulls the hue toward orange (60) vs red (29).
         expect(heavy).toBeGreaterThan(even);
         expect(heavy).toBeLessThan(60);
         // Saturation is also weighted: (90*4 + 95*1) / 5 = 91.
-        expect(parseColor("orange4 red").s).toBeCloseTo(91, 6);
+        expect(th.parse("orange4 red").s).toBeCloseTo(91, 6);
     });
 });
 
 describe("parseColor — case insensitivity", () => {
     test("channel letters are case-insensitive", () => {
-        expect(parseColor("h120 s40 l80")).toEqual(parseColor("H120 S40 L80"));
-        expect(parseColor("l+10")).toEqual(parseColor("L+10"));
+        expect(th.parse("h120 s40 l80")).toEqual(th.parse("H120 S40 L80"));
+        expect(th.parse("l+10")).toEqual(th.parse("L+10"));
     });
 
     test("color names are case-insensitive", () => {
-        expect(parseColor("RED")).toEqual(parseColor("red"));
-        expect(parseColor("Blue Indigo")).toEqual(parseColor("blue indigo"));
+        expect(th.parse("RED")).toEqual(th.parse("red"));
+        expect(th.parse("Blue Indigo")).toEqual(th.parse("blue indigo"));
     });
 });
 
 describe("calculateColor / coordsToCss", () => {
     test("L0 lands on the background anchor, L100 on the foreground", () => {
-        expect(calculateColor("S0 L0", LIGHT)).toBe("oklch(0.93 0 0)");
-        expect(calculateColor("S0 L100", LIGHT)).toBe("oklch(0.2 0 0)");
-        expect(calculateColor("S0 L0", DARK)).toBe("oklch(0.22 0 0)");
-        expect(calculateColor("S0 L100", DARK)).toBe("oklch(0.95 0 0)");
+        expect(lth.calculateColor("S0 L0")).toBe("oklch(0.93 0 0)");
+        expect(lth.calculateColor("S0 L100")).toBe("oklch(0.2 0 0)");
+        expect(dth.calculateColor("S0 L0")).toBe("oklch(0.22 0 0)");
+        expect(dth.calculateColor("S0 L100")).toBe("oklch(0.95 0 0)");
     });
 
     test("luminosity interpolates linearly between the anchors", () => {
         // halfway between 0.2 and 0.9
-        expect(calculateColor("S0 L50", { bg: 0.2, fg: 0.9 })).toBe("oklch(0.55 0 0)");
+        expect(dth2.calculateColor("S0 L50")).toBe("oklch(0.55 0 0)");
     });
 
     test("saturation maps to chroma (S100 → MAX_CHROMA 0.35)", () => {
-        expect(calculateColor("H0 S100 L0", { bg: 0.5, fg: 0.5 })).toBe("oklch(0.5 0.35 0)");
-        expect(calculateColor("H0 S50 L0", { bg: 0.5, fg: 0.5 })).toBe("oklch(0.5 0.175 0)");
+        expect(eth.calculateColor("H0 S100 L0")).toBe("oklch(0.5 0.35 0)");
+        expect(eth.calculateColor("H0 S50 L0")).toBe("oklch(0.5 0.175 0)");
     });
 
     test("the same color reads darker/lighter depending on the surface", () => {
-        expect(calculateColor("red L0", { bg: 0.2, fg: 0.9 })).toBe("oklch(0.2 0.3325 29)");
-        expect(coordsToCss(parseColor("red"), LIGHT)).toBe(calculateColor("red", LIGHT));
+        expect(dth2.calculateColor("red L0")).toBe("oklch(0.2 0.3325 29)");
+        expect(lth.coordsToCss(th.parse("red"))).toBe(lth.calculateColor("red"));
     });
 });
 
 describe("calculateStyle", () => {
     test("color is only set when a color token is present", () => {
-        expect(calculateStyle("bold", LIGHT)).toEqual({ fontWeight: "bold" });
-        expect(calculateStyle("red bold", LIGHT)).toEqual({
+        expect(lth.calculateStyle("bold")).toEqual({ fontWeight: "bold" });
+        expect(lth.calculateStyle("red bold")).toEqual({
             fontWeight: "bold",
-            color: calculateColor("red", LIGHT),
+            color: lth.calculateColor("red"),
         });
     });
 
     test("single-letter shorthands", () => {
-        expect(calculateStyle("b i u", LIGHT)).toEqual({
+        expect(lth.calculateStyle("b i u")).toEqual({
             fontWeight: "bold",
             fontStyle: "italic",
             textDecorationLine: "underline",
@@ -151,50 +158,50 @@ describe("calculateStyle", () => {
     });
 
     test("decorations accumulate and de-duplicate", () => {
-        expect(calculateStyle("underline strike overline", LIGHT).textDecorationLine).toBe(
+        expect(lth.calculateStyle("underline strike overline").textDecorationLine).toBe(
             "underline line-through overline",
         );
-        expect(calculateStyle("u u", LIGHT).textDecorationLine).toBe("underline");
+        expect(lth.calculateStyle("u u").textDecorationLine).toBe("underline");
     });
 
     test("font-family shorthands", () => {
-        expect(calculateStyle("mono", LIGHT).fontFamily).toBe("monospace");
-        expect(calculateStyle("monospace", LIGHT).fontFamily).toBe("monospace");
-        expect(calculateStyle("sans", LIGHT).fontFamily).toBe("sans-serif");
-        expect(calculateStyle("serif", LIGHT).fontFamily).toBe("serif");
+        expect(lth.calculateStyle("mono").fontFamily).toBe("monospace");
+        expect(lth.calculateStyle("monospace").fontFamily).toBe("monospace");
+        expect(lth.calculateStyle("sans").fontFamily).toBe("sans-serif");
+        expect(lth.calculateStyle("serif").fontFamily).toBe("serif");
     });
 
     test("dim/faint set opacity", () => {
-        expect(calculateStyle("dim", LIGHT)).toEqual({ opacity: "0.6" });
-        expect(calculateStyle("faint", LIGHT)).toEqual({ opacity: "0.6" });
+        expect(lth.calculateStyle("dim")).toEqual({ opacity: "0.6" });
+        expect(lth.calculateStyle("faint")).toEqual({ opacity: "0.6" });
     });
 
     test("keywords are case-insensitive", () => {
-        expect(calculateStyle("BOLD Italic", LIGHT)).toEqual({
+        expect(lth.calculateStyle("BOLD Italic")).toEqual({
             fontWeight: "bold",
             fontStyle: "italic",
         });
     });
 
     test("combines color grammar with styling", () => {
-        const style = calculateStyle("purple bold i mono", LIGHT);
+        const style = lth.calculateStyle("purple bold i mono");
         expect(style).toEqual({
             fontWeight: "bold",
             fontStyle: "italic",
             fontFamily: "monospace",
-            color: calculateColor("purple", LIGHT),
+            color: lth.calculateColor("purple"),
         });
     });
 
     test("standalone 's' is strike-through, 'S30' is saturation", () => {
-        expect(calculateStyle("s", LIGHT).textDecorationLine).toBe("line-through");
-        const withSat = calculateStyle("red S30", LIGHT);
+        expect(lth.calculateStyle("s").textDecorationLine).toBe("line-through");
+        const withSat = lth.calculateStyle("red S30");
         expect(withSat.textDecorationLine).toBeUndefined();
-        expect(withSat.color).toBe(calculateColor("red S30", LIGHT));
+        expect(withSat.color).toBe(lth.calculateColor("red S30"));
     });
 
     test("unknown tokens still throw via the color parser", () => {
-        expect(() => calculateStyle("bold chartreuse", LIGHT)).toThrow(/Unknown color name/);
+        expect(() => lth.calculateStyle("bold chartreuse")).toThrow(/Unknown color name/);
     });
 });
 

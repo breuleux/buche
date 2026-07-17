@@ -40,7 +40,7 @@ import {
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
-import { type Anchors, calculateStyle, styleToCss } from "../color.ts";
+import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import type { Accent, HighlightRange, StyledText } from "../types.ts";
 
 /** A resolved colorization span: a `[start, end)` range with an inline style. */
@@ -234,10 +234,10 @@ export class PromptCollection extends HTMLElement {
     editorFactory: EditorFactory = codeMirrorEditor;
 
     /**
-     * Background/foreground lightness anchors used to resolve a {@link StyledText}
-     * range's accent into a concrete color. Defaults to the dark editor theme.
+     * Theme used to resolve a {@link StyledText} range's accent (and tab accents)
+     * into concrete colors. Defaults to the dark editor theme.
      */
-    anchors: Anchors = { bg: 0.18, fg: 0.9 };
+    theme: Theme = defaultTheme;
 
     private initialized = false;
     private promptsEl!: HTMLElement;
@@ -475,7 +475,7 @@ export class PromptCollection extends HTMLElement {
         let css = "";
         if (accent) {
             try {
-                css = styleToCss(calculateStyle(accent, this.anchors));
+                css = styleToCss(this.theme.calculateStyle(accent));
             } catch {
                 css = "";
             }
@@ -550,7 +550,7 @@ export class PromptCollection extends HTMLElement {
         for (const range of ranges) {
             let css: string;
             try {
-                css = styleToCss(calculateStyle(range.style, this.anchors));
+                css = styleToCss(this.theme.calculateStyle(range.style));
             } catch {
                 continue;
             }
@@ -624,7 +624,7 @@ export class PromptCollection extends HTMLElement {
         const domOrder = Array.from(this.tabsEl.children)
             .map((c) => c.getAttribute("data-prompt"))
             .filter((x): x is string => x != null);
-        const changed = domOrder.join(" ") !== this.order.join(" ");
+        const changed = domOrder.join(" ") !== this.order.join(" ");
         this.order = domOrder;
         for (const id of this.order) {
             const entry = this.entries.get(id);

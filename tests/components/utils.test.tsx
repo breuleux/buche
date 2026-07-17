@@ -1,22 +1,21 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, test } from "vitest";
-import { calculateStyle, styleToCss } from "../../src/color.ts";
+import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import { buildStyledText } from "../../src/components/utils.tsx";
 
-const ANCHORS = { bg: 0.18, fg: 0.9 };
-const css = (accent: string) => styleToCss(calculateStyle(accent, ANCHORS));
+const css = (accent: string) => styleToCss(th.calculateStyle(accent));
 
 describe("buildStyledText", () => {
     test("wraps everything in a .styled-text span", () => {
-        const node = buildStyledText({ text: "hi", ranges: [] }, ANCHORS);
+        const node = buildStyledText({ text: "hi", ranges: [] }, th);
         expect(node.tagName).toBe("SPAN");
         expect(node.className).toBe("styled-text");
         expect(node.textContent).toBe("hi");
     });
 
     test("plain text with no ranges is a single text node", () => {
-        const node = buildStyledText({ text: "hello", ranges: [] }, ANCHORS);
+        const node = buildStyledText({ text: "hello", ranges: [] }, th);
         expect(node.childNodes.length).toBe(1);
         expect(node.childNodes[0].nodeType).toBe(Node.TEXT_NODE);
     });
@@ -30,7 +29,7 @@ describe("buildStyledText", () => {
                     { start: 4, end: 10, style: "cyan" },
                 ],
             },
-            ANCHORS,
+            th,
         );
 
         // "git"(span) + " "(text) + "commit"(span)
@@ -50,7 +49,7 @@ describe("buildStyledText", () => {
     test("emits leading and trailing plain text", () => {
         const node = buildStyledText(
             { text: "ab CD ef", ranges: [{ start: 3, end: 5, style: "red" }] },
-            ANCHORS,
+            th,
         );
         expect(node.childNodes[0].textContent).toBe("ab ");
         expect((node.childNodes[1] as HTMLElement).tagName).toBe("SPAN");
@@ -61,7 +60,7 @@ describe("buildStyledText", () => {
     test("clamps out-of-range offsets to the text", () => {
         const node = buildStyledText(
             { text: "abc", ranges: [{ start: -5, end: 99, style: "blue" }] },
-            ANCHORS,
+            th,
         );
         const span = node.querySelector("span")!;
         expect(span.textContent).toBe("abc");
@@ -77,7 +76,7 @@ describe("buildStyledText", () => {
                     { start: 4, end: 1, style: "blue" }, // inverted
                 ],
             },
-            ANCHORS,
+            th,
         );
         expect(node.querySelectorAll("span").length).toBe(0);
         expect(node.textContent).toBe("abcdef");
@@ -92,7 +91,7 @@ describe("buildStyledText", () => {
                     { start: 2, end: 6, style: "blue" }, // overlaps → trimmed to [4,6)
                 ],
             },
-            ANCHORS,
+            th,
         );
         const spans = node.querySelectorAll("span");
         expect(spans.length).toBe(2);
@@ -104,7 +103,7 @@ describe("buildStyledText", () => {
     test("renders text of an unparseable accent without styling", () => {
         const node = buildStyledText(
             { text: "xyz", ranges: [{ start: 0, end: 3, style: "chartreuse" }] },
-            ANCHORS,
+            th,
         );
         const span = node.querySelector("span")!;
         expect(span.textContent).toBe("xyz");
@@ -112,7 +111,7 @@ describe("buildStyledText", () => {
     });
 
     test("ignores the cursor position field", () => {
-        const node = buildStyledText({ text: "abc", ranges: [], position: 2 }, ANCHORS);
+        const node = buildStyledText({ text: "abc", ranges: [], position: 2 }, th);
         expect(node.textContent).toBe("abc");
     });
 
@@ -120,13 +119,13 @@ describe("buildStyledText", () => {
         // null start → 0, null end → text.length; {null,null} covers everything.
         const whole = buildStyledText(
             { text: "abcdef", ranges: [{ start: null, end: null, style: "red" }] },
-            ANCHORS,
+            th,
         );
         expect(whole.querySelector("span")?.textContent).toBe("abcdef");
 
         const head = buildStyledText(
             { text: "abcdef", ranges: [{ start: null, end: 3, style: "red" }] },
-            ANCHORS,
+            th,
         );
         expect(head.childNodes[0].textContent).toBe("abc"); // styled span
         expect((head.childNodes[0] as HTMLElement).tagName).toBe("SPAN");
@@ -134,7 +133,7 @@ describe("buildStyledText", () => {
 
         const tail = buildStyledText(
             { text: "abcdef", ranges: [{ start: 3, end: null, style: "red" }] },
-            ANCHORS,
+            th,
         );
         expect(tail.childNodes[0].textContent).toBe("abc"); // leading text
         expect((tail.childNodes[1] as HTMLElement).tagName).toBe("SPAN");

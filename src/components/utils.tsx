@@ -1,4 +1,4 @@
-import { type Anchors, calculateStyle, styleToCss } from "../color.ts";
+import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import type { StyledText } from "../types.ts";
 
 /**
@@ -18,10 +18,7 @@ import type { StyledText } from "../types.ts";
  *   )
  *   // → <span class="styled-text"><span style="…">git</span> commit</span>
  */
-export function buildStyledText(
-    styled: StyledText,
-    anchors: Anchors = { bg: 0.18, fg: 0.9 },
-): HTMLElement {
+export function buildStyledText(styled: StyledText, theme: Theme = defaultTheme): HTMLElement {
     const { text } = styled;
 
     // Resolve open boundaries (null → 0 / end of text), clamp to the text, drop
@@ -50,7 +47,7 @@ export function buildStyledText(
         // Unparseable accent → render the text without styling.
         let css: string | undefined;
         try {
-            css = styleToCss(calculateStyle(range.style, anchors)) || undefined;
+            css = styleToCss(theme.calculateStyle(range.style)) || undefined;
         } catch {
             css = undefined;
         }
