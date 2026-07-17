@@ -2,8 +2,8 @@
  * Run a Buche simulation from the command line.
  *
  * Usage:
- *   node scripts/sim.ts -c COMMAND [-p PAUSE] [-i MESSAGES_FILE] [-o REPLAY_FILE]
- *   node scripts/sim.ts -c COMMAND --replay FILE [-i MESSAGES_FILE]
+ *   node scripts/shallow.ts -c COMMAND [-p PAUSE] [-i MESSAGES_FILE] [-o REPLAY_FILE]
+ *   node scripts/shallow.ts -c COMMAND --replay FILE [-i MESSAGES_FILE]
  *
  * Options:
  *   -c, --command COMMAND   Shell command to run as the driver process (required).
@@ -34,6 +34,9 @@
  * parses arguments and supplies the logger.
  */
 
+// Must come first: installs DOM globals (HTMLElement, customElements, …) before
+// any module that defines custom-element classes at load time is imported.
+import "./dom-setup.ts";
 import { parseArgs } from "node:util";
 import { runSim } from "../tests/sim.ts";
 import { formatMessage } from "./format.ts";
