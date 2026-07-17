@@ -51,7 +51,12 @@ class ResizableGrid extends HTMLElement {
     // tracks, so panes stay proportional when the container is resized.
     private fractions: number[] = [];
     private panes: HTMLElement[] = [];
+    // divider[i] sits between panes[i] and panes[i+1].
+    private dividers: HTMLElement[] = [];
     private initialized = false;
+    // Watches panes toggling `hidden`: a hidden pane takes no track (it
+    // collapses out of the layout until it shows itself again).
+    private observer = new MutationObserver(() => this.resync());
 
     constructor(axis: Axis) {
         super();
@@ -78,10 +83,30 @@ class ResizableGrid extends HTMLElement {
         // Single track on the cross axis so panes fill the container.
         this.style[this.axis.cross] = "minmax(0, 1fr)";
 
+        this.dividers = [];
         for (let i = 0; i < n - 1; i++) {
             const divider = this.makeDivider(i);
             this.panes[i].after(divider);
+            this.dividers.push(divider);
         }
+        for (const pane of this.panes) {
+            this.observer.observe(pane, { attributes: true, attributeFilter: ["hidden"] });
+        }
+        this.resync();
+    }
+
+    // Recompute divider visibility and the track template (e.g. after a pane
+    // hid or showed itself).
+    private resync(): void {
+        // A divider shows as soon as one of its neighbours is visible, so the
+        // borders of a collapsed region stay draggable: grabbing one reveals
+        // the collapsed pane (see startDrag) to grow or shrink it.
+        const shown = this.dividers.map(
+            (_, k) => !this.panes[k].hidden || !this.panes[k + 1].hidden,
+        );
+        this.dividers.forEach((d, k) => {
+            d.hidden = !shown[k];
+        });
         this.applyTemplate();
     }
 
@@ -92,15 +117,35 @@ class ResizableGrid extends HTMLElement {
         return divider;
     }
 
-    private applyTemplate(): void {
-        // Content panes as `fr` tracks, dividers as fixed pixel tracks.
-        const parts: string[] = [];
-        this.fractions.forEach((f, i) => {
-            if (i > 0) {
-                parts.push(`${DIVIDER_PX}px`);
+    // Sum of the fractions of the visible panes (the renormalisation base).
+    private visibleTotal(): number {
+        let total = 0;
+        for (let i = 0; i < this.panes.length; i++) {
+            if (!this.panes[i].hidden) {
+                total += this.fractions[i];
             }
-            parts.push(`${f}fr`);
-        });
+        }
+        return total;
+    }
+
+    private applyTemplate(): void {
+        // Content panes as `fr` tracks, dividers as fixed pixel tracks, in DOM
+        // order; hidden elements generate no box, so they get no track.
+        // The visible fractions are renormalised to sum to 1: a grid's `fr`
+        // factors only share the free space proportionally when their sum
+        // reaches 1 (a sum below 1 leaves the difference undistributed), and
+        // collapsed panes would otherwise shrink the ones that remain.
+        const total = this.visibleTotal();
+        const parts: string[] = [];
+        for (const child of this.children) {
+            if (!(child instanceof HTMLElement) || child.hidden) {
+                continue;
+            }
+            const i = this.panes.indexOf(child);
+            parts.push(
+                i === -1 ? `${DIVIDER_PX}px` : `${total > 0 ? this.fractions[i] / total : 0}fr`,
+            );
+        }
         this.style[this.axis.template] = parts.join(" ");
     }
 
@@ -109,21 +154,42 @@ class ResizableGrid extends HTMLElement {
         divider.setPointerCapture(event.pointerId);
         divider.classList.add("dragging");
 
+        // A border of a collapsed region: grabbing it reveals that pane —
+        // empty, from nothing — so the drag can grow it, typically to shrink
+        // the visible neighbour. It then keeps the size it is dragged to.
+        let revealed = false;
+        for (const k of [index, index + 1]) {
+            if (this.panes[k].hidden) {
+                this.panes[k].hidden = false;
+                this.fractions[k] = 0;
+                revealed = true;
+            }
+        }
+        if (revealed) {
+            this.resync();
+        }
+
         const start = event[this.axis.clientAxis];
         const a0 = this.fractions[index];
         const b0 = this.fractions[index + 1];
         const combined = a0 + b0;
-        // Pixels available to `fr` tracks (total minus all divider tracks).
-        const flexPx = this[this.axis.extent] - DIVIDER_PX * (this.fractions.length - 1);
+        // Pixels available to `fr` tracks (total minus the divider tracks).
+        const flexPx =
+            this[this.axis.extent] - DIVIDER_PX * this.dividers.filter((d) => !d.hidden).length;
+
+        // Tracks are renormalised over the visible panes (see applyTemplate),
+        // so one stored fraction unit is worth `total` times the free space.
+        const total = this.visibleTotal();
 
         const onMove = (e: PointerEvent) => {
             if (flexPx <= 0) {
                 return;
             }
-            const deltaFrac = (e[this.axis.clientAxis] - start) / flexPx;
-            // Only the two neighbouring panes change; their sum is preserved, so
-            // every other pane (and divider) stays put. Clamping to [0, combined]
-            // makes the divider stop at its neighbour rather than push past it.
+            const deltaFrac = ((e[this.axis.clientAxis] - start) / flexPx) * total;
+            // Only the two neighbouring panes change; their sum is preserved,
+            // so every other pane (and divider) stays put. Clamping to
+            // [0, combined] makes the divider stop at its neighbour rather
+            // than push past it.
             const a = Math.max(0, Math.min(combined, a0 + deltaFrac));
             this.fractions[index] = a;
             this.fractions[index + 1] = combined - a;

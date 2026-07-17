@@ -57,7 +57,17 @@ export class TabbedZoneElement extends ZoneElement {
         if (!this.hasAttribute("focusable")) {
             this.setAttribute("focusable", "zone");
         }
-        this.appendChild(tb);
+        if (!this.contains(tb)) {
+            this.appendChild(tb);
+            // An empty zone takes no place (a hidden pane gets no grid track,
+            // see grid.tsx): the zone only shows up once something is added.
+            tb.addEventListener("tabschange", () => this.syncEmpty());
+        }
+        this.syncEmpty();
+    }
+
+    private syncEmpty(): void {
+        this.hidden = this.tabs.isEmpty;
     }
 
     contributeZones(): Array<Zone> {

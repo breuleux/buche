@@ -97,6 +97,85 @@ describe("grid-rows / grid-columns", () => {
         expect(after[2]).toBeCloseTo(1 / 3, 5); // untouched
     });
 
+    // MutationObserver callbacks run at a microtask checkpoint.
+    async function settled() {
+        await Promise.resolve();
+    }
+
+    test("dragging a collapsed pane's border reveals it and grows it", async () => {
+        const panes = (Array.from(grid.children) as HTMLElement[]).filter(
+            (c) => !c.className.includes("grid-divider"),
+        );
+        panes[1].hidden = true;
+        await settled();
+        // Grabbing B's border reveals the empty pane (from zero) and the drag
+        // grows it out of its neighbour C: flexPx = 300 - 2*4 dividers, so the
+        // 73px come straight off C, leaving A's half untouched.
+        drag(1, 73);
+        await settled();
+        expect(panes[1].hidden).toBe(false);
+        const fr = firstPart(grid.style.gridTemplateRows)
+            .filter((p) => p.endsWith("fr"))
+            .map((p) => Number.parseFloat(p));
+        expect(fr[0]).toBeCloseTo(0.5, 5);
+        expect(fr[1]).toBeCloseTo(73 / 292, 5);
+        expect(fr[2]).toBeCloseTo(0.5 - 73 / 292, 5);
+    });
+
+    test("a hidden pane takes no track but keeps its borders draggable", async () => {
+        const panes = () =>
+            (Array.from(grid.children) as HTMLElement[]).filter(
+                (c) => !c.className.includes("grid-divider"),
+            );
+        const dividers = () =>
+            (Array.from(grid.children) as HTMLElement[]).filter((c) =>
+                c.className.includes("grid-divider"),
+            );
+        panes()[1].hidden = true;
+        await settled();
+        // Both borders of the collapsed run stay visible and draggable.
+        expect(dividers().filter((d) => !d.hidden).length).toBe(2);
+        const parts = firstPart(grid.style.gridTemplateRows);
+        expect(parts.filter((p) => p.endsWith("fr")).length).toBe(2);
+        expect(parts.filter((p) => p === "4px").length).toBe(2);
+        // The visible fractions are renormalised to sum to 1 (an `fr` sum
+        // below 1 would leave the difference undistributed).
+        expect(parts).toEqual(["0.5fr", "4px", "4px", "0.5fr"]);
+    });
+
+    test("a divider hides only when both its neighbours collapse", async () => {
+        const panes = Array.from(grid.children).filter(
+            (c) => !c.className.includes("grid-divider"),
+        ) as HTMLElement[];
+        const dividers = Array.from(grid.querySelectorAll<HTMLElement>(".grid-divider-row"));
+        const shown = () => dividers.filter((d) => !d.hidden).length;
+        // Hide the first pane: its border with B stays (draggable, and B can
+        // still claim a share of the visible area through it).
+        panes[0].hidden = true;
+        await settled();
+        expect(shown()).toBe(2);
+        // Collapse the run up to C as well: only the divider against C remains.
+        panes[1].hidden = true;
+        await settled();
+        expect(shown()).toBe(1);
+        // C is the only visible pane: it claims all the space after its border.
+        expect(grid.style.gridTemplateRows).toBe("4px 1fr");
+        // Hide everything: no dividers, no tracks.
+        panes[2].hidden = true;
+        await settled();
+        expect(shown()).toBe(0);
+        expect(grid.style.gridTemplateRows).toBe("");
+        // Show them all again: the full layout is restored.
+        for (const p of panes) {
+            p.hidden = false;
+        }
+        await settled();
+        expect(shown()).toBe(2);
+        expect(firstPart(grid.style.gridTemplateRows).filter((p) => p.endsWith("fr")).length).toBe(
+            3,
+        );
+    });
+
     test("grid-columns uses col-resize dividers", () => {
         const cols = document.createElement("grid-columns");
         cols.append(document.createElement("div"), document.createElement("div"));

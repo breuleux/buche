@@ -40,6 +40,7 @@
 //   "tabchange"  detail: { entry: Entry }                — the active tab changed
 //   "tabclose"   detail: { entry: Entry }                — a tab's ✕ was clicked
 //   "viewselect" detail: { entry: Entry, view: ViewLabel } — a view icon was clicked
+//   "tabschange" — a tab was added or removed (the tab set changed)
 //
 // Appearance lives in the companion stylesheet `tab-pane.css` (or the
 // consolidated components.css).
@@ -88,6 +89,8 @@ export interface TabPaneEventMap {
     tabchange: TabChangeEvent;
     tabclose: TabCloseEvent;
     viewselect: TabViewSelectEvent;
+    /** A tab was added or removed; check {@link TabPane.isEmpty} etc. */
+    tabschange: Event;
 }
 
 export class TabPane extends HTMLElement {
@@ -188,6 +191,12 @@ export class TabPane extends HTMLElement {
         return this.active;
     }
 
+    /** Whether there are no tabs. */
+    get isEmpty(): boolean {
+        this.ensureSetup();
+        return this.order.length === 0;
+    }
+
     /** Add a tab (and its pane) for `entry`. Returns the same Entry, which is the
      *  tab's handle for {@link showTab} / {@link removeTab} / {@link paneFor}. */
     addTab(entry: Entry, content?: HTMLElement): Row {
@@ -260,6 +269,7 @@ export class TabPane extends HTMLElement {
             pane.style.display = "none";
         }
         this.updateTabsVisibility();
+        this.dispatchEvent(new Event("tabschange", { bubbles: true }));
         return row;
     }
 
@@ -286,6 +296,7 @@ export class TabPane extends HTMLElement {
             }
         }
         this.updateTabsVisibility();
+        this.dispatchEvent(new Event("tabschange", { bubbles: true }));
     }
 
     /** Make a tab (and its pane) the active one. */
