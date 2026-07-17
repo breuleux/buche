@@ -1,4 +1,4 @@
-import { Cell, type CellConfiguration } from "../cell.ts";
+import type { CellConfiguration } from "../cell.ts";
 import type { Buche, OutM } from "../core.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
 
@@ -10,15 +10,5 @@ export async function* handle$cell_create(
     buche: Buche,
     obj: CellCreateMessage,
 ): AsyncIterable<OutM> {
-    const component = buche.fresh(obj.from);
-    const { prompt, zone } = buche.findPlace(obj);
-    const cell = new Cell(obj, { zone, address: obj.from });
-    cell.prompt = prompt;
-    cell.zone = zone;
-    Object.assign(component, { cell, zones: cell.makeZones() });
-    yield {
-        type: "install_cell",
-        zone: zone,
-        component: component,
-    };
+    yield* buche.create("cell", obj);
 }

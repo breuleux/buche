@@ -9,7 +9,7 @@ export interface DataMessage extends BaseMessage {
 }
 
 export async function* handle$data(buche: Buche, obj: DataMessage): AsyncIterable<OutM> {
-    const component = buche.get(obj.from);
+    const component = yield* buche.ensure("cell", obj);
     yield {
         type: "cell_command",
         command: {

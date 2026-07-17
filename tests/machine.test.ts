@@ -36,15 +36,15 @@ describe("Sanity check Machine", () => {
 
 for (const base of ["data/runs", "data/errors"]) {
     describe(`Check playbooks in ${base}`, () => {
-        const buche = new Buche({
-            handlers: Object.assign({}, driverHandlers, interfaceHandlers) as HandlerT,
-            initialZones: { "@": new Zone() },
-        });
-        const machine = new MachinePlayer(buche, base);
-
         for (const { name, relpath } of getCases(base)) {
             test(`Conformity of machine on '${relpath}'`, async () => {
+                // Fresh Buche per playbook so scenarios stay independent.
                 resetId(100);
+                const buche = new Buche({
+                    handlers: Object.assign({}, driverHandlers, interfaceHandlers) as HandlerT,
+                    initialZones: { "@": new Zone() },
+                });
+                const machine = new MachinePlayer(buche, base);
                 await machine.test(name);
             });
         }

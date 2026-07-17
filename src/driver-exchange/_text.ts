@@ -12,7 +12,7 @@ export interface TextMessage extends BaseMessage {
 }
 
 export async function* handle$text(buche: Buche, obj: TextMessage): AsyncIterable<OutM> {
-    const component = buche.get(obj.from);
+    const component = yield* buche.ensure("cell", obj);
     yield {
         type: "cell_command",
         command: {

@@ -1,7 +1,7 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import type { Cell, Echo } from "./cell.ts";
-import type { Address, CreationInfo } from "./driver-exchange/common.ts";
+import { Cell, type CellConfiguration, type Echo } from "./cell.ts";
+import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
@@ -9,7 +9,7 @@ import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts"
 import { Machine } from "./machine.ts";
 import { outgoingDriverMessageTypes } from "./message-directory.ts";
 import type { ProcessCommunicator } from "./process.ts";
-import type { Prompt } from "./prompt.ts";
+import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import { BucheError, type ErrorMessage, mergeIterables } from "./utils.ts";
 import { Zone } from "./zone.ts";
 
@@ -99,17 +99,13 @@ export class Buche extends Machine<InM, OutM> {
         }
     }
 
-    addressKey(a: Address) {
-        return JSON.stringify(a);
-    }
-
     get(addr: Address): ComponentData {
         const node = this.hierarchy.getAt(addr, false);
         if (!node?.component) {
             throw new BucheError({
                 type: "error",
                 code: "missingcell",
-                reason: `Cell at ${this.addressKey(addr)} is missing`,
+                reason: `Cell at ${JSON.stringify(addr)} is missing`,
             });
         }
         return node.component;
@@ -157,6 +153,46 @@ export class Buche extends Machine<InM, OutM> {
             });
         }
         return { prompt, zone };
+    }
+
+    create(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    create(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    async *create(
+        type: "cell" | "prompt",
+        obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
+    ): AsyncGenerator<OutM> {
+        const component = this.fresh(obj.from);
+        const { prompt: parentPrompt, zone } = this.findPlace(obj);
+        if (type === "cell") {
+            const cell = new Cell(obj, { zone, address: obj.from });
+            cell.prompt = parentPrompt;
+            Object.assign(component, { cell, zones: cell.makeZones() });
+        } else if (type === "prompt") {
+            const prompt = new Prompt(obj, { zone, address: obj.from });
+            Object.assign(component, { prompt, zones: prompt.makeZones() });
+        }
+        yield {
+            type: `install_${type}`,
+            zone: zone,
+            component: component,
+        };
+        return component;
+    }
+
+    ensure(type: "cell", obj: CellConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): AsyncGenerator<OutM>;
+    async *ensure(
+        type: "cell" | "prompt",
+        obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
+    ): AsyncGenerator<OutM> {
+        const node = this.hierarchy.getAt(obj.from, true) as Hierarchy;
+        let c = node.component;
+        if (type === "cell" && !c?.cell) {
+            c = yield* this.create(type, obj);
+        } else if (type === "prompt" && !c?.prompt) {
+            c = yield* this.create(type, obj);
+        }
+        return c;
     }
 }
 

@@ -27,7 +27,7 @@ export const incomingInterfaceMessageTypes = new Set<string>([
 
 /** Message `type` names for interface outgoing messages. */
 export const outgoingInterfaceMessageTypes = new Set<string>([
-    "cell_send",
+    "cell_command",
     "close_component",
     "install_cell",
     "install_echo",
