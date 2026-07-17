@@ -24,3 +24,15 @@ export interface BaseMessage {
     /** Target of the message. */
     to: To;
 }
+
+/** A syntax-highlight span over the prompt text */
+export interface HighlightRange {
+  /** Inclusive start offset into the prompt text. */
+  start: number;
+
+  /** Exclusive end offset. */
+  end: number;
+
+  /** CSS class. */
+  cls: string;
+}

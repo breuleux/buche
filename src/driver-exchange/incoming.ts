@@ -2,12 +2,20 @@
 // Run `bun run gen` to regenerate.
 import { handle$cell_configure, type CellConfigureMessage } from "./_cell_configure";
 import { handle$cell_create, type CellCreateMessage } from "./_cell_create";
+import { handle$echo, type EchoMessage } from "./_echo";
+import { handle$prompt_configure, type PromptConfigureMessage } from "./_prompt_configure";
+import { handle$prompt_create, type PromptCreateMessage } from "./_prompt_create";
+import { handle$sync, type SyncMessage } from "./_sync";
 
 /** Registry of message handlers, keyed by message `type`. */
 export const handlers = {
     cell_configure: handle$cell_configure,
     cell_create: handle$cell_create,
+    echo: handle$echo,
+    prompt_configure: handle$prompt_configure,
+    prompt_create: handle$prompt_create,
+    sync: handle$sync,
 } as const;
 
 /** Union of every message type. */
-export type IncomingDriverMessage = CellConfigureMessage | CellCreateMessage;
+export type IncomingDriverMessage = CellConfigureMessage | CellCreateMessage | EchoMessage | PromptConfigureMessage | PromptCreateMessage | SyncMessage;
