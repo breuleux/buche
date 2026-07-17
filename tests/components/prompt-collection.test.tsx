@@ -748,6 +748,31 @@ describe("prompt-collection — removing", () => {
         expect(rowOf(pc, b)?.hidden).toBe(false);
     });
 
+    test("removing the active prompt reverts to the previously active one", () => {
+        const pc = make();
+        const a = pc.addPrompt(makeEntry({ label: "a" }));
+        const b = pc.addPrompt(makeEntry({ label: "b" }));
+        const c = pc.addPrompt(makeEntry({ label: "c" }));
+        pc.showPrompt(c);
+        pc.showPrompt(b);
+
+        pc.removePrompt(b);
+        expect(pc.activePrompt).toBe(c);
+        expect(rowOf(pc, c)?.hidden).toBe(false);
+
+        pc.removePrompt(c);
+        expect(pc.activePrompt).toBe(a);
+    });
+
+    test("removing an inactive prompt keeps the active one", () => {
+        const pc = make();
+        const a = pc.addPrompt(makeEntry({ label: "a" }));
+        const b = pc.addPrompt(makeEntry({ label: "b" }));
+        pc.showPrompt(b);
+        pc.removePrompt(a);
+        expect(pc.activePrompt).toBe(b);
+    });
+
     test("removing a prompt detaches its Entry reconfiguration listener", () => {
         const pc = make();
         const a = pc.addPrompt(makeEntry({ label: "a" }));

@@ -100,6 +100,9 @@ export class TabPane extends HTMLElement {
     private rows = new Map<Entry, Row>();
     private order: Entry[] = [];
     private active: Entry | null = null;
+    // Activation history, most recent last: removing the active tab falls back
+    // to the one active before it.
+    private history: Entry[] = [];
 
     static get observedAttributes(): string[] {
         return ["hide-single"];
@@ -215,6 +218,8 @@ export class TabPane extends HTMLElement {
         closeEl.textContent = "✕";
         closeEl.title = "Close";
         closeEl.setAttribute("aria-label", "Close");
+        // Closing a tab shouldn't move the focus to it first (see focus.ts).
+        closeEl.setAttribute("nofocus", "");
         closeEl.addEventListener("click", (e) => {
             e.stopPropagation();
             this.dispatchEvent(
@@ -251,7 +256,9 @@ export class TabPane extends HTMLElement {
         return row;
     }
 
-    /** Remove a tab and its pane, and detach its reconfiguration listener. */
+    /** Remove a tab and its pane, and detach its reconfiguration listener. If it
+     *  was active, the tab that was active before it becomes active (or the
+     *  first one, if none of those remain). */
     removeTab(entry: Entry): void {
         this.ensureSetup();
         const row = this.rows.get(entry);
@@ -263,9 +270,10 @@ export class TabPane extends HTMLElement {
         row.pane.remove();
         this.rows.delete(entry);
         this.order = this.order.filter((x) => x !== entry);
+        this.history = this.history.filter((x) => x !== entry);
         if (this.active === entry) {
             this.active = null;
-            const next = this.order[0];
+            const next = this.history.at(-1) ?? this.order[0];
             if (next) {
                 this.showTab(next);
             }
@@ -284,6 +292,8 @@ export class TabPane extends HTMLElement {
         // Update `active` first so applyUnderline(prev) sees prev as inactive and
         // clears its underline.
         this.active = entry;
+        this.history = this.history.filter((x) => x !== entry);
+        this.history.push(entry);
         if (prev) {
             prev.tab.classList.remove("active");
             prev.pane.style.display = "none";

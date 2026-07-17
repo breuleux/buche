@@ -5,6 +5,7 @@
 
 scroll-fader {
 	--scroll-fader-bg: #fff;
+	--scroll-fader-shadow: 48px;
 	display: flex;
 	flex-direction: column;
 	position: relative;
@@ -20,8 +21,19 @@ scroll-fader {
 	/* column-reverse pins the view to the bottom as content grows. */
 	display: flex;
 	flex-direction: column-reverse;
+	/* Scrolling an element into view (e.g. on focus) keeps it clear of the edge
+	 * shadows; for the first/last element, that scrolls all the way, so the
+	 * shadow on that side disappears. */
+	scroll-padding-block: var(--scroll-fader-shadow);
 	/* Hide the scrollbar without preventing wheel scrolling. */
 	scrollbar-width: none;
+}
+
+/* A flex column, so each piece of content is a flex item: focus navigation
+ * (focus.ts) steps between the items of a flex container along its axis. */
+.scroll-fader-content {
+	display: flex;
+	flex-direction: column;
 }
 
 .scroll-fader-inner::-webkit-scrollbar {
@@ -32,7 +44,7 @@ scroll-fader {
 	position: absolute;
 	left: 0;
 	right: 0;
-	height: 48px;
+	height: var(--scroll-fader-shadow);
 	pointer-events: none;
 	z-index: 1;
 	opacity: 0;

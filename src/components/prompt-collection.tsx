@@ -460,6 +460,9 @@ export class PromptCollection extends HTMLElement {
     private byId = new Map<string, Entry>();
     private order: Entry[] = [];
     private active: Entry | null = null;
+    // Activation history, most recent last: removing the active prompt falls
+    // back to the one active before it.
+    private history: Entry[] = [];
     private seq = 0;
     private dragEntry: Entry | null = null;
     // True while pushing an Entry's content into an editor, to suppress the
@@ -587,6 +590,9 @@ export class PromptCollection extends HTMLElement {
         row.className = "prompt-collection-prompt";
         row.setAttribute("data-prompt", id);
         row.hidden = true;
+        // Only the active row is visible, so only it takes part in focus
+        // navigation (see focus.ts); "prompt" is its kind in the focus history.
+        row.setAttribute("focusable", "prompt");
         row.append(marker, editorHost);
         // Heed the Entry's key bindings. Capture phase so a bound chord fires the
         // "command" event before the editor (CodeMirror) can act on the key.
@@ -636,7 +642,8 @@ export class PromptCollection extends HTMLElement {
         return entry;
     }
 
-    /** Remove a prompt; if it was active, the next prompt becomes active. */
+    /** Remove a prompt; if it was active, the prompt that was active before it
+     *  becomes active (or the first one, if none of those remain). */
     removePrompt(entry: Entry): void {
         this.ensureSetup();
         const row = this.rows.get(entry);
@@ -650,10 +657,12 @@ export class PromptCollection extends HTMLElement {
         this.rows.delete(entry);
         this.byId.delete(row.id);
         this.order = this.order.filter((x) => x !== entry);
+        this.history = this.history.filter((x) => x !== entry);
         if (this.active === entry) {
             this.active = null;
-            if (this.order.length > 0) {
-                this.activate(this.order[0], false);
+            const next = this.history.at(-1) ?? this.order[0];
+            if (next) {
+                this.activate(next, false);
             }
         }
     }
@@ -669,6 +678,8 @@ export class PromptCollection extends HTMLElement {
             return;
         }
         this.active = entry;
+        this.history = this.history.filter((x) => x !== entry);
+        this.history.push(entry);
         for (const [e, row] of this.rows) {
             const on = e === entry;
             row.row.hidden = !on;
