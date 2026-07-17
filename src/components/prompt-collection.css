@@ -1,0 +1,57 @@
+/* Styles for the <prompt-collection> custom element (prompt-collection.tsx).
+ * Prompts (leading marker + CodeMirror editor) with a tab zone of labels below. */
+
+prompt-collection {
+	display: block;
+	color: #d4d4d4;
+	font-family: "Menlo", "Consolas", monospace;
+	font-size: 13px;
+}
+
+/* ── The active prompt: leading marker + editor ── */
+
+.prompt-collection-prompt {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.prompt-collection-prompt[hidden] {
+	display: none;
+}
+
+.prompt-collection-marker {
+	flex: 0 0 auto;
+	line-height: 20px;
+	white-space: pre;
+}
+
+.prompt-collection-editor {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* ── Tab zone: just labels, styled only by (configurable) colour ── */
+
+.prompt-collection-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 4px;
+}
+
+.prompt-collection-tab {
+	cursor: pointer;
+	user-select: none;
+	/* The only styling is the label colour (set inline per prompt); the active
+	 * tab is shown at full strength, inactive ones dimmed. */
+	opacity: 0.5;
+}
+
+.prompt-collection-tab.active {
+	opacity: 1;
+}
+
+.prompt-collection-tab.dragging {
+	opacity: 0.3;
+}
