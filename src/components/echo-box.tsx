@@ -27,9 +27,15 @@
 // circle and closing icon change appearance with the cell's `status`; the circle
 // and line colour are configurable via the `color` attribute / `--echo-color`.
 //
-// The left gutter doubles as a resize handle: press on it and drag up to grow
-// the cell, down to shrink it. Set the `reverse` attribute to swap those
-// directions (drag up to shrink, down to grow).
+// The left gutter doubles as a resize handle: dragging *outward* from the bar
+// grows the cell, dragging *inward* shrinks it. Concretely, grabbing the top
+// half and dragging up (or the bottom half and dragging down) grows the cell;
+// dragging the top half down (or the bottom half up) shrinks it. Set the
+// `reverse` attribute to swap grow and shrink.
+//
+// The dragged half also stays anchored on screen: a top-half drag keeps the
+// element's bottom edge fixed (the surrounding scroll position is adjusted to
+// absorb the size change), while a bottom-half drag keeps the top edge fixed.
 //
 // Events (both bubble):
 //   "viewchange"  detail: { view: string }   — the active view changed
@@ -163,7 +169,7 @@ export class EchoBox extends HTMLElement {
 
     // ── Resize (drag the gutter handle) ───────────────────────────────────────
 
-    /** Drag the gutter up/down to grow/shrink the cell (reversed with `reverse`). */
+    /** Drag the gutter to grow/shrink the cell: outward grows, inward shrinks. */
     private startResize(event: PointerEvent): void {
         // Ignore anything but a primary-button / touch / pen press.
         if (event.button !== 0) {
@@ -181,14 +187,40 @@ export class EchoBox extends HTMLElement {
         const startHeight = Number.isFinite(explicit)
             ? explicit
             : this.cellEl.getBoundingClientRect().height;
-        const reverse = this.hasAttribute("reverse");
+
+        // Which half of the bar the drag started on sets the "outward" direction:
+        // from the top half, up is outward; from the bottom half, down is outward.
+        // Dragging outward grows the cell, inward shrinks it; `reverse` swaps them.
+        // The bar alongside the top line (the header/echo row, above the cell)
+        // always counts as the top half, even on a short bar where the geometric
+        // middle would fall within it.
+        const rect = gutter.getBoundingClientRect();
+        const cellTop = this.cellEl.getBoundingClientRect().top;
+        const topHalf = startY < Math.max(rect.top + rect.height / 2, cellTop);
+        const outward = topHalf ? 1 : -1;
+        const sign = (this.hasAttribute("reverse") ? -1 : 1) * outward;
+
+        // The dragged half stays put on screen: a top-half drag anchors the
+        // element's bottom edge, a bottom-half drag anchors its top edge. Rather
+        // than assume how the container reacts to the size change, we measure the
+        // anchored edge and scroll to cancel whatever drift the resize caused. In
+        // a normal (top-pinned) container that drift is the whole height change; in
+        // a bottom-pinned one like <scroll-fader> the growth already shifts the
+        // content, so the drift — and the correction — is near zero.
+        const scroller = this.resolveScrollParent();
+        const anchorEdge = (): number => {
+            const r = this.getBoundingClientRect();
+            return topHalf ? r.bottom : r.top;
+        };
+        const anchor = anchorEdge();
 
         const onMove = (e: PointerEvent) => {
-            // Moving up (clientY decreases) grows the cell, down shrinks it; the
-            // `reverse` attribute swaps those directions.
-            const delta = (startY - e.clientY) * (reverse ? -1 : 1);
-            const height = Math.max(0, startHeight + delta);
+            // `upAmount` is positive when moving up; `sign` maps it onto grow/shrink.
+            const upAmount = startY - e.clientY;
+            const height = Math.max(0, startHeight + upAmount * sign);
             this.cellEl.style.height = `${height}px`;
+            // Counter-scroll by however far the anchored edge actually drifted.
+            scroller.scrollTop += anchorEdge() - anchor;
         };
 
         const onUp = (e: PointerEvent) => {
@@ -202,6 +234,19 @@ export class EchoBox extends HTMLElement {
         gutter.addEventListener("pointermove", onMove);
         gutter.addEventListener("pointerup", onUp);
         gutter.addEventListener("pointercancel", onUp);
+    }
+
+    /** The nearest scrollable ancestor, falling back to the document scroller. */
+    private resolveScrollParent(): HTMLElement {
+        for (let el = this.parentElement; el; el = el.parentElement) {
+            const overflowY = getComputedStyle(el).overflowY;
+            const scrollable =
+                overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+            if (scrollable && el.scrollHeight > el.clientHeight) {
+                return el;
+            }
+        }
+        return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
     }
 
     // ── Status ──────────────────────────────────────────────────────────────

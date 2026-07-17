@@ -166,8 +166,23 @@ describe("echo-box — views", () => {
 });
 
 describe("echo-box — resize handle", () => {
-    function drag(box: EchoBox, fromY: number, toY: number): void {
+    // The bar spans y ∈ [0, 200] (stubbed), so its middle is at y = 100:
+    // y < 100 is the top half, y ≥ 100 the bottom half.
+    const BAR_HEIGHT = 200;
+
+    // Prepare a box whose cell starts at `startHeight` and whose gutter reports a
+    // fixed on-screen rect (happy-dom otherwise returns an all-zero rect).
+    function setup(startHeight: number, attrs: Record<string, string> = {}) {
+        const box = make(attrs);
+        const cell = q(box, ".echo-box-cell") as HTMLElement;
+        cell.style.height = `${startHeight}px`;
         const gutter = q(box, ".echo-box-gutter") as HTMLElement;
+        gutter.getBoundingClientRect = () =>
+            ({ top: 0, bottom: BAR_HEIGHT, height: BAR_HEIGHT }) as DOMRect;
+        return { box, cell, gutter };
+    }
+
+    function drag(gutter: HTMLElement, fromY: number, toY: number): void {
         gutter.dispatchEvent(
             new PointerEvent("pointerdown", {
                 clientY: fromY,
@@ -184,26 +199,102 @@ describe("echo-box — resize handle", () => {
         );
     }
 
-    test("dragging the gutter up grows the cell, down shrinks it", () => {
-        const box = make();
-        const cell = q(box, ".echo-box-cell") as HTMLElement;
-        // Drag up by 40px from a 0-height baseline → +40px.
-        drag(box, 100, 60);
-        expect(cell.style.height).toBe("40px");
-        // Drag down 20px from that height → 20px.
-        drag(box, 60, 80);
-        expect(cell.style.height).toBe("20px");
-        // Never goes below 0.
-        drag(box, 80, 300);
+    test("top half: up grows, down shrinks", () => {
+        const { cell, gutter } = setup(100);
+        drag(gutter, 50, 30); // top half, drag up 20 → grow
+        expect(cell.style.height).toBe("120px");
+        cell.style.height = "100px";
+        drag(gutter, 50, 70); // top half, drag down 20 → shrink
+        expect(cell.style.height).toBe("80px");
+    });
+
+    test("bottom half: down grows, up shrinks", () => {
+        const { cell, gutter } = setup(100);
+        drag(gutter, 150, 170); // bottom half, drag down 20 → grow
+        expect(cell.style.height).toBe("120px");
+        cell.style.height = "100px";
+        drag(gutter, 150, 130); // bottom half, drag up 20 → shrink
+        expect(cell.style.height).toBe("80px");
+    });
+
+    test("the top line (header row) always counts as the top half", () => {
+        const { cell, gutter } = setup(100);
+        // A short bar: geometric middle at y=20, but the header runs down to y=30.
+        gutter.getBoundingClientRect = () => ({ top: 0, bottom: 40, height: 40 }) as DOMRect;
+        cell.getBoundingClientRect = () => ({ top: 30, bottom: 40, height: 10 }) as DOMRect;
+        // Press at y=25: below the geometric middle, but on the header → top half.
+        drag(gutter, 25, 5); // drag up 20 → grows (top-half behaviour)
+        expect(cell.style.height).toBe("120px");
+    });
+
+    test("never shrinks below zero", () => {
+        const { cell, gutter } = setup(10);
+        drag(gutter, 50, 300); // top half, drag far down → clamped at 0
         expect(cell.style.height).toBe("0px");
     });
 
-    test("the reverse attribute swaps the drag directions", () => {
-        const box = make({ reverse: "" });
+    test("the reverse attribute swaps grow and shrink", () => {
+        const { cell, gutter } = setup(100, { reverse: "" });
+        drag(gutter, 50, 30); // top half up would normally grow; reversed → shrink
+        expect(cell.style.height).toBe("80px");
+    });
+
+    const stubScrollParent = (box: EchoBox, scroller: HTMLElement) => {
+        (box as unknown as { resolveScrollParent: () => HTMLElement }).resolveScrollParent = () =>
+            scroller;
+    };
+
+    // Attach a fake scroll container so anchoring is observable in happy-dom, and
+    // simulate a normal top-pinned container: the top edge stays put while the
+    // bottom edge tracks the cell's height (happy-dom does no layout of its own).
+    function withScroller(box: EchoBox, scrollTop: number): HTMLElement {
+        const scroller = document.createElement("div");
+        scroller.scrollTop = scrollTop;
+        stubScrollParent(box, scroller);
         const cell = q(box, ".echo-box-cell") as HTMLElement;
-        // With reverse, dragging down grows the cell.
-        drag(box, 100, 140);
-        expect(cell.style.height).toBe("40px");
+        box.getBoundingClientRect = () => {
+            const h = Number.parseFloat(cell.style.height) || 0;
+            return { top: 0, bottom: h, height: h } as DOMRect;
+        };
+        return scroller;
+    }
+
+    test("top-half drag scrolls to keep the bottom edge fixed", () => {
+        const { box, cell, gutter } = setup(100);
+        const scroller = withScroller(box, 500);
+        drag(gutter, 50, 10); // top half, grow by 40
+        expect(cell.style.height).toBe("140px");
+        // Scroll absorbs the +40 growth so the bottom stays put.
+        expect(scroller.scrollTop).toBe(540);
+    });
+
+    test("top-half shrink scrolls back the other way", () => {
+        const { box, cell, gutter } = setup(100);
+        const scroller = withScroller(box, 500);
+        drag(gutter, 50, 70); // top half, shrink by 20
+        expect(cell.style.height).toBe("80px");
+        expect(scroller.scrollTop).toBe(480);
+    });
+
+    test("bottom-half drag leaves the scroll position untouched", () => {
+        const { box, cell, gutter } = setup(100);
+        const scroller = withScroller(box, 500);
+        drag(gutter, 150, 170); // bottom half, grow by 20
+        expect(cell.style.height).toBe("120px");
+        expect(scroller.scrollTop).toBe(500);
+    });
+
+    test("bottom-pinned container: growth is not double-applied", () => {
+        const { box, cell, gutter } = setup(100);
+        const scroller = document.createElement("div");
+        scroller.scrollTop = 0; // column-reverse reports 0 at the bottom
+        stubScrollParent(box, scroller);
+        // A <scroll-fader> already pins the bottom, so the element's bottom edge
+        // does not move as the cell grows — the measured drift stays zero.
+        box.getBoundingClientRect = () => ({ top: 0, bottom: 300, height: 300 }) as DOMRect;
+        drag(gutter, 50, 10); // top half, grow by 40
+        expect(cell.style.height).toBe("140px");
+        expect(scroller.scrollTop).toBe(0); // no extra scroll layered on top
     });
 });
 
