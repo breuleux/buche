@@ -586,14 +586,18 @@ export class BasicAnsi extends HTMLElement {
         const cursor = this.cursorEnabled ? this.cursorEl : null;
         const node = this.buffer.currentLineNode(cursor);
         if (node) {
+            cursor?.classList.remove("cursor-empty-line");
             this.linesEl.appendChild(node);
             this.currentEl = node;
         } else if (cursor) {
-            // Empty current line: still show the cursor at the start of it.
-            const holder = document.createElement("span");
-            holder.appendChild(cursor);
-            this.linesEl.appendChild(holder);
-            this.currentEl = holder;
+            // A *fresh* empty current line (the buffer has no cells): collapse it.
+            // Append the cursor on its own — no line wrapper — and flag it so CSS
+            // renders a flat cursor pinned to the bottom that takes no vertical
+            // space. A line that had content and was blanked keeps its cells, so
+            // currentLineNode() returns a node above and the blank line stays.
+            cursor.classList.add("cursor-empty-line");
+            this.linesEl.appendChild(cursor);
+            this.currentEl = cursor;
         } else {
             this.currentEl = null;
         }

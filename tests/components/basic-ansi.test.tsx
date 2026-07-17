@@ -130,6 +130,33 @@ describe("basic-ansi — counters and clearing", () => {
     });
 });
 
+describe("basic-ansi — empty-line cursor", () => {
+    test("collapses a fresh empty current line to a flat cursor", () => {
+        const el = make();
+        el.write("hi\n"); // completed line, then a fresh empty current line
+        const cur = pre(el).querySelector(".cursor");
+        expect(cur?.classList.contains("cursor-empty-line")).toBe(true);
+        // The cursor sits directly in the <pre>, not wrapped in a line span.
+        expect(cur?.parentElement).toBe(pre(el));
+    });
+
+    test("a non-empty current line keeps the cursor inline (no collapse)", () => {
+        const el = make();
+        el.write("hi\nx");
+        const cur = pre(el).querySelector(".cursor");
+        expect(cur?.classList.contains("cursor-empty-line")).toBe(false);
+    });
+
+    test("a line written then blanked stays visible (not collapsed)", () => {
+        const el = make();
+        el.write("hi\n");
+        el.write("x\b \b"); // type, then erase with backspace-space-backspace
+        const cur = pre(el).querySelector(".cursor");
+        // The line still holds a cell (the space), so it is not collapsed.
+        expect(cur?.classList.contains("cursor-empty-line")).toBe(false);
+    });
+});
+
 describe("basic-ansi — prune", () => {
     test("drops whole leading lines to meet the line budget", () => {
         const el = make();
