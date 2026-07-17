@@ -1,3 +1,5 @@
+import { IdClass } from "./utils.ts";
+import { Zone } from "./zone.ts";
 
 export type PromptBindings = Record<string, string>;
 
@@ -23,13 +25,16 @@ export interface PromptConfiguration {
     prompt_html?: string;
 }
 
-export class Prompt implements PromptConfiguration {
+export class Prompt extends IdClass implements PromptConfiguration {
+    zone: Zone;
+
     label?: string | null;
     bindings?: PromptBindings;
     color?: PromptColor;
     prompt_html?: string;
 
-    constructor(config: PromptConfiguration) {
+    constructor(config: PromptConfiguration, zone: Zone) {
+        super();
         this.configure(config);
     }
     configure(config: PromptConfiguration): void {
