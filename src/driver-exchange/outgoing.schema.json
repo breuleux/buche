@@ -43,9 +43,13 @@
         },
         "position": {
           "type": "number"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Reference number for this parse. Whatever answers it — the highlight echo (a `prompt_configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
         }
       },
-      "required": ["from", "position", "text", "to", "type"],
+      "required": ["from", "position", "request_id", "text", "to", "type"],
       "additionalProperties": false
     },
     "Address": {

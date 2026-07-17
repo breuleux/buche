@@ -7,7 +7,6 @@ import { handle$configure, type ConfigureMessage } from "./_configure.ts";
 import { handle$data, type DataMessage } from "./_data.ts";
 import { handle$error, type ErrorMessage } from "./_error.ts";
 import { handle$prompt_configure, type PromptConfigureMessage } from "./_prompt_configure.ts";
-import { handle$prompt_highlight, type PromptHighlightMessage } from "./_prompt_highlight.ts";
 import { handle$sync, type SyncMessage } from "./_sync.ts";
 import { handle$text, type TextMessage } from "./_text.ts";
 
@@ -20,10 +19,9 @@ export const handlers = {
     data: handle$data,
     error: handle$error,
     prompt_configure: handle$prompt_configure,
-    prompt_highlight: handle$prompt_highlight,
     sync: handle$sync,
     text: handle$text,
 } as const;
 
 /** Union of every message type. */
-export type IncomingDriverMessage = CellConfigureMessage | CellSendMessage | CloseMessage | ConfigureMessage | DataMessage | ErrorMessage | PromptConfigureMessage | PromptHighlightMessage | SyncMessage | TextMessage;
+export type IncomingDriverMessage = CellConfigureMessage | CellSendMessage | CloseMessage | ConfigureMessage | DataMessage | ErrorMessage | PromptConfigureMessage | SyncMessage | TextMessage;

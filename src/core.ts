@@ -40,6 +40,9 @@ export class Buche {
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
+    /** Counter behind the `request_id` of outgoing parses (see user_input). */
+    requestSeq = 0;
+
     constructor(args: BucheArguments) {
         this.hierarchy = new Entry({ zones: args.initialZones });
         this.sendDriver = args.sendDriver;

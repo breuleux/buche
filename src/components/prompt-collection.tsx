@@ -14,9 +14,9 @@
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
 // flow back into `entry.prompt.submission.content` (its text and cursor position). The
-// Prompt's `filigrane` (a history suggestion, see the "prompt_highlight" driver
-// message) shows as faded ghost text extending the content; ArrowRight at the
-// end of the text accepts it.
+// Prompt's `filigrane` (a history suggestion, echoed by the "prompt_configure"
+// answer to a parse) shows as faded ghost text extending the content;
+// ArrowRight at the end of the text accepts it.
 //
 //   ┌─────────────────────────────────────────────┐
 //   │ $  ← prompt text (small, above the editor)  │

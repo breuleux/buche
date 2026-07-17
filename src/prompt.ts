@@ -21,9 +21,9 @@ export interface PromptConfiguration {
     submission?: SubmissionConfiguration;
 
     /**
-     * Ghost text (history suggestion), normally carried by "prompt_highlight";
-     * a "prompt_configure" may set or clear it too (explicit null) — e.g. to
-     * drop the suggestion along with the text when the prompt is submitted.
+     * Ghost text (history suggestion): echoed back by "prompt_configure"
+     * answering a parse, and set or cleared by an authoritative one (explicit
+     * null — e.g. dropped along with the text when the prompt is submitted).
      * Absent: left as is.
      */
     filigrane?: string | null;
@@ -37,10 +37,18 @@ export class Prompt extends WithId() implements PromptConfiguration {
     };
     /**
      * Ghost text: the most recent history entry extending the current content,
-     * offered as a completion suffix (set by "prompt_highlight"); null when
+     * offered as a completion suffix (echoed by "prompt_configure"); null when
      * there is nothing to suggest.
      */
     filigrane: string | null = null;
+
+    /**
+     * Machine bookkeeping (not configuration): the `request_id` of the last
+     * parse sent for this prompt's content. A highlight echo (prompt_configure
+     * with a `request_id`) only applies while it matches. Null once an
+     * authoritative configure took over (no parse is awaiting its answer).
+     */
+    request_id: string | null = null;
 
     zones: { main: PromptZone; pop: PopZone };
 

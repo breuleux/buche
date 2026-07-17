@@ -25,6 +25,14 @@ export interface ParseRequest extends BaseRequest {
     type: "parse";
     text: string;
     position: number;
+
+    /**
+     * Reference number for this parse. Whatever answers it — the highlight
+     * echo (a `prompt_configure` carrying `request_id`) — repeats it, so the
+     * machine can drop answers to superseded inputs (the user typed on in
+     * the meantime).
+     */
+    request_id: string;
 }
 
 export interface SignalRequest extends BaseRequest {

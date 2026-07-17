@@ -26,9 +26,6 @@
           "$ref": "#/definitions/PromptConfigureMessage"
         },
         {
-          "$ref": "#/definitions/PromptHighlightMessage"
-        },
-        {
           "$ref": "#/definitions/SyncMessage"
         },
         {
@@ -596,6 +593,10 @@
         "to": {
           "$ref": "#/definitions/To",
           "description": "Target of the message."
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Set when this message is the *echo* answering a parse (the highlight a keystroke triggered): it repeats that parse's `request_id`, and is only applied while that parse is still the latest for this prompt — a stale echo (the user typed on in the meantime) is dropped. Absent (the norm) for authoritative configurations: the fresh prompt, the submit reset, history navigation."
         }
       },
       "required": [
@@ -630,51 +631,6 @@
       },
       "required": [
         "command"
-      ],
-      "additionalProperties": false
-    },
-    "PromptHighlightMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "prompt_highlight",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "text": {
-          "type": "string",
-          "description": "The prompt text the highlight was computed for."
-        },
-        "ranges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/HighlightRange"
-          },
-          "description": "Syntax-highlight spans over `text`."
-        },
-        "filigrane": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Ghost text: the most recent history entry extending `text`, offered as a completion suffix; null when there is nothing to suggest."
-        }
-      },
-      "required": [
-        "filigrane",
-        "from",
-        "ranges",
-        "text",
-        "to",
-        "type"
       ],
       "additionalProperties": false
     },
