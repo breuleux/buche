@@ -19,8 +19,8 @@ export class Entry extends Hierarchy {
      * from its descendants consider that zone's names too (see
      * Buche.findPlace), so that e.g. a sub-shell living in some zone finds
      * the zones there before those elsewhere.
-    */
-    placement: Zone | null = null;  // INELEGANCE: I would like all this logic to be in zone
+     */
+    placement: Zone | null = null; // INELEGANCE: I would like all this logic to be in zone
 
     /** Listeners */
     listeners: Array<(entry: this) => void> = [];

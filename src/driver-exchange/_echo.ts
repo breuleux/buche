@@ -9,7 +9,11 @@ export interface EchoMessage extends BaseMessage, EchoConfiguration {
 export function handle$echo(buche: Buche, obj: EchoMessage): void {
     const entry = buche.get(obj.from, true);
     const zone = buche.findPlace(entry, obj);
-    const echo = new Echo(obj);
+    // INELEGANCE -- maybe coquille should be in charge of this
+    // The entry inherited its color from its ancestors when it was created
+    // (see Entry's constructor); keep it unless the message sets one — a bare
+    // `new Echo(obj)` would reset it to the default.
+    const echo = new Echo({ ...obj, color: obj.color ?? entry.echo.color });
     Object.assign(entry, { echo });
     buche.sendInterface({
         type: "install_echo",

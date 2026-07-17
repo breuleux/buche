@@ -1,5 +1,5 @@
 /* Styles for the <prompt-collection> custom element (prompt-collection.tsx).
- * Prompts (leading marker + CodeMirror editor) with a tab zone of labels below. */
+ * Prompts (marker above a CodeMirror editor) with a tab zone of labels below. */
 
 prompt-collection {
 	display: block;
@@ -8,21 +8,34 @@ prompt-collection {
 	font-size: 13px;
 }
 
-/* ── The active prompt: leading marker + editor ── */
+/* ── The active prompt: marker above the editor ── */
 
 .prompt-collection-prompt {
 	display: flex;
-	align-items: flex-start;
-	gap: 8px;
+	flex-direction: column;
+	gap: 2px;
+	/* Like the echo-box's top: one dim accent rectangle over the marker and the
+	 * editor (`--prompt-accent`, set inline by renderMarker; transparent when
+	 * the prompt has no accent, so nothing paints), crowned by a brighter
+	 * accent line. The rectangle reaches the left edge; the padding-left puts
+	 * the editor where the echo text sits in the echo-box (16px gutter + 2px
+	 * echo padding). */
+	padding: 2px 8px 4px 18px;
+	background: color-mix(in srgb, var(--prompt-accent, transparent) 6%, transparent);
+	border-top: 2px solid color-mix(in srgb, var(--prompt-accent, transparent) 50%, transparent);
 }
 
 .prompt-collection-prompt[hidden] {
 	display: none;
 }
 
+/* The marker: the prompt text, in small type above the editor. Its extra 4px
+ * puts it where the echo-box context text sits (22px from the left edge). */
 .prompt-collection-marker {
 	flex: 0 0 auto;
-	line-height: 20px;
+	padding-left: 4px;
+	line-height: 16px;
+	font-size: 11px;
 	white-space: pre;
 }
 
@@ -38,6 +51,8 @@ prompt-collection {
 	flex-wrap: wrap;
 	gap: 12px;
 	margin-top: 4px;
+	/* Same alignment as the prompt rows (see above). */
+	margin-left: 16px;
 }
 
 .prompt-collection-tab {

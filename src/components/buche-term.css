@@ -23,6 +23,7 @@ buche-term scroll-fader {
 }
 
 buche-term prompt-collection {
-	/* Sit at the bottom, sized to its content. */
+	/* Sit at the bottom, sized to its content, a breath below the cells. */
 	flex: 0 0 auto;
+	margin-top: 5px;
 }

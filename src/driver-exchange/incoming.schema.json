@@ -44,6 +44,10 @@
           "$ref": "#/definitions/StyledText",
           "description": "Text of the command"
         },
+        "echoContext": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
+        },
         "label": {
           "type": "string",
           "description": "The cell/tab label."
@@ -381,6 +385,10 @@
           "$ref": "#/definitions/StyledText",
           "description": "Text of the command"
         },
+        "echoContext": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
+        },
         "label": {
           "type": "string",
           "description": "The cell/tab label."
@@ -482,6 +490,10 @@
         "echo": {
           "$ref": "#/definitions/StyledText",
           "description": "Text of the command"
+        },
+        "echoContext": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
         },
         "label": {
           "type": "string",

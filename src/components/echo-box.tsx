@@ -15,8 +15,9 @@
 // Layout:
 //
 //   ┌────┬───────────────────────────────────────────┐
-//   │ ●  │ echo (the command line just submitted)  ▤◧✕│  ← status circle + echo + controls
-//   │ │  ├───────────────────────────────────────────┤
+//   │ ●  │ context (the prompt, `echoContext`, opt.) │  ╷ when there is a context:
+//   │ │  │ echo (the command line just submitted)  ▤◧✕│  ╯ one dim accent rectangle,
+//   │ │  ├───────────────────────────────────────────┤    circle riding on top
 //   │ │  │ cell — the active view's content            │  ← line runs down the gutter
 //   └────┴───────────────────────────────────────────┘
 //
@@ -152,6 +153,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     private gutter!: HTMLElement;
     private statusEl!: HTMLElement;
     private echoEl!: HTMLElement;
+    private contextEl!: HTMLElement;
     private headerEl!: HTMLElement;
     private controlsEl!: HTMLElement;
     private cellEl!: HTMLElement;
@@ -363,13 +365,19 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.headerEl = div("echo-box-header");
         this.headerEl.append(this.inlineStatusEl, this.echoEl, this.controlsEl);
 
+        // Context line (Echo `echoContext`): like the prompt's marker — a faded
+        // pill of styled text followed by a rule in the accent. It spans the full
+        // width as the box's top row; when present, the status circle rides on it
+        // (echo-box.css), its dim band extending left under the circle.
+        this.contextEl = div("echo-box-context");
+
         // Cell: holds the views; only the active one is shown.
         this.cellEl = div("echo-box-cell");
 
         const body = div("echo-box-body");
         body.append(this.headerEl, this.cellEl);
 
-        this.append(this.gutter, body);
+        this.append(this.contextEl, this.gutter, body);
 
         // Compact-mode resize handles at the very top and bottom edges. They are
         // hidden unless compact + Alt-hover (see the stylesheet) and drive the
@@ -509,7 +517,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             const r = this.getBoundingClientRect();
             return topHalf ? r.bottom : r.top;
         };
-        const anchor = anchorEdge();
+        let anchor = anchorEdge();
 
         const onMove = (e: PointerEvent) => {
             // `upAmount` is positive when moving up; `sign` maps it onto grow/shrink.
@@ -521,7 +529,16 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             this.cellEl.style.height = `${height}px`;
             // Counter-scroll by however far the anchored edge actually drifted.
             // (The size poll turns the changed measurement into a "resize".)
-            scroller.scrollTop += anchorEdge() - anchor;
+            if (scroller.scrollHeight > scroller.clientHeight) {
+                scroller.scrollTop += anchorEdge() - anchor;
+            } else {
+                // The scroller went unscrollable (content shrank below the
+                // viewport): the browser holds the view itself, and the drift
+                // accumulated so far is moot — re-baseline the anchor so it is
+                // not applied in full (clamped, landing the view off the
+                // bottom) once the content grows scrollable again.
+                anchor = anchorEdge();
+            }
         };
 
         const onUp = (e: PointerEvent) => {
@@ -618,15 +635,17 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     /** The height in px the cell can reach before the box's CSS `max-height`
-     *  clamps it (the max-height minus the header chrome), or null when the
-     *  box imposes no ceiling. Views that size dynamically grow up to it. */
+     *  clamps it (the max-height minus the header and context chrome — the
+     *  context row claims its slice of the ceiling too), or null when the box
+     *  imposes no ceiling. Views that size dynamically grow up to it. */
     get maxContentHeight(): number | null {
         this.ensureSetup();
         const max = Number.parseFloat(getComputedStyle(this).maxHeight);
         if (!Number.isFinite(max)) {
             return null;
         }
-        return Math.max(0, max - this.headerEl.offsetHeight);
+        // An empty context row is `display: none` and measures 0.
+        return Math.max(0, max - this.headerEl.offsetHeight - this.contextEl.offsetHeight);
     }
 
     /** The cell content area's rendered size, in CSS pixels. */
@@ -787,6 +806,22 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         }
     }
 
+    // ── Context (the prompt the command was typed at) ─────────────────────────
+
+    /**
+     * Set the context line shown above the header, like the prompt's marker: a
+     * faded accent pill around the styled text, then a rule to the end of the
+     * line. `null` (or an empty text) hides it.
+     */
+    setEchoContext(content: StyledText | null): void {
+        this.ensureSetup();
+        if (content?.text) {
+            this.contextEl.replaceChildren(buildStyledText(content, defaultTheme));
+        } else {
+            this.contextEl.replaceChildren();
+        }
+    }
+
     // ── Entry binding ───────────────────────────────────────────────────────────
 
     /** The bound {@link Entry}, if the box was configured from one. */
@@ -822,6 +857,9 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         const echo = entry.echo;
         if (echo?.echo !== undefined) {
             this.setEcho(echo.echo);
+        }
+        if (echo?.echoContext !== undefined) {
+            this.setEchoContext(echo.echoContext);
         }
         this.color = echo.color ?? "";
         this.status = echoStatus(echo.status);

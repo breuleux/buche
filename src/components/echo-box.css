@@ -80,6 +80,66 @@ echo-box {
 	background: transparent;
 }
 
+/* ── Context line (`echoContext`): when present, the box's top — the context
+ * row and the echo header — fuses into one dim accent rectangle, with the
+ * status circle riding on it ── */
+
+/* First grid child: its own full-width row above the gutter/body, so the
+ * context sits flush with the left edge (the gutter does not indent it). */
+.echo-box-context {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	line-height: 16px;
+	font-size: 11px;
+	flex: 0 0 auto;
+}
+
+.echo-box-context:empty {
+	display: none;
+}
+
+/* The context text clears the gutter's circle. */
+.echo-box-context > .styled-text {
+	padding-left: 22px;
+	white-space: pre;
+}
+
+/* One solid rectangle over the context row and the header. The :where() keeps
+ * the specificity low so the later base/compact selectors do not descend (see
+ * biome's noDescendingSpecificity); these rules win by order, not weight. */
+:where(echo-box:has(.echo-box-context:not(:empty))) .echo-box-context,
+:where(echo-box:has(.echo-box-context:not(:empty))) .echo-box-header {
+	background: color-mix(in srgb, var(--echo-color) 12%, transparent);
+}
+
+/* Pull the header under the gutter column too, so the rectangle is a single
+ * unbroken slab (a negative left margin grows the block leftward without
+ * moving its right edge). The gutter — circle and line — stays painted on
+ * top of it. */
+:where(echo-box:has(.echo-box-context:not(:empty))) .echo-box-header {
+	margin-left: -16px;
+	padding-left: 16px;
+}
+
+echo-box:has(.echo-box-context:not(:empty)) .echo-box-gutter {
+	z-index: 1;
+}
+
+/* The status circle rides on the context row; the gutter line reaches it. */
+echo-box:has(.echo-box-context:not(:empty)) .echo-box-status {
+	top: -13px;
+}
+
+echo-box:has(.echo-box-context:not(:empty)) .echo-box-gutter::before {
+	top: -8px;
+}
+
+/* Compact mode hides the chrome entirely: no context either. */
+echo-box[compact] .echo-box-context {
+	display: none;
+}
+
 /* ── Body: header (echo + controls) then the cell ── */
 
 .echo-box-body {

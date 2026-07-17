@@ -382,6 +382,10 @@ describe("echo-box — resize handle", () => {
     function withScroller(box: EchoBox, scrollTop: number): HTMLElement {
         const scroller = document.createElement("div");
         scroller.scrollTop = scrollTop;
+        // Make it scrollable (happy-dom reports 0/0 by default, which the drag
+        // handler reads as "content shorter than the viewport" and rebaselines).
+        Object.defineProperty(scroller, "scrollHeight", { value: 2000, configurable: true });
+        Object.defineProperty(scroller, "clientHeight", { value: 600, configurable: true });
         stubScrollParent(box, scroller);
         const cell = q(box, ".echo-box-cell") as HTMLElement;
         box.getBoundingClientRect = () => {
@@ -406,6 +410,42 @@ describe("echo-box — resize handle", () => {
         drag(gutter, 50, 70); // top half, shrink by 20
         expect(cell.style.height).toBe("80px");
         expect(scroller.scrollTop).toBe(480);
+    });
+
+    test("a mid-drag collapse rebaselines the anchor instead of stacking stale drift", () => {
+        const { box, cell, gutter } = setup(100);
+        const scroller = withScroller(box, 500);
+        // The scroller goes unscrollable for the shrink phase (content shorter
+        // than the viewport), then scrollable again as the cell grows back.
+        let scrollable = false;
+        Object.defineProperty(scroller, "scrollHeight", {
+            get: () => (scrollable ? 2000 : 600),
+        });
+        Object.defineProperty(scroller, "clientHeight", { value: 600 });
+        gutter.dispatchEvent(
+            new PointerEvent("pointerdown", {
+                clientY: 50,
+                button: 0,
+                pointerId: 1,
+                bubbles: true,
+            }),
+        );
+        scrollable = false;
+        gutter.dispatchEvent(
+            new PointerEvent("pointermove", { clientY: 70, pointerId: 1, bubbles: true }),
+        ); // shrink 20
+        scrollable = true;
+        gutter.dispatchEvent(
+            new PointerEvent("pointermove", { clientY: 30, pointerId: 1, bubbles: true }),
+        ); // grow 40
+        gutter.dispatchEvent(
+            new PointerEvent("pointerup", { clientY: 30, pointerId: 1, bubbles: true }),
+        );
+        expect(cell.style.height).toBe("120px");
+        // The 20px of drift measured before the collapse is not applied once
+        // scrollable again (it would land the view off the bottom): only the
+        // drift measured after the rebaseline is (80 → 120, i.e. +40).
+        expect(scroller.scrollTop).toBe(540);
     });
 
     test("bottom-half drag leaves the scroll position untouched", () => {

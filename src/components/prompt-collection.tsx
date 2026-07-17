@@ -19,7 +19,8 @@
 // end of the text accepts it.
 //
 //   ┌─────────────────────────────────────────────┐
-//   │ $  │ the active prompt's CodeMirror editor  │
+//   │ $  ← prompt text (small, above the editor)  │
+//   │ the active prompt's CodeMirror editor       │
 //   ├─────────────────────────────────────────────┤
 //   │ sh   py   notes            ← tab zone       │
 //   └─────────────────────────────────────────────┘
@@ -139,7 +140,7 @@ interface Row {
     entry: Entry;
     /** Stable DOM id (for the `data-prompt` attribute and drag reordering). */
     id: string;
-    row: HTMLElement; // [marker][editor]
+    row: HTMLElement; // [marker; editor]
     marker: HTMLElement;
     tab: HTMLElement;
     editor: PromptEditor;
@@ -630,7 +631,7 @@ export class PromptCollection extends HTMLElement {
         this.order.push(entry);
 
         // Render the leading marker and apply the initial styled content.
-        this.renderMarker(marker, entry.prompt?.prompt);
+        this.renderMarker(rowEntry, entry);
         this.applyContent(editor, content);
         this.applyFiligrane(rowEntry);
 
@@ -830,7 +831,7 @@ export class PromptCollection extends HTMLElement {
         }
         row.editor.setReadOnly?.(false);
         row.tab.textContent = entry.echo.label;
-        this.renderMarker(row.marker, entry.prompt?.prompt);
+        this.renderMarker(row, entry);
         this.applyTabStyle(row);
 
         // Reset the editor from `content`: its text, colorization and cursor
@@ -957,12 +958,29 @@ export class PromptCollection extends HTMLElement {
 
     // ── Internals ──────────────────────────────────────────────────────────────
 
-    // Render a StyledText leading marker into `marker` (empty when absent).
-    private renderMarker(marker: HTMLElement, styled: StyledText | undefined): void {
+    // Render a StyledText leading marker into the row's marker (empty when
+    // absent), and expose the Entry's accent as `--prompt-accent` on the row
+    // itself (custom properties inherit downward, and the rectangle styles read
+    // it on the row) so the stylesheet can tint the rectangle and top line.
+    private renderMarker(row: Row, entry: Entry): void {
+        const styled = entry.prompt?.prompt;
         if (styled?.text) {
-            marker.replaceChildren(buildStyledText(styled, this.theme));
+            row.marker.replaceChildren(buildStyledText(styled, this.theme));
         } else {
-            marker.replaceChildren();
+            row.marker.replaceChildren();
+        }
+        let accent = "";
+        if (entry.echo.color) {
+            try {
+                accent = this.theme.calculateColor(entry.echo.color);
+            } catch {
+                accent = "";
+            }
+        }
+        if (accent) {
+            row.row.style.setProperty("--prompt-accent", accent);
+        } else {
+            row.row.style.removeProperty("--prompt-accent");
         }
     }
 

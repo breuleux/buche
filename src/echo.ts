@@ -9,9 +9,19 @@ export interface Status {
     code?: number | string | null;
 }
 
+// INELEGANCE: group echo and echoContext and use the same structure for prompt cfg
+// Maybe add layout (context at top, or left?)
+
 export interface EchoConfiguration {
     /** Text of the command */
     echo?: StyledText;
+
+    /**
+     * Context for the command (e.g. the prompt it was typed at: host, path,
+     * branch). When present, the interface shows it above the echo box, in the
+     * accent color.
+     */
+    echoContext?: StyledText;
 
     /** The cell/tab label. */
     label?: string;
@@ -49,6 +59,9 @@ export class Echo extends WithId() {
     /** Text of the command */
     echo?: StyledText;
 
+    /** Context for the command, shown above the echo box (see EchoConfiguration). */
+    echoContext?: StyledText;
+
     /** The cell/tab label. */
     label!: string;
 
@@ -85,6 +98,7 @@ export class Echo extends WithId() {
         this.label = config.label ?? this.label ?? `%${this.serialId}`;
         this.color = config.color ?? this.color ?? "purple";
         this.echo = config.echo ?? this.echo;
+        this.echoContext = config.echoContext ?? this.echoContext;
         this.id = config.id ?? this.id;
         this.sticky = config.sticky ?? this.sticky;
         this.background = config.background ?? this.background;
