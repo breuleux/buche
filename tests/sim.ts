@@ -230,12 +230,12 @@ function readJsonl(path: string): any[] {
         .map((line) => JSON.parse(line));
 }
 
-function writeJsonl(path: string, items: any[]): void {
+export function writeJsonl(path: string, items: any[]): void {
     writeFileSync(path, items.map((item) => `${JSON.stringify(item)}\n`).join(""));
 }
 
 /** An optional leading line that supplies the command and pause. */
-interface BootLine {
+export interface BootLine {
     type: "boot";
     command?: string;
     pause?: number;
@@ -245,7 +245,7 @@ interface BootLine {
  * Read a JSONL file, splitting off a leading `boot` line if present. The boot
  * line is returned separately and removed from `items`.
  */
-function readJsonlWithBoot(path: string): { boot: BootLine | null; items: any[] } {
+export function readJsonlWithBoot(path: string): { boot: BootLine | null; items: any[] } {
     const items = readJsonl(path);
     if (items.length > 0 && items[0]?.type === "boot") {
         return { boot: items[0] as BootLine, items: items.slice(1) };
