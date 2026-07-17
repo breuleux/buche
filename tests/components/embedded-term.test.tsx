@@ -119,122 +119,183 @@ describe("embedded-term — held newlines", () => {
     });
 });
 
-describe("embedded-term — resize watching", () => {
-    function fakeResizeObserver() {
-        const observed: unknown[] = [];
-        const unobserved: unknown[] = [];
-        const frames: (() => void)[] = [];
-        let fire: (() => void) | null = null;
-        class FakeRO {
-            constructor(cb: () => void) {
-                fire = cb;
-            }
-            observe(el: unknown) {
-                observed.push(el);
-            }
-            unobserve(el: unknown) {
-                unobserved.push(el);
-            }
-            disconnect() {}
-        }
-        const realRO = globalThis.ResizeObserver;
+describe("embedded-term — resize polling", () => {
+    // Frame-stepped rAF so tests control when the poll ticks happen. A poll
+    // step re-arms itself at the start, so each runNew runs exactly one
+    // generation of frames (xterm schedules frames of its own too).
+    function fakeFrames() {
+        const frames = new Map<number, () => void>();
+        let seq = 0;
         const realRaf = globalThis.requestAnimationFrame;
-        globalThis.ResizeObserver = FakeRO as unknown as typeof ResizeObserver;
-        globalThis.requestAnimationFrame = ((cb: () => void) =>
-            frames.push(cb)) as unknown as typeof requestAnimationFrame;
+        const realCancel = globalThis.cancelAnimationFrame;
+        globalThis.requestAnimationFrame = ((cb: () => void) => {
+            frames.set(++seq, cb);
+            return seq;
+        }) as unknown as typeof requestAnimationFrame;
+        globalThis.cancelAnimationFrame = ((id: number) => {
+            frames.delete(id);
+        }) as unknown as typeof cancelAnimationFrame;
+        const runNew = () => {
+            const batch = Array.from(frames.values());
+            frames.clear();
+            for (const cb of batch) {
+                cb();
+            }
+        };
         return {
-            observed,
-            unobserved,
-            frames,
-            fire: () => fire!(),
+            pending: () => frames.size,
+            runNew,
             restore: () => {
-                globalThis.ResizeObserver = realRO;
                 globalThis.requestAnimationFrame = realRaf;
+                globalThis.cancelAnimationFrame = realCancel;
             },
         };
     }
 
-    test("observes the element and its whole ancestor chain, and unobserves on disconnect", () => {
-        const ro = fakeResizeObserver();
-        try {
-            const outer = document.createElement("div");
-            const inner = document.createElement("div");
-            outer.append(inner);
-            document.body.append(outer);
-            const t = document.createElement("embedded-term") as EmbeddedTerm;
-            inner.append(t);
-            for (const el of [t, inner, outer, document.body, document.documentElement]) {
-                expect(ro.observed).toContain(el);
-            }
-            t.remove();
-            for (const el of [t, inner, outer]) {
-                expect(ro.unobserved).toContain(el);
-            }
-        } finally {
-            ro.restore();
-        }
-    });
+    // happy-dom has no layout, so clientWidth/clientHeight are stubbed on the
+    // container to simulate geometry changes.
+    function sizedWrap(
+        width: number,
+        height: number,
+    ): { wrap: HTMLElement; size: (w: number, h: number) => void } {
+        const wrap = document.createElement("div");
+        let w = width;
+        let h = height;
+        Object.defineProperty(wrap, "clientWidth", { configurable: true, get: () => w });
+        Object.defineProperty(wrap, "clientHeight", { configurable: true, get: () => h });
+        document.body.append(wrap);
+        return {
+            wrap,
+            size: (nw, nh) => {
+                w = nw;
+                h = nh;
+            },
+        };
+    }
 
-    test("a bubbling grid-resize schedules a deferred refit", () => {
-        const ro = fakeResizeObserver();
+    const countRefits = (t: EmbeddedTerm): { n: number } => {
+        const g = { n: 0 };
+        const anyT = t as unknown as { refit(): void };
+        const real = anyT.refit.bind(t);
+        anyT.refit = () => {
+            g.n++;
+            real();
+        };
+        return g;
+    };
+
+    test("the first frames set a baseline without refitting", () => {
+        const raf = fakeFrames();
         try {
-            const wrap = document.createElement("div");
-            document.body.append(wrap);
+            const { wrap } = sizedWrap(100, 50);
             const t = document.createElement("embedded-term") as EmbeddedTerm;
             wrap.append(t);
-            let refits = 0;
-            const anyT = t as unknown as { refit(): void };
-            const real = anyT.refit.bind(t);
-            anyT.refit = () => {
-                refits++;
-                real();
-            };
-            const pending = ro.frames.length;
-            wrap.dispatchEvent(new CustomEvent("grid-resize", { bubbles: true }));
-            expect(refits).toBe(0);
-            const added = ro.frames.splice(pending);
-            for (const f of added) {
-                f();
-            }
-            expect(refits).toBe(1);
+            const refits = countRefits(t);
+            raf.runNew();
+            raf.runNew();
+            expect(refits.n).toBe(0);
         } finally {
-            ro.restore();
+            raf.restore();
         }
     });
 
-    test("observer notifications coalesce into one rAF-deferred refit", () => {
-        const ro = fakeResizeObserver();
+    test("a dimension change refits once, deferred a frame", () => {
+        const raf = fakeFrames();
         try {
+            const { wrap, size } = sizedWrap(100, 50);
             const t = document.createElement("embedded-term") as EmbeddedTerm;
-            document.body.append(t);
+            wrap.append(t);
+            const refits = countRefits(t);
+            raf.runNew(); // baseline
+            size(200, 50);
+            raf.runNew(); // the poll notices…
+            expect(refits.n).toBe(0); // …and defers the refit
+            raf.runNew(); // …which runs next frame
+            expect(refits.n).toBe(1);
+            raf.runNew();
+            expect(refits.n).toBe(1); // no change → no further refit
+        } finally {
+            raf.restore();
+        }
+    });
+
+    test("a hidden container is quiet, and returning re-derives the size", () => {
+        const raf = fakeFrames();
+        try {
+            const { wrap, size } = sizedWrap(100, 50);
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
+            wrap.append(t);
+            const refits = countRefits(t);
+            raf.runNew(); // baseline
+            size(0, 0); // hidden tab
+            raf.runNew();
+            raf.runNew();
+            expect(refits.n).toBe(0); // nothing is derived while hidden
+            size(100, 50); // same size, but coming back re-derives it
+            raf.runNew();
+            raf.runNew();
+            expect(refits.n).toBe(1);
+        } finally {
+            raf.restore();
+        }
+    });
+
+    test("a term created hidden derives its size on first sight", () => {
+        const raf = fakeFrames();
+        try {
+            const { wrap, size } = sizedWrap(0, 0);
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
+            wrap.append(t);
+            const refits = countRefits(t);
+            raf.runNew(); // hidden: nothing yet, no baseline taken
+            size(100, 50);
+            raf.runNew();
+            raf.runNew();
+            expect(refits.n).toBe(1); // first sight is a derivation, not a baseline
+        } finally {
+            raf.restore();
+        }
+    });
+
+    test("a grid change dispatches a bubbling term-resize", () => {
+        const t = document.createElement("embedded-term") as EmbeddedTerm;
+        document.body.append(t);
+        let fired = 0;
+        let grid = "";
+        document.body.addEventListener("term-resize", () => {
+            fired++;
+            grid = `${t.terminal.rows}x${t.terminal.cols}`;
+        });
+        // happy-dom has no metrics, so force the grid move the settle path makes.
+        (t as unknown as { resizeTerminal(rows: number): void }).resizeTerminal(20);
+        expect(fired).toBe(1);
+        expect(grid).toBe("20x80");
+        // No-op fits do not re-dispatch.
+        (t as unknown as { resizeTerminal(rows: number): void }).resizeTerminal(20);
+        expect(fired).toBe(1);
+    });
+
+    test("disconnect stops the polling", () => {
+        const raf = fakeFrames();
+        try {
+            const { wrap, size } = sizedWrap(100, 50);
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
             let refits = 0;
+            wrap.append(t);
             const anyT = t as unknown as { refit(): void };
             const real = anyT.refit.bind(t);
             anyT.refit = () => {
                 refits++;
                 real();
             };
-            // (xterm schedules its own rAF frames too, so run only the frames
-            // added since the last run, and assert on refits, not frame count.)
-            let pending = ro.frames.length;
-            const runNew = () => {
-                const added = ro.frames.splice(pending);
-                pending = ro.frames.length;
-                for (const f of added) {
-                    f();
-                }
-            };
-            ro.fire();
-            ro.fire();
-            ro.fire();
-            expect(refits).toBe(0); // deferred, and coalesced
-            runNew();
-            expect(refits).toBe(1);
-            ro.fire();
-            runNew();
-            expect(refits).toBe(2);
+            raf.runNew(); // baseline
+            t.remove();
+            size(200, 50);
+            raf.runNew();
+            raf.runNew();
+            expect(refits).toBe(0);
         } finally {
-            ro.restore();
+            raf.restore();
         }
     });
 });

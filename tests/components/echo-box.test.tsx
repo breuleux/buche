@@ -237,12 +237,23 @@ describe("echo-box — resize handle", () => {
     // y < 100 is the top half, y ≥ 100 the bottom half.
     const BAR_HEIGHT = 200;
 
+    // happy-dom has no rAF pacing to speak of for tests; waiting a couple of
+    // animation intervals lets the box's size poll tick.
+    const frames = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
     // Prepare a box whose cell starts at `startHeight` and whose gutter reports a
-    // fixed on-screen rect (happy-dom otherwise returns an all-zero rect).
+    // fixed on-screen rect (happy-dom otherwise returns an all-zero rect). The
+    // cell's client size mirrors the explicit height, so the box's size poll
+    // sees real geometry.
     function setup(startHeight: number, attrs: Record<string, string> = {}) {
         const box = make(attrs);
         const cell = q(box, ".echo-box-cell") as HTMLElement;
         cell.style.height = `${startHeight}px`;
+        Object.defineProperty(cell, "clientWidth", { configurable: true, get: () => 200 });
+        Object.defineProperty(cell, "clientHeight", {
+            configurable: true,
+            get: () => Number.parseFloat(cell.style.height) || 0,
+        });
         const gutter = q(box, ".echo-box-gutter") as HTMLElement;
         gutter.getBoundingClientRect = () =>
             ({ top: 0, bottom: BAR_HEIGHT, height: BAR_HEIGHT }) as DOMRect;
@@ -313,35 +324,50 @@ describe("echo-box — resize handle", () => {
         expect(box.style.maxHeight).toBe("none");
     });
 
-    test("double-clicking the bar snaps back to the dynamic sizing", () => {
+    test("drag and reset announce the size once per frame, as the poll notices", async () => {
         const { box, cell, gutter } = setup(100);
         box.style.maxHeight = "300px";
-        drag(gutter, 50, 30);
         let fired = 0;
         box.addEventListener("resize", () => fired++);
+        await frames(50); // a couple of quiet frames: baseline only
+        expect(fired).toBe(0);
+        // Three moves within one frame coalesce into a single announcement.
+        drag(gutter, 50, 40);
+        drag(gutter, 50, 30);
+        drag(gutter, 50, 20);
+        await frames(50);
+        expect(fired).toBe(1);
         gutter.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
         expect(cell.style.height).toBe("");
         expect(box.style.maxHeight).toBe("");
-        expect(fired).toBe(1);
+        await frames(50);
+        expect(fired).toBe(2); // the snap-back is announced the same way
+        await frames(50);
+        expect(fired).toBe(2); // unchanged → quiet
     });
 
-    test("a grid-resize announcement re-announces the size, debounced", async () => {
-        const box = make();
+    test("a terminal settling its grid re-announces unchanged pixels", async () => {
+        const { box, cell } = setup(100);
+        const view = document.createElement("div");
+        box.setView("pty", view);
+        await frames(50); // baseline at 100; nothing announced
         let fired = 0;
         box.addEventListener("resize", () => fired++);
-        window.dispatchEvent(new CustomEvent("grid-resize"));
-        window.dispatchEvent(new CustomEvent("grid-resize"));
-        expect(fired).toBe(0); // still debouncing
-        await new Promise((r) => setTimeout(r, 80));
+        view.dispatchEvent(new CustomEvent("term-resize", { bubbles: true }));
+        await frames(50);
         expect(fired).toBe(1);
+        expect(cell.style.height).toBe("100px"); // pixels never moved
+        await frames(50);
+        expect(fired).toBe(1); // one forced announcement, then quiet
     });
 
-    test("double-click without a user height is a no-op", () => {
+    test("double-click without a user height is a no-op", async () => {
         const box = make();
         const gutter = q(box, ".echo-box-gutter") as HTMLElement;
         let fired = 0;
         box.addEventListener("resize", () => fired++);
         gutter.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        await frames(50);
         expect(fired).toBe(0);
     });
 

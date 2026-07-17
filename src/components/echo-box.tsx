@@ -54,8 +54,13 @@
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "viewchange"  detail: { view: ViewLabel }  — the active view changed
 //   "close"                                     — the closing icon was clicked
-//   "resize"                                    — the user resized the cell;
-//     debounced by 50ms during a drag (and flushed when the drag ends)
+//   "resize"                                    — the cell's measured size changed.
+//     The box polls its cell size once per frame, so *every* resize cause (a
+//     gutter drag, the double-click reset, a divider move, the window, a tab
+//     coming back) funnels through this one event: at most once per frame, and
+//     only when the measurement actually differs. A child terminal's internal
+//     "term-resize" (its pty grid settled, e.g. a fresh terminal's first real
+//     fit) forces the next tick to re-announce even unchanged pixels.
 //
 // Appearance lives in the companion stylesheet `echo-box.css` (or the
 // consolidated components.css).
@@ -123,9 +128,6 @@ export interface EchoBoxEventMap {
 
 const STATUSES: readonly EchoStatus[] = ["running", "done", "error", "unresponsive", "standby"];
 
-/** Debounce window for the user-resize "resize" event, in milliseconds. */
-const RESIZE_DEBOUNCE_MS = 50;
-
 function div(className: string): HTMLElement {
     const el = document.createElement("div");
     el.className = className;
@@ -153,8 +155,14 @@ export class EchoBox extends HTMLElement {
     private _status: EchoStatus = "running";
     private _compact = false;
     private _destroyWhenDone = false;
-    // Pending debounced "resize" notification (see scheduleResize).
-    private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    // Cell-size polling, the single source of the "resize" event (see checkSize).
+    private sizeFrame = 0;
+    private lastWidth = -1;
+    private lastHeight = -1;
+    private wasHidden = false;
+    // Set when a child terminal's pty grid changed ("term-resize"): forces the
+    // next poll tick to announce even when the box's own pixels are unchanged.
+    private ptyDirty = false;
     // The bound Entry (if configured from one) and the listener registered on it.
     private _entry: Entry | null = null;
     private entryListener: ((entry: Entry) => void) | null = null;
@@ -171,25 +179,65 @@ export class EchoBox extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
-        // A grid divider announcement bubbles from the grid past its
-        // ancestors — only window sees it here (see grid.tsx). Treat it like
-        // the tail of a user drag: debounced "resize" re-announces the size.
-        window.addEventListener("grid-resize", this.onGridResize);
+        this.startSizePolling();
     }
 
     disconnectedCallback(): void {
-        window.removeEventListener("grid-resize", this.onGridResize);
         this.stopHover();
         // A box that goes away mid-drag should not announce a resize.
-        if (this.resizeTimer !== null) {
-            clearTimeout(this.resizeTimer);
-            this.resizeTimer = null;
+        this.stopSizePolling();
+    }
+
+    // The cell size is polled once per frame (while connected), so the
+    // "resize" event has exactly one source: any cause — a gutter drag, the
+    // double-click reset, a divider move, the window, a tab returning to view
+    // — simply changes the measurement, and the next frame turns that into at
+    // most one event. Hidden boxes (0×0) are skipped; returning to view always
+    // fires once, so the embedded terminal gets to re-derive its grid.
+    private startSizePolling(): void {
+        this.stopSizePolling();
+        this.lastWidth = -1;
+        this.lastHeight = -1;
+        this.wasHidden = false;
+        const step = () => {
+            this.sizeFrame = requestAnimationFrame(step);
+            this.checkSize();
+        };
+        this.sizeFrame = requestAnimationFrame(step);
+    }
+
+    private stopSizePolling(): void {
+        if (this.sizeFrame !== 0) {
+            cancelAnimationFrame(this.sizeFrame);
+            this.sizeFrame = 0;
         }
     }
 
-    private onGridResize = (): void => {
-        this.scheduleResize();
-    };
+    private checkSize(): void {
+        const { width, height } = this.cellSize;
+        if (width === 0 && height === 0) {
+            this.wasHidden = true;
+            return;
+        }
+        const reappeared = this.wasHidden;
+        const ptyChanged = this.ptyDirty;
+        this.wasHidden = false;
+        this.ptyDirty = false;
+        const same = width === this.lastWidth && height === this.lastHeight;
+        if (!reappeared && !ptyChanged && same) {
+            return;
+        }
+        // The first frame while shown only sets the baseline; the size on
+        // arrival is announced by the terminal's "term-appear" instead.
+        if (this.lastWidth < 0 && !reappeared && !ptyChanged) {
+            this.lastWidth = width;
+            this.lastHeight = height;
+            return;
+        }
+        this.lastWidth = width;
+        this.lastHeight = height;
+        this.dispatchEvent(new CustomEvent<null>("resize", { bubbles: true }));
+    }
 
     // Typed event listeners for this element's custom events (see
     // {@link EchoBoxEventMap}); falls back to the standard signature.
@@ -313,6 +361,12 @@ export class EchoBox extends HTMLElement {
 
         this.append(this.handleTop, this.handleBottom);
 
+        // A child terminal's pty-grid change may matter even when the box's
+        // pixels did not move (a fresh terminal settling its first real fit).
+        this.addEventListener("term-resize", () => {
+            this.ptyDirty = true;
+        });
+
         // Reveal the compact overlay/handles only while the pointer is over this
         // box and Alt is held. Key listeners are attached only during the hover.
         this.addEventListener("pointerenter", (e) => this.startHover(e as PointerEvent));
@@ -415,8 +469,8 @@ export class EchoBox extends HTMLElement {
             this.style.maxHeight = "none";
             this.cellEl.style.height = `${height}px`;
             // Counter-scroll by however far the anchored edge actually drifted.
+            // (The size poll turns the changed measurement into a "resize".)
             scroller.scrollTop += anchorEdge() - anchor;
-            this.scheduleResize();
         };
 
         const onUp = (e: PointerEvent) => {
@@ -425,8 +479,6 @@ export class EchoBox extends HTMLElement {
             source.removeEventListener("pointermove", onMove);
             source.removeEventListener("pointerup", onUp);
             source.removeEventListener("pointercancel", onUp);
-            // Report the final size even if the debounce hadn't elapsed yet.
-            this.flushResize();
         };
 
         source.addEventListener("pointermove", onMove);
@@ -434,46 +486,15 @@ export class EchoBox extends HTMLElement {
         source.addEventListener("pointercancel", onUp);
     }
 
-    /** (Re)arm the debounced "resize" notification; fires RESIZE_DEBOUNCE_MS
-     *  after the last resize movement. */
-    private scheduleResize(): void {
-        if (this.resizeTimer !== null) {
-            clearTimeout(this.resizeTimer);
-        }
-        this.resizeTimer = setTimeout(() => {
-            this.resizeTimer = null;
-            this.notifyResize();
-        }, RESIZE_DEBOUNCE_MS);
-    }
-
-    /** Fire a pending debounced "resize" now, if one is armed. */
-    private flushResize(): void {
-        if (this.resizeTimer === null) {
-            return;
-        }
-        clearTimeout(this.resizeTimer);
-        this.resizeTimer = null;
-        this.notifyResize();
-    }
-
-    private notifyResize(): void {
-        this.dispatchEvent(new CustomEvent<null>("resize", { bubbles: true }));
-    }
-
     /** Undo the user's custom height (double-click the bar): clear the explicit
      *  height and the dropped ceiling, snapping back to the dynamic
-     *  max-height sizing, and announce the new size. */
+     *  max-height sizing (the size poll announces the new size). */
     private resetHeight(): void {
         if (this.cellEl.style.height === "" && this.style.maxHeight === "") {
             return;
         }
-        if (this.resizeTimer !== null) {
-            clearTimeout(this.resizeTimer);
-            this.resizeTimer = null;
-        }
         this.cellEl.style.height = "";
         this.style.maxHeight = "";
-        this.notifyResize();
     }
 
     /** The nearest scrollable ancestor, falling back to the document scroller. */

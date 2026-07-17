@@ -18,6 +18,17 @@ echo-box {
 	max-height: 300px;
 }
 
+/* A box placed *directly* in a tab-pane pane owns that pane: it fills it (no
+ * 300px ceiling), and the cell takes the height the header leaves, so an
+ * embedded terminal can span the whole pane (see the fitting in cell.ts).
+ * Scoped to direct pane children: boxes inside a <buche-term> keep their
+ * dynamic content sizing (100% there feeds a content/height feedback loop
+ * through the scroll-fader). */
+.tab-pane-pane > echo-box {
+	max-height: none;
+	height: 100%;
+}
+
 /* ── Gutter: status circle at the top, line running down beside the cell ── */
 
 .echo-box-gutter {
@@ -74,10 +85,16 @@ echo-box {
 .echo-box-body {
 	grid-column: 2;
 	min-width: 0;
+	/* Stack header then cell; the cell claims whatever height the box has
+	 * beyond the header (the whole pane height in a tab pane). */
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 }
 
 .echo-box-header {
 	position: relative;
+	flex: 0 0 auto;
 }
 
 .echo-box-echo {
@@ -152,6 +169,8 @@ echo-box:not([compact]):focus-within .echo-box-controls {
 .echo-box-cell {
 	padding: 0 2px 2px;
 	min-width: 0;
+	flex: 1 1 auto;
+	min-height: 0;
 	/* When the gutter handle sets an explicit height, keep content contained. */
 	overflow: auto;
 }

@@ -69,7 +69,17 @@ export class Cell extends WithId() implements CellConfiguration {
             // Dynamic sizing (rows grow with content) is the default, capped
             // by the box's max-height; a user drag pins the rows to the
             // dragged height, and double-clicking the bar frees it again.
+            // A box placed directly in a tab-pane pane fills it, so with no
+            // drag height the grid is pinned to the rendered cell height — the
+            // terminal spans the whole pane (see the `.tab-pane-pane > echo-box`
+            // CSS). Boxes inside a <buche-term> keep dynamic sizing.
+            const fillsPane = box.parentElement?.classList.contains("tab-pane-pane") ?? false;
             const fit = () => {
+                if (fillsPane && box.cellContentHeight === null) {
+                    const height = box.cellSize.height;
+                    view.fit(height > 0 ? height : null, box.maxContentHeight);
+                    return;
+                }
                 view.fit(box.cellContentHeight, box.maxContentHeight);
             };
             box.addEventListener("resize", fit);

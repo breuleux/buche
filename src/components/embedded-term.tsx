@@ -8,8 +8,13 @@
 //   term.write("\x1b[32mhello\x1b[0m world\r\n");   // feed raw pty output
 //   term.addEventListener("term-data", (e) => pty.write((e as CustomEvent<string>).detail));
 //
-// Events (both bubble): "term-data" carries keyboard input; "term-appear"
-// announces that the terminal has been attached to the document.
+// Events (all bubble): "term-data" carries keyboard input; "term-appear"
+// announces that the terminal has been attached to the document; "term-resize"
+// announces that the pty grid (rows/cols) actually changed — a container
+// <echo-box> uses it to re-announce its size even when its own pixels stayed
+// put (a fresh terminal settles its grid after the initial fit, once xterm's
+// cell metrics are measured). Pixel changes need no event here: the term polls
+// its container each frame and refits itself.
 //
 // The terminal always declares `max-rows` rows to the pty, but the element only
 // shows the rows that have ever been used — so it starts at height 0 and grows
@@ -78,9 +83,12 @@ export class EmbeddedTerm extends HTMLElement {
     private fadeTop!: HTMLElement;
     private fadeBottom!: HTMLElement;
     private stub!: HTMLElement;
-    private observer: ResizeObserver | null = null;
-    private observed: Element[] = [];
     private refitScheduled = false;
+    // Container-size polling (see checkContainer).
+    private pollFrame = 0;
+    private lastWidth = -1;
+    private lastHeight = -1;
+    private wasHidden = false;
     // Registered only while the ed2-clears-scrollback attribute is present, so
     // the CSI J identifier carries no extra handler when the feature is off.
     private clearHook: { dispose(): void } | null = null;
@@ -108,44 +116,72 @@ export class EmbeddedTerm extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
-        this.observer ??= new ResizeObserver(() => this.scheduleRefit());
-        // Watch the whole ancestor chain, not just this element: the available
-        // width is decided upstream (zone, grid pane, window), and an
-        // intermediate clamp could leave this box's own size unchanged while
-        // the width it should fill has moved.
-        this.observed = [];
-        for (let el: Element | null = this; el; el = el.parentElement) {
-            this.observer.observe(el);
-            this.observed.push(el);
-        }
-        // Grid dividers announce their drag directly (see `grid-resize` in
-        // grid.tsx); the observer alone has proved unreliable mid-drag. The
-        // event is dispatched on the grid and bubbles, so it passes over the
-        // term — window is where it can actually be caught.
-        window.addEventListener("grid-resize", this.onGridResize);
+        this.startPolling();
         this.dispatchEvent(new CustomEvent("term-appear", { bubbles: true }));
     }
 
     disconnectedCallback(): void {
         // Keep the terminal alive so re-attaching the element just works.
-        window.removeEventListener("grid-resize", this.onGridResize);
-        if (this.observer) {
-            for (const el of this.observed) {
-                this.observer.unobserve(el);
-            }
-        }
-        this.observed = [];
+        this.stopPolling();
     }
 
-    private onGridResize = (): void => {
-        this.scheduleRefit();
-    };
+    // Rather than observing resizes (a ResizeObserver on the ancestor chain
+    // proved flimsy mid-drag, and grid-divider announcements couple the term to
+    // grid code), poll the container's effective dimensions once per frame and
+    // act when they differ. Anything that moves the layout — divider drag,
+    // window resize, an intermediate clamp — lands in the measurement, so no
+    // ancestor has to announce anything.
+    private startPolling(): void {
+        this.stopPolling();
+        this.lastWidth = -1;
+        this.lastHeight = -1;
+        this.wasHidden = false;
+        const step = () => {
+            this.pollFrame = requestAnimationFrame(step);
+            this.checkContainer();
+        };
+        this.pollFrame = requestAnimationFrame(step);
+    }
 
-    // Coalesce ResizeObserver bursts (a divider drag fires a stream of them)
-    // into one refit per frame. The rAF also lands after layout, so the
-    // measurement sees the final geometry, and keeping term.resize out of the
-    // observer callback itself avoids the ResizeObserver-loop guard that
-    // otherwise drops notifications when the callback mutates the layout.
+    private stopPolling(): void {
+        if (this.pollFrame !== 0) {
+            cancelAnimationFrame(this.pollFrame);
+            this.pollFrame = 0;
+        }
+    }
+
+    private checkContainer(): void {
+        const box = this.parentElement ?? this;
+        const w = box.clientWidth;
+        const h = box.clientHeight;
+        if (w === 0 && h === 0) {
+            // Not rendered (hidden tab pane). Skip, but remember it: on return
+            // the size is re-derived even when the numbers look unchanged —
+            // nothing could be measured while hidden, and the term may never
+            // have been measured at all (created in a background tab).
+            this.wasHidden = true;
+            return;
+        }
+        const reappeared = this.wasHidden;
+        this.wasHidden = false;
+        if (!reappeared && w === this.lastWidth && h === this.lastHeight) {
+            return;
+        }
+        // The first frame after attach only sets the baseline; the initial size
+        // is announced by "term-appear" instead.
+        if (this.lastWidth < 0 && !reappeared) {
+            this.lastWidth = w;
+            this.lastHeight = h;
+            return;
+        }
+        this.lastWidth = w;
+        this.lastHeight = h;
+        this.scheduleRefit();
+    }
+
+    // Coalesce a burst of detections into one refit per frame. The rAF also
+    // lands after layout, so the measurement sees the final geometry, and
+    // keeping term.resize out of the measuring code avoids re-entrant layout.
     private scheduleRefit(): void {
         if (this.refitScheduled) {
             return;
@@ -235,6 +271,11 @@ export class EmbeddedTerm extends HTMLElement {
         this.fixedHeight = height;
         this.resizeTerminal(height === null ? this.dynamicRows() : this.rowsForHeight(height));
         this.measure();
+        // Cells not measured yet (fresh terminal, hidden container) make the
+        // row count a fallback guess; refit once layout/metrics land.
+        if (this.cellHeight() === 0) {
+            this.scheduleRefit();
+        }
     }
 
     /**
@@ -367,11 +408,13 @@ export class EmbeddedTerm extends HTMLElement {
             this.dispatchEvent(new CustomEvent("term-data", { detail: data, bubbles: true }));
         });
 
-        // Public on recent builds only.
+        // Public on recent builds only. Cell metrics arriving (first measure,
+        // font change) changes what any pinned/fitted height means in rows:
+        // re-derive the grid, not just the clip.
         const withDims = this.term as unknown as {
             onDimensionsChange?: (cb: () => void) => void;
         };
-        withDims.onDimensionsChange?.(() => this.apply());
+        withDims.onDimensionsChange?.(() => this.refit());
 
         const textarea = this.term.textarea;
         if (textarea) {
@@ -540,6 +583,9 @@ export class EmbeddedTerm extends HTMLElement {
         const cols = this.fittedCols(this.term.cols);
         if (cols !== this.term.cols || rows !== this.term.rows) {
             this.term.resize(cols, rows);
+            // The grid the pty sees just moved; let the containing box
+            // (and through it, the machine) know, even if its pixels didn't.
+            this.dispatchEvent(new CustomEvent("term-resize", { bubbles: true }));
         } else {
             this.apply();
         }

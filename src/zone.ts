@@ -52,6 +52,37 @@ export class Zone extends WithId() {
 export class TabbedZone extends Zone {
     declare element: TabPane;
 
+    constructor(args: ZoneConfiguration) {
+        super(args);
+        this.names.push("tab");
+    }
+
+    installCell(ifc: Interface, entry: Entry): HTMLElement {
+        const row = this.element.addTab(entry);
+        const eb = new EchoBox();
+        eb.setCompact(true);
+        eb.bindEntry(entry);
+        eb.addEventListener("close", () => {
+            eb.destroyWhenDone = true;
+            const code = eb.status === "unresponsive" ? 9 : 15;
+            ifc.interactions.push({
+                type: "user_signal",
+                code,
+                entry,
+            });
+        });
+        eb.addEventListener("resize", () => reportResize(ifc, eb, entry));
+        eb.addEventListener("term-data", (e) => {
+            ifc.interactions.push({
+                type: "user_text",
+                text: (e as CustomEvent<string>).detail,
+                entry,
+            });
+        });
+        row.pane.appendChild(eb);
+        return eb;
+    }
+
     installPrompt(ifc: Interface, entry: Entry): HTMLElement {
         const row = this.element.addTab(entry);
         const pz = entry.prompt!.zones.main;
@@ -82,8 +113,11 @@ export class TabbedZone extends Zone {
     }
 }
 
-// The size last reported per box, so announcements that changed nothing
-// (e.g. a grid drag that only moved other zones) stay quiet.
+// The size last reported per box. The box's single polled "resize" event also
+// fires once on reappear (so the terminal's fit can re-derive its grid) even
+// when the size is unchanged, and the pty grid can settle after the fit
+// without a pixel change — so an identical (pixel, pty) payload is announced
+// on the wire only once.
 const lastReported = new WeakMap<EchoBox, string>();
 
 /** Report the box's current size to the machine as a `user_resize`
