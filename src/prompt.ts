@@ -35,9 +35,14 @@ export class Prompt extends IdClass implements PromptConfiguration {
 
     constructor(config: PromptConfiguration, zone: Zone) {
         super();
+        this.zone = zone;
         this.configure(config);
     }
     configure(config: PromptConfiguration): void {
         Object.assign(this, config);
     };
+
+    makeZones(): Record<string, Zone> {
+        return {"@": new Zone()};
+    }
 }

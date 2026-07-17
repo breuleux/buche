@@ -1,4 +1,4 @@
-import { type CellConfiguration } from "../cell.ts";
+import { Cell, type CellConfiguration } from "../cell.ts";
 import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage, type CreationInfo } from "./common.ts";
 
@@ -10,14 +10,15 @@ export async function* handle$cell_create(
     buche: Buche,
     obj: CellCreateMessage
 ): AsyncIterable<OutM> {
-    // const ctor = buche.cellTypes[obj.mode];
-    // if (!ctor) {
-    //     throw Error(`Unsupported cell type: '${obj.mode}'`);
-    // }
-    // const cell = new ctor(obj);
-    // const key = JSON.stringify(obj.from);
-    // if (key in buche.cells) {
-    //     throw Error(`Cell already exists at address ${obj.from}`);
-    // }
-    // buche.cells[key] = cell;
+    const component = buche.fresh(obj.from);
+    const { prompt, zone } = buche.findPlace(obj);
+    const cell = new Cell(obj, zone);
+    cell.prompt = prompt;
+    cell.zone = zone;
+    Object.assign(component, { cell, zones: cell.makeZones() });
+    yield {
+        type: "install_cell",
+        zone: zone,
+        component: component,
+    }
 }

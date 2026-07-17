@@ -22,7 +22,7 @@ export interface ErrorMessage {
     code: string;
     subcode?: string;
     reason: string;
-    input: any;
+    input?: any;
 }
 
 export class BucheError extends Error {

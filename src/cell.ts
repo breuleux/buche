@@ -13,6 +13,10 @@ export interface CellConfiguration {
     background?: boolean;
 }
 
+export class Echo extends IdClass {
+    prompt: Prompt | null = null;
+}
+
 export class Cell extends IdClass implements CellConfiguration {
     prompt: Prompt | null = null;
     zone: Zone;
@@ -28,5 +32,9 @@ export class Cell extends IdClass implements CellConfiguration {
     }
     configure(config: CellConfiguration) {
         Object.assign(this, config);
+    }
+
+    makeZones(): Record<string, Zone> {
+        return {};
     }
 }

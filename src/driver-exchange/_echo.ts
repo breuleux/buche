@@ -1,3 +1,4 @@
+import { Echo } from "../cell.ts";
 import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage, type HighlightRange } from "./common.ts";
 
@@ -15,5 +16,14 @@ export async function* handle$echo(
     buche: Buche,
     obj: EchoMessage
 ): AsyncIterable<OutM> {
-  // TODO
+    const component = buche.fresh(obj.from, false);
+    const { zone, prompt } = buche.findPlace(obj);
+    const echo = new Echo();
+    echo.prompt = prompt;
+    Object.assign(component, { echo });
+    yield {
+        type: "install_echo",
+        zone: zone,
+        component: component,
+    }
 }

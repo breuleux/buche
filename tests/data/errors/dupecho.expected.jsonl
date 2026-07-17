@@ -1,0 +1,4 @@
+{"$role":"in","type":"echo","from":["cq","2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"$role":"out","type":"install_echo","zone":"#1","component":{"zones":{},"echo":"#100"}}
+{"$role":"in","type":"echo","from":["cq","2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"$role":"out","type":"error","code":"exists","reason":"An element already exists at address cq,2","input":{"type":"echo","from":["cq","2"],"to":["$terminal"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}}
