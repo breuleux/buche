@@ -26,7 +26,7 @@ export class Prompt extends WithId() implements PromptConfiguration {
         super();
         this.configure(config);
         this.zones = {
-            main: new PromptZone("@"),
+            main: new PromptZone({ names: ["@"] }),
         };
     }
 

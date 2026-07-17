@@ -10,10 +10,10 @@ export interface CellSendMessage extends BaseMessage {
 }
 
 export function handle$cell_send(buche: Buche, obj: CellSendMessage): void {
-    const component = buche.ensure("cell", obj);
+    const entry = buche.ensure(obj);
     buche.sendInterface({
         type: "cell_command",
         command: obj.message,
-        component: component,
+        entry: entry,
     });
 }

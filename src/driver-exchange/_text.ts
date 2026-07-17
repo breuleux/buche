@@ -12,7 +12,7 @@ export interface TextMessage extends BaseMessage {
 }
 
 export function handle$text(buche: Buche, obj: TextMessage): void {
-    const component = buche.ensure("cell", obj);
+    const entry = buche.ensure(obj);
     buche.sendInterface({
         type: "cell_command",
         command: {
@@ -20,6 +20,6 @@ export function handle$text(buche: Buche, obj: TextMessage): void {
             stream: obj.stream,
             text: obj.text,
         },
-        component: component,
+        entry: entry,
     });
 }

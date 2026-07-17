@@ -1,11 +1,10 @@
-import type { Cell } from "../cell.ts";
 import type { Buche } from "../core.ts";
-import type { Prompt } from "../prompt.ts";
+import type { Entry } from "../entry.ts";
 
 export interface SignalMessage {
     type: "signal";
     code: number;
-    element: Prompt | Cell;
+    entry: Entry;
 }
 
 export function handle$signal(buche: Buche, obj: SignalMessage): void {
@@ -13,6 +12,6 @@ export function handle$signal(buche: Buche, obj: SignalMessage): void {
         type: "signal",
         code: obj.code,
         from: ["$term"],
-        to: obj.element.address,
+        to: obj.entry.echo.address,
     });
 }

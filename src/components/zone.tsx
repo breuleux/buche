@@ -1,14 +1,14 @@
 import type { DomProps } from "myjsx/jsx-runtime";
-import type { Cell } from "../cell.ts";
-import type { Prompt } from "../prompt.ts";
 import { WithId } from "../utils.ts";
+import { TabbedZone, type Zone } from "../zone.ts";
+import { TabPane } from "./tab-pane.tsx";
 
 export function extractZones(root: HTMLElement): Array<Zone> {
     // Not setting parents, we don't really expect nested zones here
     const zones: Array<Zone> = [];
     const walk = (node: Element) => {
-        if (node instanceof Zone) {
-            zones.push(node);
+        if (node instanceof ZoneElement) {
+            zones.push(...node.contributeZones());
         }
         for (const child of node.children) {
             walk(child);
@@ -18,82 +18,60 @@ export function extractZones(root: HTMLElement): Array<Zone> {
     return zones;
 }
 
-// export function extractZones(root: HTMLElement): Array<Zone> {
-//     const zones: Array<Zone> = [];
-//     const walk = (node: Element, parent?: Zone) => {
-//         let nearestZone = parent;
-//         if (node instanceof Zone) {
-//             let effectiveParent = parent;
-//             if (node instanceof PromptZone) {
-//                 while (effectiveParent instanceof PromptZone) {
-//                     effectiveParent = effectiveParent.parent;
-//                 }
-//             }
-//             node.parent = effectiveParent;
-//             zones.push(node);
-//             nearestZone = node;
-//         }
-//         for (const child of node.children) {
-//             walk(child, nearestZone);
-//         }
-//     };
-//     walk(root);
-//     return zones;
-// }
-
-export function zoneMap(zones: Array<Zone>): Record<string, Zone> {
-    const rval: Record<string, Zone> = {};
-    for (const zone of zones) {
-        for (const name of zone.names) {
-            rval[name] = zone;
-        }
-    }
-    return rval;
-}
-
-export class Zone extends WithId(HTMLElement) {
+export class ZoneElement extends WithId(HTMLElement) {
     // Names given explicitly to the constructor. When absent (e.g. the element
     // was upgraded from declarative markup like `<tabbed-zone names="left">`),
     // the `names` getter falls back to the `names` attribute.
     names: Array<string>;
 
-    constructor(name?: string | Array<string>) {
+    constructor(name: string | Array<string> | null = null) {
         super();
-        if (name !== undefined) {
+        if (!name) {
+            name = this.getAttribute("names");
+        }
+        if (name !== null) {
             this.names = typeof name === "string" ? name.split(/ +/) : [...name];
         } else {
             this.names = [];
         }
         this.names.push(`Z${this.serialId}`);
     }
+
+    contributeZones(): Array<Zone> {
+        return [];
+    }
 }
 
-export class TabbedZone extends Zone {}
+export class TabbedZoneElement extends ZoneElement {
+    tabs: TabPane = new TabPane();
 
-export class LogZone extends Zone {}
+    connectedCallback(): void {
+        this.ensureSetup();
+    }
 
-export class SingletonZone extends Zone {}
+    ensureSetup() {
+        const tb = this.tabs;
+        // this.tabs.setAttribute("hide-single", "");
+        this.appendChild(tb);
+    }
 
-export class PromptZone extends Zone {}
+    contributeZones(): Array<Zone> {
+        return [new TabbedZone({ names: this.names, element: this.tabs })];
+    }
+}
 
 if (typeof customElements !== "undefined") {
     if (!customElements.get("tabbed-zone")) {
-        customElements.define("base-zone", Zone);
-        customElements.define("tabbed-zone", TabbedZone);
-        customElements.define("log-zone", LogZone);
-        customElements.define("singleton-zone", SingletonZone);
-        customElements.define("prompt-zone", PromptZone);
+        customElements.define("base-zone", ZoneElement);
+        customElements.define("tabbed-zone", TabbedZoneElement);
     }
 }
 
 declare module "myjsx/jsx-runtime" {
     namespace JSX {
         interface CustomElements {
-            "base-zone": DomProps<Zone>;
-            "tabbed-zone": DomProps<TabbedZone>;
-            "log-zone": DomProps<LogZone>;
-            "singleton-zone": DomProps<SingletonZone>;
-            "prompt-zone": DomProps<PromptZone>;
+            "base-zone": DomProps<ZoneElement>;
+            "tabbed-zone": DomProps<TabbedZoneElement>;
         }
     }
 }

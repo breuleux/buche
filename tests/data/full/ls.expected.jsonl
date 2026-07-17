@@ -1,6 +1,4 @@
 {"type":"boot","command":"ls README.md","pause":0}
 {"type":"text","from":[],"to":["$term"],"stream":"stdout","text":"README.md\n","$role":"driverIn"}
-{"type":"update_component","zone":"#0","component":{"echo":"#1","cell":"#2","prompt":null,"zones":{"@":"#0","Z0":"#0"}},"$role":"interfaceOut"}
-{"type":"cell_command","command":{"type":"text","stream":"stdout","text":"README.md\n"},"component":{"echo":"#1","cell":"#2","prompt":null,"zones":{"@":"#0","Z0":"#0"}},"$role":"interfaceOut"}
+{"type":"cell_command","command":{"type":"text","stream":"stdout","text":"README.md\n"},"entry":{"echo":"#1","cell":null,"prompt":null,"zones":{"@":"#0","Z0":"#0"}},"$role":"interfaceOut"}
 {"type":"close","from":[],"to":["$term"],"outcome":{"type":"success","code":0},"$role":"driverIn"}
-{"type":"update_component","component":{"echo":"#1","cell":"#2","prompt":null,"zones":{"@":"#0","Z0":"#0"}},"$role":"interfaceOut"}

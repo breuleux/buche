@@ -1,3 +1,5 @@
+import type { EchoBox } from "./components/echo-box.tsx";
+import { EmbeddedTerm } from "./components/embedded-term.tsx";
 import type { Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
@@ -41,5 +43,28 @@ export class Cell extends WithId() implements CellConfiguration {
 
     configure(config: CellConfiguration) {
         Object.assign(this, config);
+    }
+
+    handle(message: CellCommand, box: EchoBox) {
+        type HT = (m: CellCommand, box: EchoBox) => void;
+        const handler = this[`handle$${message.type}`];
+        (handler as HT).call(this, message, box);
+    }
+
+    handle$text(message: TextCommand, box: EchoBox) {
+        let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
+        if (!view) {
+            view = new EmbeddedTerm();
+            box.setView("pty", view);
+        }
+        view.write(message.text);
+    }
+
+    handle$data(message: TextCommand, box: EchoBox) {
+        throw Error("not implemented");
+    }
+
+    handle$exec(message: TextCommand, box: EchoBox) {
+        throw Error("not implemented");
     }
 }

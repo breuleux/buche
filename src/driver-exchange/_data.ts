@@ -9,13 +9,13 @@ export interface DataMessage extends BaseMessage {
 }
 
 export function handle$data(buche: Buche, obj: DataMessage): void {
-    const component = buche.ensure("cell", obj);
+    const entry = buche.ensure(obj);
     buche.sendInterface({
         type: "cell_command",
         command: {
             type: "data",
             data: obj.data,
         },
-        component: component,
+        entry: entry,
     });
 }

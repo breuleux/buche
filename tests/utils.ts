@@ -32,7 +32,7 @@ export class MachinePlayer {
 
     constructor(datadir: string) {
         this.machine = new Buche({
-            initialZones: zoneMap([new Zone("@")]),
+            initialZones: zoneMap([new Zone({ names: ["@"] })]),
             sendDriver: this.driverQueue.push.bind(this.driverQueue),
             sendInterface: this.interfaceQueue.push.bind(this.interfaceQueue),
         });

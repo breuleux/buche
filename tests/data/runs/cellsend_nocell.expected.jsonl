@@ -1,3 +1,2 @@
 {"$role":"driverIn","type":"cell_send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
-{"$role":"interfaceOut","type":"update_component","zone":"#100","component":{"echo":"#104","cell":"#105","prompt":null,"zones":{}}}
-{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"hi"},"component":{"echo":"#104","cell":"#105","prompt":null,"zones":{}}}
+{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"hi"},"entry":{"echo":"#104","cell":null,"prompt":null,"zones":{}}}

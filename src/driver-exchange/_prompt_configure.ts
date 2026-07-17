@@ -12,15 +12,15 @@ export interface PromptConfigureMessage
 }
 
 export function handle$prompt_configure(buche: Buche, obj: PromptConfigureMessage): void {
-    const entry = buche.ensure2(obj);
-    const zone = buche.findPlace2(entry, obj);
+    const entry = buche.ensure(obj);
+    const zone = buche.findPlace(entry, obj);
     if (entry.prompt) {
         entry.prompt.configure(obj);
     } else {
         const prompt = new Prompt(obj);
         entry.setPrompt(prompt);
     }
-    entry.echo.status = {status: "running"};
+    entry.echo.status = { status: "running" };
     buche.sendInterface({
         type: "update_prompt",
         zone: zone,

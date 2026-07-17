@@ -1,18 +1,20 @@
-import type { BasicTerm } from "./components/basic-term";
-import type { EchoBox } from "./components/echo-box";
-import type { PromptCollection } from "./components/prompt-collection";
+import type { EchoBox } from "./components/echo-box.tsx";
+import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
+import type { Entry } from "./entry.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
+    InstallEchoMessage,
     OutgoingInterfaceMessage,
     ProblemMessage,
+    UpdateCellMessage,
     UpdateComponentMessage,
+    UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
-import type { Entry } from "./entry.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
-import { extractZones, type Zone } from "./zone";
+import type { Zone } from "./zone";
 
 export interface Interface {
     interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
@@ -53,11 +55,17 @@ function reifyTemplate(template: Element | string): Element {
     return element;
 }
 
+interface Reification {
+    zone: Zone;
+    element: HTMLElement;
+}
+
 export class BucheInterface implements Interface {
     container: Element;
     area: Element;
-    interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
+    interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
     zones: Array<Zone>;
+    map: Map<Entry, Reification> = new Map();
 
     constructor(args: BucheInterfaceArguments) {
         this.container = args.container;
@@ -65,12 +73,50 @@ export class BucheInterface implements Interface {
         this.zones = extractZones(this.area as HTMLElement);
         this.interactions = new AsyncQueue();
     }
+
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {
+        console.log(message);
         type HT = (buche: Buche, m: OutgoingInterfaceMessage) => void;
         const handler = this[`handle$${message.type}`];
-        (handler as HT)(buche, message);
+        (handler as HT).call(this, buche, message);
     }
+
+    handle$install_echo(buche: Buche, message: InstallEchoMessage) {
+        message.zone!.installEcho(this, message.entry);
+    }
+
+    handle$update_cell(buche: Buche, message: UpdateCellMessage) {
+        const existing = this.map.get(message.entry);
+        if (existing) {
+            buche.sendInterface({
+                type: "problem",
+                reason: "A cell already exists",
+                code: "cell_exists",
+            });
+        }
+        const element = message.zone!.installCell(this, message.entry);
+        this.map.set(message.entry, { zone: message.zone!, element });
+    }
+
+    handle$update_prompt(buche: Buche, message: UpdatePromptMessage) {
+        const existing = this.map.get(message.entry);
+        if (existing) {
+            buche.sendInterface({
+                type: "problem",
+                reason: "A prompt already exists",
+                code: "prompt_exists",
+            });
+        }
+        const element = message.zone!.installPrompt(this, message.entry);
+        this.map.set(message.entry, { zone: message.zone!, element });
+    }
+
     handle$update_component(buche: Buche, message: UpdateComponentMessage) {}
-    handle$cell_command(buche: Buche, message: CellCommandMessage) {}
+
+    handle$cell_command(buche: Buche, message: CellCommandMessage) {
+        const existing = this.map.get(message.entry)!;
+        message.entry.cell!.handle(message.command, existing.element as EchoBox);
+    }
+
     handle$problem(buche: Buche, message: ProblemMessage) {}
 }

@@ -12,15 +12,15 @@ export interface CellConfigureMessage
 }
 
 export function handle$cell_configure(buche: Buche, obj: CellConfigureMessage): void {
-    const entry = buche.ensure2(obj);
-    const zone = buche.findPlace2(entry, obj);
+    const entry = buche.ensure(obj);
+    const zone = buche.findPlace(entry, obj);
     if (entry.cell) {
         entry.cell.configure(obj);
     } else {
         const cell = new Cell(obj);
         entry.setCell(cell);
     }
-    entry.echo.status = {status: "running"};
+    entry.echo.status = { status: "running" };
     buche.sendInterface({
         type: "update_cell",
         zone: zone,

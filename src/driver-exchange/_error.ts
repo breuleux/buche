@@ -16,13 +16,13 @@ export interface ErrorMessage extends BaseMessage {
 }
 
 export function handle$error(buche: Buche, obj: ErrorMessage): void {
-    const component = buche.hierarchy.getAt(obj.from, false)?.entry;
+    const entry = buche.hierarchy.getAt(obj.from, false);
 
     buche.sendInterface({
         type: "problem",
         code: "process",
         reason: obj.message,
         input: obj,
-        component: component,
+        entry: entry ?? undefined,
     });
 }

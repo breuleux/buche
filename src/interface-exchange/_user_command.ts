@@ -1,10 +1,10 @@
 import type { Buche } from "../core.ts";
-import type { Prompt } from "../prompt.ts";
+import type { Entry } from "../entry.ts";
 
 export interface UserCommandMessage {
     type: "user_command";
 
-    prompt: Prompt;
+    entry: Entry;
 
     text: string;
     position: number;
@@ -15,7 +15,7 @@ export function handle$user_command(buche: Buche, obj: UserCommandMessage): void
     buche.sendDriver({
         type: "command",
         from: ["$term"],
-        to: obj.prompt.address,
+        to: obj.entry.echo.address,
         text: obj.text,
         position: obj.position,
         command: obj.command,

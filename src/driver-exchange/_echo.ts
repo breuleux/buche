@@ -7,13 +7,13 @@ export interface EchoMessage extends BaseMessage, EchoConfiguration {
 }
 
 export function handle$echo(buche: Buche, obj: EchoMessage): void {
-    const component = buche.get(obj.from, true);
-    const { zone } = buche.findPlace(obj);
+    const entry = buche.get(obj.from, true);
+    const zone = buche.findPlace(entry, obj);
     const echo = new Echo(obj);
-    Object.assign(component, { echo });
+    Object.assign(entry, { echo });
     buche.sendInterface({
-        type: "update_component",
+        type: "install_echo",
         zone: zone,
-        component: component,
+        entry: entry,
     });
 }

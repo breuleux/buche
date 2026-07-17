@@ -194,7 +194,7 @@ export async function* simulate(args: SimulateArgs | ReplayArgs): AsyncGenerator
             await bucheRun({
                 process,
                 interface: new InertInterface(replay ? staggerByReplay() : staggerByPause(), [
-                    new Zone("@"),
+                    new Zone({ names: ["@"] }),
                 ]),
                 loggers: {
                     driverIn: tagAndPush("driverIn"),

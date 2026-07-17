@@ -13,6 +13,16 @@ export interface UpdatePromptMessage {
     entry: Entry;
 }
 
+export interface InstallEchoMessage {
+    type: "install_echo";
+
+    /** The zone in which to install the echo. */
+    zone?: Zone | null;
+
+    /** The component's entry (echo, cell, prompt, zones). */
+    entry: Entry;
+}
+
 export interface UpdateCellMessage {
     type: "update_cell";
 
@@ -37,18 +47,19 @@ export interface CellCommandMessage {
     type: "cell_command";
 
     command: CellCommand;
-    component: Entry;
+    entry: Entry;
 }
 
 export interface ProblemMessage extends BucheErrorFields {
     type: "problem";
 
     /** The component regarding which there was a problem, if one may be found. */
-    component?: Entry;
+    entry?: Entry;
 }
 
 /** Union of every message type. */
 export type OutgoingInterfaceMessage =
+    | InstallEchoMessage
     | UpdatePromptMessage
     | UpdateCellMessage
     | UpdateComponentMessage

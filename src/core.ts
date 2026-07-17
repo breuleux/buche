@@ -1,7 +1,6 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import { Cell, type CellConfiguration } from "./cell.ts";
-import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
+import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
 import type { EchoConfiguration } from "./echo.ts";
@@ -10,7 +9,7 @@ import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import type { ProcessCommunicator } from "./process.ts";
-import { Prompt, type PromptConfiguration } from "./prompt.ts";
+import type { Prompt } from "./prompt.ts";
 import type { Address } from "./types.ts";
 import { awrap, BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
 import { type Zone, zoneMap } from "./zone.ts";
@@ -89,41 +88,14 @@ export class Buche {
         return c;
     }
 
-    findPlace(info: CreationInfo): LocationResult {
+    findPlace(entry: Entry, info: CreationInfo): Zone {
         const zoneName = info.zone || "@";
-        const arr = Array.from(info.from) as Address;
-        let prompt: Prompt | null = null;
-        let zone: Zone | null = null;
-
-        let node: Entry | undefined = this.hierarchy;
-        for (let i = 0; node; node = node.children[arr[i++]]) {
-            const data = node;
-            if (data?.prompt) {
-                prompt = data.prompt;
+        let e: Entry | undefined = entry.parent;
+        while (e) {
+            if (e.zones && zoneName in e.zones) {
+                return e.zones[zoneName];
             }
-            if (data?.zones && zoneName in data.zones) {
-                zone = data.zones[zoneName];
-            }
-        }
-        if (zone === null) {
-            throw new BucheError({
-                type: "buche_error",
-                code: "nozone",
-                reason: `No zone named ${zoneName} could be found`,
-                input: info,
-            });
-        }
-        return { prompt, zone };
-    }
-
-    findPlace2(post: Entry, info: CreationInfo): Zone {
-        const zoneName = info.zone || "@";
-        let p: Entry | undefined = post.parent;
-        while (p) {
-            if (p.zones && zoneName in p.zones) {
-                return p.zones[zoneName];
-            }
-            p = p.parent;
+            e = e.parent;
         }
         throw new BucheError({
             type: "buche_error",
@@ -133,81 +105,20 @@ export class Buche {
         });
     }
 
-    ensure2(message: EchoConfiguration & CreationInfo) {
-        const post = this.hierarchy.getAt(message.from.slice(1), true)!;
+    ensure(message: EchoConfiguration & CreationInfo) {
+        const post = this.hierarchy.getAt(message.from, true)!;
         post.echo.configure(message);
         return post;
-    }
-
-    /**
-     * Create the cell/prompt at `obj.from`, or reconfigure it if one of the
-     * same kind already lives there. Throws `exists` only when the other kind
-     * occupies the address (a cell where a prompt lives, or vice versa).
-     */
-    configure(type: "cell", obj: CellConfiguration & BaseMessage): Entry;
-    configure(type: "prompt", obj: PromptConfiguration & BaseMessage): Entry;
-    configure(
-        type: "cell" | "prompt",
-        obj: (CellConfiguration | PromptConfiguration) & CreationInfo & BaseMessage,
-    ): Entry {
-        const post = this.get(obj.from, true);
-        const other = type === "cell" ? "prompt" : "cell";
-        if (post[other]) {
-            throw new BucheError({
-                type: "buche_error",
-                code: "exists",
-                reason: `A ${other} already exists at address ${obj.from}, cannot configure a ${type}`,
-            });
-        }
-        const { zone } = this.findPlace(obj);
-        if (type === "cell") {
-            const cconf: CellConfiguration = obj as CellConfiguration;
-            if (post.cell) {
-                post.cell.configure(cconf);
-            } else {
-                const cell = new Cell(cconf);
-                post.setCell(cell);
-            }
-        } else {
-            const pconf: PromptConfiguration = obj as PromptConfiguration;
-            if (post.prompt) {
-                post.prompt.configure(pconf);
-            } else {
-                const prompt = new Prompt(pconf);
-                post.setPrompt(prompt);
-            }
-        }
-        this.sendInterface({
-            type: "update_component",
-            zone: zone,
-            component: post,
-        });
-        return post;
-    }
-
-    ensure(type: "cell", obj: CellConfiguration & BaseMessage): Entry;
-    ensure(type: "prompt", obj: PromptConfiguration & BaseMessage): Entry;
-    ensure(
-        type: "cell" | "prompt",
-        obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
-    ): Entry {
-        const c = this.get(obj.from, true);
-        if (type === "cell" && !c.cell) {
-            return this.configure(type, obj);
-        } else if (type === "prompt" && !c.prompt) {
-            return this.configure(type, obj as PromptConfiguration & BaseMessage);
-        }
-        return c;
     }
 }
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {
-        let post: Entry | undefined;
+        let entry: Entry | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest
             // non-null component in the hierarchy.
-            let node: Hierarchy<Entry> = buche.hierarchy;
+            let node: Entry = buche.hierarchy;
             for (const segment of obj.input.from) {
                 const child = node.children[segment];
                 if (!child) {
@@ -215,12 +126,12 @@ const baseHandlers = {
                 }
                 node = child;
             }
-            post = node.entry;
+            entry = node;
         }
         buche.sendInterface(
             Object.assign({}, obj, {
                 type: "problem",
-                component: post,
+                component: entry,
             }) as unknown as ProblemMessage,
         );
     },
