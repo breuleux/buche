@@ -1,6 +1,12 @@
 {
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
     "includes": ["**", "!**/incoming.ts", "!**/incoming.schema.json"]
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   },
   "formatter": {
     "useEditorconfig": true,
@@ -8,8 +14,15 @@
   },
   "linter": {
     "rules": {
+      "correctness": {
+        "noUnusedFunctionParameters": "off"
+      },
       "style": {
         "useBlockStatements": "error"
+      },
+      "suspicious": {
+        "noAssignInExpressions": "off",
+        "noExplicitAny": "off"
       }
     }
   }

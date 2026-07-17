@@ -112,7 +112,7 @@ export class Buche extends Machine<InM, OutM> {
     }
 
     fresh(addr: Address, allowEcho: boolean = true): ComponentData {
-        const node = this.hierarchy.getAt(addr, true)!;
+        const node = this.hierarchy.getAt(addr, true) as Hierarchy;
         let c = node.component;
         if (c) {
             if (c.cell || c.prompt || (!allowEcho && c.echo)) {

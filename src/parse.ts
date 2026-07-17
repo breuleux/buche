@@ -12,7 +12,7 @@ class BasicParser<T> {
     parse(input: string): T | ErrorMessage {
         try {
             return this.validate(JSON.parse(input));
-        } catch (e) {
+        } catch (_e) {
             return {
                 type: "error",
                 code: "invalid_message",

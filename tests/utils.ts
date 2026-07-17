@@ -49,7 +49,7 @@ export class MachinePlayer<In, Out> {
         });
         // Helper to write lines while properly handling stream backpressure
         const writeLine = async (data: Record<string, any>): Promise<void> => {
-            const line = JSON.stringify(data) + "\n";
+            const line = `${JSON.stringify(data)}\n`;
             if (!outputStream.write(line)) {
                 await once(outputStream, "drain");
             }
@@ -92,7 +92,9 @@ export function* getCases(directory: string) {
         : path.join(import.meta.dirname, directory);
     for (const filename of readdirSync(absdir)) {
         const match = filename.match(/(.*)\.source\.jsonl$/);
-        if (!match) continue;
+        if (!match) {
+            continue;
+        }
 
         yield {
             filename,

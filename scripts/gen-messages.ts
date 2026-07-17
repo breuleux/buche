@@ -114,7 +114,7 @@ class Generator {
 
         if (errors.length > 0) {
             console.error(
-                "Message file validation failed:\n" + errors.map((e) => `  - ${e}`).join("\n"),
+                `Message file validation failed:\n${errors.map((e) => `  - ${e}`).join("\n")}`,
             );
             process.exit(1);
         }
@@ -155,7 +155,7 @@ export type ${this.className} = ${union};
         });
 
         const schema = generator.createSchema(this.className);
-        writeFileSync(this.schemaFile, JSON.stringify(schema, null, 2) + "\n");
+        writeFileSync(this.schemaFile, `${JSON.stringify(schema, null, 2)}\n`);
 
         console.log(
             `Wrote ${this.dest} and ${this.schemaFile} (${entries.length} message${
