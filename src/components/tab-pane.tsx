@@ -50,6 +50,7 @@ import { defaultTheme, type Theme } from "../color.ts";
 import type { ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import { VIEW_ICONS, VIEW_TITLES } from "./echo-box.tsx";
+import { syncStatusPhases } from "./utils.tsx";
 
 interface Row {
     entry: Entry;
@@ -362,7 +363,13 @@ export class TabPane extends HTMLElement {
         const { entry, tab, labelEl, viewsEl } = row;
         const echo = entry.echo;
         labelEl.textContent = echo.label;
-        tab.setAttribute("data-status", echo.status?.status ?? "absent");
+        const status = echo.status?.status ?? "absent";
+        if (tab.getAttribute("data-status") !== status) {
+            tab.setAttribute("data-status", status);
+            // Re-phase the dot's animation only when the status changes, so
+            // every dot pulses in step (see syncStatusPhases).
+            syncStatusPhases(tab);
+        }
 
         const accent = this.accentColor(entry);
         if (accent) {

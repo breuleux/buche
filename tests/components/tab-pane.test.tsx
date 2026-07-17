@@ -57,3 +57,25 @@ describe("tab-pane — removing", () => {
         expect(tp.activeTab).toBe(b);
     });
 });
+
+describe("tab-pane — status", () => {
+    test("status dots get a shared animation phase, stamped only on change", () => {
+        const tp = make();
+        const entry = new Entry({});
+        tp.addTab(entry, document.createElement("div"));
+        const tab = tp.querySelector<HTMLElement>(".tab-pane-tab")!;
+        expect(tab.getAttribute("data-status")).toBe("absent");
+        expect(tab.style.getPropertyValue("--status-throb-phase")).toMatch(/^-\d+ms$/);
+        expect(tab.style.getPropertyValue("--status-blink-phase")).toMatch(/^-\d+ms$/);
+
+        entry.echo.status = { status: "running" };
+        entry.fire();
+        expect(tab.getAttribute("data-status")).toBe("running");
+
+        // Unrelated reconfigurations must not re-stamp (and twitch) the phase.
+        const phased = tab.style.getPropertyValue("--status-throb-phase");
+        entry.echo.label = "renamed";
+        entry.fire();
+        expect(tab.style.getPropertyValue("--status-throb-phase")).toBe(phased);
+    });
+});

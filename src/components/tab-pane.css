@@ -96,6 +96,9 @@ tab-pane {
 	border-color: transparent;
 	background: #fff;
 	animation: tab-pane-throb 2.4s ease-in-out infinite;
+	/* Negative delay shared by every dot (see syncStatusPhases): all dots
+	 * continue one global cycle instead of each starting its own. */
+	animation-delay: var(--status-throb-phase, 0ms);
 }
 
 .tab-pane-tab[data-status="standby"] .tab-pane-tab-status {
@@ -117,6 +120,7 @@ tab-pane {
 	border-color: transparent;
 	background: #f5c542;
 	animation: tab-pane-blink 0.8s steps(1, end) infinite;
+	animation-delay: var(--status-blink-phase, 0ms);
 }
 
 @keyframes tab-pane-throb {

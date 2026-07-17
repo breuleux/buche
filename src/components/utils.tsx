@@ -60,3 +60,23 @@ export function buildStyledText(styled: StyledText, theme: Theme = defaultTheme)
 
     return (<span className="styled-text">{parts}</span>) as HTMLElement;
 }
+
+// Cycle lengths of the status-dot animations; keep in sync with echo-box.css
+// and tab-pane.css.
+const THROB_MS = 2400;
+const BLINK_MS = 800;
+
+/**
+ * Put the status-dot animations (`throb`, `blink`) of `el` in phase with every
+ * other dot in the interface. The negative `animation-delay` starts each
+ * animation part-way into its cycle — wherever the common cycle has got to by
+ * now, since the offset is taken from the clock rather than the moment the
+ * status appeared — so dots that started at different times pulse together.
+ * Called wherever `data-status` changes; the stylesheets read the offsets
+ * through `--status-throb-phase` / `--status-blink-phase`.
+ */
+export function syncStatusPhases(el: HTMLElement): void {
+    const now = Date.now();
+    el.style.setProperty("--status-throb-phase", `-${now % THROB_MS}ms`);
+    el.style.setProperty("--status-blink-phase", `-${now % BLINK_MS}ms`);
+}

@@ -80,7 +80,7 @@ import type { Status, StatusString, ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
-import { buildStyledText } from "./utils.tsx";
+import { buildStyledText, syncStatusPhases } from "./utils.tsx";
 
 /** The box's visual status. Alias of the shared {@link StatusString}. */
 export type EchoStatus = StatusString;
@@ -604,7 +604,13 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     private applyStatus(): void {
         // A data-attribute on the host drives all status-dependent CSS.
+        const prev = this.getAttribute("data-status");
         this.setAttribute("data-status", this._status);
+        if (prev !== this._status) {
+            // Re-phase the dot's animation on status changes only, so every
+            // dot pulses in step (see syncStatusPhases).
+            syncStatusPhases(this);
+        }
         const alive =
             this._status === "running" ||
             this._status === "unresponsive" ||

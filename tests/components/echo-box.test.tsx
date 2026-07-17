@@ -135,6 +135,16 @@ describe("echo-box — status", () => {
         box.setAttribute("status", "error");
         expect(box.getAttribute("data-status")).toBe("error");
     });
+
+    test("status changes stamp a shared animation phase, only on change", () => {
+        const box = make();
+        expect(box.style.getPropertyValue("--status-throb-phase")).toMatch(/^-\d+ms$/);
+        expect(box.style.getPropertyValue("--status-blink-phase")).toMatch(/^-\d+ms$/);
+        box.status = "done";
+        const phased = box.style.getPropertyValue("--status-throb-phase");
+        box.status = "done";
+        expect(box.style.getPropertyValue("--status-throb-phase")).toBe(phased);
+    });
 });
 
 describe("echo-box — views", () => {

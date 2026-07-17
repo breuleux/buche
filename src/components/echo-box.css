@@ -247,6 +247,9 @@ echo-box[data-status="running"] .echo-box-status::after {
 	height: 5px;
 	background: #fff;
 	animation: echo-box-throb 2.4s ease-in-out infinite;
+	/* Negative delay shared by every dot (see syncStatusPhases): all dots
+	 * continue one global cycle instead of each starting its own. */
+	animation-delay: var(--status-throb-phase, 0ms);
 }
 
 /* done: filled with the background colour, capping the bar where it overlaps. */
@@ -276,6 +279,7 @@ echo-box[data-status="unresponsive"] .echo-box-status::after {
 	height: 100%;
 	background: #f5c542;
 	animation: echo-box-blink 0.8s steps(1, end) infinite;
+	animation-delay: var(--status-blink-phase, 0ms);
 }
 
 @keyframes echo-box-throb {
