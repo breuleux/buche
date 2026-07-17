@@ -1,9 +1,10 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import { Cell, type CellConfiguration, type Echo } from "./cell.ts";
+import { Cell, type CellConfiguration } from "./cell.ts";
 import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
+import type { Echo } from "./echo.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";

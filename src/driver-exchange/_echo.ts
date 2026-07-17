@@ -1,5 +1,5 @@
-import { Echo, type EchoConfiguration } from "../cell.ts";
 import type { Buche, OutM } from "../core.ts";
+import { Echo, type EchoConfiguration } from "../echo.ts";
 import { BucheError } from "../utils.ts";
 import type { BaseMessage } from "./common.ts";
 
