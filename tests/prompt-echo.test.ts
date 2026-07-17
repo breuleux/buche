@@ -123,6 +123,47 @@ describe("prompt_configure echo", () => {
         expect(f.interfaceOut).toEqual([]);
     });
 
+    test("a close propagates by default, sweeping the subtree", () => {
+        resetId(100);
+        const f = machine();
+        f.buche.handle({ type: "configure", from: [...PROMPT, "1"], to: ["$term"] } as never);
+        f.buche.handle({
+            type: "cell_configure",
+            from: [...PROMPT, "1", "$main"],
+            to: ["$term"],
+        } as never);
+        f.buche.handle({
+            type: "close",
+            from: PROMPT,
+            to: ["$term"],
+            outcome: { type: "success" },
+        } as never);
+        expect(f.buche.get(PROMPT).echo.status.status).toBe("done");
+        expect(f.buche.get([...PROMPT, "1"]).echo.status.status).toBe("done");
+        expect(f.buche.get([...PROMPT, "1", "$main"]).echo.status.status).toBe("done");
+    });
+
+    test("propagate: false closes the entry alone, not the processes below", () => {
+        resetId(100);
+        const f = machine();
+        f.buche.handle({ type: "configure", from: [...PROMPT, "1"], to: ["$term"] } as never);
+        f.buche.handle({
+            type: "cell_configure",
+            from: [...PROMPT, "1", "$main"],
+            to: ["$term"],
+        } as never);
+        f.buche.handle({
+            type: "close",
+            from: PROMPT,
+            to: ["$term"],
+            outcome: { type: "success" },
+            propagate: false,
+        } as never);
+        expect(f.buche.get(PROMPT).echo.status.status).toBe("done"); // the prompt itself
+        expect(f.buche.get([...PROMPT, "1"]).echo.status.status).toBe("running"); // drains
+        expect(f.buche.get([...PROMPT, "1", "$main"]).echo.status.status).toBe("running");
+    });
+
     test("reconfiguring a live prompt leaves its zones and status alone", () => {
         resetId(100);
         const f = machine();

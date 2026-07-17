@@ -48,6 +48,7 @@
 //
 // Events (all bubble):
 //   "promptchange"  detail: { entry: Entry }                      — active prompt changed
+//   "promptremoved" detail: { entry: Entry }                      — a prompt was dropped (closed)
 //   "textchange"    detail: { entry, text, position }              — a prompt's editor text changed
 //   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
 //   "command"       detail: { command, event, entry, text, position }
@@ -194,6 +195,7 @@ export interface PromptCommandDetail {
 }
 
 export type PromptChangeEvent = CustomEvent<PromptChangeDetail>;
+export type PromptRemovedEvent = CustomEvent<PromptChangeDetail>;
 export type PromptTextChangeEvent = CustomEvent<PromptTextChangeDetail>;
 export type PromptReorderEvent = CustomEvent<PromptReorderDetail>;
 export type PromptCommandEvent = CustomEvent<PromptCommandDetail>;
@@ -201,6 +203,7 @@ export type PromptCommandEvent = CustomEvent<PromptCommandDetail>;
 /** Typed event map for {@link PromptCollection} (drives `addEventListener`). */
 export interface PromptCollectionEventMap {
     promptchange: PromptChangeEvent;
+    promptremoved: PromptRemovedEvent;
     textchange: PromptTextChangeEvent;
     reorder: PromptReorderEvent;
     command: PromptCommandEvent;
@@ -703,6 +706,14 @@ export class PromptCollection extends HTMLElement {
                 this.activate(next, false);
             }
         }
+        // Viewers of the collection (a hosting tab, say) need to react to a
+        // prompt's departure even when it is not the entry they track.
+        this.dispatchEvent(
+            new CustomEvent<PromptChangeDetail>("promptremoved", {
+                detail: { entry },
+                bubbles: true,
+            }),
+        );
     }
 
     /** Switch to a prompt and (unless `focus` is false) focus its editor.

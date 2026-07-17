@@ -142,6 +142,7 @@ describe("pop-zone", () => {
 
 // ── Closing unresponsive cells ─────────────────────────────────────────────
 
+import { Prompt } from "../../src/prompt.ts";
 import { PromptZone, TabbedZone } from "../../src/zone.ts";
 
 describe("cell closing", () => {
@@ -218,6 +219,38 @@ describe("cell closing", () => {
         entry.fire();
         expect(box.isConnected).toBe(false);
         expect(tz.tabs.isEmpty).toBe(true);
+    });
+
+    // A nested shell's prompt installs into the outer prompt's BucheTerm,
+    // below it in the same collection: closing the outer prompt (Ctrl+D)
+    // must leave the nested one alone — and the tab must go once it drains.
+    test("a prompt tab outlives its own prompt while a nested prompt is alive", () => {
+        const shell = () => new Prompt({ submission: { content: { text: "", ranges: [] } } });
+        const { tz, zone, ifc } = tabbed();
+        const sibling = new Entry({});
+        sibling.echo.status = { status: "running" };
+        zone.installCell(ifc as any, sibling); // so the prompt tab is not the last
+
+        const outer = new Entry({});
+        outer.setPrompt(shell());
+        outer.echo.status = { status: "running" };
+        const pane = zone.installPrompt(ifc as any, outer);
+        const bt = pane.querySelector("buche-term") as any;
+
+        const nested = new Entry({});
+        nested.setPrompt(shell());
+        nested.echo.status = { status: "running" };
+        bt.prompts.addPrompt(nested);
+
+        outer.echo.status = { status: "done" };
+        outer.fire();
+        expect(pane.isConnected).toBe(true); // the nested prompt still drains
+        expect(bt.prompts.promptElement(nested)?.isConnected).toBe(true);
+
+        nested.echo.status = { status: "done" };
+        nested.fire();
+        expect(pane.isConnected).toBe(false);
+        expect(tz.tabs.isEmpty).toBe(false); // the sibling tab remains
     });
 
     test("closing a spent cell signals nothing and leaves the sibling views alone", () => {

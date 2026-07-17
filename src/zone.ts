@@ -150,15 +150,10 @@ export class TabbedZone extends Zone {
     installPrompt(ifc: Interface, entry: Entry): HTMLElement {
         const row = this.element.addTab(entry);
         // The tab's ✕ signals the prompt's process, like a cell's ✕ (through
-        // `represents` when the prompt stands for one); the tab goes when the
-        // process has ended (the prompt is then removed).
+        // `represents` when the prompt stands for one).
         this.closers.set(entry, () => {
             const code = statusOf(entry).status === "unresponsive" ? 9 : 15;
             ifc.interactions.push({ type: "user_signal", code, entry });
-        });
-        this.removeTabWhen(entry, () => {
-            const status = statusOf(entry).status;
-            return status === "done" || status === "error";
         });
         const pz = entry.prompt!.zones.main;
         const bt = new BucheTerm();
@@ -175,6 +170,19 @@ export class TabbedZone extends Zone {
             });
         });
         bt.prompts.addPrompt(entry);
+        // The tab goes when the process has ended — but only once the
+        // BucheTerm holds no live prompt at all: nested shells install into
+        // this same collection, and pulling the tab while one drains would
+        // take it down with the outer prompt (visually, at least).
+        const check = this.removeTabWhen(entry, () =>
+            bt.prompts.prompts.every((prompt) => {
+                const status = statusOf(prompt).status;
+                return status === "done" || status === "error";
+            }),
+        );
+        // A nested prompt's removal never touches the outer entry's
+        // listeners; the collection itself must re-trigger the check.
+        bt.prompts.addEventListener("promptremoved", check);
         pz.element = bt;
         attachPopZone(entry.prompt!.zones.pop, bt, entry);
         row.pane.appendChild(bt);

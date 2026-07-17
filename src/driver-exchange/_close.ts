@@ -16,12 +16,16 @@ export interface CloseMessage extends BaseMessage {
 
     /** How the process terminated. */
     outcome: CloseOutcome;
+
+    /** Whether the status change propagates to subaddresses. */
+    propagate?: boolean;
 }
 
 export function handle$close(buche: Buche, obj: CloseMessage): void {
     const status = obj.outcome.type === "success" ? "done" : "error";
     const h = buche.hierarchy.getAt(obj.from);
-    for (const entry of h ? h.walk() : []) {
+    const entries = h ? (obj.propagate === false ? [h] : h.walk()) : [];
+    for (const entry of entries) {
         const echo = entry.echo;
         if (killable(echo)) {
             echo.status = { status, code: obj.outcome.code };

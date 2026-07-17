@@ -373,6 +373,10 @@
         "outcome": {
           "$ref": "#/definitions/CloseOutcome",
           "description": "How the process terminated."
+        },
+        "propagate": {
+          "type": "boolean",
+          "description": "Whether the close also ends everything *below* the closed address (default true — a process's exit ends its `$main` cell, its nested subprocesses, everything addressed beneath it). False marks the closed entry alone: a shell closing its prompt (`$proc.cq`) must not sweep the processes still running under it (`$proc.cq.<id>`, its descendants in the address tree)."
         }
       },
       "required": [
