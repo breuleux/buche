@@ -30,7 +30,13 @@ describe("ModalKeys", () => {
         const box = document.createElement("div");
         document.body.append(box);
         const hits: string[] = [];
-        const keys = new ModalKeys({ chords: { "Ctrl+p": () => hits.push("p") } });
+        const keys = new ModalKeys({
+            chords: {
+                "Ctrl+p": () => {
+                    hits.push("p");
+                },
+            },
+        });
         keys.attach(box);
 
         const ev = key(box, "keydown", { key: "p", ctrlKey: true });
@@ -48,8 +54,14 @@ describe("ModalKeys", () => {
         document.body.append(box);
         const hits: string[] = [];
         const keys = new ModalKeys({
-            capture: { p: () => hits.push("p") },
-            release: () => hits.push("release"),
+            capture: {
+                p: () => {
+                    hits.push("p");
+                },
+            },
+            release: () => {
+                hits.push("release");
+            },
         });
         keys.attach(box);
 
@@ -82,10 +94,16 @@ describe("ModalKeys", () => {
         const hits: string[] = [];
         const keys = new ModalKeys({
             capture: {
-                ArrowUp: () => hits.push("up"),
-                "Shift+ArrowUp": () => hits.push("shift+up"),
+                ArrowUp: () => {
+                    hits.push("up");
+                },
+                "Shift+ArrowUp": () => {
+                    hits.push("shift+up");
+                },
             },
-            onEnter: () => hits.push("enter"),
+            onEnter: () => {
+                hits.push("enter");
+            },
         });
         keys.attach(box);
 
@@ -102,7 +120,13 @@ describe("ModalKeys", () => {
         const box = document.createElement("div");
         document.body.append(box);
         let hits = 0;
-        const keys = new ModalKeys({ chords: { "Mod+p": () => hits++ } });
+        const keys = new ModalKeys({
+            chords: {
+                "Mod+p": () => {
+                    hits++;
+                },
+            },
+        });
         keys.attach(box);
         key(box, "keydown", { key: "p", ...(isMac() ? { metaKey: true } : { ctrlKey: true }) });
         expect(hits).toBe(1);
@@ -265,6 +289,42 @@ describe("BucheInterface global bindings", () => {
         expect(iface.keys.capturing).toBe(false);
         expect(iface.focus.holdCommits).toBe(false);
         expect(focused).toBe(1);
+        iface.keys.detach();
+    });
+
+    test("'l' clears spent cells — C-q-l or plain Ctrl+L", () => {
+        const [iface, container] = makeInterface();
+        const [doneBox] = makeCell();
+        const [errBox] = makeCell();
+        const [runBox] = makeCell();
+        doneBox.status = "done";
+        errBox.status = "error";
+        runBox.status = "running";
+        container.append(doneBox, errBox, runBox);
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "l", ctrlKey: true });
+        key(window, "keyup", { key: "Control" });
+        expect(doneBox.isConnected).toBe(false);
+        expect(errBox.isConnected).toBe(false);
+        expect(runBox.isConnected).toBe(true);
+
+        // Plain Ctrl+L clears only in a prompt input, and is swallowed there.
+        const [pc] = makePromptCollection();
+        const [late] = makeCell();
+        late.status = "done";
+        container.append(late, pc);
+
+        // Elsewhere it passes through (a pty's clear-screen stays intact).
+        const past = key(container, "keydown", { key: "l", ctrlKey: true });
+        expect(past.defaultPrevented).toBe(false);
+        expect(late.isConnected).toBe(true);
+
+        const editor = pc.querySelector<HTMLElement>(".stub-editor")!;
+        const ev = key(editor, "keydown", { key: "l", ctrlKey: true });
+        expect(ev.defaultPrevented).toBe(true);
+        expect(late.isConnected).toBe(false);
+        expect(runBox.isConnected).toBe(true);
         iface.keys.detach();
     });
 

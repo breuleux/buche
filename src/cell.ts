@@ -49,6 +49,9 @@ export class Cell extends WithId() implements CellConfiguration {
         let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
         if (!view) {
             view = new EmbeddedTerm();
+            // Ctrl-L (a bare ED 2 clear) drops the scrollback too, the way
+            // `clear(1)` does (see the ed2-clears-scrollback attribute).
+            view.setAttribute("ed2-clears-scrollback", "");
             const cursorTerm = view;
             entry.listeners.push((entry: Entry) => {
                 const st = entry.echo.status.status;

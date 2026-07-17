@@ -6,7 +6,9 @@
 // release" mode needed here — that needs raw keyup tracking anyway):
 //
 //   - Chords: always-live bindings like "Mod+p" (Cmd on Mac, Ctrl elsewhere),
-//     matched against the full modifier set of the event.
+//     matched against the full modifier set of the event. A chord handler
+//     returning `false` did not handle the event: it passes through untouched
+//     (a conditional chord, e.g. one that only applies to some target).
 //   - Capture mode: `enter` (default Ctrl+Q) starts capturing every non-modifier
 //     keydown — swallowing it — until Ctrl is released, which runs the
 //     `release` handlers (e.g. commit the focus). Entering runs the `enter`
@@ -21,7 +23,10 @@
 
 import { chordFromEvent, expandMod, normalizeChord } from "./keychord.ts";
 
-export type KeyHandler = (event: KeyboardEvent) => void;
+// A chord handler returning `false` declines the event (it is not swallowed);
+// any other return value handles it. Capture handlers ignore the value:
+// capture mode swallows whatever it captures.
+export type KeyHandler = (event: KeyboardEvent) => unknown;
 
 const MODIFIER_KEYS = new Set([
     "Control",
@@ -169,10 +174,9 @@ export class ModalKeys {
             return;
         }
         const handler = this.chords.get(chord);
-        if (handler) {
+        if (handler && handler(e) !== false) {
             e.preventDefault();
             e.stopPropagation();
-            handler(e);
         }
     }
 

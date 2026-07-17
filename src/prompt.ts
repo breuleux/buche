@@ -19,6 +19,14 @@ export interface PromptConfiguration {
      * editor).
      */
     submission?: SubmissionConfiguration;
+
+    /**
+     * Ghost text (history suggestion), normally carried by "prompt_highlight";
+     * a "prompt_configure" may set or clear it too (explicit null) — e.g. to
+     * drop the suggestion along with the text when the prompt is submitted.
+     * Absent: left as is.
+     */
+    filigrane?: string | null;
 }
 
 export class Prompt extends WithId() implements PromptConfiguration {
@@ -48,5 +56,8 @@ export class Prompt extends WithId() implements PromptConfiguration {
     configure(config: PromptConfiguration): void {
         this.bindings = config.bindings ?? this.bindings;
         applySubmission(this.submission, config.submission);
+        if (config.filigrane !== undefined) {
+            this.filigrane = config.filigrane;
+        }
     }
 }

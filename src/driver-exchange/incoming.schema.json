@@ -531,6 +531,13 @@
           "$ref": "#/definitions/SubmissionConfiguration",
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
         },
+        "filigrane": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Ghost text (history suggestion), normally carried by \"prompt_highlight\"; a \"prompt_configure\" may set or clear it too (explicit null) — e.g. to drop the suggestion along with the text when the prompt is submitted. Absent: left as is."
+        },
         "label": {
           "type": "string",
           "description": "The cell/tab label."

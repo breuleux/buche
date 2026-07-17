@@ -490,6 +490,37 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         press("Escape");
         expect(pc.getValue(entry)).toBe("");
     });
+
+    test("a configure with filigrane null drops the ghost (the submit reset)", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls") });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        expect(editor.dom.querySelector(".cm-filigrane")).not.toBeNull();
+
+        // What the driver sends along with the emptied text on submit (see
+        // coquille's command$submit): an explicit null clears the ghost, and
+        // the Entry stays cleared so later updates don't re-push it.
+        entry.prompt!.configure({ filigrane: null });
+        entry.fire();
+        expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
+        entry.fire();
+        expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
+    });
+
+    test("a configure without filigrane leaves the ghost alone", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls") });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        entry.prompt!.configure({ bindings: {} });
+        entry.fire();
+        expect(editor.dom.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
+    });
 });
 
 describe("prompt-collection — styled values", () => {

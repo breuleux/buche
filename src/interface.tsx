@@ -105,6 +105,8 @@ export class BucheInterface implements Interface {
     //   p             focus the latest prompt
     //   k / d         kill / close the focused cell — from a prompt, the cell
     //                 right above it
+    //   l             clear all spent cells (Ctrl+L does the same, but only
+    //                 while typing in a prompt)
     // Extend or override through `iface.keys.on(...) / .onCapture(...) /
     // .onRelease(...)`.
 
@@ -118,6 +120,7 @@ export class BucheInterface implements Interface {
             p: () => this.focusPrompt(),
             k: () => this.killCell(),
             d: () => this.closeCell(),
+            l: () => this.clearSpentCells(),
         };
         for (const [key, direction] of Object.entries(ARROWS)) {
             capture[key] = move(direction, "mix");
@@ -126,6 +129,15 @@ export class BucheInterface implements Interface {
         const keys = new ModalKeys({
             chords: {
                 "Mod+p": () => this.focusPrompt(),
+                // C-l clears, but only in a prompt input: elsewhere it belongs
+                // to what has the focus (a pty's clear-screen).
+                "Ctrl+l": (e) => {
+                    const target = e.target;
+                    if (!(target instanceof Element) || !target.closest('[focusable="prompt"]')) {
+                        return false;
+                    }
+                    this.clearSpentCells();
+                },
             },
             enter: "Ctrl+q",
             capture,
@@ -225,6 +237,17 @@ export class BucheInterface implements Interface {
     /** Behave exactly like clicking the target cell's ✕ button. */
     closeCell(): void {
         this.targetCell()?.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
+    }
+
+    /** Remove every spent cell (done or error), wherever it shows: log cells,
+     *  tab cells (the tabs go with the boxes, see the "destroy" event), pop
+     *  cells. Running cells are left alone — no signals are sent. */
+    clearSpentCells(): void {
+        for (const box of this.container.querySelectorAll("echo-box")) {
+            if (box instanceof EchoBox && (box.status === "done" || box.status === "error")) {
+                box.destroy();
+            }
+        }
     }
 
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {
