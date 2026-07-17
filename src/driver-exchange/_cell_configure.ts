@@ -20,6 +20,7 @@ export function handle$cell_configure(buche: Buche, obj: CellConfigureMessage): 
         const cell = new Cell(obj);
         entry.setCell(cell);
     }
+
     entry.echo.status = { status: "running" };
     buche.sendInterface({
         type: "update_cell",

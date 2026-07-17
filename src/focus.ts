@@ -243,9 +243,9 @@ export class FocusManager {
 
     /**
      * Go back to the most recent element of the history (before the current
-     * one) that is still there and visible, as when the focused element is
-     * removed; then commit, unless commits are held. Returns whether the focus
-     * moved.
+     * one) that is still there, visible, and not the current one's container,
+     * as when the focused element is removed; then commit, unless commits are
+     * held. Returns whether the focus moved.
      */
     back(): boolean {
         const target = this.previousValid();
@@ -501,12 +501,18 @@ export class FocusManager {
         return false;
     }
 
-    // The most recent valid element of the history other than the current one.
+    // The most recent valid element of the history other than the current one,
+    // and that does not resolve back to it: stepping onto the container of the
+    // current leaf (e.g. a cell's box, when the focus is on something inside
+    // it) would not move the focus anywhere.
     private previousValid(): HTMLElement | null {
         for (let i = this.past.length - 1; i >= 0; i--) {
             const el = this.past[i].element;
             if (el !== this.currentEl && this.valid(el)) {
-                return el;
+                const leaf = this.resolve(el);
+                if (leaf !== this.currentEl && this.valid(leaf)) {
+                    return el;
+                }
             }
         }
         return null;

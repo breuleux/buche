@@ -333,9 +333,9 @@ export class PopZone extends Zone {
             });
         });
         eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
-        // A pop cell ends without shifting the focus on its own (the interface
-        // releases ended cells unless sticky, see releaseEndedCell): it holds
-        // the focus until it is moved explicitly.
+        // A pop cell ends without shifting the focus on its own (the
+        // interface releases ended cells unless sticky, see
+        // releaseEndedCell): it holds the focus until it is moved explicitly.
         entry.echo.sticky = true;
         this.element.append(eb);
         this.current = eb;

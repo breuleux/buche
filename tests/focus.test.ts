@@ -191,3 +191,28 @@ describe("focus-commit-request", () => {
         expect(el.commits).toBe(0);
     });
 });
+
+describe("FocusManager.back", () => {
+    test("skips the container the focus would land back on", () => {
+        const [fm, root] = setup();
+        const other = cell("other");
+        const box = cell("box");
+        root.append(other, box);
+        fm.focus(other, "api");
+        // The box is a leaf when it is focused, so it enters the history…
+        fm.focus(box, "api");
+        // …but a focusable appears inside it, and takes the focus.
+        const gui = document.createElement("div");
+        gui.setAttribute("focusable", "gui");
+        gui.tabIndex = -1;
+        gui.id = "gui";
+        box.append(gui);
+        fm.focus(gui, "api");
+        expect(fm.history.map((r) => r.element.id)).toEqual(["other", "box", "gui"]);
+
+        // Going back onto the box would resolve to its leaf, i.e. right back
+        // to the gui: the box is skipped, and the focus really moves.
+        expect(fm.back()).toBe(true);
+        expect(fm.current).toBe(other);
+    });
+});

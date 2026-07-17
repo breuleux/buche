@@ -239,6 +239,37 @@ export class EmbeddedTerm extends HTMLElement {
         this.write("\x1b[H\x1b[2J\x1b[3J");
     }
 
+    /** Resolves once everything written so far has been parsed into the
+     *  buffer (xterm parses asynchronously). */
+    flush(): Promise<void> {
+        return new Promise((resolve) => {
+            if (!this.initialized || (!this.writing && this.queue.length === 0)) {
+                resolve();
+            } else {
+                this.idleWaiters.push(resolve);
+            }
+        });
+    }
+
+    private idleWaiters: (() => void)[] = [];
+
+    /** The whole buffer as plain text (scrollback and visible lines, trailing
+     *  blank lines trimmed). */
+    getText(): string {
+        if (!this.initialized) {
+            return "";
+        }
+        const buf = this.term.buffer.active;
+        const lines: string[] = [];
+        for (let y = 0; y < buf.length; y++) {
+            lines.push(buf.getLine(y)?.translateToString(true) ?? "");
+        }
+        while (lines.length > 0 && lines[lines.length - 1] === "") {
+            lines.pop();
+        }
+        return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
+    }
+
     /**
      * Will the next character land at the start of a fresh line? A held newline
      * already supplies the break, so a caller that would otherwise prepend its
@@ -550,6 +581,13 @@ export class EmbeddedTerm extends HTMLElement {
         this.stubOn = this.holding();
         this.measure();
         this.pump();
+        if (!this.writing && this.queue.length === 0 && this.idleWaiters.length > 0) {
+            const waiters = this.idleWaiters;
+            this.idleWaiters = [];
+            for (const waiter of waiters) {
+                waiter();
+            }
+        }
     }
 
     private readMaxRows(): number {

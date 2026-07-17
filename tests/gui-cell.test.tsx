@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { Cell, type CellCommand } from "../src/cell.ts";
-import { BucheGui } from "../src/components/buche-gui.tsx";
+import { BucheGui, GUI_SEND_EVENT } from "../src/components/buche-gui.tsx";
 import { EchoBox } from "../src/components/echo-box.tsx";
+import type { PromptCollection } from "../src/components/prompt-collection.tsx";
 import { TabbedZoneElement } from "../src/components/zone.tsx";
 import { Buche, type InM, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
@@ -192,6 +193,174 @@ describe("gui kill from the interface", () => {
         expect(box.querySelectorAll("embedded-term").length).toBe(1);
         expect(box.querySelectorAll("buche-gui").length).toBe(1);
         expect(iface.focus.current).toBe(gui);
+    });
+
+    test("switching to unified drops the terminal, forwarding its text to the gui", async () => {
+        const { driver } = setup();
+        driver({ type: "cell_configure", from: ["p"] });
+        driver({ type: "text", from: ["p"], stream: "stdout", text: "hi there\n" });
+        const box = document.querySelector<EchoBox>("echo-box")!;
+        expect(box.querySelectorAll("embedded-term").length).toBe(1);
+
+        const send = vi.spyOn(BucheGui.prototype, "send");
+        driver({ type: "cell_configure", from: ["p"], mode: "unified" });
+        // The forwarding waits for the terminal to parse what it was given.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        try {
+            expect(box.querySelectorAll("embedded-term").length).toBe(0);
+            expect(box.views).toEqual(["gui"]);
+            expect(send.mock.calls.map((c) => c[0])).toContainEqual({
+                type: "data",
+                data: { $schema: "buche:text", text: "hi there\n", stream: "stdout" },
+            });
+        } finally {
+            send.mockRestore();
+        }
+    });
+
+    // A focusable outside the cell, to have somewhere for the focus to go
+    // back to (happy-dom tab-pane visibility aside).
+    function standIn(iface: BucheInterface): HTMLElement {
+        const el = document.createElement("div");
+        el.setAttribute("focusable", "");
+        el.tabIndex = 0;
+        iface.container.append(el);
+        return el;
+    }
+
+    function stickyGuiCell(iface: BucheInterface, driver: (m: Record<string, unknown>) => void) {
+        const other = standIn(iface);
+        iface.focus.focus(other, "api");
+        driver({ type: "cell_configure", from: ["p"], sticky: true });
+        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        const gui = document.querySelector<BucheGui>("buche-gui")!;
+        return { other, gui, box: gui.closest("echo-box")! };
+    }
+
+    test("a sticky cell keeps the focus when it ends, even with the gui focused", () => {
+        const { iface, driver } = setup();
+        const { gui } = stickyGuiCell(iface, driver);
+        expect(iface.focus.current).toBe(gui);
+
+        driver({ type: "close", from: ["p"], outcome: { type: "success" } });
+        expect(iface.focus.current).toBe(gui);
+    });
+
+    test("a cell sticky through its process keeps the focus when that process ends", () => {
+        // The shape coquille produces for a main cell: the cell is a handle on
+        // the process (`represents`), the process is configured on its own, and
+        // `close` comes from it — so the ended entry is not the sticky echo.
+        const { iface, driver } = setup();
+        const other = standIn(iface);
+        iface.focus.focus(other, "api");
+        driver({ type: "configure", from: ["$proc", "1"] });
+        driver({
+            type: "cell_configure",
+            from: ["$proc", "1", "$main"],
+            represents: ["$proc", "1"],
+            sticky: true,
+        });
+        driver({
+            type: "cell_send",
+            from: ["$proc", "1", "$main"],
+            message: { type: "data", data: {} },
+        });
+        const gui = document.querySelector<BucheGui>("buche-gui")!;
+        expect(iface.focus.current).toBe(gui);
+
+        driver({ type: "close", from: ["$proc", "1"], outcome: { type: "success" } });
+        expect(iface.focus.current).toBe(gui);
+    });
+
+    test("buche.leave() moves the focus away, even from a sticky cell", () => {
+        const { iface, driver } = setup();
+        const { other, gui, box } = stickyGuiCell(iface, driver);
+        expect(iface.focus.current).toBe(gui);
+        [...iface.interactions.purge()]; // clear the focus noise
+
+        gui.dispatchEvent(
+            new CustomEvent(GUI_SEND_EVENT, {
+                detail: { type: "leave" },
+                bubbles: true,
+                composed: true,
+            }),
+        );
+        expect(iface.focus.current).not.toBe(gui);
+        expect(box.contains(iface.focus.current ?? box.parentNode)).toBe(false);
+        expect(iface.focus.current).toBe(other);
+        // A terminal-level command: not relayed to the process.
+        expect([...iface.interactions.purge()]).toHaveLength(0);
+    });
+
+    test("buche.leave() leaves the cell when its box is in the history too", async () => {
+        // The real sequence: the prompt, then the cell's box (which the command
+        // was expected on), then the gui inside that box. Stepping back from
+        // the gui onto the box would resolve right back onto the gui.
+        const { iface, driver } = setup();
+        driver({ type: "prompt_configure", from: ["$proc", "cq"], label: "cq" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const pc = document.querySelector<PromptCollection>("prompt-collection")!;
+        const promptEl = pc.promptElement(pc.prompts[0])!;
+        expect(iface.focus.current).toBe(promptEl);
+
+        iface.focus.expect("echo-c1");
+        driver({ type: "cell_configure", from: ["$proc", "cq", "2"], sticky: true, id: "c1" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const box = document.querySelector("#echo-c1")!;
+        expect(iface.focus.current).toBe(box);
+
+        driver({
+            type: "cell_send",
+            from: ["$proc", "cq", "2"],
+            message: { type: "data", data: {} },
+        });
+        const gui = box.querySelector<BucheGui>("buche-gui")!;
+        expect(iface.focus.current).toBe(gui);
+
+        gui.dispatchEvent(
+            new CustomEvent(GUI_SEND_EVENT, {
+                detail: { type: "leave" },
+                bubbles: true,
+                composed: true,
+            }),
+        );
+        expect(iface.focus.current).toBe(promptEl);
+    });
+
+    test("buche.leave() would rather go to the prompt than to another part of the cell", async () => {
+        // The prompt, then something else in the same box (its terminal, say),
+        // then the gui: stepping back would land on the terminal, i.e. nowhere
+        // near the exit, so the prompt gets the focus instead.
+        const { iface, driver } = setup();
+        driver({ type: "prompt_configure", from: ["$proc", "cq"], label: "cq" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const pc = document.querySelector<PromptCollection>("prompt-collection")!;
+        const promptEl = pc.promptElement(pc.prompts[0])!;
+
+        driver({ type: "cell_configure", from: ["$proc", "cq", "2"], sticky: true });
+        const box = document.querySelector("#echo-c2") ?? document.querySelector("echo-box")!;
+        const inner = document.createElement("div");
+        inner.setAttribute("focusable", "cell");
+        inner.tabIndex = -1;
+        box.append(inner);
+        iface.focus.focus(promptEl, "api");
+        iface.focus.focus(inner, "api");
+        driver({
+            type: "cell_send",
+            from: ["$proc", "cq", "2"],
+            message: { type: "data", data: {} },
+        });
+        const gui = box.querySelector<BucheGui>("buche-gui")!;
+        expect(iface.focus.current).toBe(gui);
+
+        gui.dispatchEvent(
+            new CustomEvent(GUI_SEND_EVENT, {
+                detail: { type: "leave" },
+                bubbles: true,
+                composed: true,
+            }),
+        );
+        expect(iface.focus.current).toBe(promptEl);
     });
 
     test("killCell targets the box when the focus is on the gui itself", () => {

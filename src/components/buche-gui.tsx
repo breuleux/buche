@@ -41,7 +41,11 @@
 //   buche.request(data)    same, but returns a Promise resolved by a `response`
 //                          command carrying the same `response_id`
 //   buche.proc(url)        fetch a `proc://` resource (see below), as a Response
-//   buche.blur()           hand the focus back to the page
+//   buche.blur()           hand the focus back to the page (it stays on the
+//                          cell)
+//   buche.leave()          "the user is done": the focus leaves the cell
+//                          entirely, even if the cell is sticky (the cell
+//                          itself is untouched)
 //
 // # `proc://` resources
 //
@@ -580,6 +584,11 @@ function bucheGuiRuntime(): void {
     };
     buche.blur = (): void => {
         toParent({ [TAG]: "blur" });
+    };
+    // "The user is done with this GUI": the focus leaves the cell entirely,
+    // even a sticky one (unlike blur(), which only escapes the iframe).
+    buche.leave = (): void => {
+        send({ type: "leave" });
     };
     buche.autofocus = focusInside;
     (window as any).buche = buche;

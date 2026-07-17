@@ -111,12 +111,25 @@ export class BucheInterface implements Interface {
             if (!(el instanceof Element)) {
                 return;
             }
+            const detail = (e as CustomEvent).detail as Json;
+            // `buche.leave()` is a terminal-level command, not app data: the
+            // user explicitly left the GUI, so the focus abandons the cell
+            // even if the cell is sticky (which only governs *normal* ends).
+            if (
+                typeof detail === "object" &&
+                detail !== null &&
+                !Array.isArray(detail) &&
+                detail.type === "leave"
+            ) {
+                this.releaseCellFocus(el);
+                return;
+            }
             const entry = this.guiEntry(el);
             if (entry) {
                 this.interactions.push({
                     type: "cell_gui_feedback",
                     entry,
-                    data: (e as CustomEvent).detail,
+                    data: detail,
                 });
             }
         });
@@ -398,16 +411,53 @@ export class BucheInterface implements Interface {
     // The focused cell's process ended: give the focus back, unless sticky.
     private releaseEndedCell(entry: Entry): void {
         const { status } = entry.echo.status;
-        if ((status !== "done" && status !== "error") || entry.echo.sticky) {
+        if (status !== "done" && status !== "error") {
             return;
         }
+        // The focus may sit on the box itself, or anywhere inside it — the
+        // GUI host (after buche.blur()), or the element committed in the
+        // iframe.
         const current = this.focus.current;
-        if (
-            current instanceof EchoBox &&
-            (current.boundEntry === entry || current.boundEntry?.representative() === entry)
-        ) {
-            this.focus.back();
+        if (!current) {
+            return;
         }
+        for (const [ent, { element }] of this.map) {
+            if (
+                (ent === entry || ent.representative() === entry) &&
+                (element === current || element.contains(current))
+            ) {
+                // Stickiness is a property of the echo on screen, which is not
+                // the entry whose process ended when the echo only `represents`
+                // it (a cell showing a process's output, say).
+                if (ent.echo.sticky || entry.echo.sticky) {
+                    continue;
+                }
+                this.focus.back();
+                break;
+            }
+        }
+    }
+
+    /** The user explicitly left the cell whose element contains `inside`
+     *  (`buche.leave()` from its GUI): the focus abandons the cell — even a
+     *  sticky one, since stickiness is about normal ends, not departures.
+     *  The cell itself stays exactly as it was: alive, visible, re-enterable
+     *  (a click, or navigating onto it, brings the focus back). */
+    private releaseCellFocus(inside: Element): void {
+        const box = inside.closest("echo-box");
+        const before = this.focus.current;
+        if (!box || !before || !(box === before || box.contains(before))) {
+            return;
+        }
+        this.focus.back();
+        const now = this.focus.current;
+        if (now && now !== before && !box.contains(now)) {
+            return;
+        }
+        // Nothing in the history outside the cell — typically the prompt that
+        // launched the command, hidden in the tab the cell took over: land
+        // there instead (which brings its tab back into view).
+        this.focusPrompt();
     }
 
     // ── Interface messages ────────────────────────────────────────────────────
@@ -422,6 +472,12 @@ export class BucheInterface implements Interface {
         // cell installed in one zone (a tab) must also refresh the echo handle
         // of the same entry shown elsewhere (the prompt zone).
         message.entry.fire();
+        // The configuration may have changed the mode (e.g. to unified, which
+        // drops the terminal view); bring the box in line with it.
+        const element = this.map.get(message.entry)?.element;
+        if (element instanceof EchoBox && message.entry.cell) {
+            message.entry.cell.applyMode(element);
+        }
     }
 
     handle$update_prompt(buche: Buche, message: UpdatePromptMessage) {

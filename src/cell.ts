@@ -169,6 +169,34 @@ export class Cell extends WithId() implements CellConfiguration {
         box.bump("gui");
     }
 
+    /** Bring the box in line with the mode. A unified cell has no terminal
+     *  view: switching to unified removes it, forwarding whatever it held to
+     *  the GUI as text. Call after each (re)configuration. */
+    applyMode(box: EchoBox): void {
+        if (this.mode !== "unified") {
+            return;
+        }
+        const pty = box.getView("pty")?.firstElementChild;
+        if (!(pty instanceof EmbeddedTerm)) {
+            return;
+        }
+        // The terminal parses asynchronously: wait for its content to settle
+        // before lifting it out.
+        void pty.flush().then(() => {
+            if (box.getView("pty")?.firstElementChild !== pty) {
+                return;
+            }
+            const text = pty.getText();
+            if (text !== "") {
+                this.sendToGui(
+                    { type: "data", data: { $schema: "buche:text", text, stream: "stdout" } },
+                    box,
+                );
+            }
+            box.removeView("pty");
+        });
+    }
+
     handle(message: CellCommand, entry: Entry, box: EchoBox) {
         type HT = (m: CellCommand, entry: Entry, box: EchoBox) => void;
         const handler = this[`handle$${message.type}`];
