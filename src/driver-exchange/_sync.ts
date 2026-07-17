@@ -11,5 +11,10 @@ export async function handle$sync(
     buche: Buche,
     obj: SyncMessage
 ): Promise<void> {
-    // TODO
+    // buche.send({
+    //     type: "sync",
+    //     from: ["$terminal"],
+    //     to: obj.from,
+    //     nonce: obj.nonce,
+    // })
 }

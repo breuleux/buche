@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from "ajv";
 import { handlers, type IncomingDriverMessage } from "./driver-exchange/incoming.ts";
-import schema from "./driver-exchange/message.schema.json" with { type: "json" };
+import schema from "./driver-exchange/incoming.schema.json" with { type: "json" };
 import { Buche } from "./core.ts";
 
 export type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
@@ -54,7 +54,7 @@ export class Runner {
     buche: Buche;
 
     constructor(buche?: Buche) {
-        this.buche = buche || new Buche();
+        this.buche = buche || new Buche({cellTypes: {}});
     }
 
     handleMessage(msg: IncomingDriverMessage): Promise<void> {
