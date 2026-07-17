@@ -118,7 +118,7 @@ class Generator {
         // ---- Emit incoming.ts -----------------------------------------------------------
 
         const imports = entries
-            .map((e) => `import { ${e.handler}, type ${e.iface} } from "${e.module}";`)
+            .map((e) => `import { ${e.handler}, type ${e.iface} } from "${e.module}.ts";`)
             .join("\n");
 
         const registry = entries.map((e) => `    ${e.key}: ${e.handler},`).join("\n");

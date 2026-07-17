@@ -1,6 +1,6 @@
-import { PromptConfiguration } from "../prompt.ts";
-import { Buche } from "../core.ts";
-import { BaseMessage, ZoneDescriptor } from "./common.ts";
+import { type PromptConfiguration } from "../prompt.ts";
+import { type Buche } from "../core.ts";
+import { type BaseMessage, type ZoneDescriptor } from "./common.ts";
 
 export interface PromptCreateMessage extends BaseMessage, PromptConfiguration {
   type: "prompt_create";

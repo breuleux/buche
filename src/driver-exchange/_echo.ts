@@ -1,5 +1,5 @@
-import { Buche } from "../core.ts";
-import { BaseMessage, HighlightRange } from "./common.ts";
+import { type Buche } from "../core.ts";
+import { type BaseMessage, type HighlightRange } from "./common.ts";
 
 export interface EchoMessage extends BaseMessage {
   type: "echo";

@@ -1,5 +1,5 @@
-import { Buche } from "../core.ts";
-import { BaseMessage } from "./common.ts";
+import { type Buche } from "../core.ts";
+import { type BaseMessage } from "./common.ts";
 
 export interface TextMessage extends BaseMessage {
   type: "text";

@@ -1,6 +1,6 @@
-import { CellConfiguration } from "../cell.ts";
-import { Buche } from "../core.ts";
-import { BaseMessage, ZoneDescriptor } from "./common.ts";
+import { type CellConfiguration } from "../cell.ts";
+import { type Buche } from "../core.ts";
+import { type BaseMessage, type ZoneDescriptor } from "./common.ts";
 
 export interface CellCreateMessage extends BaseMessage, CellConfiguration {
   type: "cell_create";

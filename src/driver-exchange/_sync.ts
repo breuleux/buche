@@ -1,5 +1,5 @@
 import { type Buche } from "../core.ts";
-import { BaseMessage } from "./common.ts";
+import { type BaseMessage } from "./common.ts";
 
 export interface SyncMessage extends BaseMessage {
   type: "sync";

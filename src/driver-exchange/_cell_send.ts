@@ -1,7 +1,7 @@
-import { Buche } from "../core.ts";
-import { DataMessage } from "./_data.ts";
-import { TextMessage } from "./_text.ts";
-import { BaseMessage } from "./common.ts";
+import { type Buche } from "../core.ts";
+import { type DataMessage } from "./_data.ts";
+import { type TextMessage } from "./_text.ts";
+import { type BaseMessage } from "./common.ts";
 
 export interface ExecCellMessage {
   type: "exec";
