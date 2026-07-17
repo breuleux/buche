@@ -214,6 +214,11 @@ export class BucheInterface implements Interface {
         if (!box || !entry) {
             return;
         }
+        // Nothing to kill once the process is spent — and signaling would
+        // mark the entry (and its other views) unresponsive for nothing.
+        if (box.status === "done" || box.status === "error") {
+            return;
+        }
         const code = box.status === "unresponsive" ? 9 : 15;
         this.interactions.push({ type: "user_signal", code, entry });
     }
@@ -294,13 +299,14 @@ export class BucheInterface implements Interface {
 
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         this.settleExpectation(message.entry);
-        const existing = this.map.get(message.entry);
-        if (existing) {
-            message.entry.fire();
-        } else {
+        if (!this.map.has(message.entry)) {
             const element = message.zone!.installCell(this, message.entry);
             this.map.set(message.entry, { zone: message.zone!, element });
         }
+        // Re-apply on every box showing the entry, however it got there: a
+        // cell installed in one zone (a tab) must also refresh the echo handle
+        // of the same entry shown elsewhere (the prompt zone).
+        message.entry.fire();
     }
 
     handle$update_prompt(buche: Buche, message: UpdatePromptMessage) {

@@ -69,6 +69,27 @@ function tagCell(eb: EchoBox, entry: Entry): void {
     }
 }
 
+/** Behave like a box's ✕. An alive cell gets SIGTERM and removes itself once
+ *  the confirmation (done/error) arrives; an already unresponsive one gets
+ *  SIGKILL and goes away immediately — a stalled process is not expected to
+ *  confirm anything. A spent one (done/error) is not signaled at all: there is
+ *  no process to kill, and a signal would mark the entry unresponsive —
+ *  poisoning the other boxes showing the same entry (e.g. the prompt-zone
+ *  echo of a cell closed from its tab) with a change that never happened. */
+function closeBox(ifc: Interface, eb: EchoBox, entry: Entry): void {
+    if (eb.status === "done" || eb.status === "error") {
+        eb.destroy();
+        return;
+    }
+    const code = eb.status === "unresponsive" ? 9 : 15;
+    ifc.interactions.push({ type: "user_signal", code, entry });
+    if (code === 9) {
+        eb.destroy();
+    } else {
+        eb.destroyWhenDone = true;
+    }
+}
+
 export class TabbedZone extends Zone {
     declare element: TabPane;
     // What each tab's ✕ does, by entry (see installCell / installPrompt).
@@ -101,15 +122,7 @@ export class TabbedZone extends Zone {
         const eb = new EchoBox();
         eb.setCompact(true);
         eb.bindEntry(entry);
-        eb.addEventListener("close", () => {
-            eb.destroyWhenDone = true;
-            const code = eb.status === "unresponsive" ? 9 : 15;
-            ifc.interactions.push({
-                type: "user_signal",
-                code,
-                entry,
-            });
-        });
+        eb.addEventListener("close", () => closeBox(ifc, eb, entry));
         eb.addEventListener("resize", () => reportResize(ifc, eb, entry));
         eb.addEventListener("term-data", (e) => {
             ifc.interactions.push({
@@ -224,15 +237,7 @@ export class PromptZone extends Zone {
     installEcho(ifc: Interface, entry: Entry): HTMLElement {
         const eb = new EchoBox();
         eb.bindEntry(entry);
-        eb.addEventListener("close", () => {
-            eb.destroyWhenDone = true;
-            const code = eb.status === "unresponsive" ? 9 : 15;
-            ifc.interactions.push({
-                type: "user_signal",
-                code,
-                entry,
-            });
-        });
+        eb.addEventListener("close", () => closeBox(ifc, eb, entry));
         eb.addEventListener("resize", () => reportResize(ifc, eb, entry));
         // Keyboard input bubbles up from the embedded terminal (see EmbeddedTerm).
         eb.addEventListener("term-data", (e) => {
@@ -312,8 +317,12 @@ export class PopZone extends Zone {
         eb.setCompact(true);
         eb.bindEntry(entry);
         this.closer = () => {
-            const code = eb.status === "unresponsive" ? 9 : 15;
-            ifc.interactions.push({ type: "user_signal", code, entry });
+            // Spent cells are not signaled (see closeBox): the other views of
+            // the entry would hear about a kill that never happened.
+            if (eb.status !== "done" && eb.status !== "error") {
+                const code = eb.status === "unresponsive" ? 9 : 15;
+                ifc.interactions.push({ type: "user_signal", code, entry });
+            }
             eb.remove();
         };
         eb.addEventListener("close", () => this.dismiss());

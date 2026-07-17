@@ -141,3 +141,62 @@ describe("pop-zone", () => {
         expect(ifc.focused[0]).toBeNull(); // no row wired: the fallback prompt
     });
 });
+
+// ── Closing unresponsive cells ─────────────────────────────────────────────
+
+import { PromptZone } from "../../src/zone.ts";
+
+describe("cell closing", () => {
+    function promptZone(): { slot: HTMLElement; zone: PromptZone; ifc: FakeIfc } {
+        const root = document.createElement("div");
+        const slot = document.createElement("div");
+        root.append(slot);
+        document.body.append(root);
+        const pc = document.createElement("prompt-collection");
+        const element = { log: (n: Node) => slot.append(n), prompts: pc } as any;
+        return { slot, zone: new PromptZone({ names: ["@"], element }), ifc: fakeIfc(root) };
+    }
+
+    test("closing a live cell signals SIGTERM and waits for the confirmation", () => {
+        const { slot, zone, ifc } = promptZone();
+        const entry = new Entry({});
+        const box = zone.installEcho(ifc as any, entry) as EchoBox;
+        box.status = "running";
+        box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+        const sig = ifc.pushed.find((m) => m.type === "user_signal");
+        expect(sig.code).toBe(15);
+        expect(box.isConnected).toBe(true); // kept until done/error confirms
+        expect(box.destroyWhenDone).toBe(true);
+    });
+
+    test("closing an unresponsive cell SIGKILLs and removes it at once", () => {
+        const { slot, zone, ifc } = promptZone();
+        const entry = new Entry({});
+        const box = zone.installEcho(ifc as any, entry) as EchoBox;
+        box.status = "unresponsive";
+        box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+        const sig = ifc.pushed.find((m) => m.type === "user_signal");
+        expect(sig.code).toBe(9);
+        expect(box.isConnected).toBe(false);
+        expect(slot.children).toHaveLength(0);
+    });
+
+    test("closing a spent cell signals nothing and leaves the sibling views alone", () => {
+        const { slot, zone, ifc } = promptZone();
+        const entry = new Entry({});
+        entry.echo.status = { status: "done" };
+        // Two views of one entry: the prompt-zone echo and the tab cell.
+        const echo = zone.installEcho(ifc as any, entry) as EchoBox;
+        const sibling = document.createElement("echo-box") as EchoBox;
+        sibling.bindEntry(entry);
+        document.body.append(sibling);
+        expect(echo.status).toBe("done");
+
+        echo.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+
+        expect(ifc.pushed.some((m: any) => m.type === "user_signal")).toBe(false);
+        expect(echo.isConnected).toBe(false);
+        expect(slot.children).toHaveLength(0);
+        expect(sibling.status).toBe("done"); // untouched by the close
+    });
+});
