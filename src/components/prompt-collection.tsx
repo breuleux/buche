@@ -1,30 +1,38 @@
 // A collection of prompts as a custom element: `<prompt-collection>`.
 //
 //   const pc = document.createElement("prompt-collection") as PromptCollection;
-//   pc.addPrompt({ label: "sh", color: "#8ae234", promptHtml: "<b>$</b>", doc: "" });
-//   pc.addPrompt({ label: "py", color: "#729fcf", promptHtml: "<b>&gt;&gt;&gt;</b>" });
+//   const entry = new Entry({});
+//   entry.echo.label = "sh";
+//   entry.echo.color = "green";
+//   entry.setPrompt(new Prompt({ prompt: { text: "$", ranges: [] } }));
+//   pc.addPrompt(entry);
 //   container.appendChild(pc);
 //
-// Each prompt is a CodeMirror input box with some prompt HTML to its left (its
-// leading marker). Only the active prompt is shown. Under the prompt is a tab
-// zone: one tab per prompt, which is simply its label — the only styling is the
-// label's colour (configurable per prompt). Click a label to switch prompts;
-// drag labels to reorder them.
+// Each prompt is configured from an {@link Entry} (src/entry.ts) and keyed by that
+// Entry object — `showPrompt`, `removePrompt`, etc. all take the Entry you added.
+// The tab's label and accent colour come from the Entry's {@link Echo}; the
+// leading marker and the editor's initial content come from the Entry's
+// {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
+// flow back into `entry.prompt.content.text`.
 //
-//   ┌───────────────────────────────────────────┐
+//   ┌─────────────────────────────────────────────┐
 //   │ $  │ the active prompt's CodeMirror editor  │
-//   ├───────────────────────────────────────────┤
+//   ├─────────────────────────────────────────────┤
 //   │ sh   py   notes            ← tab zone       │
-//   └───────────────────────────────────────────┘
+//   └─────────────────────────────────────────────┘
 //
-// This is intentionally standalone (it does not import the `Prompt` class), but
-// its config mirrors PromptConfiguration (label / color / prompt_html / text) so
-// it can be wired to real prompts later. The editor is created through a swappable
-// `editorFactory` (default: CodeMirror) so alternative editors can be injected.
+// Only the active prompt is shown. Under the prompt is a tab zone: one tab per
+// prompt (its label, coloured by the Echo accent while active, grey otherwise).
+// Click a label to switch prompts; drag labels to reorder them. The editor is
+// created through a swappable `editorFactory` (default: CodeMirror).
+//
+// Adding a prompt registers a reconfiguration listener on `entry.listeners`;
+// mutate the Entry and call `entry.fire()` to re-read the label, accent and
+// marker (the editor content is left alone so it never clobbers user edits).
 //
 // Events (both bubble):
-//   "promptchange"  detail: { prompt: string }      — the active prompt changed
-//   "reorder"       detail: { order: string[] }      — tabs were reordered
+//   "promptchange"  detail: { entry: Entry }     — the active prompt changed
+//   "reorder"       detail: { order: Entry[] }    — tabs were reordered
 //
 // Appearance lives in the companion stylesheet `prompt-collection.css` (or the
 // consolidated components.css).
@@ -41,7 +49,9 @@ import {
 import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
-import type { Accent, HighlightRange, StyledText } from "../types.ts";
+import type { Entry } from "../entry.ts";
+import type { HighlightRange, StyledText } from "../types.ts";
+import { buildStyledText } from "./utils.tsx";
 
 /** A resolved colorization span: a `[start, end)` range with an inline style. */
 export interface StyleSpan {
@@ -82,33 +92,16 @@ export type EditorFactory = (options: {
     onNavigate?: (direction: -1 | 1) => void;
 }) => PromptEditor;
 
-export interface PromptSpec {
-    /** Stable id; generated if omitted. */
-    id?: string;
-    /** Tab label. */
-    label: string;
-    /**
-     * Tab label accent — a color/style description resolved through
-     * {@link calculateStyle} (see `color.ts`). Applied while the tab is active;
-     * inactive tabs are shown grey.
-     */
-    color?: Accent;
-    /** HTML (or a node) for the leading marker shown left of the editor. */
-    promptHtml?: string | Node;
-    /** Initial editor text. */
-    doc?: string;
-    /** Called with the new value whenever the editor's text changes. */
-    onChange?: (value: string) => void;
-}
-
-interface Entry {
+interface Row {
+    entry: Entry;
+    /** Stable DOM id (for the `data-prompt` attribute and drag reordering). */
     id: string;
-    label: string;
-    color?: string;
     row: HTMLElement; // [marker][editor]
     marker: HTMLElement;
     tab: HTMLElement;
     editor: PromptEditor;
+    /** The reconfiguration callback registered on `entry.listeners`. */
+    listener: (entry: Entry) => void;
 }
 
 let darkTheme: Extension | null = null;
@@ -242,11 +235,14 @@ export class PromptCollection extends HTMLElement {
     private initialized = false;
     private promptsEl!: HTMLElement;
     private tabsEl!: HTMLElement;
-    private entries = new Map<string, Entry>();
-    private order: string[] = [];
-    private active: string | null = null;
+    // Prompts are keyed by their Entry object — the Entry is the prompt's identity.
+    private rows = new Map<Entry, Row>();
+    // Reverse lookup from a row's DOM id back to its Entry (for drag reordering).
+    private byId = new Map<string, Entry>();
+    private order: Entry[] = [];
+    private active: Entry | null = null;
     private seq = 0;
-    private dragId: string | null = null;
+    private dragEntry: Entry | null = null;
 
     connectedCallback(): void {
         this.ensureSetup();
@@ -257,12 +253,6 @@ export class PromptCollection extends HTMLElement {
             return;
         }
         this.initialized = true;
-
-        // Capture authored `[data-label]` children as prompts (their innerHTML
-        // becomes the leading marker), then rebuild.
-        const authored = Array.from(this.children).filter(
-            (c): c is HTMLElement => c instanceof HTMLElement && c.hasAttribute("data-label"),
-        );
         this.replaceChildren();
 
         this.promptsEl = document.createElement("div");
@@ -274,49 +264,46 @@ export class PromptCollection extends HTMLElement {
         // Live reordering while dragging a tab across the tab zone.
         this.tabsEl.addEventListener("dragover", (e) => this.onDragOver(e));
         this.tabsEl.addEventListener("drop", (e) => e.preventDefault());
-
-        for (const child of authored) {
-            this.addPrompt({
-                label: child.getAttribute("data-label") ?? "",
-                color: child.getAttribute("data-color") ?? undefined,
-                promptHtml: child.innerHTML,
-                doc: child.getAttribute("data-doc") ?? "",
-            });
-        }
     }
 
     // ── Prompts ───────────────────────────────────────────────────────────────
 
-    /** The prompt ids, in tab order. */
-    get prompts(): string[] {
+    /** The prompt entries, in tab order. */
+    get prompts(): Entry[] {
         this.ensureSetup();
         return [...this.order];
     }
 
-    /** The active prompt id, or null if empty. */
-    get activePrompt(): string | null {
+    /** The active prompt's entry, or null if empty. */
+    get activePrompt(): Entry | null {
         this.ensureSetup();
         return this.active;
     }
 
-    /** Add a prompt (and its tab). The first prompt added becomes active.
-     *  Returns the prompt id. */
-    addPrompt(spec: PromptSpec): string {
+    /** Add a prompt (and its tab) for `entry`. The first prompt added becomes
+     *  active. Returns the same Entry (the prompt's handle). */
+    addPrompt(entry: Entry): Entry {
         this.ensureSetup();
-        const id = spec.id ?? `p${++this.seq}`;
-        if (this.entries.has(id)) {
-            throw new Error(`prompt-collection: duplicate prompt id "${id}"`);
+        if (this.rows.has(entry)) {
+            return entry;
         }
+        const id = `p${++this.seq}`;
 
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
-        this.setMarker(marker, spec.promptHtml);
+
+        const content: StyledText = entry.prompt?.content ?? { text: "", ranges: [] };
 
         const editorHost = document.createElement("div");
         editorHost.className = "prompt-collection-editor";
         const editor = this.editorFactory({
-            doc: spec.doc ?? "",
-            onChange: spec.onChange,
+            doc: content.text,
+            // Keep the Entry's Prompt content text in sync with the editor.
+            onChange: (value) => {
+                if (entry.prompt) {
+                    entry.prompt.content.text = value;
+                }
+            },
             onNavigate: (dir) => this.rotate(dir),
         });
         editorHost.appendChild(editor.dom);
@@ -331,11 +318,11 @@ export class PromptCollection extends HTMLElement {
         const tab = document.createElement("span");
         tab.className = "prompt-collection-tab";
         tab.setAttribute("data-prompt", id);
-        tab.textContent = spec.label;
+        tab.textContent = entry.echo.label;
         tab.draggable = true;
-        tab.addEventListener("click", () => this.showPrompt(id));
+        tab.addEventListener("click", () => this.showPrompt(entry));
         tab.addEventListener("dragstart", (e) => {
-            this.dragId = id;
+            this.dragEntry = entry;
             tab.classList.add("dragging");
             e.dataTransfer?.setData("text/plain", id);
             if (e.dataTransfer) {
@@ -344,43 +331,47 @@ export class PromptCollection extends HTMLElement {
         });
         tab.addEventListener("dragend", () => {
             tab.classList.remove("dragging");
-            this.dragId = null;
+            this.dragEntry = null;
             this.syncOrderFromDom();
         });
         this.tabsEl.appendChild(tab);
 
-        const entry: Entry = {
-            id,
-            label: spec.label,
-            color: spec.color,
-            row,
-            marker,
-            tab,
-            editor,
-        };
-        this.entries.set(id, entry);
-        this.order.push(id);
+        // Re-read the prompt whenever the Entry is reconfigured (entry.fire()).
+        const listener = (): void => this.reconfigure(entry);
+        entry.listeners.push(listener);
+
+        const rowEntry: Row = { entry, id, row, marker, tab, editor, listener };
+        this.rows.set(entry, rowEntry);
+        this.byId.set(id, entry);
+        this.order.push(entry);
+
+        // Render the leading marker and apply the initial styled content.
+        this.renderMarker(marker, entry.prompt?.prompt);
+        this.applyContent(editor, content);
+
         // Paint the tab (grey while inactive); activation restyles the active one.
-        this.applyTabStyle(entry);
+        this.applyTabStyle(rowEntry);
         if (this.active === null) {
-            this.activate(id, false);
+            this.activate(entry, false);
         }
-        return id;
+        return entry;
     }
 
     /** Remove a prompt; if it was active, the next prompt becomes active. */
-    removePrompt(id: string): void {
+    removePrompt(entry: Entry): void {
         this.ensureSetup();
-        const entry = this.entries.get(id);
-        if (!entry) {
+        const row = this.rows.get(entry);
+        if (!row) {
             return;
         }
-        entry.editor.destroy();
-        entry.row.remove();
-        entry.tab.remove();
-        this.entries.delete(id);
-        this.order = this.order.filter((x) => x !== id);
-        if (this.active === id) {
+        entry.listeners = entry.listeners.filter((l) => l !== row.listener);
+        row.editor.destroy();
+        row.row.remove();
+        row.tab.remove();
+        this.rows.delete(entry);
+        this.byId.delete(row.id);
+        this.order = this.order.filter((x) => x !== entry);
+        if (this.active === entry) {
             this.active = null;
             if (this.order.length > 0) {
                 this.activate(this.order[0], false);
@@ -388,31 +379,29 @@ export class PromptCollection extends HTMLElement {
         }
     }
 
-    /** Switch to a prompt by id and focus its editor. No-op for an unknown id. */
-    showPrompt(id: string): void {
-        this.activate(id, true);
+    /** Switch to a prompt and focus its editor. No-op for an unknown entry. */
+    showPrompt(entry: Entry): void {
+        this.activate(entry, true);
     }
 
-    private activate(id: string, focus: boolean): void {
+    private activate(entry: Entry, focus: boolean): void {
         this.ensureSetup();
-        if (!this.entries.has(id)) {
+        if (!this.rows.has(entry)) {
             return;
         }
-        this.active = id;
-        for (const [pid, entry] of this.entries) {
-            const on = pid === id;
-            entry.row.hidden = !on;
-            entry.tab.classList.toggle("active", on);
-            entry.tab.setAttribute("aria-selected", String(on));
+        this.active = entry;
+        for (const [e, row] of this.rows) {
+            const on = e === entry;
+            row.row.hidden = !on;
+            row.tab.classList.toggle("active", on);
+            row.tab.setAttribute("aria-selected", String(on));
             // Active tab wears its accent; inactive tabs go grey.
-            this.applyTabStyle(entry);
+            this.applyTabStyle(row);
         }
         if (focus) {
-            this.entries.get(id)?.editor.focus();
+            this.rows.get(entry)?.editor.focus();
         }
-        this.dispatchEvent(
-            new CustomEvent("promptchange", { detail: { prompt: id }, bubbles: true }),
-        );
+        this.dispatchEvent(new CustomEvent("promptchange", { detail: { entry }, bubbles: true }));
     }
 
     /** Rotate the active prompt cyclically (-1 = previous, +1 = next) and focus
@@ -431,47 +420,40 @@ export class PromptCollection extends HTMLElement {
     }
 
     /** Move a prompt to a new index in the tab order. */
-    movePrompt(id: string, toIndex: number): void {
+    movePrompt(entry: Entry, toIndex: number): void {
         this.ensureSetup();
-        const from = this.order.indexOf(id);
+        const from = this.order.indexOf(entry);
         if (from < 0) {
             return;
         }
         this.order.splice(from, 1);
         const idx = Math.max(0, Math.min(this.order.length, toIndex));
-        this.order.splice(idx, 0, id);
+        this.order.splice(idx, 0, entry);
         this.applyOrder();
         this.dispatchEvent(
             new CustomEvent("reorder", { detail: { order: [...this.order] }, bubbles: true }),
         );
     }
 
-    // ── Per-prompt config ───────────────────────────────────────────────────
+    // ── Reconfiguration ─────────────────────────────────────────────────────
 
-    setLabel(id: string, label: string): void {
-        this.ensureSetup();
-        const entry = this.entries.get(id);
-        if (entry) {
-            entry.label = label;
-            entry.tab.textContent = label;
+    // Re-read an Entry's label, accent and marker after its Echo was reconfigured.
+    // The editor content is left untouched so live edits are never clobbered.
+    private reconfigure(entry: Entry): void {
+        const row = this.rows.get(entry);
+        if (!row) {
+            return;
         }
+        row.tab.textContent = entry.echo.label;
+        this.renderMarker(row.marker, entry.prompt?.prompt);
+        this.applyTabStyle(row);
     }
 
-    /** Set a tab's accent (a color/style description; see `color.ts`). */
-    setColor(id: string, color: Accent): void {
-        this.ensureSetup();
-        const entry = this.entries.get(id);
-        if (entry) {
-            entry.color = color;
-            this.applyTabStyle(entry);
-        }
-    }
-
-    /** Paint a tab from its accent while active, or grey while inactive. The
+    /** Paint a tab from its Echo accent while active, or grey while inactive. The
      *  accent is resolved through the color grammar; an unparseable one is
      *  ignored (the tab falls back to inherited styling). */
-    private applyTabStyle(entry: Entry): void {
-        const accent = entry.id === this.active ? entry.color : "grey";
+    private applyTabStyle(row: Row): void {
+        const accent = row.entry === this.active ? row.entry.echo.color : "grey";
         let css = "";
         if (accent) {
             try {
@@ -480,51 +462,48 @@ export class PromptCollection extends HTMLElement {
                 css = "";
             }
         }
-        entry.tab.setAttribute("style", css);
-    }
-
-    setPromptHtml(id: string, html: string | Node): void {
-        this.ensureSetup();
-        const entry = this.entries.get(id);
-        if (entry) {
-            this.setMarker(entry.marker, html);
-        }
+        row.tab.setAttribute("style", css);
     }
 
     // ── Editor access ─────────────────────────────────────────────────────────
 
-    getEditor(id: string): PromptEditor | null {
+    getEditor(entry: Entry): PromptEditor | null {
         this.ensureSetup();
-        return this.entries.get(id)?.editor ?? null;
+        return this.rows.get(entry)?.editor ?? null;
     }
 
-    getValue(id: string): string {
+    getValue(entry: Entry): string {
         this.ensureSetup();
-        return this.entries.get(id)?.editor.getValue() ?? "";
+        return this.rows.get(entry)?.editor.getValue() ?? "";
     }
 
     /**
-     * Set a prompt's value. A plain string sets just the text. A {@link StyledText}
-     * additionally colorizes the text (resolving each range's accent through
-     * {@link calculateStyle} against {@link anchors}) and, when a `position` is
-     * given, moves the cursor there.
+     * Set a prompt's editor value. A plain string sets just the text. A
+     * {@link StyledText} additionally colorizes the text (resolving each range's
+     * accent through {@link calculateStyle}) and, when a `position` is given,
+     * moves the cursor there.
      */
-    setValue(id: string, value: string | StyledText): void {
+    setValue(entry: Entry, value: string | StyledText): void {
         this.ensureSetup();
-        const entry = this.entries.get(id);
-        if (!entry) {
+        const row = this.rows.get(entry);
+        if (!row) {
             return;
         }
         if (typeof value === "string") {
-            entry.editor.setValue(value);
+            row.editor.setValue(value);
             return;
         }
-        const { base, spans } = this.resolveContent(value.ranges ?? [], value.text);
-        entry.editor.setValue(value.text);
-        entry.editor.setBaseStyle?.(base);
-        entry.editor.setHighlights?.(spans);
-        if (value.position != null) {
-            entry.editor.setPosition?.(value.position);
+        row.editor.setValue(value.text);
+        this.applyContent(row.editor, value);
+    }
+
+    // Apply a StyledText's colorization and cursor position to an editor.
+    private applyContent(editor: PromptEditor, content: StyledText): void {
+        const { base, spans } = this.resolveContent(content.ranges ?? [], content.text);
+        editor.setBaseStyle?.(base);
+        editor.setHighlights?.(spans);
+        if (content.position != null) {
+            editor.setPosition?.(content.position);
         }
     }
 
@@ -574,34 +553,33 @@ export class PromptCollection extends HTMLElement {
 
     // ── Internals ──────────────────────────────────────────────────────────────
 
-    private setMarker(marker: HTMLElement, html: string | Node | undefined): void {
-        if (html == null) {
-            marker.replaceChildren();
-        } else if (typeof html === "string") {
-            marker.innerHTML = html;
+    // Render a StyledText leading marker into `marker` (empty when absent).
+    private renderMarker(marker: HTMLElement, styled: StyledText | undefined): void {
+        if (styled?.text) {
+            marker.replaceChildren(buildStyledText(styled, this.theme));
         } else {
-            marker.replaceChildren(html);
+            marker.replaceChildren();
         }
     }
 
     // Re-append tabs and rows to match `this.order`.
     private applyOrder(): void {
-        for (const id of this.order) {
-            const entry = this.entries.get(id);
-            if (entry) {
-                this.tabsEl.appendChild(entry.tab);
-                this.promptsEl.appendChild(entry.row);
+        for (const entry of this.order) {
+            const row = this.rows.get(entry);
+            if (row) {
+                this.tabsEl.appendChild(row.tab);
+                this.promptsEl.appendChild(row.row);
             }
         }
     }
 
     // While dragging, move the dragged tab to the pointer's position.
     private onDragOver(e: DragEvent): void {
-        if (!this.dragId) {
+        if (!this.dragEntry) {
             return;
         }
         e.preventDefault();
-        const dragging = this.entries.get(this.dragId)?.tab;
+        const dragging = this.rows.get(this.dragEntry)?.tab;
         if (!dragging) {
             return;
         }
@@ -621,15 +599,19 @@ export class PromptCollection extends HTMLElement {
 
     // After a drag ends, adopt the DOM tab order as the canonical order.
     private syncOrderFromDom(): void {
-        const domOrder = Array.from(this.tabsEl.children)
+        const domIds = Array.from(this.tabsEl.children)
             .map((c) => c.getAttribute("data-prompt"))
             .filter((x): x is string => x != null);
-        const changed = domOrder.join(" ") !== this.order.join(" ");
+        const domOrder = domIds
+            .map((id) => this.byId.get(id))
+            .filter((e): e is Entry => e != null);
+        const prevIds = this.order.map((e) => this.rows.get(e)?.id ?? "");
+        const changed = domIds.join(" ") !== prevIds.join(" ");
         this.order = domOrder;
-        for (const id of this.order) {
-            const entry = this.entries.get(id);
-            if (entry) {
-                this.promptsEl.appendChild(entry.row);
+        for (const entry of this.order) {
+            const row = this.rows.get(entry);
+            if (row) {
+                this.promptsEl.appendChild(row.row);
             }
         }
         if (changed) {

@@ -14,6 +14,9 @@ export class Entry extends Hierarchy {
     prompt: Prompt | null = null;
     zones: Record<string, Zone> = {};
 
+    /** Listeners */
+    listeners: Array<(entry: this) => void> = [];
+
     constructor(args: EntryArgs) {
         super(args);
         this.echo = new Echo({
@@ -35,6 +38,12 @@ export class Entry extends Hierarchy {
     setPrompt(prompt: Prompt) {
         this.prompt = prompt;
         Object.assign(this.zones, zoneMap(Object.values(prompt.zones)));
+    }
+
+    fire() {
+        for (const listener of this.listeners) {
+            listener(this);
+        }
     }
 
     toJSON() {

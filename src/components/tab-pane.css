@@ -13,6 +13,7 @@ tab-pane {
 	min-height: 0;
 	background: var(--tab-pane-bg);
 	color: #d4d4d4;
+	height: 100%;
 }
 
 .tab-pane-tabs {

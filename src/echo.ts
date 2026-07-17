@@ -41,9 +41,6 @@ export class Echo extends WithId() {
     /** List of views. */
     views?: Set<ViewLabel>;
 
-    /** Listeners */
-    listeners: Array<(echo: this) => void> = [];
-
     constructor(config: EchoConfiguration & CreationInfo) {
         super();
         this.views = new Set();
@@ -56,11 +53,5 @@ export class Echo extends WithId() {
         this.label = config.label ?? `%${this.serialId}`;
         this.color = config.color ?? "purple";
         this.echo = config.echo;
-    }
-
-    fire() {
-        for (const listener of this.listeners) {
-            listener(this);
-        }
     }
 }

@@ -56,9 +56,13 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
-import type { Echo, Status, StatusString, ViewLabel } from "../echo.ts";
+import type { Status, StatusString, ViewLabel } from "../echo.ts";
+import type { Entry } from "../entry.ts";
 import type { StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
+
+/** The box's visual status. Alias of the shared {@link StatusString}. */
+export type EchoStatus = StatusString;
 
 /** Map an {@link Echo}'s status onto the box's visual status. `absent` (an echo
  *  that hasn't started) is shown as `unresponsive`. */
@@ -117,9 +121,9 @@ export class EchoBox extends HTMLElement {
     private _activeView: ViewLabel | null = null;
     private _status: EchoStatus = "running";
     private _compact = false;
-    // The bound Echo (if configured from one) and the listener registered on it.
-    private _echo: Echo | null = null;
-    private echoListener: ((echo: Echo) => void) | null = null;
+    // The bound Entry (if configured from one) and the listener registered on it.
+    private _entry: Entry | null = null;
+    private entryListener: ((entry: Entry) => void) | null = null;
     // Whether the pointer is currently over this box. The compact overlay and
     // handles are shown only while Alt is held *and* the pointer is over the box,
     // so Alt-tracking is per-box (not global) and scoped to the hover.
@@ -517,38 +521,39 @@ export class EchoBox extends HTMLElement {
         }
     }
 
-    // ── Echo object binding ─────────────────────────────────────────────────────
+    // ── Entry binding ───────────────────────────────────────────────────────────
 
-    /** The bound {@link Echo}, if the box was configured from one. */
-    get boundEcho(): Echo | null {
+    /** The bound {@link Entry}, if the box was configured from one. */
+    get boundEntry(): Entry | null {
         this.ensureSetup();
-        return this._echo;
+        return this._entry;
     }
 
     /**
-     * Configure the box from an {@link Echo}: apply its command text, colour,
-     * status and views now, and re-apply on every subsequent `echo.fire()`. Any
-     * previously bound echo is detached first.
+     * Configure the box from an {@link Entry}: apply its Echo's command text,
+     * colour, status and views now, and re-apply on every subsequent
+     * `entry.fire()`. Any previously bound entry is detached first.
      */
-    bindEcho(echo: Echo): void {
+    bindEntry(entry: Entry): void {
         this.ensureSetup();
-        this.unbindEcho();
-        this._echo = echo;
-        this.echoListener = () => this.applyEcho(echo);
-        echo.listeners.push(this.echoListener);
-        this.applyEcho(echo);
+        this.unbindEntry();
+        this._entry = entry;
+        this.entryListener = () => this.applyEntry(entry);
+        entry.listeners.push(this.entryListener);
+        this.applyEntry(entry);
     }
 
-    /** Detach the current echo's reconfiguration listener (if any). */
-    unbindEcho(): void {
-        if (this._echo && this.echoListener) {
-            this._echo.listeners = this._echo.listeners.filter((l) => l !== this.echoListener);
+    /** Detach the current entry's reconfiguration listener (if any). */
+    unbindEntry(): void {
+        if (this._entry && this.entryListener) {
+            this._entry.listeners = this._entry.listeners.filter((l) => l !== this.entryListener);
         }
-        this._echo = null;
-        this.echoListener = null;
+        this._entry = null;
+        this.entryListener = null;
     }
 
-    private applyEcho(echo: Echo): void {
+    private applyEntry(entry: Entry): void {
+        const echo = entry.echo;
         this.setEcho(echo.echo ?? echo.label ?? "");
         this.color = echo.color ?? "";
         this.status = echoStatus(echo.status);
