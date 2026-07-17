@@ -5,6 +5,7 @@ import type { Address, BaseMessage, CreationInfo } from "./driver-exchange/commo
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
 import type { Echo } from "./echo.ts";
+import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
@@ -255,7 +256,7 @@ export interface BucheFunctionArguments {
 }
 
 export interface BucheStreamArguments extends BucheFunctionArguments {
-    interactionStream: AsyncGenerator<InM>;
+    interactionStream: AsyncGenerator<IncomingInterfaceMessage | BucheErrorMessage>;
 }
 
 export async function* bucheStream(args: BucheStreamArguments) {
@@ -293,13 +294,16 @@ export async function* bucheStream(args: BucheStreamArguments) {
     }
 }
 
-export interface BucheRunArguments extends BucheStreamArguments {
-    interfaceProcessor: (m: OutgoingInterfaceMessage) => void;
+export interface BucheRunArguments extends BucheFunctionArguments {
+    interface: Interface;
 }
 
 export async function bucheRun(args: BucheRunArguments) {
-    for await (const message of bucheStream(args)) {
-        args.interfaceProcessor(message);
+    const sargs: BucheStreamArguments = Object.assign(args, {
+        interactionStream: args.interface.interactions[Symbol.asyncIterator](),
+    });
+    for await (const message of bucheStream(sargs as BucheStreamArguments)) {
+        args.interface.processMessage(message);
     }
 }
 
