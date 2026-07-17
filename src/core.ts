@@ -7,6 +7,7 @@ import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
+import { outgoingDriverMessageTypes } from "./message-directory.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import type { Prompt } from "./prompt.ts";
 import { BucheError, type ErrorMessage, mergeIterables } from "./utils.ts";
@@ -204,7 +205,7 @@ export async function* bucheRun(args: BucheRunArguments) {
     );
     const stream = buche.stream(instream);
     for await (const message of stream) {
-        if (message.type in driverHandlers) {
+        if (message.type in outgoingDriverMessageTypes) {
             args.loggers.driverOut?.(message);
             args.process.send(message as OutgoingDriverMessage);
         } else {

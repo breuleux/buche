@@ -24,8 +24,8 @@ export interface CloseComponentMessage {
     component: ComponentData;
 }
 
-export interface CellSendMessage {
-    type: "cell_send";
+export interface CellCommandMessage {
+    type: "cell_command";
 
     command: CellCommand;
     component: ComponentData;
@@ -43,5 +43,5 @@ export type OutgoingInterfaceMessage =
     | InstallCellMessage
     | InstallPromptMessage
     | CloseComponentMessage
-    | CellSendMessage
+    | CellCommandMessage
     | PromptSubmitMessage;

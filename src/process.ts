@@ -151,7 +151,7 @@ export class ProcessCommunicator {
 
     /** Serialize an outgoing message as JSON and write it to fd5 on a single line. */
     send(message: OutgoingDriverMessage): void {
-        if (!this.control || !this.control.writable) {
+        if (!this.control?.writable) {
             throw new Error("control channel (fd5) is not available");
         }
         this.control.write(`${JSON.stringify(message)}\n`);

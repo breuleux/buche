@@ -12,7 +12,7 @@ export interface CellSendMessage extends BaseMessage {
 export async function* handle$cell_send(buche: Buche, obj: CellSendMessage): AsyncIterable<OutM> {
     const component = buche.get(obj.from);
     yield {
-        type: "cell_send",
+        type: "cell_command",
         command: obj.message,
         component: component,
     };

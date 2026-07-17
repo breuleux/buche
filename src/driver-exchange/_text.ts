@@ -14,7 +14,7 @@ export interface TextMessage extends BaseMessage {
 export async function* handle$text(buche: Buche, obj: TextMessage): AsyncIterable<OutM> {
     const component = buche.get(obj.from);
     yield {
-        type: "cell_send",
+        type: "cell_command",
         command: {
             type: "text",
             stream: obj.stream,

@@ -9,6 +9,15 @@
  *     property is the string literal "xxx" (underscores preserved), and
  *   - a function `handle$xxx`.
  *
+ * It also generates, from the hand-written `outgoing.ts` file in each exchange
+ * directory:
+ *   - src/<exchange>/outgoing.schema.json — JSON Schema for the outgoing union.
+ *
+ * Finally, it generates src/message-directory.ts, which lists the message
+ * `type` names for each of the four exchanges (driver/interface x
+ * incoming/outgoing). A warning is printed if any `type` appears in more than
+ * one of the four sets.
+ *
  * Run with: bun run gen
  */
 
@@ -20,6 +29,7 @@ import { Project, SyntaxKind } from "ts-morph";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
+const TSCONFIG = join(ROOT, "tsconfig.json");
 
 /** snake_case -> PascalCase, e.g. "foo_bar" -> "FooBar" */
 function toPascal(name: string): string {
@@ -29,20 +39,48 @@ function toPascal(name: string): string {
         .join("");
 }
 
+/** Emit a JSON Schema file for `type` declared in `path`. */
+function writeSchema(path: string, type: string, schemaFile: string) {
+    const generator = createGenerator({
+        path,
+        tsconfig: TSCONFIG,
+        type,
+        jsDoc: "extended", // carry JSDoc comments into `description` fields
+        additionalProperties: false, // reject unknown properties
+        topRef: true,
+    });
+
+    const schema = generator.createSchema(type);
+    writeFileSync(schemaFile, `${JSON.stringify(schema, null, 2)}\n`);
+}
+
+/** The set of message `type` names generated for one exchange direction. */
+interface DirectionResult {
+    /** Human-readable label used in warnings, e.g. "driver incoming". */
+    label: string;
+    /** The message `type` string literals. */
+    types: string[];
+}
+
 class Generator {
     directory: string;
+    exchange: string;
     dest: string;
     schemaFile: string;
-    className: string;
+    incomingClassName: string;
+    outgoingClassName: string;
 
-    constructor(directory: string, className: string) {
-        this.directory = directory;
+    constructor(exchange: string, incomingClassName: string, outgoingClassName: string) {
+        this.exchange = exchange;
+        this.directory = join(ROOT, "src", `${exchange}-exchange`);
         this.dest = join(this.directory, "incoming.ts");
         this.schemaFile = join(this.directory, "incoming.schema.json");
-        this.className = className;
+        this.incomingClassName = incomingClassName;
+        this.outgoingClassName = outgoingClassName;
     }
 
-    run() {
+    /** Generate incoming.ts + incoming.schema.json; return the incoming `type`s. */
+    generateIncoming(): DirectionResult {
         const files = readdirSync(this.directory)
             .filter((f) => f.startsWith("_") && f.endsWith(".ts"))
             .sort();
@@ -138,35 +176,141 @@ ${registry}
 } as const;
 
 /** Union of every message type. */
-export type ${this.className} = ${union};
+export type ${this.incomingClassName} = ${union};
 `;
 
         writeFileSync(this.dest, allOutput);
 
         // ---- Emit incoming.schema.json ---------------------------------------------
 
-        const generator = createGenerator({
-            path: this.dest,
-            tsconfig: join(ROOT, "tsconfig.json"),
-            type: this.className,
-            jsDoc: "extended", // carry JSDoc comments into `description` fields
-            additionalProperties: false, // reject unknown properties
-            topRef: true,
-        });
-
-        const schema = generator.createSchema(this.className);
-        writeFileSync(this.schemaFile, `${JSON.stringify(schema, null, 2)}\n`);
+        writeSchema(this.dest, this.incomingClassName, this.schemaFile);
 
         console.log(
             `Wrote ${this.dest} and ${this.schemaFile} (${entries.length} message${
                 entries.length === 1 ? "" : "s"
             })`,
         );
+
+        return { label: `${this.exchange} incoming`, types: entries.map((e) => e.key) };
+    }
+
+    /**
+     * Generate outgoing.schema.json from the hand-written outgoing.ts, and
+     * return the outgoing `type`s discovered in the outgoing union.
+     */
+    generateOutgoing(): DirectionResult {
+        const outgoingTs = join(this.directory, "outgoing.ts");
+        const schemaFile = join(this.directory, "outgoing.schema.json");
+
+        // Resolve the outgoing union's member `type` string literals.
+        const project = new Project({
+            tsConfigFilePath: TSCONFIG,
+            skipAddingFilesFromTsConfig: true,
+        });
+        const src = project.addSourceFileAtPath(outgoingTs);
+        const alias = src.getTypeAlias(this.outgoingClassName);
+        if (!alias) {
+            console.error(
+                `${outgoingTs}: expected exported type alias \`${this.outgoingClassName}\``,
+            );
+            process.exit(1);
+        }
+
+        const aliasType = alias.getType();
+        const members = aliasType.isUnion() ? aliasType.getUnionTypes() : [aliasType];
+
+        const errors: string[] = [];
+        const types: string[] = [];
+        for (const member of members) {
+            const typeSymbol = member.getProperty("type");
+            const name = member.getSymbol()?.getName() ?? member.getText();
+            if (!typeSymbol) {
+                errors.push(`union member \`${name}\` is missing a \`type\` field`);
+                continue;
+            }
+            const literal = typeSymbol.getTypeAtLocation(alias).getLiteralValue();
+            if (typeof literal !== "string") {
+                errors.push(`union member \`${name}\` has a non-string-literal \`type\``);
+                continue;
+            }
+            types.push(literal);
+        }
+
+        if (errors.length > 0) {
+            console.error(
+                `Outgoing message validation failed in ${outgoingTs}:\n${errors
+                    .map((e) => `  - ${e}`)
+                    .join("\n")}`,
+            );
+            process.exit(1);
+        }
+
+        // ---- Emit outgoing.schema.json ---------------------------------------------
+
+        writeSchema(outgoingTs, this.outgoingClassName, schemaFile);
+
+        console.log(
+            `Wrote ${schemaFile} (${types.length} message${types.length === 1 ? "" : "s"})`,
+        );
+
+        types.sort();
+        return { label: `${this.exchange} outgoing`, types };
     }
 }
 
-const dr = new Generator(join(ROOT, "src", "driver-exchange"), "IncomingDriverMessage");
-dr.run();
+const generators = [
+    new Generator("driver", "IncomingDriverMessage", "OutgoingDriverMessage"),
+    new Generator("interface", "IncomingInterfaceMessage", "OutgoingInterfaceMessage"),
+];
 
-const ifc = new Generator(join(ROOT, "src", "interface-exchange"), "IncomingInterfaceMessage");
-ifc.run();
+const directions: DirectionResult[] = [];
+for (const g of generators) {
+    directions.push(g.generateIncoming());
+    directions.push(g.generateOutgoing());
+}
+
+// ---- Warn about `type`s that appear in more than one set ------------------------
+
+const seenIn = new Map<string, string[]>();
+for (const { label, types } of directions) {
+    for (const t of types) {
+        const labels = seenIn.get(t) ?? [];
+        labels.push(label);
+        seenIn.set(t, labels);
+    }
+}
+for (const [type, labels] of seenIn) {
+    if (labels.length > 1) {
+        console.warn(
+            `Warning: message type "${type}" appears in multiple sets: ${labels.join(", ")}`,
+        );
+    }
+}
+
+// ---- Emit src/message-directory.ts ----------------------------------------------
+
+/** camelCase set name from a "<exchange> <direction>" label. */
+function setName(label: string): string {
+    const [exchange, direction] = label.split(" ");
+    return `${direction}${toPascal(exchange)}MessageTypes`;
+}
+
+const setDecls = directions
+    .map(({ label, types }) => {
+        const entries = types.map((t) => `    ${JSON.stringify(t)},`).join("\n");
+        return `/** Message \`type\` names for ${label} messages. */
+export const ${setName(label)} = new Set<string>([
+${entries}
+]);`;
+    })
+    .join("\n\n");
+
+const directoryOutput = `// AUTO-GENERATED by scripts/gen-messages.ts — do not edit.
+// Run \`bun run gen\` to regenerate.
+
+${setDecls}
+`;
+
+const directoryFile = join(ROOT, "src", "message-directory.ts");
+writeFileSync(directoryFile, directoryOutput);
+console.log(`Wrote ${directoryFile}`);
