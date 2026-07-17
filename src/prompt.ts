@@ -1,6 +1,6 @@
 import type { Address } from "./driver-exchange/common.ts";
 import { IdClass } from "./utils.ts";
-import { Zone } from "./zone.ts";
+import { PromptZone, type Zone } from "./zone.ts";
 
 export type PromptBindings = Record<string, string>;
 
@@ -45,7 +45,7 @@ export class Prompt extends IdClass implements PromptConfiguration {
         Object.assign(this, config);
     }
 
-    makeZones(): Record<string, Zone> {
-        return { "@": new Zone() };
+    makeZones(parentZone: Zone): Record<string, Zone> {
+        return { "@": new PromptZone(parentZone) };
     }
 }

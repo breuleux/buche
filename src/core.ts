@@ -174,14 +174,14 @@ export class Buche extends Machine<InM, OutM> {
             } else {
                 const cell = new Cell(obj, { zone, address: obj.from });
                 cell.prompt = parentPrompt;
-                Object.assign(component, { cell, zones: cell.makeZones() });
+                Object.assign(component, { cell, zones: cell.makeZones(zone) });
             }
         } else {
             if (component.prompt) {
                 component.prompt.configure(obj);
             } else {
                 const prompt = new Prompt(obj, { zone, address: obj.from });
-                Object.assign(component, { prompt, zones: prompt.makeZones() });
+                Object.assign(component, { prompt, zones: prompt.makeZones(zone) });
             }
         }
         yield {

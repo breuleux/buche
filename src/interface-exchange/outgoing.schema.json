@@ -44,12 +44,15 @@
     },
     "Zone": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "_id": {
           "type": "number"
+        },
+        "parent": {
+          "$ref": "#/definitions/Zone"
         }
       },
+      "additionalProperties": false,
       "required": ["_id"]
     },
     "ComponentData": {
