@@ -8,10 +8,7 @@ export interface SignalMessage {
     element: Prompt | Cell;
 }
 
-export async function* handle$signal(
-    buche: Buche,
-    obj: SignalMessage,
-): AsyncIterable<OutM> {
+export async function* handle$signal(buche: Buche, obj: SignalMessage): AsyncIterable<OutM> {
     yield {
         type: "signal",
         code: obj.code,

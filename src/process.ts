@@ -7,10 +7,10 @@ import type { Address, Json, To } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
 import { driverParser } from "./parse.ts";
-import type { ErrorMessage } from "./utils.ts";
+import type { BucheErrorMessage } from "./utils.ts";
 
 /** A message produced by the process: either a valid driver message or a parse error. */
-export type ProcessMessage = IncomingDriverMessage | ErrorMessage;
+export type ProcessMessage = IncomingDriverMessage | BucheErrorMessage;
 
 /**
  * What to do with a readable output descriptor (fd1, fd2 or fd4):
@@ -209,7 +209,7 @@ export class ProcessCommunicator {
         });
         child.on("error", (err) => {
             this.queue.push({
-                type: "error",
+                type: "buche_error",
                 code: "process",
                 subcode: "spawn",
                 reason: err.message,
@@ -271,7 +271,7 @@ export class ProcessCommunicator {
                 data = JSON.parse(trimmed);
             } catch (_e) {
                 this.queue.push({
-                    type: "error",
+                    type: "buche_error",
                     code: "invalid_message",
                     subcode: "notjson",
                     reason: "fd4 data must be parsable as JSON",
@@ -302,7 +302,7 @@ export class ProcessCommunicator {
                 }
             } catch (err: any) {
                 this.queue.push({
-                    type: "error",
+                    type: "buche_error",
                     code: "process",
                     subcode: "control",
                     reason: err?.message ?? String(err),

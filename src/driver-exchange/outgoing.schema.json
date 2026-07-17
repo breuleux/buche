@@ -39,13 +39,7 @@
           "type": "number"
         }
       },
-      "required": [
-        "type",
-        "from",
-        "to",
-        "text",
-        "position"
-      ],
+      "required": ["from", "position", "text", "to", "type"],
       "additionalProperties": false
     },
     "Address": {
@@ -77,14 +71,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "type",
-        "from",
-        "to",
-        "text",
-        "position",
-        "command"
-      ],
+      "required": ["command", "from", "position", "text", "to", "type"],
       "additionalProperties": false
     },
     "SignalRequest": {
@@ -104,12 +91,7 @@
           "type": "number"
         }
       },
-      "required": [
-        "type",
-        "from",
-        "to",
-        "code"
-      ],
+      "required": ["code", "from", "to", "type"],
       "additionalProperties": false
     },
     "SyncRequest": {
@@ -135,12 +117,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "from",
-        "nonce",
-        "to",
-        "type"
-      ],
+      "required": ["from", "nonce", "to", "type"],
       "additionalProperties": false
     },
     "To": {

@@ -8,16 +8,18 @@ export const incomingDriverMessageTypes = new Set<string>([
     "close",
     "data",
     "echo",
+    "error",
     "prompt_configure",
     "sync",
     "text",
 ]);
 
 /** Message `type` names for driver outgoing messages. */
-export const outgoingDriverMessageTypes = new Set<string>(["command", "parse", "sync"]);
+export const outgoingDriverMessageTypes = new Set<string>(["command", "parse", "signal", "sync"]);
 
 /** Message `type` names for interface incoming messages. */
 export const incomingInterfaceMessageTypes = new Set<string>([
+    "signal",
     "user_command",
     "user_focus",
     "user_input",

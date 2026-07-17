@@ -28,8 +28,4 @@ export interface SignalRequest extends BaseRequest {
 export type SyncRequest = SyncMessage;
 
 /** Union of every message type. */
-export type OutgoingDriverMessage =
-    | ParseRequest
-    | CommandRequest
-    | SignalRequest
-    | SyncRequest;
+export type OutgoingDriverMessage = ParseRequest | CommandRequest | SignalRequest | SyncRequest;

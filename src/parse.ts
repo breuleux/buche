@@ -2,19 +2,19 @@ import { readFileSync } from "node:fs";
 import Ajv, { type AnySchema, type ValidateFunction } from "ajv";
 import driverSchema from "./driver-exchange/incoming.schema.json" with { type: "json" };
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
-import type { ErrorMessage } from "./utils.ts";
+import type { BucheErrorMessage } from "./utils.ts";
 
 class BasicParser<T> {
-    validate(input: unknown): T | ErrorMessage {
+    validate(input: unknown): T | BucheErrorMessage {
         return input as T;
     }
 
-    parse(input: string): T | ErrorMessage {
+    parse(input: string): T | BucheErrorMessage {
         try {
             return this.validate(JSON.parse(input));
         } catch (_e) {
             return {
-                type: "error",
+                type: "buche_error",
                 code: "invalid_message",
                 subcode: "notjson",
                 reason: "message must be parsable as JSON",
@@ -25,7 +25,7 @@ class BasicParser<T> {
 
     async *stream(
         source: string | Iterable<string | Uint8Array> | AsyncIterable<string | Uint8Array>,
-    ): AsyncIterable<T | ErrorMessage> {
+    ): AsyncIterable<T | BucheErrorMessage> {
         if (typeof source === "string") {
             source = [source];
         }
@@ -78,10 +78,10 @@ class Parser<T> extends BasicParser<T> {
         this.validators = validators;
     }
 
-    validate(input: unknown): T | ErrorMessage {
+    validate(input: unknown): T | BucheErrorMessage {
         if (typeof input !== "object" || input === null || Array.isArray(input)) {
             return {
-                type: "error",
+                type: "buche_error",
                 code: "invalid_message",
                 subcode: "notobject",
                 reason: "message must be a JSON object",
@@ -91,7 +91,7 @@ class Parser<T> extends BasicParser<T> {
         const type = (input as { type?: unknown }).type;
         if (typeof type !== "string") {
             return {
-                type: "error",
+                type: "buche_error",
                 code: "invalid_message",
                 subcode: "notype",
                 reason: "message is missing a string `type` field",
@@ -101,7 +101,7 @@ class Parser<T> extends BasicParser<T> {
         const validate = this.validators[type];
         if (!validate) {
             return {
-                type: "error",
+                type: "buche_error",
                 code: "invalid_message",
                 subcode: "unknowntype",
                 reason: `unknown message type: ${JSON.stringify(type)}`,
@@ -110,7 +110,7 @@ class Parser<T> extends BasicParser<T> {
         }
         if (!validate(input)) {
             return {
-                type: "error",
+                type: "buche_error",
                 code: "invalid_message",
                 subcode: "invalid",
                 reason: this.ajv.errorsText(validate.errors),

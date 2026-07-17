@@ -11,7 +11,7 @@ export async function* handle$echo(buche: Buche, obj: EchoMessage): AsyncIterabl
     const component = buche.get(obj.from, true);
     if (component.echo || component.cell || component.prompt) {
         throw new BucheError({
-            type: "error",
+            type: "buche_error",
             code: "exists",
             reason: `An element already exists at address ${obj.from}`,
         });

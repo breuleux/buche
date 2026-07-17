@@ -16,8 +16,8 @@ export class IdClass {
     }
 }
 
-export interface ErrorMessage {
-    type: "error";
+export interface BucheErrorMessage {
+    type: "buche_error";
     code: string;
     subcode?: string;
     reason: string;
@@ -25,9 +25,9 @@ export interface ErrorMessage {
 }
 
 export class BucheError extends Error {
-    errorData: ErrorMessage;
+    errorData: BucheErrorMessage;
 
-    constructor(errorData: ErrorMessage) {
+    constructor(errorData: BucheErrorMessage) {
         super(errorData.reason);
         this.errorData = errorData;
     }

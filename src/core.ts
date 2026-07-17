@@ -10,11 +10,11 @@ import { Machine } from "./machine.ts";
 import { outgoingDriverMessageTypes } from "./message-directory.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
-import { BucheError, type ErrorMessage, mergeIterables } from "./utils.ts";
+import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
 import { Zone } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage;
-export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | ErrorMessage;
+export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | BucheErrorMessage;
 export type HandlerT = Record<string, (buche: Buche, message: InM) => AsyncIterable<OutM>>;
 
 export interface BucheArguments {
@@ -89,7 +89,7 @@ export class Buche extends Machine<InM, OutM> {
             } else {
                 /* node:coverage disable */
                 yield {
-                    type: "error",
+                    type: "buche_error",
                     code: "internal",
                     reason: err.toString(),
                     input: err,
@@ -110,7 +110,7 @@ export class Buche extends Machine<InM, OutM> {
         if (!c) {
             if (!create) {
                 throw new BucheError({
-                    type: "error",
+                    type: "buche_error",
                     code: "missingcell",
                     reason: `Cell at ${JSON.stringify(addr)} is missing`,
                 });
@@ -138,7 +138,7 @@ export class Buche extends Machine<InM, OutM> {
         }
         if (zone === null) {
             throw new BucheError({
-                type: "error",
+                type: "buche_error",
                 code: "nozone",
                 reason: `No zone named ${zoneName} could be found`,
                 input: info,
@@ -162,7 +162,7 @@ export class Buche extends Machine<InM, OutM> {
         const other = type === "cell" ? "prompt" : "cell";
         if (component[other]) {
             throw new BucheError({
-                type: "error",
+                type: "buche_error",
                 code: "exists",
                 reason: `A ${other} already exists at address ${obj.from}, cannot configure a ${type}`,
             });
@@ -220,7 +220,7 @@ async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
 }
 
 const baseHandlers = {
-    async *error(buche: Buche, obj: ErrorMessage): AsyncGenerator<OutM> {
+    async *buche_error(buche: Buche, obj: BucheErrorMessage): AsyncGenerator<OutM> {
         // TODO
     },
 };

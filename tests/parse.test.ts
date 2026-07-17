@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { describe, test } from "node:test";
 import type { IncomingDriverMessage } from "../src/driver-exchange/incoming.ts";
 import { driverParser } from "../src/parse.ts";
-import type { ErrorMessage } from "../src/utils.ts";
+import type { BucheErrorMessage } from "../src/utils.ts";
 import { getCases } from "./utils.ts";
 
 function processable(message: unknown) {
@@ -14,11 +14,13 @@ function processable(message: unknown) {
     );
 }
 
-async function validateMessages(messages: AsyncIterable<IncomingDriverMessage | ErrorMessage>) {
+async function validateMessages(
+    messages: AsyncIterable<IncomingDriverMessage | BucheErrorMessage>,
+) {
     const errors = [];
     for await (const msg of messages) {
         assert.ok(processable(msg), "Parser output is unprocessable");
-        if (msg.type === "error") {
+        if (msg.type === "buche_error") {
             errors.push(msg);
         }
     }
