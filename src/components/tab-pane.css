@@ -1,0 +1,66 @@
+/* Styles for the <tab-pane> custom element (tab-pane.tsx).
+ * A tab bar on top of a set of panes. A dim line runs along the bottom of the
+ * tabs; the active tab paints that line with its accent color (the underline is
+ * set inline from the tab's Echo accent). Reproduces the zone-tab look from the
+ * original buche src/terminal/styles.css. Set --tab-pane-bg to the surrounding
+ * background so the dim baseline blends in. */
+
+tab-pane {
+	--tab-pane-bg: #1c1c1c;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	background: var(--tab-pane-bg);
+	color: #d4d4d4;
+}
+
+.tab-pane-tabs {
+	display: flex;
+	flex: 0 0 auto;
+	flex-direction: row;
+	background: var(--tab-pane-bg);
+	/* The dim line running along the bottom of the tabs. */
+	border-bottom: 1px solid oklch(from var(--tab-pane-bg) calc(l + 0.2) c h);
+	padding: 0 4px;
+}
+
+.tab-pane-tab {
+	background: none;
+	border: none;
+	/* Sits on top of the tab bar's bottom line; coloured when active. */
+	border-bottom: 2px solid transparent;
+	/* Overlap the 1px baseline so the accent replaces the dim line. */
+	margin-bottom: -1px;
+	color: #555;
+	cursor: default;
+	font-size: 11px;
+	font-family: inherit;
+	padding: 4px 12px 3px;
+	line-height: 1;
+	user-select: none;
+	transition:
+		color 0.15s,
+		border-bottom-color 0.15s;
+}
+
+.tab-pane-tab:hover {
+	color: #999;
+}
+
+.tab-pane-tab.active {
+	color: #d4d4d4;
+	/* border-bottom-color is set inline from the tab's accent. */
+}
+
+.tab-pane-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.tab-pane-pane {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+}
