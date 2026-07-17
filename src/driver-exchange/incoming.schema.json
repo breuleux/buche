@@ -14,6 +14,9 @@
           "$ref": "#/definitions/CellSendMessage"
         },
         {
+          "$ref": "#/definitions/CloseMessage"
+        },
+        {
           "$ref": "#/definitions/DataMessage"
         },
         {
@@ -304,6 +307,57 @@
       ],
       "description": "Any JSON-serializable value (payloads exchanged over the FDs)."
     },
+    "CloseMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "close",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "outcome": {
+          "$ref": "#/definitions/CloseOutcome",
+          "description": "How the process terminated."
+        }
+      },
+      "required": [
+        "from",
+        "outcome",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "CloseOutcome": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "success",
+            "error"
+          ],
+          "description": "Whether the process ended successfully or with an error."
+        },
+        "code": {
+          "type": "number",
+          "description": "Exit/return code, when available."
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of a process that has terminated."
+    },
     "EchoMessage": {
       "type": "object",
       "properties": {
@@ -320,7 +374,7 @@
           "$ref": "#/definitions/To",
           "description": "Target of the message."
         },
-        "prompt_id": {
+        "parent_prompt": {
           "type": [
             "string",
             "null"
@@ -344,7 +398,7 @@
       },
       "required": [
         "from",
-        "prompt_id",
+        "parent_prompt",
         "ranges",
         "text",
         "to",

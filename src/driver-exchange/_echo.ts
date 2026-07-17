@@ -5,7 +5,7 @@ export interface EchoMessage extends BaseMessage {
   type: "echo";
 
   /** Associates the echo with an existing prompt. */
-  prompt_id: string | null;
+  parent_prompt: string | null;
 
   /** Text of the command. */
   text: string | null;
