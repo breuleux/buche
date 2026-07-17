@@ -1,6 +1,6 @@
 import type { Address, Json } from "./driver-exchange/common.ts";
 import type { Prompt } from "./prompt.ts";
-import { IdClass } from "./utils.ts";
+import { WithId } from "./utils.ts";
 import type { Zone } from "./zone.ts";
 
 export interface ComponentStatus {
@@ -37,7 +37,7 @@ export interface CellConfiguration {
     background?: boolean;
 }
 
-export class Cell extends IdClass implements CellConfiguration {
+export class Cell extends WithId() implements CellConfiguration {
     prompt: Prompt | null = null;
     zone: Zone;
     address: Address;

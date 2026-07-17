@@ -1,5 +1,5 @@
 import type { Address, HighlightRange } from "./driver-exchange/common.ts";
-import { IdClass } from "./utils.ts";
+import { WithId } from "./utils.ts";
 import { PromptZone, type Zone } from "./zone.ts";
 
 export type PromptBindings = Record<string, string>;
@@ -32,7 +32,7 @@ export interface PromptConfiguration {
     ranges?: HighlightRange[];
 }
 
-export class Prompt extends IdClass implements PromptConfiguration {
+export class Prompt extends WithId() implements PromptConfiguration {
     zone: Zone;
     address: Address;
 

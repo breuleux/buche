@@ -2,14 +2,6 @@ import type { CellCommand } from "../cell.ts";
 import type { ComponentData } from "../core.ts";
 import type { BucheErrorFields } from "../utils.ts";
 
-/**
- * Install or update a component (echo, cell and/or prompt) at a location.
- *
- * This single message replaces the former `install_echo`, `install_cell`,
- * `install_prompt` and `update_status` messages: the interface (re)renders the
- * component from `component`, reading any status directly from its echo. The
- * zone the component lives in is available on the echo/cell/prompt themselves.
- */
 export interface UpdateComponentMessage {
     type: "update_component";
 

@@ -1,6 +1,6 @@
 import type { Cell } from "./cell.ts";
 import type { Prompt } from "./prompt.ts";
-import { IdClass } from "./utils.ts";
+import { WithId } from "./utils.ts";
 
 export function zoneMap(zones: Array<Zone>): Record<string, Zone> {
     const rval: Record<string, Zone> = {};
@@ -12,14 +12,14 @@ export function zoneMap(zones: Array<Zone>): Record<string, Zone> {
     return rval;
 }
 
-export class Zone extends IdClass {
+export class Zone extends WithId() {
     names: Array<string>;
     parent?: Zone;
 
     constructor(name: string | Array<string>, parent?: Zone) {
         super();
         this.names = typeof name === "string" ? [name] : name;
-        this.names.push(`Z${this._id}`);
+        this.names.push(`Z${this.serialId}`);
         this.parent = parent;
     }
 

@@ -4,16 +4,21 @@ export function resetId(n: number = 0) {
     _CURRENT_ID = n;
 }
 
-export class IdClass {
-    _id: number;
+type Constructor<T = object> = new (...args: any[]) => T;
 
-    constructor() {
-        this._id = _CURRENT_ID++;
-    }
+/**
+ * Mixin giving a class a `serialId` — drawn from a shared counter at
+ * construction — and a `toJSON` that renders it as a `#<n>` reference. Use
+ * {@link resetId} to make a run's ids deterministic.
+ */
+export function WithId<TBase extends Constructor = Constructor>(Base: TBase = class {} as TBase) {
+    return class extends Base {
+        serialId = _CURRENT_ID++;
 
-    toJSON() {
-        return `#${this._id}`;
-    }
+        toJSON() {
+            return `#${this.serialId}`;
+        }
+    };
 }
 
 export interface BucheErrorFields {

@@ -13,6 +13,11 @@
  * directory:
  *   - src/<exchange>/outgoing.schema.json — JSON Schema for the outgoing union.
  *
+ * Schemas are only emitted for exchanges that are an exported cross-language
+ * protocol. The driver exchange is; the interface exchange is not (its messages
+ * reference runtime-only classes and are only serialized in tests), so its
+ * incoming.ts is still generated but no `*.schema.json` files are.
+ *
  * Finally, it generates src/message-directory.ts, which lists the message
  * `type` names for each of the four exchanges (driver/interface x
  * incoming/outgoing). A warning is printed if any `type` appears in more than
@@ -69,14 +74,24 @@ class Generator {
     schemaFile: string;
     incomingClassName: string;
     outgoingClassName: string;
+    /** Whether to emit JSON Schema files. Off for exchanges that are not an
+     *  exported cross-language protocol (e.g. the interface exchange, whose
+     *  messages reference runtime-only classes and are only serialized in tests). */
+    emitSchema: boolean;
 
-    constructor(exchange: string, incomingClassName: string, outgoingClassName: string) {
+    constructor(
+        exchange: string,
+        incomingClassName: string,
+        outgoingClassName: string,
+        emitSchema = true,
+    ) {
         this.exchange = exchange;
         this.directory = join(ROOT, "src", `${exchange}-exchange`);
         this.dest = join(this.directory, "incoming.ts");
         this.schemaFile = join(this.directory, "incoming.schema.json");
         this.incomingClassName = incomingClassName;
         this.outgoingClassName = outgoingClassName;
+        this.emitSchema = emitSchema;
     }
 
     /** Generate incoming.ts + incoming.schema.json; return the incoming `type`s. */
@@ -183,12 +198,15 @@ export type ${this.incomingClassName} = ${union};
 
         // ---- Emit incoming.schema.json ---------------------------------------------
 
-        writeSchema(this.dest, this.incomingClassName, this.schemaFile);
+        if (this.emitSchema) {
+            writeSchema(this.dest, this.incomingClassName, this.schemaFile);
+        }
 
+        const count = `${entries.length} message${entries.length === 1 ? "" : "s"}`;
         console.log(
-            `Wrote ${this.dest} and ${this.schemaFile} (${entries.length} message${
-                entries.length === 1 ? "" : "s"
-            })`,
+            this.emitSchema
+                ? `Wrote ${this.dest} and ${this.schemaFile} (${count})`
+                : `Wrote ${this.dest} (${count}; schema skipped)`,
         );
 
         return { label: `${this.exchange} incoming`, types: entries.map((e) => e.key) };
@@ -247,11 +265,12 @@ export type ${this.incomingClassName} = ${union};
 
         // ---- Emit outgoing.schema.json ---------------------------------------------
 
-        writeSchema(outgoingTs, this.outgoingClassName, schemaFile);
-
-        console.log(
-            `Wrote ${schemaFile} (${types.length} message${types.length === 1 ? "" : "s"})`,
-        );
+        if (this.emitSchema) {
+            writeSchema(outgoingTs, this.outgoingClassName, schemaFile);
+            console.log(
+                `Wrote ${schemaFile} (${types.length} message${types.length === 1 ? "" : "s"})`,
+            );
+        }
 
         types.sort();
         return { label: `${this.exchange} outgoing`, types };
@@ -260,7 +279,10 @@ export type ${this.incomingClassName} = ${union};
 
 const generators = [
     new Generator("driver", "IncomingDriverMessage", "OutgoingDriverMessage"),
-    new Generator("interface", "IncomingInterfaceMessage", "OutgoingInterfaceMessage"),
+    // The interface exchange is not an exported protocol — its messages reference
+    // runtime-only classes (Cell/Zone/…) and are only serialized in tests — so we
+    // generate its incoming.ts but emit no JSON Schema.
+    new Generator("interface", "IncomingInterfaceMessage", "OutgoingInterfaceMessage", false),
 ];
 
 const directions: DirectionResult[] = [];

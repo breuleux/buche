@@ -1,7 +1,7 @@
 import type { ComponentStatus } from "./cell.ts";
 import type { HighlightRange } from "./driver-exchange/common.ts";
 import type { Prompt } from "./prompt.ts";
-import { IdClass } from "./utils.ts";
+import { WithId } from "./utils.ts";
 import type { Zone } from "./zone.ts";
 
 export interface EchoConfiguration {
@@ -12,7 +12,7 @@ export interface EchoConfiguration {
     ranges: HighlightRange[];
 }
 
-export class Echo extends IdClass {
+export class Echo extends WithId() {
     prompt: Prompt | null = null;
     zone: Zone;
 
