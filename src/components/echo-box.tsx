@@ -15,7 +15,7 @@
 // Layout:
 //
 //   ┌────┬───────────────────────────────────────────┐
-//   │ ●  │ context (the prompt, `echoContext`, opt.) │  ╷ when there is a context:
+//   │ ●  │ context (the prompt, submission, opt.)  │  ╷ when there is a context:
 //   │ │  │ echo (the command line just submitted)  ▤◧✕│  ╯ one dim accent rectangle,
 //   │ │  ├───────────────────────────────────────────┤    circle riding on top
 //   │ │  │ cell — the active view's content            │  ← line runs down the gutter
@@ -387,7 +387,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.headerEl = div("echo-box-header");
         this.headerEl.append(this.inlineStatusEl, this.echoEl, this.controlsEl);
 
-        // Context line (Echo `echoContext`): like the prompt's marker — a faded
+        // Context line (the submission's context): like the prompt's marker — a faded
         // pill of styled text followed by a rule in the accent. It spans the full
         // width as the box's top row; when present, the status circle rides on it
         // (echo-box.css), its dim band extending left under the circle.
@@ -908,11 +908,12 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     private applyEntry(entry: Entry): void {
         const echo = entry.echo;
-        if (echo?.echo !== undefined) {
-            this.setEcho(echo.echo);
+        const submission = echo?.submission;
+        if (submission?.content) {
+            this.setEcho(submission.content);
         }
-        if (echo?.echoContext !== undefined) {
-            this.setEchoContext(echo.echoContext);
+        if (submission?.context) {
+            this.setEchoContext(submission.context);
         }
         this.color = echo.color ?? "";
         this.status = echoStatus(echo.status);

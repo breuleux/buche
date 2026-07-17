@@ -102,8 +102,10 @@ function makeEntry(
     }
     entry.setPrompt(
         new Prompt({
-            prompt: opts.marker ?? { text: "", ranges: [] },
-            content: opts.content ?? { text: "", ranges: [] },
+            submission: {
+                context: opts.marker ?? { text: "", ranges: [] },
+                content: opts.content ?? { text: "", ranges: [] },
+            },
             bindings: opts.bindings,
         }),
     );
@@ -205,7 +207,7 @@ describe("prompt-collection — reconfiguration", () => {
 
         entry.echo.label = "renamed";
         entry.echo.color = "red";
-        entry.prompt!.prompt = { text: ">", ranges: [] };
+        entry.prompt!.submission.context = { text: ">", ranges: [] };
         entry.fire();
 
         expect(tabOf(pc, entry)?.textContent).toBe("renamed");
@@ -223,8 +225,8 @@ describe("prompt-collection — reconfiguration", () => {
         expect(pc.getValue(entry)).toBe("first");
 
         // Mutate the Prompt's content and fire: the editor resets to it.
-        entry.prompt!.content.text = "reset";
-        entry.prompt!.content.position = 2;
+        entry.prompt!.submission.content.text = "reset";
+        entry.prompt!.submission.content.position = 2;
         entry.fire();
 
         expect(pc.getValue(entry)).toBe("reset");
@@ -234,12 +236,12 @@ describe("prompt-collection — reconfiguration", () => {
     test("resetting from content does not feed back into content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
-        entry.prompt!.content.text = "reset";
-        entry.prompt!.content.position = 1;
+        entry.prompt!.submission.content.text = "reset";
+        entry.prompt!.submission.content.position = 1;
         entry.fire();
         // The reset is applied to the editor but the stored content is preserved.
-        expect(entry.prompt?.content.text).toBe("reset");
-        expect(entry.prompt?.content.position).toBe(1);
+        expect(entry.prompt?.submission.content.text).toBe("reset");
+        expect(entry.prompt?.submission.content.position).toBe(1);
     });
 
     test("a prompt whose echo is done or error is removed on reconfiguration", () => {
@@ -306,7 +308,7 @@ describe("prompt-collection — editor values", () => {
         pc.setValue(entry, "two");
         expect(pc.getValue(entry)).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
-        expect(entry.prompt?.content.text).toBe("two");
+        expect(entry.prompt?.submission.content.text).toBe("two");
     });
 
     test("editing updates the Entry's content text and cursor position", () => {
@@ -317,8 +319,8 @@ describe("prompt-collection — editor values", () => {
         editor.setPosition?.(3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
 
-        expect(entry.prompt?.content.text).toBe("hello");
-        expect(entry.prompt?.content.position).toBe(3);
+        expect(entry.prompt?.submission.content.text).toBe("hello");
+        expect(entry.prompt?.submission.content.position).toBe(3);
     });
 
     test("editing fires textchange with entry, text and position", () => {
@@ -480,7 +482,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         press("Escape");
         expect(pc.getValue(entry)).toBe("");
-        expect(entry.prompt?.content.text).toBe(""); // synced back to the Entry
+        expect(entry.prompt?.submission.content.text).toBe(""); // synced back to the Entry
         expect(editor.getPosition?.()).toBe(0);
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 

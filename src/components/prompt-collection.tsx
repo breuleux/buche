@@ -13,7 +13,7 @@
 // The tab's label and accent colour come from the Entry's {@link Echo}; the
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.content` (its text and cursor position). The
+// flow back into `entry.prompt.submission.content` (its text and cursor position). The
 // Prompt's `filigrane` (a history suggestion, see the "prompt_highlight" driver
 // message) shows as faded ghost text extending the content; ArrowRight at the
 // end of the text accepts it.
@@ -32,7 +32,7 @@
 //
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
-// marker, and to reset the editor's text and cursor from `entry.prompt.content`.
+// marker, and to reset the editor's text and cursor from the prompt's submission.
 // A reconfiguration that finds the Echo's status `done` or `error` (the process
 // closed) instead removes the prompt — its tab and editor are spent.
 //
@@ -559,7 +559,7 @@ export class PromptCollection extends HTMLElement {
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
 
-        const content: StyledText = entry.prompt?.content ?? { text: "", ranges: [] };
+        const content: StyledText = entry.prompt?.submission.content ?? { text: "", ranges: [] };
 
         const editorHost = document.createElement("div");
         editorHost.className = "prompt-collection-editor";
@@ -574,9 +574,9 @@ export class PromptCollection extends HTMLElement {
                 }
                 const pos = this.rows.get(entry)?.editor.getPosition?.();
                 if (entry.prompt) {
-                    entry.prompt.content.text = value;
+                    entry.prompt.submission.content.text = value;
                     if (pos != null) {
-                        entry.prompt.content.position = pos;
+                        entry.prompt.submission.content.position = pos;
                     }
                 }
                 this.dispatchEvent(
@@ -857,7 +857,7 @@ export class PromptCollection extends HTMLElement {
 
         // Reset the editor from `content`: its text, colorization and cursor
         // position. Guarded so the resulting change doesn't sync back into it.
-        const content = entry.prompt?.content;
+        const content = entry.prompt?.submission.content;
         if (content) {
             this.applyingContent = true;
             try {
@@ -984,7 +984,7 @@ export class PromptCollection extends HTMLElement {
     // itself (custom properties inherit downward, and the rectangle styles read
     // it on the row) so the stylesheet can tint the rectangle and top line.
     private renderMarker(row: Row, entry: Entry): void {
-        const styled = entry.prompt?.prompt;
+        const styled = entry.prompt?.submission.context;
         if (styled?.text) {
             row.marker.replaceChildren(buildStyledText(styled, this.theme));
         } else {

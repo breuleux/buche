@@ -40,13 +40,9 @@
     "CellConfigureMessage": {
       "type": "object",
       "properties": {
-        "echo": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Text of the command"
-        },
-        "echoContext": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
+        "submission": {
+          "$ref": "#/definitions/SubmissionConfiguration",
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
         },
         "label": {
           "type": "string",
@@ -98,6 +94,20 @@
         "to",
         "type"
       ],
+      "additionalProperties": false
+    },
+    "SubmissionConfiguration": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Content text of the submission"
+        },
+        "context": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Context of the submission (prompt text)"
+        }
+      },
       "additionalProperties": false
     },
     "StyledText": {
@@ -381,13 +391,9 @@
     "EchoMessage": {
       "type": "object",
       "properties": {
-        "echo": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Text of the command"
-        },
-        "echoContext": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
+        "submission": {
+          "$ref": "#/definitions/SubmissionConfiguration",
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
         },
         "label": {
           "type": "string",
@@ -479,21 +485,9 @@
           "$ref": "#/definitions/PromptBindings",
           "description": "Key-chord → action-name map for this prompt."
         },
-        "prompt": {
-          "$ref": "#/definitions/StyledText",
-          "description": "HTML for the prompt's leading label/marker."
-        },
-        "content": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Prompt contents"
-        },
-        "echo": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Text of the command"
-        },
-        "echoContext": {
-          "$ref": "#/definitions/StyledText",
-          "description": "Context for the command (e.g. the prompt it was typed at: host, path, branch). When present, the interface shows it above the echo box, in the accent color."
+        "submission": {
+          "$ref": "#/definitions/SubmissionConfiguration",
+          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value."
         },
         "label": {
           "type": "string",

@@ -1,4 +1,4 @@
-{"$role":"driverIn","type":"echo","from":["$proc","cq","3"],"to":["$term"],"echo":{"text":"boom","ranges":[]}}
+{"$role":"driverIn","type":"echo","from":["$proc","cq","3"],"to":["$term"],"submission":{"content":{"text":"boom","ranges":[]}}}
 {"$role":"interfaceOut","type":"install_echo","zone":"#100","entry":{"echo":"#105","cell":null,"prompt":null,"zones":{}}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"error","code":1}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"success","code":0}}

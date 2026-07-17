@@ -36,3 +36,19 @@ export interface StyledText {
     /** Position of the cursor, if applicable. */
     position?: number | null;
 }
+
+export interface SubmissionConfiguration {
+    /** Content text of the submission */
+    content?: StyledText;
+
+    /** Context of the submission (prompt text) */
+    context?: StyledText;
+}
+
+export interface Submission {
+    /** Content text of the submission */
+    content: StyledText;
+
+    /** Context of the submission (prompt text) */
+    context: StyledText;
+}

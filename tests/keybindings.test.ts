@@ -144,7 +144,7 @@ function makePromptCollection(): [PromptCollection, Entry] {
         };
     }) as EditorFactory;
     const entry = new Entry({});
-    entry.setPrompt(new Prompt({ prompt: { text: "$", ranges: [] } }));
+    entry.setPrompt(new Prompt({ submission: { context: { text: "$", ranges: [] } } }));
     pc.addPrompt(entry);
     return [pc, entry];
 }

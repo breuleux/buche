@@ -1,4 +1,34 @@
-import type { Address } from "./types.ts";
+import type { Address, Submission, SubmissionConfiguration } from "./types.ts";
+
+/** A submission with nothing in it: empty content and empty context. */
+export function emptySubmission(): Submission {
+    return { content: { text: "", ranges: [] }, context: { text: "", ranges: [] } };
+}
+
+/**
+ * Merge a partial {@link SubmissionConfiguration} into a {@link Submission}:
+ * a subfield the configuration leaves out keeps its current value (so a
+ * configuration can update the content without restating the context, or the
+ * other way around). A provided content without a cursor position inherits
+ * the current one, so a reconfiguration doesn't teleport the cursor.
+ */
+export function applySubmission(
+    submission: Submission,
+    configuration: SubmissionConfiguration | undefined,
+): void {
+    if (!configuration) {
+        return;
+    }
+    if (configuration.content !== undefined) {
+        const { position, ...rest } = configuration.content;
+        const current = submission.content.position;
+        const merged = position ?? current;
+        submission.content = merged === undefined ? rest : { ...rest, position: merged };
+    }
+    if (configuration.context !== undefined) {
+        submission.context = configuration.context;
+    }
+}
 
 var _CURRENT_ID = 0;
 

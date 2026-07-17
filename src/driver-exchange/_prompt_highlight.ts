@@ -21,8 +21,8 @@ export interface PromptHighlightMessage extends BaseMessage {
 export function handle$prompt_highlight(buche: Buche, obj: PromptHighlightMessage): void {
     const entry = buche.get(obj.from, true);
     const zone = buche.findPlace(entry, obj);
-    if (entry.prompt && entry.prompt.content.text === obj.text) {
-        entry.prompt.content.ranges = obj.ranges;
+    if (entry.prompt && entry.prompt.submission.content.text === obj.text) {
+        entry.prompt.submission.content.ranges = obj.ranges;
         entry.prompt.filigrane = obj.filigrane;
     }
     buche.sendInterface({
