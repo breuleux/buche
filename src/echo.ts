@@ -1,7 +1,11 @@
-import type { ComponentStatus } from "./cell.ts";
 import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { Accent, Address, StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
+
+export interface Status {
+    status: "absent" | "running" | "standby" | "done" | "error" | "unresponsive";
+    code?: number | string | null;
+}
 
 export interface EchoConfiguration {
     /** Text of the command */
@@ -28,7 +32,7 @@ export class Echo extends WithId() {
     address: Address;
 
     /** Status of the component. */
-    status: ComponentStatus;
+    status: Status;
 
     /** List of views. */
     views?: Set<string>;
@@ -36,7 +40,7 @@ export class Echo extends WithId() {
     constructor(config: EchoConfiguration & CreationInfo) {
         super();
         this.views = new Set();
-        this.status = { status: "running" };
+        this.status = { status: "absent" };
         this.address = config.from;
         this.configure(config);
     }

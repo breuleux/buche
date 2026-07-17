@@ -1,11 +1,6 @@
 import type { Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
-export interface ComponentStatus {
-    status: "running" | "standby" | "done" | "error" | "unresponsive";
-    code?: number | string | null;
-}
-
 export interface TextCommand {
     type: "text";
     stream: string;
