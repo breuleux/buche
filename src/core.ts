@@ -1,13 +1,13 @@
-import { type IncomingDriverMessage } from "./driver-exchange/incoming.ts";
-import { type OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
-import { type IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
-import { type OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
-import { type CreationInfo, type Address } from "./driver-exchange/common.ts";
+import type { Cell, Echo } from "./cell.ts";
+import type { Address, CreationInfo } from "./driver-exchange/common.ts";
+import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
+import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
+import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
+import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
-import { Prompt } from "./prompt.ts";
-import { Cell, Echo } from "./cell.ts";
-import { Zone } from "./zone.ts";
+import type { Prompt } from "./prompt.ts";
 import { BucheError, type ErrorMessage } from "./utils.ts";
+import type { Zone } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | ErrorMessage;
@@ -153,3 +153,18 @@ export class Buche extends Machine<InM, OutM> {
         return { prompt, zone };
     }
 }
+
+// export interface BucheConfig {
+//     cellTypes: Record<string, new (config: CellConfiguration) => Cell>;
+// }
+
+// export class Buche extends Machine<InM, OutM> implements BucheConfig {
+//     cellTypes!: Record<string, new (config: CellConfiguration) => Cell>;
+
+//     cells: Record<string, Cell> = {};
+
+//     constructor(config: BucheConfig) {
+//         super();
+//         Object.assign(this, config);
+//     }
+// }

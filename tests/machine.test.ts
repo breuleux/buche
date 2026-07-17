@@ -1,11 +1,11 @@
 import { describe, test } from "node:test";
-import { Machine } from "../src/machine.ts";
-import { getCases, MachinePlayer } from "./utils.ts";
 import { Buche, type HandlerT } from "../src/core.ts";
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import { Zone } from "../src/zone.ts";
+import { Machine } from "../src/machine.ts";
 import { resetId } from "../src/utils.ts";
+import { Zone } from "../src/zone.ts";
+import { getCases, MachinePlayer } from "./utils.ts";
 
 interface InM {
     value: string;

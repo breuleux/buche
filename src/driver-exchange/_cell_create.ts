@@ -1,6 +1,6 @@
 import { Cell, type CellConfiguration } from "../cell.ts";
-import { type OutM, type Buche } from "../core.ts";
-import { type BaseMessage, type CreationInfo } from "./common.ts";
+import type { Buche, OutM } from "../core.ts";
+import type { BaseMessage, CreationInfo } from "./common.ts";
 
 export interface CellCreateMessage extends BaseMessage, CreationInfo, CellConfiguration {
     type: "cell_create";

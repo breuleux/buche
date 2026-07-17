@@ -1,6 +1,6 @@
-import { Prompt } from "./prompt.ts";
+import type { Prompt } from "./prompt.ts";
 import { IdClass } from "./utils.ts";
-import { Zone } from "./zone.ts";
+import type { Zone } from "./zone.ts";
 
 export interface CellConfiguration {
     /** The cell/tab label. */

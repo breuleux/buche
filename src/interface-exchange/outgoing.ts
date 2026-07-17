@@ -1,5 +1,5 @@
-import { type ComponentData } from "../core.ts";
-import { Zone } from "../zone.ts";
+import type { ComponentData } from "../core.ts";
+import type { Zone } from "../zone.ts";
 
 export interface InstallMessage {
     zone: Zone;

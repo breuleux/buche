@@ -1,9 +1,9 @@
 import assert from "node:assert";
 import { describe, test } from "node:test";
-import { getCases } from "./utils.ts";
+import type { IncomingDriverMessage } from "../src/driver-exchange/incoming.ts";
 import { driverParser } from "../src/parse.ts";
-import { type IncomingDriverMessage } from "../src/driver-exchange/incoming.ts";
-import { type ErrorMessage } from "../src/utils.ts";
+import type { ErrorMessage } from "../src/utils.ts";
+import { getCases } from "./utils.ts";
 
 function processable(message: unknown) {
     return (
@@ -15,7 +15,7 @@ function processable(message: unknown) {
 }
 
 async function validateMessages(messages: AsyncIterable<IncomingDriverMessage | ErrorMessage>) {
-    let errors = [];
+    const errors = [];
     for await (const msg of messages) {
         assert.ok(processable(msg), "Parser output is unprocessable");
         if (msg.type === "error") {

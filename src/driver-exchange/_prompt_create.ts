@@ -1,6 +1,6 @@
-import { type OutM, type Buche } from "../core.ts";
+import type { Buche, OutM } from "../core.ts";
 import { Prompt, type PromptConfiguration } from "../prompt.ts";
-import { type BaseMessage, type CreationInfo } from "./common.ts";
+import type { BaseMessage, CreationInfo } from "./common.ts";
 
 export interface PromptCreateMessage extends BaseMessage, CreationInfo, PromptConfiguration {
     type: "prompt_create";

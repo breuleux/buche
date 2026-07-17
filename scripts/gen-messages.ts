@@ -11,11 +11,12 @@
  *
  * Run with: bun run gen
  */
-import { Project, SyntaxKind } from "ts-morph";
-import { createGenerator } from "ts-json-schema-generator";
+
 import { readdirSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createGenerator } from "ts-json-schema-generator";
+import { Project, SyntaxKind } from "ts-morph";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -27,7 +28,6 @@ function toPascal(name: string): string {
         .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
         .join("");
 }
-
 
 class Generator {
     directory: string;
@@ -74,7 +74,9 @@ class Generator {
                 }
                 const typeProp = iface.getProperty("type");
                 if (!typeProp) {
-                    errors.push(`${file}: interface \`${interfaceName}\` is missing a \`type\` field`);
+                    errors.push(
+                        `${file}: interface \`${interfaceName}\` is missing a \`type\` field`,
+                    );
                 } else {
                     const literal = typeProp
                         .getTypeNode()
@@ -111,7 +113,9 @@ class Generator {
         }
 
         if (errors.length > 0) {
-            console.error("Message file validation failed:\n" + errors.map((e) => `  - ${e}`).join("\n"));
+            console.error(
+                "Message file validation failed:\n" + errors.map((e) => `  - ${e}`).join("\n"),
+            );
             process.exit(1);
         }
 
@@ -161,14 +165,8 @@ export type ${this.className} = ${union};
     }
 }
 
-const dr = new Generator(
-    join(ROOT, "src", "driver-exchange"),
-    "IncomingDriverMessage",
-)
+const dr = new Generator(join(ROOT, "src", "driver-exchange"), "IncomingDriverMessage");
 dr.run();
 
-const ifc = new Generator(
-    join(ROOT, "src", "interface-exchange"),
-    "IncomingInterfaceMessage",
-)
+const ifc = new Generator(join(ROOT, "src", "interface-exchange"), "IncomingInterfaceMessage");
 ifc.run();

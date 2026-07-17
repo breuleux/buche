@@ -1,4 +1,7 @@
 {
+  "files": {
+    "includes": ["**", "!**/incoming.ts", "!**/incoming.schema.json"]
+  },
   "formatter": {
     "useEditorconfig": true,
     "lineWidth": 99

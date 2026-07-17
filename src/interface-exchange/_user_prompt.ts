@@ -1,4 +1,4 @@
-import { type OutM, type Buche } from "../core.ts";
+import type { Buche, OutM } from "../core.ts";
 
 export interface UserPromptMessage {
     type: "user_prompt";

@@ -1,4 +1,4 @@
-import { type SyncMessage } from "./_sync.ts";
+import type { SyncMessage } from "./_sync.ts";
 
 export type SyncResponse = SyncMessage;
 

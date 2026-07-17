@@ -1,6 +1,6 @@
 import { Echo } from "../cell.ts";
-import { type OutM, type Buche } from "../core.ts";
-import { type BaseMessage, type HighlightRange } from "./common.ts";
+import type { Buche, OutM } from "../core.ts";
+import type { BaseMessage, HighlightRange } from "./common.ts";
 
 export interface EchoMessage extends BaseMessage {
     type: "echo";

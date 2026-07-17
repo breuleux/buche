@@ -1,8 +1,8 @@
+import { readFileSync } from "node:fs";
 import Ajv, { type AnySchema, type ValidateFunction } from "ajv";
 import driverSchema from "./driver-exchange/incoming.schema.json" with { type: "json" };
-import { type IncomingDriverMessage } from "./driver-exchange/incoming.ts";
-import { readFileSync } from "node:fs";
-import { type ErrorMessage } from "./utils.ts";
+import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
+import type { ErrorMessage } from "./utils.ts";
 
 class BasicParser<T> {
     validate(input: unknown): T | ErrorMessage {

@@ -1,12 +1,11 @@
 import assert from "node:assert";
 import { once } from "node:events";
-import { readdirSync } from "node:fs";
-import fs from "node:fs";
+import fs, { readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
-import { Machine } from "../src/machine.ts";
+import type { Machine } from "../src/machine.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {
     const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });

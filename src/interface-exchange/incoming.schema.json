@@ -21,7 +21,9 @@
           "const": "user_focus"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     },
     "UserPromptMessage": {
@@ -32,7 +34,9 @@
           "const": "user_prompt"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     }
   }

@@ -41,7 +41,10 @@
       "type": "object",
       "properties": {
         "label": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The cell/tab label."
         },
         "sticky": {
@@ -66,7 +69,11 @@
           "description": "Target of the message."
         }
       },
-      "required": ["from", "to", "type"],
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "Address": {
@@ -82,7 +89,10 @@
       "type": "object",
       "properties": {
         "label": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The cell/tab label."
         },
         "sticky": {
@@ -118,7 +128,11 @@
           "description": "Target of the message."
         }
       },
-      "required": ["from", "to", "type"],
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "ZoneDescriptor": {
@@ -145,7 +159,12 @@
           "description": "Message to send to the cell."
         }
       },
-      "required": ["from", "message", "to", "type"],
+      "required": [
+        "from",
+        "message",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "CellMessage": {
@@ -172,7 +191,10 @@
           "type": "string"
         }
       },
-      "required": ["type", "code"],
+      "required": [
+        "type",
+        "code"
+      ],
       "additionalProperties": false
     },
     "TextMessage": {
@@ -193,7 +215,10 @@
         },
         "stream": {
           "type": "string",
-          "enum": ["stdout", "stderr"],
+          "enum": [
+            "stdout",
+            "stderr"
+          ],
           "description": "Stream on which the message was sent."
         },
         "text": {
@@ -201,7 +226,13 @@
           "description": "Text that was sent."
         }
       },
-      "required": ["from", "stream", "text", "to", "type"],
+      "required": [
+        "from",
+        "stream",
+        "text",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "DataMessage": {
@@ -225,7 +256,12 @@
           "description": "The data."
         }
       },
-      "required": ["data", "from", "to", "type"],
+      "required": [
+        "data",
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "Json": {
@@ -278,7 +314,12 @@
           "description": "How the process terminated."
         }
       },
-      "required": ["from", "outcome", "to", "type"],
+      "required": [
+        "from",
+        "outcome",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "CloseOutcome": {
@@ -286,7 +327,10 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["success", "error"],
+          "enum": [
+            "success",
+            "error"
+          ],
           "description": "Whether the process ended successfully or with an error."
         },
         "code": {
@@ -294,7 +338,9 @@
           "description": "Exit/return code, when available."
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "description": "Outcome of a process that has terminated."
     },
@@ -315,7 +361,10 @@
           "description": "Target of the message."
         },
         "text": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Text of the command."
         },
         "ranges": {
@@ -326,7 +375,13 @@
           "description": "Spans to colorize."
         }
       },
-      "required": ["from", "ranges", "text", "to", "type"],
+      "required": [
+        "from",
+        "ranges",
+        "text",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "HighlightRange": {
@@ -345,7 +400,11 @@
           "description": "CSS class."
         }
       },
-      "required": ["start", "end", "cls"],
+      "required": [
+        "start",
+        "end",
+        "cls"
+      ],
       "additionalProperties": false,
       "description": "A syntax-highlight span over the prompt text"
     },
@@ -353,7 +412,10 @@
       "type": "object",
       "properties": {
         "label": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The prompt/tab label."
         },
         "bindings": {
@@ -382,7 +444,11 @@
           "description": "Target of the message."
         }
       },
-      "required": ["from", "to", "type"],
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "PromptBindings": {
@@ -409,7 +475,10 @@
       "type": "object",
       "properties": {
         "label": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The prompt/tab label."
         },
         "bindings": {
@@ -449,7 +518,11 @@
           "description": "Target of the message."
         }
       },
-      "required": ["from", "to", "type"],
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "SyncMessage": {
@@ -472,7 +545,12 @@
           "type": "string"
         }
       },
-      "required": ["from", "nonce", "to", "type"],
+      "required": [
+        "from",
+        "nonce",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     }
   }

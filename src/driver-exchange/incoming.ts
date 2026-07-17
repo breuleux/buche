@@ -26,14 +26,4 @@ export const handlers = {
 } as const;
 
 /** Union of every message type. */
-export type IncomingDriverMessage =
-    | CellConfigureMessage
-    | CellCreateMessage
-    | CellSendMessage
-    | CloseMessage
-    | DataMessage
-    | EchoMessage
-    | PromptConfigureMessage
-    | PromptCreateMessage
-    | SyncMessage
-    | TextMessage;
+export type IncomingDriverMessage = CellConfigureMessage | CellCreateMessage | CellSendMessage | CloseMessage | DataMessage | EchoMessage | PromptConfigureMessage | PromptCreateMessage | SyncMessage | TextMessage;

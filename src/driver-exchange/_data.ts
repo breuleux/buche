@@ -1,5 +1,5 @@
-import { type OutM, type Buche } from "../core.ts";
-import { type BaseMessage, type Json } from "./common.ts";
+import type { Buche, OutM } from "../core.ts";
+import type { BaseMessage, Json } from "./common.ts";
 
 export interface DataMessage extends BaseMessage {
     type: "data";
