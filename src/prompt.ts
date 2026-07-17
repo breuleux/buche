@@ -1,4 +1,4 @@
-import type { Address, StyledText } from "./types.ts";
+import type { StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
 import { PromptZone } from "./zone.ts";
 
@@ -16,17 +16,14 @@ export interface PromptConfiguration {
 }
 
 export class Prompt extends WithId() implements PromptConfiguration {
-    address: Address;
-
     bindings: PromptBindings = {};
     prompt: StyledText = { text: "", ranges: [] };
     content: StyledText = { text: "", ranges: [], position: 0 };
 
     zones: { main: PromptZone };
 
-    constructor(config: PromptConfiguration, location: { address: Address }) {
+    constructor(config: PromptConfiguration) {
         super();
-        this.address = location.address;
         this.configure(config);
         this.zones = {
             main: new PromptZone("@"),

@@ -1,5 +1,6 @@
 import type { ComponentStatus } from "./cell.ts";
-import type { Accent, StyledText } from "./types.ts";
+import type { CreationInfo } from "./driver-exchange/common.ts";
+import type { Accent, Address, StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
 
 export interface EchoConfiguration {
@@ -23,16 +24,20 @@ export class Echo extends WithId() {
     /** Accent color for the component. */
     color!: Accent;
 
+    /** Address of the component. */
+    address: Address;
+
     /** Status of the component. */
     status: ComponentStatus;
 
     /** List of views. */
     views?: Set<string>;
 
-    constructor(config: EchoConfiguration) {
+    constructor(config: EchoConfiguration & CreationInfo) {
         super();
         this.views = new Set();
         this.status = { status: "running" };
+        this.address = config.from;
         this.configure(config);
     }
 

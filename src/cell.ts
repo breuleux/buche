@@ -1,4 +1,4 @@
-import type { Address, Json } from "./types.ts";
+import type { Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
 export interface ComponentStatus {
@@ -33,16 +33,13 @@ export interface CellConfiguration {
 }
 
 export class Cell extends WithId() implements CellConfiguration {
-    address: Address;
-
     sticky?: boolean;
     background?: boolean;
 
     zones: Record<string, never>; // cells do not define zones currently
 
-    constructor(config: CellConfiguration, location: { address: Address }) {
+    constructor(config: CellConfiguration) {
         super();
-        this.address = location.address;
         this.configure(config);
         this.zones = {};
     }

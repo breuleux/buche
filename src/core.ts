@@ -148,7 +148,7 @@ export class Buche {
             if (post.cell) {
                 post.cell.configure(cconf);
             } else {
-                const cell = new Cell(cconf, { address: obj.from });
+                const cell = new Cell(cconf);
                 post.setCell(cell);
             }
         } else {
@@ -156,7 +156,7 @@ export class Buche {
             if (post.prompt) {
                 post.prompt.configure(pconf);
             } else {
-                const prompt = new Prompt(pconf, { address: obj.from });
+                const prompt = new Prompt(pconf);
                 post.setPrompt(prompt);
             }
         }
