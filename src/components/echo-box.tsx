@@ -59,6 +59,12 @@
 // a view asks the manager to commit again ("focus-commit-request"), so a
 // terminal created while the box has the focus gets it.
 //
+// Prompt activity: `box.observePromptActivity(collection)` ties the box to a
+// <prompt-collection>. While the prompt the echo originated from (the nearest
+// ancestor of the bound entry carrying a Prompt) is not the collection's
+// active prompt, the box takes the `prompt-inactive` attribute and its
+// accents fade (echo-box.css).
+//
 // Events (both bubble). See the exported detail/event types below
 // ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "viewchange"  detail: { view: ViewLabel }  — the active view changed
@@ -80,7 +86,19 @@ import type { Status, StatusString, ViewLabel } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
+import type { PromptCollection } from "./prompt-collection.tsx";
 import { buildStyledText, syncStatusPhases } from "./utils.tsx";
+
+/** The entry of the prompt `entry` (an echo's entry) originated from: the
+ *  nearest ancestor (or the entry itself) carrying a Prompt. Null if none. */
+function promptSource(entry: Entry | null): Entry | null {
+    for (let e = entry; e; e = e.parent ?? null) {
+        if (e.prompt) {
+            return e;
+        }
+    }
+    return null;
+}
 
 /** The box's visual status. Alias of the shared {@link StatusString}. */
 export type EchoStatus = StatusString;
@@ -177,6 +195,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     // The bound Entry (if configured from one) and the listener registered on it.
     private _entry: Entry | null = null;
     private entryListener: ((entry: Entry) => void) | null = null;
+    // The prompt collection whose active prompt this box fades against (see
+    // observePromptActivity), and the listener registered on it.
+    private promptCollection: PromptCollection | null = null;
+    private onPromptChange = (): void => this.syncPromptActivity();
     // Whether the pointer is currently over this box. The compact overlay and
     // handles are shown only while Alt is held *and* the pointer is over the box,
     // so Alt-tracking is per-box (not global) and scoped to the hover.
@@ -848,6 +870,31 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.entryListener = () => this.applyEntry(entry);
         entry.listeners.push(this.entryListener);
         this.applyEntry(entry);
+        this.syncPromptActivity();
+    }
+
+    /**
+     * Fade the box's accents (status circle, gutter/handles, header background)
+     * while the prompt its echo originated from — the nearest ancestor of the
+     * bound entry carrying a Prompt — is not the collection's active prompt
+     * (the `prompt-inactive` attribute; see echo-box.css). The box listens for
+     * "promptchange" on the collection and re-checks on every rebind.
+     */
+    observePromptActivity(collection: PromptCollection): void {
+        this.ensureSetup();
+        if (this.promptCollection === collection) {
+            return;
+        }
+        this.promptCollection?.removeEventListener("promptchange", this.onPromptChange);
+        this.promptCollection = collection;
+        collection.addEventListener("promptchange", this.onPromptChange);
+        this.syncPromptActivity();
+    }
+
+    private syncPromptActivity(): void {
+        const source = this.promptCollection ? promptSource(this._entry) : null;
+        const active = this.promptCollection?.activePrompt ?? null;
+        this.toggleAttribute("prompt-inactive", source !== null && source !== active);
     }
 
     /** Detach the current entry's reconfiguration listener (if any). */

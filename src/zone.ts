@@ -233,6 +233,7 @@ export class PromptZone extends Zone {
         // exists to report: announce the size then.
         eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
         this.element.log(eb);
+        eb.observePromptActivity(this.element.prompts);
         this.echoMap.set(entry, eb);
         return eb;
     }

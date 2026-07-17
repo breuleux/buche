@@ -465,3 +465,24 @@ echo-box[focused] .echo-box-gutter::before {
 echo-box[focused] embedded-term {
 	--embedded-term-bg: #262626;
 }
+
+/* ── Inactive source prompt ──────────────────────────────────────────────
+ * While the prompt the echo originated from is not the collection's active
+ * one (see EchoBox.observePromptActivity), the box's accents recede: status
+ * circle, gutter line and handles dim, and the header's dim accent
+ * rectangle all but disappears. The text and the cell content stay put. */
+echo-box[prompt-inactive] .echo-box-gutter::before,
+echo-box[prompt-inactive] .echo-box-status,
+echo-box[prompt-inactive] .echo-box-handle {
+	opacity: 0.35;
+}
+
+echo-box[prompt-inactive] .echo-box-handle:hover,
+echo-box[prompt-inactive] .echo-box-handle.resizing {
+	opacity: 0.5;
+}
+
+echo-box[prompt-inactive]:has(.echo-box-context:not(:empty)) .echo-box-context,
+echo-box[prompt-inactive]:has(.echo-box-context:not(:empty)) .echo-box-header {
+	background: color-mix(in srgb, var(--echo-color) 4%, transparent);
+}

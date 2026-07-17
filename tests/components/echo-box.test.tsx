@@ -4,6 +4,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import { styleToCss, defaultTheme as th } from "../../src/color.ts";
 import type { EchoBox } from "../../src/components/echo-box.tsx";
 import "../../src/components/echo-box.tsx";
+import type { PromptCollection } from "../../src/components/prompt-collection.tsx";
+import "../../src/components/prompt-collection.tsx";
+import { Entry } from "../../src/entry.ts";
+import { Prompt } from "../../src/prompt.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -601,5 +605,77 @@ describe("echo-box — authored views", () => {
         box.append(bogus);
         document.body.append(box);
         expect(box.views).toEqual([]);
+    });
+});
+
+describe("echo-box — prompt activity", () => {
+    function stubCollection(): PromptCollection {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        pc.editorFactory = () => ({
+            dom: document.createElement("div"),
+            getValue: () => "",
+            setValue: () => {},
+            focus: () => {},
+            destroy: () => {},
+        });
+        document.body.append(pc);
+        return pc;
+    }
+
+    function promptEntry(label: string): Entry {
+        const entry = new Entry({});
+        entry.echo.label = label;
+        entry.setPrompt(new Prompt({}));
+        return entry;
+    }
+
+    test("fades when the source prompt is not the active one", () => {
+        const pc = stubCollection();
+        const a = promptEntry("a");
+        const b = promptEntry("b");
+        pc.addPrompt(a);
+        pc.addPrompt(b);
+
+        const box = make();
+        box.bindEntry(new Entry({ parent: a, field: "0" }));
+        box.observePromptActivity(pc);
+        expect(box.hasAttribute("prompt-inactive")).toBe(false);
+
+        pc.showPrompt(b, false);
+        expect(box.hasAttribute("prompt-inactive")).toBe(true);
+
+        pc.showPrompt(a, false);
+        expect(box.hasAttribute("prompt-inactive")).toBe(false);
+    });
+
+    test("stays lit with no prompt origin or no observed collection", () => {
+        const pc = stubCollection();
+        pc.addPrompt(promptEntry("a"));
+
+        const orphan = make();
+        orphan.bindEntry(new Entry({}));
+        orphan.observePromptActivity(pc);
+        expect(orphan.hasAttribute("prompt-inactive")).toBe(false);
+
+        const unbound = make();
+        unbound.bindEntry(new Entry({ parent: promptEntry("z"), field: "0" }));
+        expect(unbound.hasAttribute("prompt-inactive")).toBe(false);
+    });
+
+    test("re-checks on rebind", () => {
+        const pc = stubCollection();
+        const a = promptEntry("a");
+        const b = promptEntry("b");
+        pc.addPrompt(a);
+        pc.addPrompt(b);
+        pc.showPrompt(b, false);
+
+        const box = make();
+        box.observePromptActivity(pc);
+        box.bindEntry(new Entry({ parent: a, field: "0" }));
+        expect(box.hasAttribute("prompt-inactive")).toBe(true);
+
+        box.bindEntry(new Entry({ parent: b, field: "0" }));
+        expect(box.hasAttribute("prompt-inactive")).toBe(false);
     });
 });
