@@ -3,12 +3,12 @@ import { Prompt, type PromptConfiguration } from "../prompt.ts";
 import { type BaseMessage, type CreationInfo } from "./common.ts";
 
 export interface PromptCreateMessage extends BaseMessage, CreationInfo, PromptConfiguration {
-  type: "prompt_create";
+    type: "prompt_create";
 }
 
 export async function* handle$prompt_create(
     buche: Buche,
-    obj: PromptCreateMessage
+    obj: PromptCreateMessage,
 ): AsyncIterable<OutM> {
     const component = buche.fresh(obj.from);
     const { zone } = buche.findPlace(obj);
@@ -18,5 +18,5 @@ export async function* handle$prompt_create(
         type: "install_prompt",
         zone: zone,
         component: component,
-    }
+    };
 }

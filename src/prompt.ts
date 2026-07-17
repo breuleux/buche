@@ -40,9 +40,9 @@ export class Prompt extends IdClass implements PromptConfiguration {
     }
     configure(config: PromptConfiguration): void {
         Object.assign(this, config);
-    };
+    }
 
     makeZones(): Record<string, Zone> {
-        return {"@": new Zone()};
+        return { "@": new Zone() };
     }
 }

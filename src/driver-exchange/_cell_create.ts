@@ -3,12 +3,12 @@ import { type OutM, type Buche } from "../core.ts";
 import { type BaseMessage, type CreationInfo } from "./common.ts";
 
 export interface CellCreateMessage extends BaseMessage, CreationInfo, CellConfiguration {
-  type: "cell_create";
+    type: "cell_create";
 }
 
 export async function* handle$cell_create(
     buche: Buche,
-    obj: CellCreateMessage
+    obj: CellCreateMessage,
 ): AsyncIterable<OutM> {
     const component = buche.fresh(obj.from);
     const { prompt, zone } = buche.findPlace(obj);
@@ -20,5 +20,5 @@ export async function* handle$cell_create(
         type: "install_cell",
         zone: zone,
         component: component,
-    }
+    };
 }

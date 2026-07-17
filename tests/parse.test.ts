@@ -1,15 +1,17 @@
-import assert from 'node:assert';
+import assert from "node:assert";
 import { describe, test } from "node:test";
-import { getCases } from "./utils.ts"
-import { driverParser } from "../src/parse.ts"
-import { type IncomingDriverMessage } from '../src/driver-exchange/incoming.ts';
-import { type ErrorMessage } from '../src/utils.ts';
+import { getCases } from "./utils.ts";
+import { driverParser } from "../src/parse.ts";
+import { type IncomingDriverMessage } from "../src/driver-exchange/incoming.ts";
+import { type ErrorMessage } from "../src/utils.ts";
 
 function processable(message: unknown) {
-    return message
-        && (typeof message === "object")
-        && ("type" in message)
-        && (typeof message.type === "string")
+    return (
+        message &&
+        typeof message === "object" &&
+        "type" in message &&
+        typeof message.type === "string"
+    );
 }
 
 async function validateMessages(messages: AsyncIterable<IncomingDriverMessage | ErrorMessage>) {
@@ -36,7 +38,11 @@ describe("Parse IncomingDriverMessage", () => {
     for (const { path, relpath } of getCases("data/runs")) {
         test(`Can parse '${relpath}'`, async () => {
             const { errors } = await validateMessages(driverParser.streamFromFile(path));
-            assert.strictEqual(errors.length, 0, `Some messages were invalid:\n${JSON.stringify(errors, null, 2)}`);
+            assert.strictEqual(
+                errors.length,
+                0,
+                `Some messages were invalid:\n${JSON.stringify(errors, null, 2)}`,
+            );
         });
     }
 });

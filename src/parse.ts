@@ -12,23 +12,19 @@ class BasicParser<T> {
     parse(input: string): T | ErrorMessage {
         try {
             return this.validate(JSON.parse(input));
-        }
-        catch (e) {
+        } catch (e) {
             return {
                 type: "error",
                 code: "invalid_message",
                 subcode: "notjson",
                 reason: "message must be parsable as JSON",
                 input: input,
-            }
+            };
         }
     }
 
-    async* stream(
-        source:
-            | string
-            | Iterable<string | Uint8Array>
-            | AsyncIterable<string | Uint8Array>,
+    async *stream(
+        source: string | Iterable<string | Uint8Array> | AsyncIterable<string | Uint8Array>,
     ): AsyncIterable<T | ErrorMessage> {
         if (typeof source === "string") {
             source = [source];
@@ -52,7 +48,7 @@ class BasicParser<T> {
         }
     }
 
-    async* streamFromFile(filename: string) {
+    async *streamFromFile(filename: string) {
         yield* this.stream([readFileSync(filename)]);
     }
 }
@@ -61,10 +57,10 @@ class Parser<T> extends BasicParser<T> {
     validators: Record<string, ValidateFunction>;
     private ajv: Ajv;
 
-    constructor(args: {schema: AnySchema}) {
-        super()
+    constructor(args: { schema: AnySchema }) {
+        super();
 
-        const {schema} = args;
+        const { schema } = args;
 
         this.ajv = new Ajv({ allErrors: true });
         this.ajv.addSchema(schema, "messages");
@@ -73,7 +69,9 @@ class Parser<T> extends BasicParser<T> {
         for (const [name, def] of Object.entries((schema as any).definitions ?? {})) {
             const literal = (def as any)?.properties?.type?.const;
             if (typeof literal === "string") {
-                validators[literal] = this.ajv.compile({ $ref: `messages#/definitions/${name}` });
+                validators[literal] = this.ajv.compile({
+                    $ref: `messages#/definitions/${name}`,
+                });
             }
         }
 

@@ -1,13 +1,5 @@
-
 /** Any JSON-serializable value (payloads exchanged over the FDs). */
-export type Json =
-  | null
-  | boolean
-  | number
-  | string
-  | Json[]
-  | { [key: string]: Json };
-
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 export type Address = Array<string>;
 export type To = Address;
@@ -35,12 +27,12 @@ export interface CreationInfo {
 
 /** A syntax-highlight span over the prompt text */
 export interface HighlightRange {
-  /** Inclusive start offset into the prompt text. */
-  start: number;
+    /** Inclusive start offset into the prompt text. */
+    start: number;
 
-  /** Exclusive end offset. */
-  end: number;
+    /** Exclusive end offset. */
+    end: number;
 
-  /** CSS class. */
-  cls: string;
+    /** CSS class. */
+    cls: string;
 }

@@ -26,7 +26,6 @@ export interface TextCommand {
 
 export type CellCommand = TextCommand;
 
-
 export interface CellSendMessage {
     type: "cell_send";
 

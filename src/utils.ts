@@ -1,4 +1,3 @@
-
 var _CURRENT_ID = 0;
 
 export function resetId(n: number = 0) {

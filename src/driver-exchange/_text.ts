@@ -11,10 +11,7 @@ export interface TextMessage extends BaseMessage {
     text: string;
 }
 
-export async function* handle$text(
-    buche: Buche,
-    obj: TextMessage
-): AsyncIterable<OutM> {
+export async function* handle$text(buche: Buche, obj: TextMessage): AsyncIterable<OutM> {
     const component = buche.get(obj.from);
     yield {
         type: "cell_send",
@@ -24,5 +21,5 @@ export async function* handle$text(
             text: obj.text,
         },
         component: component,
-    }
+    };
 }

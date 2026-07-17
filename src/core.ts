@@ -9,7 +9,7 @@ import { Cell, Echo } from "./cell.ts";
 import { Zone } from "./zone.ts";
 import { BucheError, type ErrorMessage } from "./utils.ts";
 
-export type InM = IncomingDriverMessage | IncomingInterfaceMessage
+export type InM = IncomingDriverMessage | IncomingInterfaceMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | ErrorMessage;
 export type HandlerT = Record<string, (buche: Buche, message: InM) => AsyncIterable<OutM>>;
 
@@ -40,22 +40,20 @@ export class Buche extends Machine<InM, OutM> {
         this.hierarchy = {"[]": {zones: args.initialZones}};
     }
 
-    async* process(input: InM): AsyncIterable<OutM> {
+    async *process(input: InM): AsyncIterable<OutM> {
         try {
             yield* this.handlers[input.type](this, input);
-        }
-        catch (err: any) {
+        } catch (err: any) {
             if (err instanceof BucheError) {
                 err.errorData.input = input;
                 yield err.errorData;
-            }
-            else {
+            } else {
                 yield {
                     type: "error",
                     code: "internal",
                     reason: err.toString(),
                     input: err,
-                }
+                };
             }
         }
     }
@@ -119,7 +117,7 @@ export class Buche extends Machine<InM, OutM> {
                 code: "nozone",
                 reason: `No zone named ${zoneName} could be found`,
                 input: info,
-            })
+            });
         }
         return { prompt, zone };
     }
