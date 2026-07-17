@@ -52,6 +52,9 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
+import type { Anchors } from "../color.ts";
+import type { StyledText } from "../types.ts";
+import { buildStyledText } from "./utils.tsx";
 
 export type EchoStatus = "running" | "done" | "error" | "unresponsive" | "standby";
 
@@ -75,6 +78,12 @@ function div(className: string): HTMLElement {
 }
 
 export class EchoBox extends HTMLElement {
+    /**
+     * Background/foreground lightness anchors used to resolve a {@link StyledText}
+     * echo's accents into concrete colors. Defaults to the dark echo surface.
+     */
+    anchors: Anchors = { bg: 0.18, fg: 0.9 };
+
     private initialized = false;
     private gutter!: HTMLElement;
     private statusEl!: HTMLElement;
@@ -454,17 +463,23 @@ export class EchoBox extends HTMLElement {
         return this.echoEl.textContent ?? "";
     }
 
-    set echo(value: string) {
+    set echo(value: string | Node | StyledText) {
         this.setEcho(value);
     }
 
-    /** Set the echo to plain text or a rich node (e.g. a highlighted command). */
-    setEcho(content: string | Node): void {
+    /**
+     * Set the echo to plain text, a rich node (e.g. a highlighted command), or a
+     * {@link StyledText} — whose text and highlight ranges are rendered through
+     * {@link buildStyledText} against {@link anchors}.
+     */
+    setEcho(content: string | Node | StyledText): void {
         this.ensureSetup();
         if (typeof content === "string") {
             this.echoEl.textContent = content;
-        } else {
+        } else if (content instanceof Node) {
             this.echoEl.replaceChildren(content);
+        } else {
+            this.echoEl.replaceChildren(buildStyledText(content, this.anchors));
         }
     }
 

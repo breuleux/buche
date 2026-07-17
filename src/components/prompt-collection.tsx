@@ -30,9 +30,30 @@
 // consolidated components.css).
 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { EditorState, type Extension, Prec } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import {
+    Compartment,
+    EditorState,
+    type Extension,
+    Prec,
+    StateEffect,
+    StateField,
+} from "@codemirror/state";
+import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
+import { type Anchors, calculateStyle, styleToCss } from "../color.ts";
+import type { Accent, HighlightRange, StyledText } from "../types.ts";
+
+/** A resolved colorization span: a `[start, end)` range with an inline style. */
+export interface StyleSpan {
+    start: number;
+    end: number;
+    /** Inline CSS declaration string applied to the span. */
+    css: string;
+    /** Open start boundary: grows to absorb text inserted at `start`. */
+    inclusiveStart?: boolean;
+    /** Open end boundary: grows to absorb text inserted at `end`. */
+    inclusiveEnd?: boolean;
+}
 
 /** A minimal editor handle the collection drives; the default is CodeMirror. */
 export interface PromptEditor {
@@ -42,6 +63,16 @@ export interface PromptEditor {
     setValue(value: string): void;
     focus(): void;
     destroy(): void;
+    /** Colorize spans over the current text. Optional; no-op if unsupported. */
+    setHighlights?(spans: StyleSpan[]): void;
+    /**
+     * Apply a style to the whole editor, including text the user will type
+     * (`""` clears it). Used for fully-open ranges, which have no text to anchor
+     * a span to. Optional; no-op if unsupported.
+     */
+    setBaseStyle?(css: string): void;
+    /** Move the cursor to an offset into the text. Optional. */
+    setPosition?(position: number): void;
 }
 
 export type EditorFactory = (options: {
@@ -56,8 +87,12 @@ export interface PromptSpec {
     id?: string;
     /** Tab label. */
     label: string;
-    /** Tab label colour (the only per-tab styling). */
-    color?: string;
+    /**
+     * Tab label accent — a color/style description resolved through
+     * {@link calculateStyle} (see `color.ts`). Applied while the tab is active;
+     * inactive tabs are shown grey.
+     */
+    color?: Accent;
     /** HTML (or a node) for the leading marker shown left of the editor. */
     promptHtml?: string | Node;
     /** Initial editor text. */
@@ -78,6 +113,42 @@ interface Entry {
 
 let darkTheme: Extension | null = null;
 
+// Colorization decorations: a state field holding a decoration set that is
+// replaced wholesale whenever `setSpansEffect` is dispatched.
+const setSpansEffect = StateEffect.define<StyleSpan[]>();
+const spansField = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(deco, tr) {
+        deco = deco.map(tr.changes);
+        for (const effect of tr.effects) {
+            if (effect.is(setSpansEffect)) {
+                const len = tr.state.doc.length;
+                const marks = effect.value
+                    // Clamp to the document and drop empty/inverted spans.
+                    .map((s) => ({
+                        ...s,
+                        start: Math.max(0, Math.min(len, s.start)),
+                        end: Math.max(0, Math.min(len, s.end)),
+                    }))
+                    .filter((s) => s.start < s.end)
+                    .sort((a, b) => a.start - b.start || a.end - b.end)
+                    .map((s) =>
+                        Decoration.mark({
+                            attributes: { style: s.css },
+                            // Open boundaries absorb text inserted at the edge as
+                            // the decoration is re-mapped across document changes.
+                            inclusiveStart: s.inclusiveStart ?? false,
+                            inclusiveEnd: s.inclusiveEnd ?? false,
+                        }).range(s.start, s.end),
+                    );
+                deco = Decoration.set(marks);
+            }
+        }
+        return deco;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+});
+
 // Default editor: a CodeMirror EditorView. Built lazily so merely importing this
 // module never touches CodeMirror's runtime (keeps injected-editor tests light).
 const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
@@ -90,6 +161,9 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
         },
         { dark: true },
     );
+    // A reconfigurable inline style on `.cm-content` (the editor-wide base style).
+    // An inline style beats the theme's class rules, and applies to typed text.
+    const baseStyle = new Compartment();
     const view = new EditorView({
         state: EditorState.create({
             doc,
@@ -123,6 +197,8 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                 history(),
                 keymap.of([...defaultKeymap, ...historyKeymap]),
                 EditorView.lineWrapping,
+                spansField,
+                baseStyle.of([]),
                 darkTheme,
                 EditorView.updateListener.of((u) => {
                     if (u.docChanged) {
@@ -137,6 +213,17 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
         getValue: () => view.state.doc.toString(),
         setValue: (value) =>
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }),
+        setHighlights: (spans) => view.dispatch({ effects: setSpansEffect.of(spans) }),
+        setBaseStyle: (css) =>
+            view.dispatch({
+                effects: baseStyle.reconfigure(
+                    css ? EditorView.contentAttributes.of({ style: css }) : [],
+                ),
+            }),
+        setPosition: (position) => {
+            const pos = Math.max(0, Math.min(view.state.doc.length, position));
+            view.dispatch({ selection: { anchor: pos } });
+        },
         focus: () => view.focus(),
         destroy: () => view.destroy(),
     };
@@ -145,6 +232,12 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
 export class PromptCollection extends HTMLElement {
     /** How each prompt's editor is created. Swap before adding prompts. */
     editorFactory: EditorFactory = codeMirrorEditor;
+
+    /**
+     * Background/foreground lightness anchors used to resolve a {@link StyledText}
+     * range's accent into a concrete color. Defaults to the dark editor theme.
+     */
+    anchors: Anchors = { bg: 0.18, fg: 0.9 };
 
     private initialized = false;
     private promptsEl!: HTMLElement;
@@ -240,9 +333,6 @@ export class PromptCollection extends HTMLElement {
         tab.setAttribute("data-prompt", id);
         tab.textContent = spec.label;
         tab.draggable = true;
-        if (spec.color) {
-            tab.style.color = spec.color;
-        }
         tab.addEventListener("click", () => this.showPrompt(id));
         tab.addEventListener("dragstart", (e) => {
             this.dragId = id;
@@ -259,7 +349,7 @@ export class PromptCollection extends HTMLElement {
         });
         this.tabsEl.appendChild(tab);
 
-        this.entries.set(id, {
+        const entry: Entry = {
             id,
             label: spec.label,
             color: spec.color,
@@ -267,8 +357,11 @@ export class PromptCollection extends HTMLElement {
             marker,
             tab,
             editor,
-        });
+        };
+        this.entries.set(id, entry);
         this.order.push(id);
+        // Paint the tab (grey while inactive); activation restyles the active one.
+        this.applyTabStyle(entry);
         if (this.active === null) {
             this.activate(id, false);
         }
@@ -311,6 +404,8 @@ export class PromptCollection extends HTMLElement {
             entry.row.hidden = !on;
             entry.tab.classList.toggle("active", on);
             entry.tab.setAttribute("aria-selected", String(on));
+            // Active tab wears its accent; inactive tabs go grey.
+            this.applyTabStyle(entry);
         }
         if (focus) {
             this.entries.get(id)?.editor.focus();
@@ -362,13 +457,30 @@ export class PromptCollection extends HTMLElement {
         }
     }
 
-    setColor(id: string, color: string): void {
+    /** Set a tab's accent (a color/style description; see `color.ts`). */
+    setColor(id: string, color: Accent): void {
         this.ensureSetup();
         const entry = this.entries.get(id);
         if (entry) {
             entry.color = color;
-            entry.tab.style.color = color;
+            this.applyTabStyle(entry);
         }
+    }
+
+    /** Paint a tab from its accent while active, or grey while inactive. The
+     *  accent is resolved through the color grammar; an unparseable one is
+     *  ignored (the tab falls back to inherited styling). */
+    private applyTabStyle(entry: Entry): void {
+        const accent = entry.id === this.active ? entry.color : "grey";
+        let css = "";
+        if (accent) {
+            try {
+                css = styleToCss(calculateStyle(accent, this.anchors));
+            } catch {
+                css = "";
+            }
+        }
+        entry.tab.setAttribute("style", css);
     }
 
     setPromptHtml(id: string, html: string | Node): void {
@@ -391,9 +503,73 @@ export class PromptCollection extends HTMLElement {
         return this.entries.get(id)?.editor.getValue() ?? "";
     }
 
-    setValue(id: string, value: string): void {
+    /**
+     * Set a prompt's value. A plain string sets just the text. A {@link StyledText}
+     * additionally colorizes the text (resolving each range's accent through
+     * {@link calculateStyle} against {@link anchors}) and, when a `position` is
+     * given, moves the cursor there.
+     */
+    setValue(id: string, value: string | StyledText): void {
         this.ensureSetup();
-        this.entries.get(id)?.editor.setValue(value);
+        const entry = this.entries.get(id);
+        if (!entry) {
+            return;
+        }
+        if (typeof value === "string") {
+            entry.editor.setValue(value);
+            return;
+        }
+        const { base, spans } = this.resolveContent(value.ranges ?? [], value.text);
+        entry.editor.setValue(value.text);
+        entry.editor.setBaseStyle?.(base);
+        entry.editor.setHighlights?.(spans);
+        if (value.position != null) {
+            entry.editor.setPosition?.(value.position);
+        }
+    }
+
+    /**
+     * Resolve styled-text ranges into a whole-editor base style plus concrete
+     * colorization spans.
+     *
+     *   - A *fully* open range (`start` and `end` both `null`) styles the entire
+     *     editor, including text the user will type, so it becomes the base style
+     *     rather than a span (which would need text to anchor to).
+     *   - A partially open boundary resolves to the text edge (0 / length) and is
+     *     marked *open*, so its span grows to cover text typed at that edge.
+     *
+     * Ranges whose accent cannot be parsed are skipped rather than aborting the
+     * whole set.
+     */
+    private resolveContent(
+        ranges: HighlightRange[],
+        text: string,
+    ): { base: string; spans: StyleSpan[] } {
+        const baseParts: string[] = [];
+        const spans: StyleSpan[] = [];
+        for (const range of ranges) {
+            let css: string;
+            try {
+                css = styleToCss(calculateStyle(range.style, this.anchors));
+            } catch {
+                continue;
+            }
+            if (!css) {
+                continue;
+            }
+            if (range.start == null && range.end == null) {
+                baseParts.push(css);
+            } else {
+                spans.push({
+                    start: range.start ?? 0,
+                    end: range.end ?? text.length,
+                    css,
+                    inclusiveStart: range.start == null,
+                    inclusiveEnd: range.end == null,
+                });
+            }
+        }
+        return { base: baseParts.join("; "), spans };
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────

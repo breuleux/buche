@@ -1,7 +1,12 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
-import type { EditorFactory, PromptCollection } from "../../src/components/prompt-collection.tsx";
+import { calculateStyle, styleToCss } from "../../src/color.ts";
+import type {
+    EditorFactory,
+    PromptCollection,
+    StyleSpan,
+} from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
 
 afterEach(() => {
@@ -13,7 +18,13 @@ afterEach(() => {
 const destroyed: string[] = [];
 // The editor handle, plus a test hook to fire the navigation callback that the
 // real CodeMirror editor binds to Cmd/Ctrl-Left/Right.
-type StubEditor = ReturnType<EditorFactory> & { navigate?: (dir: -1 | 1) => void };
+type StubEditor = ReturnType<EditorFactory> & {
+    navigate?: (dir: -1 | 1) => void;
+    /** Last spans/base-style/position handed to the editor, for assertions. */
+    spans?: StyleSpan[];
+    baseStyle?: string;
+    position?: number;
+};
 
 function stubFactory(): EditorFactory {
     return ({ doc, onChange, onNavigate }) => {
@@ -28,6 +39,15 @@ function stubFactory(): EditorFactory {
                 value = v;
                 dom.textContent = v;
                 onChange?.(v);
+            },
+            setHighlights: (spans) => {
+                editor.spans = spans;
+            },
+            setBaseStyle: (css) => {
+                editor.baseStyle = css;
+            },
+            setPosition: (position) => {
+                editor.position = position;
             },
             focus: () => {},
             destroy: () => {
@@ -67,7 +87,7 @@ describe("prompt-collection — adding prompts", () => {
         const pc = make();
         const id = pc.addPrompt({
             label: "sh",
-            color: "#8ae234",
+            color: "green",
             promptHtml: "<b>$</b>",
             doc: "ls",
         });
@@ -77,10 +97,10 @@ describe("prompt-collection — adding prompts", () => {
         expect(r.querySelector(".prompt-collection-marker")?.innerHTML).toBe("<b>$</b>");
         expect(r.querySelector(".prompt-collection-editor .stub-editor")?.textContent).toBe("ls");
 
-        // Tab shows the label in the configured colour.
+        // The active tab wears its accent, resolved through the color grammar.
         const t = tab(pc, id)!;
         expect(t.textContent).toBe("sh");
-        expect(t.style.color).toBe("#8ae234");
+        expect(t.getAttribute("style")).toBe(styleToCss(calculateStyle("green", pc.anchors)));
         expect(t.draggable).toBe(true);
 
         // First prompt is active and shown.
@@ -129,15 +149,47 @@ describe("prompt-collection — switching", () => {
 describe("prompt-collection — per-prompt config", () => {
     test("setLabel, setColor and setPromptHtml update the DOM", () => {
         const pc = make();
-        const id = pc.addPrompt({ label: "a", color: "#111", promptHtml: "$" });
+        const id = pc.addPrompt({ label: "a", color: "blue", promptHtml: "$" });
         pc.setLabel(id, "renamed");
-        pc.setColor(id, "#f00");
+        pc.setColor(id, "red");
         pc.setPromptHtml(id, "<i>&gt;</i>");
         expect(tab(pc, id)?.textContent).toBe("renamed");
-        expect(tab(pc, id)?.style.color).toBe("#f00");
+        // Active tab: accent resolved via the color grammar.
+        expect(tab(pc, id)?.getAttribute("style")).toBe(
+            styleToCss(calculateStyle("red", pc.anchors)),
+        );
         expect(row(pc, id)?.querySelector(".prompt-collection-marker")?.innerHTML).toBe(
             "<i>&gt;</i>",
         );
+    });
+
+    test("active tab wears its accent; inactive tabs are grey", () => {
+        const pc = make();
+        const a = pc.addPrompt({ label: "a", color: "green" });
+        const b = pc.addPrompt({ label: "b", color: "blue" });
+
+        const grey = styleToCss(calculateStyle("grey", pc.anchors));
+
+        // 'a' is active (its accent), 'b' is inactive (grey) — even though it has one.
+        expect(tab(pc, a)?.getAttribute("style")).toBe(
+            styleToCss(calculateStyle("green", pc.anchors)),
+        );
+        expect(tab(pc, b)?.getAttribute("style")).toBe(grey);
+
+        // Switch: the accents follow the active tab.
+        pc.showPrompt(b);
+        expect(tab(pc, a)?.getAttribute("style")).toBe(grey);
+        expect(tab(pc, b)?.getAttribute("style")).toBe(
+            styleToCss(calculateStyle("blue", pc.anchors)),
+        );
+    });
+
+    test("an accent may carry style beyond color (e.g. bold)", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a", color: "red bold" });
+        const css = tab(pc, id)?.getAttribute("style") ?? "";
+        expect(css).toContain("font-weight: bold");
+        expect(css).toContain("color: oklch(");
     });
 });
 
@@ -150,6 +202,169 @@ describe("prompt-collection — editor values", () => {
         pc.setValue(id, "two");
         expect(pc.getValue(id)).toBe("two");
         expect(changes).toEqual(["two"]);
+    });
+});
+
+describe("prompt-collection — styled values", () => {
+    test("setValue with StyledText sets text, colorizes ranges and moves the cursor", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, {
+            text: "git commit",
+            ranges: [
+                { start: 0, end: 3, style: "green bold" },
+                { start: 4, end: 10, style: "blue" },
+            ],
+            position: 4,
+        });
+
+        // Text goes through the editor.
+        expect(pc.getValue(id)).toBe("git commit");
+
+        // Ranges are resolved into concrete CSS spans via the color grammar.
+        // Explicit numeric boundaries are closed (not inclusive).
+        expect(editor.spans).toEqual([
+            {
+                start: 0,
+                end: 3,
+                css: styleToCss(calculateStyle("green bold", pc.anchors)),
+                inclusiveStart: false,
+                inclusiveEnd: false,
+            },
+            {
+                start: 4,
+                end: 10,
+                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                inclusiveStart: false,
+                inclusiveEnd: false,
+            },
+        ]);
+        // The green span really is bold + colored.
+        expect(editor.spans?.[0].css).toContain("font-weight: bold");
+        expect(editor.spans?.[0].css).toContain("color: oklch(");
+
+        // The cursor position is forwarded.
+        expect(editor.position).toBe(4);
+    });
+
+    test("a partially-open boundary resolves to the text edge and marks the span open", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, {
+            text: "abcdef",
+            ranges: [
+                { start: null, end: 3, style: "blue" }, // open start only
+                { start: 3, end: null, style: "green" }, // open end only
+            ],
+        });
+
+        expect(editor.spans).toEqual([
+            {
+                start: 0,
+                end: 3,
+                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                inclusiveStart: true,
+                inclusiveEnd: false,
+            },
+            {
+                start: 3,
+                end: 6,
+                css: styleToCss(calculateStyle("green", pc.anchors)),
+                inclusiveStart: false,
+                inclusiveEnd: true,
+            },
+        ]);
+        // No fully-open range → no base style.
+        expect(editor.baseStyle).toBe("");
+    });
+
+    test("a fully-open range becomes a whole-editor base style, not a span", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, {
+            text: "abcdef",
+            ranges: [
+                { start: null, end: null, style: "red bold" }, // whole editor + future text
+                { start: 0, end: 3, style: "blue" }, // a normal span on top
+            ],
+        });
+
+        expect(editor.baseStyle).toBe(styleToCss(calculateStyle("red bold", pc.anchors)));
+        expect(editor.spans).toEqual([
+            {
+                start: 0,
+                end: 3,
+                css: styleToCss(calculateStyle("blue", pc.anchors)),
+                inclusiveStart: false,
+                inclusiveEnd: false,
+            },
+        ]);
+    });
+
+    test("a fully-open range styles even an empty prompt (nothing to anchor a span to)", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, { text: "", ranges: [{ start: null, end: null, style: "green" }] });
+
+        expect(pc.getValue(id)).toBe("");
+        expect(editor.baseStyle).toBe(styleToCss(calculateStyle("green", pc.anchors)));
+        expect(editor.spans).toEqual([]);
+    });
+
+    test("a plain string leaves highlights and position untouched", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, "plain");
+
+        expect(pc.getValue(id)).toBe("plain");
+        expect(editor.spans).toBeUndefined();
+        expect(editor.position).toBeUndefined();
+    });
+
+    test("omitting position does not move the cursor", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, { text: "hello", ranges: [], position: null });
+
+        expect(pc.getValue(id)).toBe("hello");
+        expect(editor.spans).toEqual([]);
+        expect(editor.position).toBeUndefined();
+    });
+
+    test("ranges with an unparseable accent are skipped, not fatal", () => {
+        const pc = make();
+        const id = pc.addPrompt({ label: "a" });
+        const editor = pc.getEditor(id) as StubEditor;
+
+        pc.setValue(id, {
+            text: "abcdef",
+            ranges: [
+                { start: 0, end: 2, style: "chartreuse" }, // unknown color → skipped
+                { start: 2, end: 4, style: "red" },
+            ],
+        });
+
+        expect(editor.spans).toEqual([
+            {
+                start: 2,
+                end: 4,
+                css: styleToCss(calculateStyle("red", pc.anchors)),
+                inclusiveStart: false,
+                inclusiveEnd: false,
+            },
+        ]);
     });
 });
 

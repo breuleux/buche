@@ -9,11 +9,18 @@ export type Accent = string;
 
 /** A syntax-highlight span over the prompt text */
 export interface HighlightRange {
-    /** Inclusive start offset into the prompt text. */
-    start: number;
+    /**
+     * Inclusive start offset. `null` means the start of the text (offset 0); in
+     * an editable prompt it is an *open* boundary that also absorbs text the user
+     * inserts at the very beginning.
+     */
+    start: number | null;
 
-    /** Exclusive end offset. */
-    end: number;
+    /**
+     * Exclusive end offset. `null` means the end of the text; in an editable
+     * prompt it is an *open* boundary that also absorbs text the user appends.
+     */
+    end: number | null;
 
     /** Style. */
     style: Accent;

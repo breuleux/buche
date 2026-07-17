@@ -43,8 +43,8 @@ prompt-collection {
 .prompt-collection-tab {
 	cursor: pointer;
 	user-select: none;
-	/* The only styling is the label colour (set inline per prompt); the active
-	 * tab is shown at full strength, inactive ones dimmed. */
+	/* Colour is set inline per prompt: the active tab wears its accent, inactive
+	 * tabs are greyed (and further dimmed here via opacity). */
 	opacity: 0.5;
 }
 

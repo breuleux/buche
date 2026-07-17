@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
+import { calculateStyle, styleToCss } from "../../src/color.ts";
 import type { EchoBox } from "../../src/components/echo-box.tsx";
 import "../../src/components/echo-box.tsx";
 
@@ -49,6 +50,38 @@ describe("echo-box — echo text", () => {
         span.textContent = "cmd";
         box.setEcho(span);
         expect(q(box, ".echo-box-echo")?.firstElementChild).toBe(span);
+    });
+
+    test("setEcho accepts a StyledText and renders colorized spans", () => {
+        const box = make();
+        box.setEcho({
+            text: "git commit",
+            ranges: [
+                { start: 0, end: 3, style: "green bold" },
+                { start: 4, end: 10, style: "blue" },
+            ],
+        });
+
+        const echoEl = q(box, ".echo-box-echo")!;
+        // The whole command reads back as text…
+        expect(echoEl.textContent).toBe("git commit");
+        // …built from a .styled-text container with one span per range.
+        const container = echoEl.querySelector(".styled-text")!;
+        const spans = container.querySelectorAll("span");
+        expect(spans.length).toBe(2);
+        expect(spans[0].textContent).toBe("git");
+        expect(spans[0].getAttribute("style")).toBe(
+            styleToCss(calculateStyle("green bold", box.anchors)),
+        );
+        expect(spans[1].textContent).toBe("commit");
+        expect(box.echo).toBe("git commit");
+    });
+
+    test("the echo property accepts a StyledText too", () => {
+        const box = make();
+        box.echo = { text: "ok", ranges: [{ start: 0, end: 2, style: "green" }] };
+        expect(q(box, ".echo-box-echo .styled-text")).not.toBeNull();
+        expect(box.echo).toBe("ok");
     });
 });
 
