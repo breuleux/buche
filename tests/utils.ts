@@ -33,7 +33,7 @@ export class MachinePlayer<In, Out> {
     constructor(machine: Machine<In, Out>, datadir: string) {
         this.machine = machine;
         this.tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), "buche-test-"));
-        this.datadir = datadir;
+        this.datadir = path.join(import.meta.dirname, datadir);
     }
 
     testFiles(testName: string) {
@@ -87,10 +87,18 @@ export class MachinePlayer<In, Out> {
 }
 
 export function* getCases(directory: string) {
-    for (const file of readdirSync(directory)) {
-        const match = file.match(/(.*)\.source\.jsonl$/);
+    const absdir = directory.startsWith("/")
+        ? directory
+        : path.join(import.meta.dirname, directory);
+    for (const filename of readdirSync(absdir)) {
+        const match = filename.match(/(.*)\.source\.jsonl$/);
         if (!match) continue;
 
-        yield match[1];
+        yield {
+            filename,
+            name: match[1],
+            path: path.join(absdir, filename),
+            relpath: path.join(directory, filename),
+        };
     }
 }

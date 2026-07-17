@@ -1,8 +1,6 @@
 import { describe, test } from "node:test";
-import { readdirSync } from "node:fs";
 import { Machine } from "../src/machine.ts"
 import { getCases, MachinePlayer } from "./utils.ts"
-import path from "node:path";
 
 
 interface InM {
@@ -25,13 +23,11 @@ export class SpellMachine extends Machine<InM, OutM> {
 
 
 describe("Sanity check Machine", () => {
-    const machine = new MachinePlayer(
-        new SpellMachine(),
-        path.join(import.meta.dirname, "data/sanity")
-    );
+    const base = "data/sanity";
+    const machine = new MachinePlayer(new SpellMachine(), base);
 
-    for (const name of getCases(machine.datadir)) {
-        test(`Conformity of machine on '${name}.source.jsonl'`, async () => {
+    for (const { name, relpath } of getCases(base)) {
+        test(`Conformity of machine on '${relpath}'`, async () => {
             await machine.test(name);
         });
     }
