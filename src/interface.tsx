@@ -1,3 +1,4 @@
+import type { Buche } from "./core";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
@@ -11,7 +12,7 @@ import { extractZones, type Zone } from "./zone";
 
 export interface Interface {
     interactions: AsyncIterable<IncomingInterfaceMessage | BucheErrorMessage>;
-    processMessage: (message: OutgoingInterfaceMessage) => void;
+    processMessage: (buche: Buche, message: OutgoingInterfaceMessage) => void;
     zones: Array<Zone>;
 }
 
@@ -32,7 +33,7 @@ export class InertInterface implements Interface {
         this.zones = zones;
     }
 
-    processMessage(message: OutgoingInterfaceMessage) {}
+    processMessage(buche: Buche, message: OutgoingInterfaceMessage) {}
 }
 
 function reifyTemplate(template: Element | string): Element {
@@ -60,11 +61,12 @@ export class BucheInterface implements Interface {
         this.zones = extractZones(this.area as HTMLElement);
         this.interactions = new AsyncQueue();
     }
-    processMessage(message: OutgoingInterfaceMessage) {
+    processMessage(buche: Buche, message: OutgoingInterfaceMessage) {
+        type HT = (buche: Buche, m: OutgoingInterfaceMessage) => void
         const handler = this[`handle$${message.type}`];
-        (handler as (m: OutgoingInterfaceMessage) => void)(message);
+        (handler as HT)(buche, message);
     }
-    handle$update_component(message: UpdateComponentMessage) {}
-    handle$cell_command(message: CellCommandMessage) {}
-    handle$problem(message: ProblemMessage) {}
+    handle$update_component(buche: Buche, message: UpdateComponentMessage) {}
+    handle$cell_command(buche: Buche, message: CellCommandMessage) {}
+    handle$problem(buche: Buche, message: ProblemMessage) {}
 }

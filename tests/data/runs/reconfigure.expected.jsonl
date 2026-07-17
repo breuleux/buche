@@ -1,4 +1,4 @@
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"first","background":false}
-{"$role":"interfaceOut","type":"update_component","component":{"zones":{},"cell":"#101"}}
+{"$role":"interfaceOut","type":"update_component","zone":"#100","component":{"zones":{},"cell":"#101"}}
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"second","background":true}
-{"$role":"interfaceOut","type":"update_component","component":{"zones":{},"cell":"#101"}}
+{"$role":"interfaceOut","type":"update_component","zone":"#100","component":{"zones":{},"cell":"#101"}}

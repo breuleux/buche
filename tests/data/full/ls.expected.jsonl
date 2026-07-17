@@ -1,5 +1,5 @@
 {"type":"boot","command":"ls README.md","pause":0}
 {"type":"text","from":[],"to":["$term"],"stream":"stdout","text":"README.md\n","$role":"driverIn"}
-{"type":"update_component","component":{"zones":{},"cell":"#1"},"$role":"interfaceOut"}
+{"type":"update_component","zone":"#0","component":{"zones":{},"cell":"#1"},"$role":"interfaceOut"}
 {"type":"cell_command","command":{"type":"text","stream":"stdout","text":"README.md\n"},"component":{"zones":{},"cell":"#1"},"$role":"interfaceOut"}
 {"type":"close","from":[],"to":["$term"],"outcome":{"type":"success","code":0},"$role":"driverIn"}

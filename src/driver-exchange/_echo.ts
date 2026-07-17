@@ -21,6 +21,7 @@ export function handle$echo(buche: Buche, obj: EchoMessage): void {
     Object.assign(component, { echo });
     buche.sendInterface({
         type: "update_component",
+        zone: zone,
         component: component,
     });
 }

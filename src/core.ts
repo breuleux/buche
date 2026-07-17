@@ -198,6 +198,7 @@ export class Buche {
         }
         this.sendInterface({
             type: "update_component",
+            zone: zone,
             component: component,
         });
         return component;
@@ -284,7 +285,7 @@ export async function bucheRun(args: BucheRunArguments) {
         },
         sendInterface(outMessage: OutgoingInterfaceMessage) {
             args.loggers.interfaceOut?.(outMessage);
-            args.interface.processMessage(outMessage);
+            args.interface.processMessage(buche, outMessage);
         },
     });
     const instream = mergeIterables(
