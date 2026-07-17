@@ -103,10 +103,12 @@ export async function* mergeIterables<T, U>(
 
 export class Hierarchy<T> {
     entry?: T;
+    parent?: Hierarchy<T>;
     children: Record<string, Hierarchy<T>>;
 
-    constructor(entry?: T) {
+    constructor(entry?: T, parent?: Hierarchy<T>) {
         this.entry = entry;
+        this.parent = parent;
         this.children = {};
     }
 
@@ -118,7 +120,7 @@ export class Hierarchy<T> {
                 if (!create) {
                     return null;
                 }
-                child = node.children[segment] = new Hierarchy();
+                child = node.children[segment] = new Hierarchy(undefined, node);
             }
             node = child;
         }
