@@ -1,9 +1,9 @@
 import Ajv, { type ValidateFunction } from "ajv";
-import { handlers, type Message } from "./messages/all.ts";
-import schema from "./messages/message.schema.json" with { type: "json" };
+import { handlers, type IncomingDriverMessage } from "./driver-exchange/incoming.ts";
+import schema from "./driver-exchange/message.schema.json" with { type: "json" };
 import { Buche } from "./core.ts";
 
-export type { Message } from "./messages/all.ts";
+export type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 
 /** Thrown when an incoming object is not a valid Message. */
 export class MessageValidationError extends Error {
@@ -32,7 +32,7 @@ for (const [name, def] of Object.entries((schema as any).definitions ?? {})) {
  * Validate an already-JSON-parsed value and narrow it to a Message.
  * Throws MessageValidationError if it is not a valid, known message.
  */
-export function parse(input: unknown): Message {
+export function parse(input: unknown): IncomingDriverMessage {
     if (typeof input !== "object" || input === null || Array.isArray(input)) {
         throw new MessageValidationError("message must be a JSON object", input);
     }
@@ -47,7 +47,7 @@ export function parse(input: unknown): Message {
     if (!validate(input)) {
         throw new MessageValidationError(ajv.errorsText(validate.errors), input);
     }
-    return input as Message;
+    return input as IncomingDriverMessage;
 }
 
 export class Runner {
@@ -57,8 +57,8 @@ export class Runner {
         this.buche = buche || new Buche();
     }
 
-    handleMessage(msg: Message): Promise<void> {
-        return (handlers as Record<Message["type"], (b: Buche, m: Message) => Promise<void>>)[
+    handleMessage(msg: IncomingDriverMessage): Promise<void> {
+        return (handlers as Record<IncomingDriverMessage["type"], (b: Buche, m: IncomingDriverMessage) => Promise<void>>)[
             msg.type
         ](this.buche, msg);
     }

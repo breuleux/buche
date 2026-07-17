@@ -1,7 +1,7 @@
 /**
- * Generates, from the `_xxx.ts` files in src/messages:
- *   - src/messages/all.ts          — imports + `handlers` registry + `Message` union
- *   - src/messages/message.schema.json — JSON Schema for `Message`, for
+ * Generates, from the `_xxx.ts` files in src/driver-exchange:
+ *   - src/driver-exchange/incoming.ts          — imports + `handlers` registry + `Message` union
+ *   - src/driver-exchange/incoming.schema.json — JSON Schema for `Message`, for
  *     cross-language clients. JSDoc comments become `description` fields.
  *
  * Each `_xxx.ts` file must export:
@@ -19,9 +19,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
-const MESSAGES_DIR = join(ROOT, "src", "messages");
-const ALL_FILE = join(MESSAGES_DIR, "all.ts");
-const SCHEMA_FILE = join(MESSAGES_DIR, "message.schema.json");
+const MESSAGES_DIR = join(ROOT, "src", "driver-exchange");
+const ALL_FILE = join(MESSAGES_DIR, "incoming.ts");
+const SCHEMA_FILE = join(MESSAGES_DIR, "incoming.schema.json");
 
 /** snake_case -> PascalCase, e.g. "foo_bar" -> "FooBar" */
 function toPascal(name: string): string {
@@ -103,7 +103,7 @@ if (errors.length > 0) {
     process.exit(1);
 }
 
-// ---- Emit all.ts -----------------------------------------------------------
+// ---- Emit incoming.ts -----------------------------------------------------------
 
 const imports = entries
     .map((e) => `import { ${e.handler}, type ${e.iface} } from "${e.module}";`)
@@ -122,23 +122,23 @@ ${registry}
 } as const;
 
 /** Union of every message type. */
-export type Message = ${union};
+export type IncomingDriverMessage = ${union};
 `;
 
 writeFileSync(ALL_FILE, allOutput);
 
-// ---- Emit message.schema.json ---------------------------------------------
+// ---- Emit incoming.schema.json ---------------------------------------------
 
 const generator = createGenerator({
     path: ALL_FILE,
     tsconfig: join(ROOT, "tsconfig.json"),
-    type: "Message",
+    type: "IncomingDriverMessage",
     jsDoc: "extended", // carry JSDoc comments into `description` fields
     additionalProperties: false, // reject unknown properties
     topRef: true,
 });
 
-const schema = generator.createSchema("Message");
+const schema = generator.createSchema("IncomingDriverMessage");
 writeFileSync(SCHEMA_FILE, JSON.stringify(schema, null, 2) + "\n");
 
 console.log(

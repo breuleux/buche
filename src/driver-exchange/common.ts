@@ -10,12 +10,9 @@ export type Json =
 
 
 export type Address = [string];
+export type To = Address;
 
 export type ZoneDescriptor = string;
-
-export interface To {
-    target: string;
-}
 
 export interface BaseMessage {
     /** Type of the message. */

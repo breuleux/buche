@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/Message",
+  "$ref": "#/definitions/IncomingDriverMessage",
   "definitions": {
-    "Message": {
+    "IncomingDriverMessage": {
       "anyOf": [
         {
           "$ref": "#/definitions/CellConfigureMessage"
@@ -36,7 +36,7 @@
           "const": "cell_configure",
           "description": "Type of the message."
         },
-        "address": {
+        "from": {
           "$ref": "#/definitions/Address",
           "description": "Address of the issuing process."
         },
@@ -46,7 +46,7 @@
         }
       },
       "required": [
-        "address",
+        "from",
         "to",
         "type"
       ],
@@ -61,16 +61,7 @@
       "maxItems": 1
     },
     "To": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "target"
-      ],
-      "additionalProperties": false
+      "$ref": "#/definitions/Address"
     },
     "CellCreateMessage": {
       "type": "object",
@@ -95,7 +86,7 @@
           "const": "cell_create",
           "description": "Type of the message."
         },
-        "address": {
+        "from": {
           "$ref": "#/definitions/Address",
           "description": "Address of the issuing process."
         },
@@ -104,7 +95,7 @@
           "description": "Target of the message."
         },
         "mode": {
-          "$ref": "#/definitions/CellMode",
+          "type": "string",
           "description": "Which cell handler to instantiate. Unknown modes are ignored with an error."
         },
         "prompt_id": {
@@ -115,33 +106,24 @@
           "description": "Associates the cell with an existing prompt."
         },
         "zone": {
-          "$ref": "#/definitions/ZoneDescriptor",
-          "description": "Which handler to instantiate. Unknown modes are ignored with an error."
-        },
-        "echo_html": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ZoneDescriptor"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Inline HTML echo of the command line, shown in the cell header."
+          "description": "Which zone to put the cell in."
         }
       },
       "required": [
-        "address",
+        "from",
         "mode",
         "to",
         "type"
       ],
       "additionalProperties": false
-    },
-    "CellMode": {
-      "type": "string",
-      "enum": [
-        "text",
-        "term",
-        "auto",
-        "data"
-      ]
     },
     "ZoneDescriptor": {
       "type": "string"

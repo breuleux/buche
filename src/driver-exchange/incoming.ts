@@ -10,4 +10,4 @@ export const handlers = {
 } as const;
 
 /** Union of every message type. */
-export type Message = CellConfigureMessage | CellCreateMessage;
+export type IncomingDriverMessage = CellConfigureMessage | CellCreateMessage;
