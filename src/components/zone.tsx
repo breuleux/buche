@@ -52,34 +52,20 @@ export function zoneMap(zones: Array<Zone>): Record<string, Zone> {
 }
 
 export class Zone extends WithId(HTMLElement) {
-    parent?: Zone;
     // Names given explicitly to the constructor. When absent (e.g. the element
     // was upgraded from declarative markup like `<tabbed-zone names="left">`),
     // the `names` getter falls back to the `names` attribute.
-    private _names?: Array<string>;
+    names: Array<string>;
 
-    constructor(name?: string | Array<string>, parent?: Zone) {
+    constructor(name?: string | Array<string>) {
         super();
         if (name !== undefined) {
-            this._names = typeof name === "string" ? name.split(/ +/) : [...name];
+            this.names = typeof name === "string" ? name.split(/ +/) : [...name];
+        } else {
+            this.names = [];
         }
-        this.parent = parent;
+        this.names.push(`Z${this.serialId}`);
     }
-
-    effectiveZone(element: Cell | Prompt) {
-        return this;
-    }
-    get names(): Array<string> {
-        const base =
-            this._names ?? this.getAttribute?.("names")?.split(/ +/).filter(Boolean) ?? [];
-        // The auto-generated `Z<id>` name is always addressable.
-        return [...base, `Z${this.serialId}`];
-    }
-
-    set names(value: Array<string>) {
-        this._names = value;
-    }
-
 }
 
 export class TabbedZone extends Zone {}
@@ -88,14 +74,7 @@ export class LogZone extends Zone {}
 
 export class SingletonZone extends Zone {}
 
-export class PromptZone extends Zone {
-    constructor(name: string | Array<string>, parent?: Zone) {
-        super(name, parent);
-        while (this.parent instanceof PromptZone) {
-            this.parent = this.parent.parent;
-        }
-    }
-}
+export class PromptZone extends Zone {}
 
 if (typeof customElements !== "undefined") {
     if (!customElements.get("tabbed-zone")) {

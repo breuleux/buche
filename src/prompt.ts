@@ -1,6 +1,6 @@
 import type { Address, HighlightRange } from "./driver-exchange/common.ts";
 import { WithId } from "./utils.ts";
-import { PromptZone, type Zone } from "./zone.ts";
+import { PromptZone } from "./zone.ts";
 
 export type PromptBindings = Record<string, string>;
 
@@ -33,7 +33,6 @@ export interface PromptConfiguration {
 }
 
 export class Prompt extends WithId() implements PromptConfiguration {
-    zone: Zone;
     address: Address;
 
     label?: string | null;
@@ -41,18 +40,18 @@ export class Prompt extends WithId() implements PromptConfiguration {
     color?: PromptColor;
     prompt_html?: string;
 
-    constructor(config: PromptConfiguration, location: { zone: Zone; address: Address }) {
+    zones: { main: PromptZone };
+
+    constructor(config: PromptConfiguration, location: { address: Address }) {
         super();
-        this.zone = location.zone;
         this.address = location.address;
         this.configure(config);
+        this.zones = {
+            main: new PromptZone("@"),
+        };
     }
 
     configure(config: PromptConfiguration): void {
         Object.assign(this, config);
-    }
-
-    makeZones(parentZone: Zone): Array<Zone> {
-        return [new PromptZone("@", parentZone)];
     }
 }

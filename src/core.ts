@@ -184,16 +184,18 @@ export class Buche {
             if (component.cell) {
                 component.cell.configure(obj);
             } else {
-                const cell = new Cell(obj, { zone, address: obj.from });
+                const cell = new Cell(obj, { address: obj.from });
                 cell.prompt = parentPrompt;
-                Object.assign(component, { cell, zones: zoneMap(cell.makeZones(zone)) });
+                component.cell = cell;
+                component.zones = zoneMap(Object.values(cell.zones));
             }
         } else {
             if (component.prompt) {
                 component.prompt.configure(obj);
             } else {
-                const prompt = new Prompt(obj, { zone, address: obj.from });
-                Object.assign(component, { prompt, zones: zoneMap(prompt.makeZones(zone)) });
+                const prompt = new Prompt(obj, { address: obj.from });
+                component.prompt = prompt;
+                component.zones = zoneMap(Object.values(prompt.zones));
             }
         }
         this.sendInterface({
