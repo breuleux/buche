@@ -17,6 +17,7 @@ export const incomingDriverMessageTypes = new Set<string>([
 /** Message `type` names for driver outgoing messages. */
 export const outgoingDriverMessageTypes = new Set<string>([
     "command",
+    "data",
     "parse",
     "resize",
     "signal",
@@ -26,6 +27,7 @@ export const outgoingDriverMessageTypes = new Set<string>([
 
 /** Message `type` names for interface incoming messages. */
 export const incomingInterfaceMessageTypes = new Set<string>([
+    "cell_gui_feedback",
     "user_command",
     "user_focus",
     "user_input",

@@ -1004,11 +1004,13 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.updateControlsState();
     }
 
-    /** Switch to a view. No-op for a view that doesn't exist. */
+    /** Switch to a view. No-op for a view that doesn't exist, or that is
+     *  already active. Asks the focus manager to commit again, so a box that
+     *  has the focus passes it to the newly active view's content. */
     showView(lbl: ViewLabel): void {
         this.ensureSetup();
         const entry = this.viewMap.get(lbl);
-        if (!entry) {
+        if (!entry || this._activeView === lbl) {
             return;
         }
         this._activeView = lbl;
@@ -1024,6 +1026,9 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
                 bubbles: true,
             }),
         );
+        // The focused box may now pass its focus to the content shown (see
+        // setView and focus.ts).
+        this.dispatchEvent(new Event("focus-commit-request", { bubbles: true }));
     }
 
     /** The content container for a view, or null if unknown. */

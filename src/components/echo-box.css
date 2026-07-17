@@ -434,8 +434,12 @@ echo-box[compact][data-alt] .echo-box-handle {
 }
 
 /* ── Focus (focus.ts) ──────────────────────────────────────────────────────
- * The focused cell (the FocusManager's `focused` attribute) is highlighted:
- * the gutter bar widens and brightens and the background lightens a touch.
+ * The focused cell is highlighted: the gutter bar widens and brightens and
+ * the background lightens a touch. The highlight follows the cell, not the
+ * active view: with the pty active the box itself is the focus leaf
+ * (`focused`); with the GUI active the leaf is the <buche-gui> inside it and
+ * the box is on the `focus-path` — both read as focused here, so switching
+ * views does not change the cell's look.
  * The box itself takes the DOM focus while navigated onto, without the
  * browser's own outline. */
 echo-box:focus {
@@ -445,24 +449,29 @@ echo-box:focus {
 /* #262626 = the default background (#1c1c1c) lightened by ~4.5% white; solid
  * so the embedded terminal can match it exactly (its canvas background comes
  * from a colour, not from compositing). */
-echo-box[focused] {
+echo-box[focused],
+echo-box[focus-path] {
 	--echo-bg: #262626;
 	background: #262626;
 }
 
 echo-box[focused] .echo-box-gutter::before,
-echo-box[focused] .echo-box-status {
+echo-box[focused] .echo-box-status,
+echo-box[focus-path] .echo-box-gutter::before,
+echo-box[focus-path] .echo-box-status {
 	filter: brightness(1.35);
 }
 
-echo-box[focused] .echo-box-gutter::before {
+echo-box[focused] .echo-box-gutter::before,
+echo-box[focus-path] .echo-box-gutter::before {
 	width: 4px;
 }
 
 /* embedded-term declares its own --embedded-term-bg, so the cascade needs to
  * target the element itself; embedded-term.tsx's refreshBackground() pushes
  * the same colour into the xterm theme. */
-echo-box[focused] embedded-term {
+echo-box[focused] embedded-term,
+echo-box[focus-path] embedded-term {
 	--embedded-term-bg: #262626;
 }
 

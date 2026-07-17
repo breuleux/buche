@@ -17,6 +17,9 @@
           "$ref": "#/definitions/TextRequest"
         },
         {
+          "$ref": "#/definitions/DataRequest"
+        },
+        {
           "$ref": "#/definitions/ResizeRequest"
         },
         {
@@ -133,6 +136,55 @@
       },
       "required": ["from", "stream", "text", "to", "type"],
       "additionalProperties": false
+    },
+    "DataRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "data"
+        },
+        "from": {
+          "$ref": "#/definitions/Address"
+        },
+        "to": {
+          "$ref": "#/definitions/Address"
+        },
+        "data": {
+          "$ref": "#/definitions/Json",
+          "description": "Arbitrary JSON relayed from the interface (a GUI cell message, a `proc://` request, an exec response, ...)."
+        }
+      },
+      "required": ["data", "from", "to", "type"],
+      "additionalProperties": false
+    },
+    "Json": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Json"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Json"
+          }
+        }
+      ]
     },
     "ResizeRequest": {
       "type": "object",

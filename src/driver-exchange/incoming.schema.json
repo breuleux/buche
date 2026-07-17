@@ -37,6 +37,9 @@
     "CellConfigureMessage": {
       "type": "object",
       "properties": {
+        "mode": {
+          "$ref": "#/definitions/CellMode"
+        },
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
@@ -107,6 +110,14 @@
         "type"
       ],
       "additionalProperties": false
+    },
+    "CellMode": {
+      "type": "string",
+      "enum": [
+        "split",
+        "unified"
+      ],
+      "description": "Cell view layout.\n- `\"split\"`: `text` commands go to the terminal view, GUI commands to the   GUI view (the two are switchable).\n- `\"unified\"`: no terminal; `text` commands are sent to the GUI as a   special case of the `data` command (schema `\"buche:text\"`)."
     },
     "SubmissionConfiguration": {
       "type": "object",
@@ -268,6 +279,21 @@
         },
         {
           "$ref": "#/definitions/ExecCommand"
+        },
+        {
+          "$ref": "#/definitions/HtmlCommand"
+        },
+        {
+          "$ref": "#/definitions/RegisterCommand"
+        },
+        {
+          "$ref": "#/definitions/RegisterSchemasCommand"
+        },
+        {
+          "$ref": "#/definitions/ResolveCommand"
+        },
+        {
+          "$ref": "#/definitions/ResponseCommand"
         }
       ]
     },
@@ -345,12 +371,157 @@
           "const": "exec"
         },
         "code": {
-          "type": "string"
+          "type": "string",
+          "description": "JavaScript to execute. Evaluated as an expression when `response_id` is set (the value is sent back); as statements otherwise."
+        },
+        "selector": {
+          "type": "string",
+          "description": "CSS selector of the targets; `code` runs once per target, with `this` bound to it."
+        },
+        "response_id": {
+          "type": "string",
+          "description": "If set, the GUI responds with a `response` carrying the result (or error)."
         }
       },
       "required": [
         "type",
         "code"
+      ],
+      "additionalProperties": false
+    },
+    "HtmlCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "html"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "append",
+            "set",
+            "replace"
+          ],
+          "description": "How to inject the content; defaults to \"append\"."
+        },
+        "selector": {
+          "type": "string",
+          "description": "CSS selector of the injection targets; defaults to the document body."
+        },
+        "content": {
+          "type": "string",
+          "description": "HTML to inject (scripts in it are re-created so they execute)."
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "RegisterCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "register"
+        },
+        "handlers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Message type -> handler source, e.g. `{\"foo\": \"(msg) => {...}\"}`."
+        }
+      },
+      "required": [
+        "type",
+        "handlers"
+      ],
+      "additionalProperties": false
+    },
+    "RegisterSchemasCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "register_schemas"
+        },
+        "schemas": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Schema spec (e.g. `\"buche:plain\"`) -> handler source for `data` payloads."
+        }
+      },
+      "required": [
+        "type",
+        "schemas"
+      ],
+      "additionalProperties": false
+    },
+    "ResolveCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "resolve"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Correlates with the GUI's original resource request; when absent, the command pre-pushes the resource into the GUI's cache under `path`."
+        },
+        "path": {
+          "type": "string",
+          "description": "Resource path (cache push when there is no `request_id`)."
+        },
+        "status": {
+          "type": "number",
+          "description": "HTTP-like status for the resolution (e.g. 200/404)."
+        },
+        "content": {
+          "type": "string",
+          "description": "Resource body; text or base64 depending on `encoding`."
+        },
+        "mimetype": {
+          "type": "string",
+          "description": "MIME type of `content`."
+        },
+        "encoding": {
+          "type": "string",
+          "description": "Encoding of `content`, e.g. `\"utf-8\"` or `\"base64\"`."
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "ResponseCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "response"
+        },
+        "response_id": {
+          "type": "string",
+          "description": "Correlates with the request (`buche.request`, or an `exec` with a `response_id`) this answers."
+        },
+        "value": {
+          "$ref": "#/definitions/Json",
+          "description": "Result value of a successful request."
+        },
+        "error": {
+          "type": "string",
+          "description": "Error description of a failed request."
+        }
+      },
+      "required": [
+        "type",
+        "response_id"
       ],
       "additionalProperties": false
     },
@@ -376,7 +547,7 @@
         },
         "propagate": {
           "type": "boolean",
-          "description": "Whether the close also ends everything *below* the closed address (default true — a process's exit ends its `$main` cell, its nested subprocesses, everything addressed beneath it). False marks the closed entry alone: a shell closing its prompt (`$proc.cq`) must not sweep the processes still running under it (`$proc.cq.<id>`, its descendants in the address tree)."
+          "description": "Whether the status change propagates to subaddresses."
         }
       },
       "required": [

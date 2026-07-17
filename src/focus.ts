@@ -768,17 +768,28 @@ export class FocusManager {
     };
 
     // Deferred to a microtask, so the requester can finish setting up the new
-    // content (e.g. size a terminal) before the focus moves into it.
+    // content (e.g. size a terminal) before the focus moves into it. Requests
+    // arriving in the same task coalesce into a single commit (setting a view
+    // both switches and fills it).
+    private commitRequests = new Set<Node>();
+    private commitPending = false;
     private onCommitRequest = (e: Event): void => {
-        const target = e.target;
+        if (e.target instanceof Node) {
+            this.commitRequests.add(e.target);
+        }
+        if (this.commitPending) {
+            return;
+        }
+        this.commitPending = true;
         queueMicrotask(() => {
+            this.commitPending = false;
+            const wanted = [...this.commitRequests];
+            this.commitRequests.clear();
             const current = this.current;
-            if (
-                current &&
-                target instanceof Node &&
-                current.contains(target) &&
-                !this.holdCommits
-            ) {
+            if (!current || this.holdCommits) {
+                return;
+            }
+            if (wanted.some((t) => current.contains(t))) {
                 this.commitFocus();
             }
         });

@@ -1,3 +1,4 @@
+import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection, PromptCommandDetail } from "./components/prompt-collection.tsx";
 import { showToast } from "./components/toast.ts";
@@ -16,6 +17,7 @@ import type {
     UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
 import { type KeyHandler, ModalKeys } from "./keybindings.ts";
+import type { Json } from "./types.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 import type { Zone } from "./zone";
@@ -94,6 +96,88 @@ export class BucheInterface implements Interface {
         this.interactions = new AsyncQueue();
         this.focus = new FocusManager(this.container as HTMLElement);
         this.keys = this.installKeys();
+        this.installGuiRelay();
+    }
+
+    // ── GUI relay ─────────────────────────────────────────────────────────────
+    // Messages a cell's <buche-gui> iframe relays out (`buche(data)`,
+    // `buche.request`, exec results, `proc://` requests) are pushed into the
+    // interactions as cell_gui_feedback, which routes them back to the entry's
+    // process.
+
+    private installGuiRelay(): void {
+        this.container.addEventListener(GUI_SEND_EVENT, (e: Event) => {
+            const el = e.target;
+            if (!(el instanceof Element)) {
+                return;
+            }
+            const entry = this.guiEntry(el);
+            if (entry) {
+                this.interactions.push({
+                    type: "cell_gui_feedback",
+                    entry,
+                    data: (e as CustomEvent).detail,
+                });
+            }
+        });
+        // A GUI view that just came into existence takes the focus (unless
+        // its cell is background, or a navigation is mid-capture).
+        this.container.addEventListener(GUI_APPEAR_EVENT, (e: Event) => {
+            const el = e.target;
+            if (!(el instanceof HTMLElement)) {
+                return;
+            }
+            const entry = this.guiEntry(el);
+            if (entry?.echo.background) {
+                return;
+            }
+            this.focus.focus(el, "auto");
+            if (!this.focus.holdCommits) {
+                this.focus.commitFocus();
+            }
+        });
+        // In Electron, `proc://` requests answered by the natively registered
+        // scheme are relayed from the main process by the preload bridge (see
+        // electron/preload.ts); route them like any other GUI message.
+        window.addEventListener("message", (e: MessageEvent) => {
+            if (e.source !== window) {
+                return;
+            }
+            const d = e.data as {
+                __buche?: string;
+                cellId?: string;
+                requestId?: string;
+                path?: string;
+                params?: Json;
+                method?: string;
+            } | null;
+            if (d?.__buche !== "proc:request" || !d.cellId) {
+                return;
+            }
+            const gui = this.container.querySelector(`buche-gui[proc-cell-id="${d.cellId}"]`);
+            const entry = gui ? this.guiEntry(gui) : null;
+            if (!entry) {
+                return;
+            }
+            this.interactions.push({
+                type: "cell_gui_feedback",
+                entry,
+                data: {
+                    type: "resolve",
+                    request_id: d.requestId ?? "",
+                    path: d.path ?? "/",
+                    params: d.params ?? {},
+                    method: d.method ?? "GET",
+                },
+            });
+        });
+    }
+
+    /** The entry of the cell showing the given GUI element: the entry bound
+     *  to the <echo-box> it lives in. */
+    private guiEntry(el: Element): Entry | null {
+        const box = el.closest("echo-box");
+        return box instanceof EchoBox ? box.boundEntry : null;
     }
 
     // ── Global key bindings ───────────────────────────────────────────────────
@@ -152,6 +236,10 @@ export class BucheInterface implements Interface {
             },
         });
         keys.attach(this.container);
+        // Every GUI iframe hands the capture-mode chord to the page: Ctrl+Q
+        // typed inside a GUI escapes the iframe and enters nav mode, exactly
+        // as it does elsewhere.
+        BucheGui.defaultInterceptChords = () => [keys.enter];
         return keys;
     }
 
@@ -214,7 +302,14 @@ export class BucheInterface implements Interface {
         if (target && fm.currentTags.includes("prompt")) {
             target = fm.find(target, "up", "neighbour");
         }
-        return target instanceof EchoBox ? target : null;
+        if (target instanceof EchoBox) {
+            return target;
+        }
+        // The focus may sit on something inside the cell rather than the cell
+        // itself — e.g. the <buche-gui> host, which takes it when a chord
+        // escapes the iframe (Ctrl+Q). Cell actions apply to its box.
+        const box = target?.closest("echo-box");
+        return box instanceof EchoBox ? box : null;
     }
 
     /** SIGTERM (SIGKILL when already unresponsive) to the target cell, like

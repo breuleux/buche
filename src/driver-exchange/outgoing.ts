@@ -1,5 +1,5 @@
 import type { SyncMessage } from "./_sync.ts";
-import type { Address } from "./common.ts";
+import type { Address, Json } from "./common.ts";
 
 export interface BaseRequest {
     type: string;
@@ -50,6 +50,14 @@ export interface TextRequest extends BaseRequest {
     text: string;
 }
 
+export interface DataRequest extends BaseRequest {
+    type: "data";
+
+    /** Arbitrary JSON relayed from the interface (a GUI cell message, a
+     *  `proc://` request, an exec response, ...). */
+    data: Json;
+}
+
 export interface ResizeRequest extends BaseRequest {
     type: "resize";
 
@@ -74,5 +82,6 @@ export type OutgoingDriverMessage =
     | CommandRequest
     | SignalRequest
     | TextRequest
+    | DataRequest
     | ResizeRequest
     | SyncRequest;
