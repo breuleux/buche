@@ -5,13 +5,122 @@
     "IncomingInterfaceMessage": {
       "anyOf": [
         {
+          "$ref": "#/definitions/UserCommandMessage"
+        },
+        {
           "$ref": "#/definitions/UserFocusMessage"
         },
         {
-          "$ref": "#/definitions/UserPromptMessage"
+          "$ref": "#/definitions/UserInputMessage"
         }
       ],
       "description": "Union of every message type."
+    },
+    "UserCommandMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "user_command"
+        },
+        "prompt": {
+          "$ref": "#/definitions/Prompt"
+        },
+        "text": {
+          "type": "string"
+        },
+        "position": {
+          "type": "number"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "prompt",
+        "text",
+        "position",
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "Prompt": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The prompt/tab label."
+        },
+        "bindings": {
+          "$ref": "#/definitions/PromptBindings",
+          "description": "Key-chord → action-name map for this prompt."
+        },
+        "color": {
+          "$ref": "#/definitions/PromptColor",
+          "description": "Accent color for the prompt."
+        },
+        "prompt_html": {
+          "type": "string",
+          "description": "HTML for the prompt's leading label/marker."
+        },
+        "_id": {
+          "type": "number"
+        },
+        "zone": {
+          "$ref": "#/definitions/Zone"
+        },
+        "address": {
+          "$ref": "#/definitions/Address"
+        }
+      },
+      "required": [
+        "_id",
+        "address",
+        "zone"
+      ],
+      "additionalProperties": false
+    },
+    "PromptBindings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "PromptColor": {
+      "type": "object",
+      "properties": {
+        "hue": {
+          "type": "number",
+          "description": "OKLCH hue"
+        },
+        "chroma": {
+          "type": "number",
+          "description": "OKLCH chroma"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Zone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_id": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "_id"
+      ]
+    },
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "UserFocusMessage": {
       "type": "object",
@@ -26,16 +135,28 @@
       ],
       "additionalProperties": false
     },
-    "UserPromptMessage": {
+    "UserInputMessage": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "user_prompt"
+          "const": "user_input"
+        },
+        "prompt": {
+          "$ref": "#/definitions/Prompt"
+        },
+        "text": {
+          "type": "string"
+        },
+        "position": {
+          "type": "number"
         }
       },
       "required": [
-        "type"
+        "type",
+        "prompt",
+        "text",
+        "position"
       ],
       "additionalProperties": false
     }

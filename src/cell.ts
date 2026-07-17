@@ -1,4 +1,4 @@
-import type { Json } from "./driver-exchange/common.ts";
+import type { Address, Json } from "./driver-exchange/common.ts";
 import type { Prompt } from "./prompt.ts";
 import { IdClass } from "./utils.ts";
 import type { Zone } from "./zone.ts";
@@ -39,14 +39,16 @@ export class Echo extends IdClass {
 export class Cell extends IdClass implements CellConfiguration {
     prompt: Prompt | null = null;
     zone: Zone;
+    address: Address;
 
     label?: string | null;
     sticky?: boolean;
     background?: boolean;
 
-    constructor(config: CellConfiguration, zone: Zone) {
+    constructor(config: CellConfiguration, location: { zone: Zone; address: Address }) {
         super();
-        this.zone = zone;
+        this.zone = location.zone;
+        this.address = location.address;
         this.configure(config);
     }
     configure(config: CellConfiguration) {

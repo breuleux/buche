@@ -155,7 +155,7 @@
           "description": "Target of the message."
         },
         "message": {
-          "$ref": "#/definitions/CellMessage",
+          "$ref": "#/definitions/CellCommand",
           "description": "Message to send to the cell."
         }
       },
@@ -167,100 +167,54 @@
       ],
       "additionalProperties": false
     },
-    "CellMessage": {
+    "CellCommand": {
       "anyOf": [
         {
-          "$ref": "#/definitions/ExecCellMessage"
+          "$ref": "#/definitions/TextCommand"
         },
         {
-          "$ref": "#/definitions/TextMessage"
+          "$ref": "#/definitions/DataCommand"
         },
         {
-          "$ref": "#/definitions/DataMessage"
+          "$ref": "#/definitions/ExecCommand"
         }
       ]
     },
-    "ExecCellMessage": {
+    "TextCommand": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "exec"
+          "const": "text"
         },
-        "code": {
+        "stream": {
+          "type": "string"
+        },
+        "text": {
           "type": "string"
         }
       },
       "required": [
         "type",
-        "code"
-      ],
-      "additionalProperties": false
-    },
-    "TextMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "text",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "stream": {
-          "type": "string",
-          "enum": [
-            "stdout",
-            "stderr"
-          ],
-          "description": "Stream on which the message was sent."
-        },
-        "text": {
-          "type": "string",
-          "description": "Text that was sent."
-        }
-      },
-      "required": [
-        "from",
         "stream",
-        "text",
-        "to",
-        "type"
+        "text"
       ],
       "additionalProperties": false
     },
-    "DataMessage": {
+    "DataCommand": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "data",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
+          "const": "data"
         },
         "data": {
-          "$ref": "#/definitions/Json",
-          "description": "The data."
+          "$ref": "#/definitions/Json"
         }
       },
       "required": [
-        "data",
-        "from",
-        "to",
-        "type"
+        "type",
+        "data"
       ],
       "additionalProperties": false
     },
@@ -292,6 +246,23 @@
         }
       ],
       "description": "Any JSON-serializable value (payloads exchanged over the FDs)."
+    },
+    "ExecCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "exec"
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "code"
+      ],
+      "additionalProperties": false
     },
     "CloseMessage": {
       "type": "object",
@@ -343,6 +314,35 @@
       ],
       "additionalProperties": false,
       "description": "Outcome of a process that has terminated."
+    },
+    "DataMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "data",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "data": {
+          "$ref": "#/definitions/Json",
+          "description": "The data."
+        }
+      },
+      "required": [
+        "data",
+        "from",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
     },
     "EchoMessage": {
       "type": "object",
@@ -548,6 +548,44 @@
       "required": [
         "from",
         "nonce",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "TextMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "stream": {
+          "type": "string",
+          "enum": [
+            "stdout",
+            "stderr"
+          ],
+          "description": "Stream on which the message was sent."
+        },
+        "text": {
+          "type": "string",
+          "description": "Text that was sent."
+        }
+      },
+      "required": [
+        "from",
+        "stream",
+        "text",
         "to",
         "type"
       ],

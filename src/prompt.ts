@@ -1,3 +1,4 @@
+import type { Address } from "./driver-exchange/common.ts";
 import { IdClass } from "./utils.ts";
 import { Zone } from "./zone.ts";
 
@@ -27,15 +28,17 @@ export interface PromptConfiguration {
 
 export class Prompt extends IdClass implements PromptConfiguration {
     zone: Zone;
+    address: Address;
 
     label?: string | null;
     bindings?: PromptBindings;
     color?: PromptColor;
     prompt_html?: string;
 
-    constructor(config: PromptConfiguration, zone: Zone) {
+    constructor(config: PromptConfiguration, location: { zone: Zone; address: Address }) {
         super();
-        this.zone = zone;
+        this.zone = location.zone;
+        this.address = location.address;
         this.configure(config);
     }
     configure(config: PromptConfiguration): void {

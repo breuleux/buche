@@ -12,7 +12,7 @@ export async function* handle$cell_create(
 ): AsyncIterable<OutM> {
     const component = buche.fresh(obj.from);
     const { prompt, zone } = buche.findPlace(obj);
-    const cell = new Cell(obj, zone);
+    const cell = new Cell(obj, { zone, address: obj.from });
     cell.prompt = prompt;
     cell.zone = zone;
     Object.assign(component, { cell, zones: cell.makeZones() });

@@ -12,7 +12,7 @@ export async function* handle$prompt_create(
 ): AsyncIterable<OutM> {
     const component = buche.fresh(obj.from);
     const { zone } = buche.findPlace(obj);
-    const prompt = new Prompt(obj, zone);
+    const prompt = new Prompt(obj, { zone, address: obj.from });
     Object.assign(component, { prompt, zones: prompt.makeZones() });
     yield {
         type: "install_prompt",
