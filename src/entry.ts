@@ -1,6 +1,7 @@
 import type { Cell } from "./cell";
-import { Echo } from "./echo";
+import { Echo, type Status } from "./echo";
 import type { Prompt } from "./prompt";
+import type { Address } from "./types";
 import { Hierarchy, type HierarchyArgs } from "./utils";
 import { type Zone, zoneMap } from "./zone";
 
@@ -12,15 +13,14 @@ export class Entry extends Hierarchy {
     echo: Echo;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
-    /** Zones this entry defines (e.g. its prompt's "@"), by name. */
+    /** Zones this entry defines (e.g. its prompt's "@") or inherits, by name. */
     zones: Record<string, Zone> = {};
     /**
-     * The zone this entry's prompt or cell was placed in, if any. Zone lookups
-     * from its descendants consider that zone's names too (see
-     * Buche.findPlace), so that e.g. a sub-shell living in some zone finds
-     * the zones there before those elsewhere.
+     * The address of the entry this one stands for (set by `cell_configure`).
+     * While set, the entry's status mirrors the represented entry's, and user
+     * interactions (signal, input, resize) are routed to its address.
      */
-    placement: Zone | null = null; // INELEGANCE: I would like all this logic to be in zone
+    represents: Address | null = null;
 
     /** Listeners */
     listeners: Array<(entry: this) => void> = [];
@@ -48,6 +48,22 @@ export class Entry extends Hierarchy {
         Object.assign(this.zones, zoneMap(Object.values(prompt.zones)));
     }
 
+    /**
+     * The entry named by {@link Entry.represents}, resolved from the root of
+     * the hierarchy; null when `represents` is unset or names no existing
+     * entry.
+     */
+    representative(): Entry | null {
+        if (this.represents === null) {
+            return null;
+        }
+        let root: Entry = this;
+        while (root.parent) {
+            root = root.parent;
+        }
+        return root.getAt(this.represents);
+    }
+
     fire() {
         for (const listener of this.listeners) {
             listener(this);
@@ -55,11 +71,30 @@ export class Entry extends Hierarchy {
     }
 
     toJSON() {
-        return {
+        const json: Record<string, unknown> = {
             echo: this.echo,
             cell: this.cell,
             prompt: this.prompt,
             zones: this.zones,
         };
+        if (this.represents !== null) {
+            json.represents = this.represents;
+        }
+        return json;
     }
+}
+
+/**
+ * The status an entry displays: its represented entry's when it represents a
+ * live one (the represented entry is the process; the cell or prompt is its
+ * handle), its own otherwise — including when `represents` names no existing
+ * entry or an entry nothing ever configured (status `absent`), which means
+ * there is no process to mirror yet.
+ */
+export function statusOf(entry: Entry): Status {
+    const rep = entry.representative();
+    if (rep === null || rep.echo.status.status === "absent") {
+        return entry.echo.status;
+    }
+    return rep.echo.status;
 }

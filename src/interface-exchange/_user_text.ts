@@ -11,11 +11,13 @@ export interface UserTextMessage {
 }
 
 export function handle$user_text(buche: Buche, obj: UserTextMessage): void {
+    // Input reaches the represented entry (the process), not the cell itself.
+    const target = obj.entry.representative() ?? obj.entry;
     buche.sendDriver({
         type: "text",
         stream: "stdin",
         text: obj.text,
         from: ["$term"],
-        to: obj.entry.echo.address,
+        to: target.echo.address,
     });
 }

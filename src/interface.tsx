@@ -9,7 +9,6 @@ import { type Direction, FocusManager, type NavigationMode } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
-    InstallEchoMessage,
     OutgoingInterfaceMessage,
     ProblemMessage,
     UpdateCellMessage,
@@ -236,14 +235,14 @@ export class BucheInterface implements Interface {
     }
 
     // ── Automatic focus ───────────────────────────────────────────────────────
-    // A prompt command gets an id, which the driver repeats on the echo it
-    // produces in response; the echo's element (see echoElementId) is then
+    // A prompt command gets an id, which the driver repeats on the cell it
+    // produces in response; the cell's element (see echoElementId) is then
     // expected, and takes the focus when it appears unless the focus moved in
-    // the meantime, or the echo is `background`. When the focused cell's
-    // process ends, the focus goes back to where it was, unless the echo is
+    // the meantime, or the cell is `background`. When the focused cell's
+    // process ends, the focus goes back to where it was, unless the cell is
     // `sticky`. A new prompt takes the focus unless it is `background`.
 
-    /** Relay a prompt's command to the machine, expecting the echo answering it. */
+    /** Relay a prompt's command to the machine, expecting the cell answering it. */
     pushCommand(detail: PromptCommandDetail): void {
         const id = `c${++this.commandSeq}`;
         this.focus.expect(echoElementId(id));
@@ -257,7 +256,7 @@ export class BucheInterface implements Interface {
         });
     }
 
-    // A background echo doesn't take the focus: drop the expectation of it.
+    // A background cell doesn't take the focus: drop the expectation of it.
     private settleExpectation(entry: Entry): void {
         const { id, background } = entry.echo;
         if (background && id !== undefined && this.focus.expecting === echoElementId(id)) {
@@ -285,17 +284,15 @@ export class BucheInterface implements Interface {
             return;
         }
         const current = this.focus.current;
-        if (current instanceof EchoBox && current.boundEntry === entry) {
+        if (
+            current instanceof EchoBox &&
+            (current.boundEntry === entry || current.boundEntry?.representative() === entry)
+        ) {
             this.focus.back();
         }
     }
 
     // ── Interface messages ────────────────────────────────────────────────────
-
-    handle$install_echo(buche: Buche, message: InstallEchoMessage) {
-        this.settleExpectation(message.entry);
-        message.zone!.installEcho(this, message.entry);
-    }
 
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         this.settleExpectation(message.entry);

@@ -92,34 +92,50 @@ export class Buche {
     }
 
     /**
-     * The zone named by `info.zone` (default "@") for `entry`, looked up by
-     * bubbling up its ancestors: at each one, the zones it defines, then the
-     * zone it was placed in (its names). The root defines every zone of the
-     * layout, as a last resort.
+     * The zone named by `info.zone` for `entry`, looked up by bubbling up its
+     * ancestors: at each one, the zones it defines (a configured entry answers
+     * here both by name and — for a nameless request — through `""`, its
+     * placement). A nameless request (null, absent or "") tries "@" first at
+     * each ancestor, then that ancestor's `""`. The root defines every zone of
+     * the layout, as a last resort.
      */
     findPlace(entry: Entry, info: CreationInfo): Zone {
-        const zoneName = info.zone || "@";
+        const zoneName = info.zone === "" ? null : (info.zone ?? null);
         let e: Entry | undefined = entry.parent;
         while (e) {
-            if (e.zones && zoneName in e.zones) {
-                return e.zones[zoneName];
-            }
-            if (e.placement?.names.includes(zoneName)) {
-                return e.placement;
+            if (zoneName !== null) {
+                if (zoneName in e.zones) {
+                    return e.zones[zoneName];
+                }
+            } else {
+                if ("@" in e.zones) {
+                    return e.zones["@"];
+                }
+                if ("" in e.zones) {
+                    return e.zones[""];
+                }
             }
             e = e.parent;
         }
         throw new BucheError({
             type: "buche_error",
             code: "nozone",
-            reason: `No zone named ${zoneName} could be found`,
+            reason: `No zone named ${zoneName ?? "@"} could be found`,
             input: info,
         });
     }
 
+    /**
+     * Get (creating it if needed) the entry at `message.from` and apply an
+     * echo configuration to it: the shared {@link EchoConfiguration} fields
+     * merge into its echo, and a provided `represents` onto the entry itself.
+     */
     ensure(message: EchoConfiguration & CreationInfo) {
         const post = this.hierarchy.getAt(message.from, true)!;
         post.echo.configure(message);
+        if (message.represents !== undefined) {
+            post.represents = message.represents;
+        }
         return post;
     }
 }

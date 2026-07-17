@@ -61,7 +61,7 @@ function prompt(container: HTMLElement, label = "cq"): HTMLElement {
     throw new Error(`no prompt ${label}`);
 }
 
-// The shell's prompt, then a submitted command answered by an echo + cell.
+// The shell's prompt, then a submitted command answered by a cell.
 function run(
     ctx: ReturnType<typeof setup>,
     echo: Record<string, unknown> = {},
@@ -81,8 +81,7 @@ function run(
     expect(request.type).toBe("command");
     const id = request.id as string;
     const from = [...SHELL, "2"];
-    driver({ type: "echo", from, id, echo: { text: "ls", ranges: [] }, ...echo });
-    driver({ type: "cell_configure", from, zone: null, ...cell });
+    driver({ type: "cell_configure", from, zone: null, id, ...echo, ...cell });
     return { id, box: () => container.querySelector(`#echo-${id}`) };
 }
 
@@ -185,15 +184,14 @@ describe("automatic focus", () => {
         });
         ctx.flush();
         const id = (ctx.sent.at(-1) as { id: string }).id;
-        // The user clicks elsewhere before the echo arrives. (Clicking the
+        // The user clicks elsewhere before the cell arrives. (Clicking the
         // prompt again wouldn't count: the focus has to move.)
         const other = document.createElement("div");
         other.setAttribute("focusable", "cell");
         ctx.container.append(other);
         ctx.iface.focus.focus(other, "click");
         const from = [...SHELL, "2"];
-        ctx.driver({ type: "echo", from, id, echo: { text: "ls", ranges: [] } });
-        ctx.driver({ type: "cell_configure", from, zone: null });
+        ctx.driver({ type: "cell_configure", from, zone: null, id });
         await settle();
         expect(ctx.container.querySelector(`#echo-${id}`)).not.toBeNull();
         expect(ctx.iface.focus.current).toBe(other);
@@ -285,11 +283,14 @@ describe("tab ✕", () => {
 describe("zone lookup", () => {
     test("bubbles up through the zones entries were placed in, before the layout's", () => {
         const container = document.createElement("div");
-        // Two tabbed zones, both named "tab" among others; in the layout-wide
-        // registry, "tab" is the last one (main).
+        // Three tabbed zones, every one named "tab" among others; in the
+        // layout-wide registry, "tab" is the last one (right) — a lookup that
+        // reaches the root resolves to the wrong zone, which is what the
+        // placement records are for.
         const left = new TabbedZoneElement(["left"]);
         const main = new TabbedZoneElement(["@", "main"]);
-        container.append(left, main);
+        const right = new TabbedZoneElement(["right"]);
+        container.append(left, main, right);
         document.body.append(container);
         const iface = new BucheInterface({ container, template: container });
         const buche: Buche = new Buche({
@@ -304,10 +305,18 @@ describe("zone lookup", () => {
                 ?.closest("tabbed-zone");
 
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        // `@left coquille`: the sub-shell's cell and prompt go to the left zone.
+        // `@left coquille`: the sub-shell is configured in the left zone; its
+        // prompt goes there through the entry's "" placement.
         const sub = [...SHELL, "1"];
-        driver({ type: "cell_configure", from: sub, zone: "left", label: "coquille" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], zone: "left", label: "sub" });
+        driver({ type: "configure", from: sub, zone: "left" });
+        driver({
+            type: "cell_configure",
+            from: [...sub, "$main"],
+            zone: "left",
+            label: "coquille",
+            represents: sub,
+        });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
 
         // In the sub-shell: `@tab ls` goes to a tab of the left zone, where the
         // sub-shell lives; a plain command goes to the sub-shell's log.
@@ -327,9 +336,18 @@ describe("zone lookup", () => {
                 ?.querySelector(".prompt-collection-tab")?.textContent,
         ).toBe("sub");
 
-        // From the main shell, `@tab ls` goes to the main zone's tabs.
+        // From the main shell, `@tab ls` goes to the main zone's tabs — the
+        // prompt's placement, not the root registry's arbitrary "tab" (right).
         driver({ type: "cell_configure", from: [...SHELL, "4"], zone: "tab", label: "main-tab" });
         expect(zoneOf("main-tab")).toBe(main);
+        // The same through the configure chain, as coquille does it.
+        driver({ type: "configure", from: [...SHELL, "5"], zone: "tab" });
+        driver({
+            type: "cell_configure",
+            from: [...SHELL, "5", "$main"],
+            label: "main-tab-configured",
+        });
+        expect(zoneOf("main-tab-configured")).toBe(main);
         // And explicit names still resolve from anywhere.
         driver({ type: "cell_configure", from: [...sub, "cq", "5"], zone: "main", label: "far" });
         expect(zoneOf("far")).toBe(main);

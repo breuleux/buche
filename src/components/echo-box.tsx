@@ -83,7 +83,7 @@
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme } from "../color.ts";
 import type { Status, StatusString, ViewLabel } from "../echo.ts";
-import type { Entry } from "../entry.ts";
+import { type Entry, statusOf } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
 import type { PromptCollection } from "./prompt-collection.tsx";
@@ -192,8 +192,11 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     // Set when a child terminal's pty grid changed ("term-resize"): forces the
     // next poll tick to announce even when the box's own pixels are unchanged.
     private ptyDirty = false;
-    // The bound Entry (if configured from one) and the listener registered on it.
+    // The bound Entry (if configured from one) and the listener registered on
+    // it — and, when the entry represents another one, on the represented
+    // entry too (its status is what the box shows).
     private _entry: Entry | null = null;
+    private _rep: Entry | null = null;
     private entryListener: ((entry: Entry) => void) | null = null;
     // The prompt collection whose active prompt this box fades against (see
     // observePromptActivity), and the listener registered on it.
@@ -644,10 +647,14 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         }
     }
 
-    /** Remove the box from the DOM and detach from its bound entry. */
+    /** Remove the box from the DOM and detach from its bound entry. The
+     *  "destroy" event (after the removal, so `isConnected` is already false)
+     *  lets hosts react to the box going away even when no entry change comes
+     *  — e.g. a tab closing a cell whose process is already spent. */
     destroy(): void {
         this.unbindEntry();
         this.remove();
+        this.dispatchEvent(new CustomEvent("destroy", { bubbles: true }));
     }
 
     // ── Sizing ──────────────────────────────────────────────────────────────
@@ -867,8 +874,11 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.ensureSetup();
         this.unbindEntry();
         this._entry = entry;
+        this._rep = entry.representative();
         this.entryListener = () => this.applyEntry(entry);
         entry.listeners.push(this.entryListener);
+        // The represented entry's changes must refresh this box too (status).
+        this._rep?.listeners.push(this.entryListener);
         this.applyEntry(entry);
         this.syncPromptActivity();
     }
@@ -902,7 +912,11 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         if (this._entry && this.entryListener) {
             this._entry.listeners = this._entry.listeners.filter((l) => l !== this.entryListener);
         }
+        if (this._rep && this.entryListener) {
+            this._rep.listeners = this._rep.listeners.filter((l) => l !== this.entryListener);
+        }
         this._entry = null;
+        this._rep = null;
         this.entryListener = null;
     }
 
@@ -916,7 +930,12 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             this.setEchoContext(submission.context);
         }
         this.color = echo.color ?? "";
-        this.status = echoStatus(echo.status);
+        // An ephemeral entry's box follows its process: spent means gone.
+        if (echo.ephemeral) {
+            this._destroyWhenDone = true;
+        }
+        // Status comes from the represented entry when there is one.
+        this.status = echoStatus(statusOf(entry));
         // The echo's `views` set drives which view icons exist.
         if (echo.views) {
             for (const lbl of echo.views) {

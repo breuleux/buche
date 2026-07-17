@@ -14,10 +14,10 @@
           "$ref": "#/definitions/CloseMessage"
         },
         {
-          "$ref": "#/definitions/DataMessage"
+          "$ref": "#/definitions/ConfigureMessage"
         },
         {
-          "$ref": "#/definitions/EchoMessage"
+          "$ref": "#/definitions/DataMessage"
         },
         {
           "$ref": "#/definitions/ErrorMessage"
@@ -63,6 +63,21 @@
         "background": {
           "type": "boolean",
           "description": "If true, do not automatically focus the cell or prompt."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
+        },
+        "represents": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
         },
         "from": {
           "$ref": "#/definitions/Address",
@@ -359,36 +374,7 @@
       "additionalProperties": false,
       "description": "Outcome of a process that has terminated."
     },
-    "DataMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "data",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "data": {
-          "$ref": "#/definitions/Json",
-          "description": "The data."
-        }
-      },
-      "required": [
-        "data",
-        "from",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "EchoMessage": {
+    "ConfigureMessage": {
       "type": "object",
       "properties": {
         "submission": {
@@ -415,9 +401,60 @@
           "type": "boolean",
           "description": "If true, do not automatically focus the cell or prompt."
         },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
+        },
+        "represents": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ZoneDescriptor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which zone to put the element in."
+        },
         "type": {
           "type": "string",
-          "const": "echo",
+          "const": "configure",
+          "description": "Type of the message."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "Declares (or reconfigures) an entry without installing anything in any zone: a process, or any non-visual parent of cells and prompts. It carries the shared echo configuration (label, color, `represents`, `ephemeral`, ...) — applied without creating a cell, so it can retune an entry that already has one, or state things about one that doesn't — and records its placement: descendants resolve their zones through this entry (an unnamed request gets the configured zone, recorded under `\"\"`; a named one matches the configured zone's own names; `origin` names the zone an unnamed request would have resolved to anyway, typically the spawning prompt)."
+    },
+    "DataMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "data",
           "description": "Type of the message."
         },
         "from": {
@@ -427,9 +464,14 @@
         "to": {
           "$ref": "#/definitions/To",
           "description": "Target of the message."
+        },
+        "data": {
+          "$ref": "#/definitions/Json",
+          "description": "The data."
         }
       },
       "required": [
+        "data",
         "from",
         "to",
         "type"
@@ -508,6 +550,21 @@
         "background": {
           "type": "boolean",
           "description": "If true, do not automatically focus the cell or prompt."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
+        },
+        "represents": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
         },
         "from": {
           "$ref": "#/definitions/Address",

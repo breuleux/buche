@@ -65,7 +65,7 @@ import {
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
-import type { Entry } from "../entry.ts";
+import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
 import type { HighlightRange, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
@@ -843,9 +843,10 @@ export class PromptCollection extends HTMLElement {
         if (!row) {
             return;
         }
-        // A prompt whose process has terminated (close → echo status done or
-        // error) has no further use: drop its tab and editor.
-        const status = entry.echo.status.status;
+        // A prompt whose process has terminated (close → status done or error,
+        // through `represents` when it stands for a process) has no further
+        // use: drop its tab and editor.
+        const status = statusOf(entry).status;
         if (status === "done" || status === "error") {
             this.removePrompt(entry);
             return;

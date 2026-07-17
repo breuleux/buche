@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
-import type { TabbedZoneElement } from "../../src/components/zone.tsx";
-import "../../src/components/zone.tsx";
+import { TabbedZoneElement } from "../../src/components/zone.tsx";
 import { Entry } from "../../src/entry.ts";
 
 afterEach(() => {
@@ -28,7 +27,6 @@ describe("tabbed-zone — emptiness", () => {
 // ── PopZone ─────────────────────────────────────────────────────────────────
 
 import type { EchoBox } from "../../src/components/echo-box.tsx";
-import type { BucheInterface } from "../../src/interface.tsx";
 import { PopZone } from "../../src/zone.ts";
 
 interface FakeIfc {
@@ -144,7 +142,7 @@ describe("pop-zone", () => {
 
 // ── Closing unresponsive cells ─────────────────────────────────────────────
 
-import { PromptZone } from "../../src/zone.ts";
+import { PromptZone, TabbedZone } from "../../src/zone.ts";
 
 describe("cell closing", () => {
     function promptZone(): { slot: HTMLElement; zone: PromptZone; ifc: FakeIfc } {
@@ -158,9 +156,9 @@ describe("cell closing", () => {
     }
 
     test("closing a live cell signals SIGTERM and waits for the confirmation", () => {
-        const { slot, zone, ifc } = promptZone();
+        const { zone, ifc } = promptZone();
         const entry = new Entry({});
-        const box = zone.installEcho(ifc as any, entry) as EchoBox;
+        const box = zone.installCell(ifc as any, entry) as EchoBox;
         box.status = "running";
         box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
         const sig = ifc.pushed.find((m) => m.type === "user_signal");
@@ -172,7 +170,7 @@ describe("cell closing", () => {
     test("closing an unresponsive cell SIGKILLs and removes it at once", () => {
         const { slot, zone, ifc } = promptZone();
         const entry = new Entry({});
-        const box = zone.installEcho(ifc as any, entry) as EchoBox;
+        const box = zone.installCell(ifc as any, entry) as EchoBox;
         box.status = "unresponsive";
         box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
         const sig = ifc.pushed.find((m) => m.type === "user_signal");
@@ -181,12 +179,53 @@ describe("cell closing", () => {
         expect(slot.children).toHaveLength(0);
     });
 
+    // The box's own ✕ (and C-q-d, which replays it) closes the box directly,
+    // bypassing the tab's closer: the tab must follow the box even when the
+    // removal comes with no entry change (a spent cell).
+    function tabbed(): { tz: TabbedZoneElement; zone: TabbedZone; ifc: FakeIfc } {
+        const root = document.createElement("div");
+        const tz = new TabbedZoneElement(["tab"]);
+        root.append(tz);
+        document.body.append(root);
+        return {
+            tz,
+            zone: new TabbedZone({ names: tz.names, element: tz.tabs }),
+            ifc: fakeIfc(root),
+        };
+    }
+
+    test("closing a spent tab cell removes the tab along with the box", () => {
+        const { tz, zone, ifc } = tabbed();
+        const entry = new Entry({});
+        entry.echo.status = { status: "done" };
+        const box = zone.installCell(ifc as any, entry) as EchoBox;
+        box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+        expect(box.isConnected).toBe(false);
+        expect(tz.tabs.isEmpty).toBe(true);
+    });
+
+    test("closing a live tab cell removes the tab when the end confirms", () => {
+        const { tz, zone, ifc } = tabbed();
+        const entry = new Entry({});
+        const box = zone.installCell(ifc as any, entry) as EchoBox;
+        entry.echo.status = { status: "running" }; // a fresh entry is absent
+        entry.fire();
+        box.dispatchEvent(new CustomEvent("close", { bubbles: true }));
+        expect(ifc.pushed.some((m) => m.type === "user_signal")).toBe(true);
+        expect(box.isConnected).toBe(true); // kept until done/error confirms
+        expect(tz.tabs.isEmpty).toBe(false);
+        entry.echo.status = { status: "done" };
+        entry.fire();
+        expect(box.isConnected).toBe(false);
+        expect(tz.tabs.isEmpty).toBe(true);
+    });
+
     test("closing a spent cell signals nothing and leaves the sibling views alone", () => {
         const { slot, zone, ifc } = promptZone();
         const entry = new Entry({});
         entry.echo.status = { status: "done" };
-        // Two views of one entry: the prompt-zone echo and the tab cell.
-        const echo = zone.installEcho(ifc as any, entry) as EchoBox;
+        // Two views of one entry: the prompt-zone cell and the tab cell.
+        const echo = zone.installCell(ifc as any, entry) as EchoBox;
         const sibling = document.createElement("echo-box") as EchoBox;
         sibling.bindEntry(entry);
         document.body.append(sibling);

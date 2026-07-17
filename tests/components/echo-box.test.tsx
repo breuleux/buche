@@ -608,6 +608,49 @@ describe("echo-box — authored views", () => {
     });
 });
 
+describe("echo-box — ephemeral entries", () => {
+    test("an ephemeral entry's box removes itself when the entry is spent", () => {
+        const entry = new Entry({});
+        entry.echo.ephemeral = true;
+        entry.echo.status = { status: "running" };
+        const box = make();
+        box.bindEntry(entry);
+        expect(box.isConnected).toBe(true);
+
+        entry.echo.status = { status: "done" };
+        entry.fire();
+        expect(box.isConnected).toBe(false);
+        // Detached: later changes no longer touch it.
+        expect(entry.listeners.length).toBe(0);
+    });
+
+    test("an ephemeral entry's box goes on an error too; a normal one stays", () => {
+        const entry = new Entry({});
+        entry.echo.ephemeral = true;
+        const box = make();
+        box.bindEntry(entry);
+        entry.echo.status = { status: "error" };
+        entry.fire();
+        expect(box.isConnected).toBe(false);
+
+        const kept = new Entry({});
+        const box2 = make();
+        box2.bindEntry(kept);
+        kept.echo.status = { status: "done" };
+        kept.fire();
+        expect(box2.isConnected).toBe(true);
+    });
+
+    test("binding an already-spent ephemeral entry removes the box right away", () => {
+        const entry = new Entry({});
+        entry.echo.ephemeral = true;
+        entry.echo.status = { status: "done" };
+        const box = make();
+        box.bindEntry(entry);
+        expect(box.isConnected).toBe(false);
+    });
+});
+
 describe("echo-box — prompt activity", () => {
     function stubCollection(): PromptCollection {
         const pc = document.createElement("prompt-collection") as PromptCollection;

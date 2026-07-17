@@ -8,6 +8,7 @@ import type {
 import type { TabCloseEvent, TabPane } from "./components/tab-pane.tsx";
 import { echoElementId } from "./echo.ts";
 import type { Entry } from "./entry.ts";
+import { statusOf } from "./entry.ts";
 import type { FocusChangeDetail } from "./focus.ts";
 import type { BucheInterface as Interface } from "./interface.tsx";
 import { WithId } from "./utils.ts";
@@ -36,10 +37,6 @@ export class Zone extends WithId() {
         this.names = args.names || [];
         this.element = args.element;
         this.names.push(`Z${this.serialId}`);
-    }
-
-    installEcho(ifc: Interface, entry: Entry): HTMLElement {
-        throw Error("not implemented");
     }
 
     installCell(ifc: Interface, entry: Entry): HTMLElement {
@@ -134,12 +131,14 @@ export class TabbedZone extends Zone {
         row.pane.appendChild(eb);
         tagCell(eb, entry);
         // The tab's ✕ is the cell's ✕. The box removes itself once its process
-        // has ended after a close; the tab goes with it.
+        // has ended after a close; the tab goes with it. The "destroy" listener
+        // also catches boxes removed without any entry change following (a
+        // spent cell closed by ✕ or C-q-d).
         const check = this.removeTabWhen(entry, () => !eb.isConnected);
-        this.closers.set(entry, () => {
-            eb.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
-            check();
-        });
+        eb.addEventListener("destroy", check);
+        this.closers.set(entry, () =>
+            eb.dispatchEvent(new CustomEvent<null>("close", { bubbles: true })),
+        );
         // A new tab stays in the background, unless it holds the cell the
         // focus is waiting for (not a background one: see the interface).
         if (eb.id && ifc.focus.expecting === eb.id) {
@@ -150,14 +149,15 @@ export class TabbedZone extends Zone {
 
     installPrompt(ifc: Interface, entry: Entry): HTMLElement {
         const row = this.element.addTab(entry);
-        // The tab's ✕ signals the prompt's process, like a cell's ✕; the tab
-        // goes when the process has ended (the prompt is then removed).
+        // The tab's ✕ signals the prompt's process, like a cell's ✕ (through
+        // `represents` when the prompt stands for one); the tab goes when the
+        // process has ended (the prompt is then removed).
         this.closers.set(entry, () => {
-            const code = entry.echo.status.status === "unresponsive" ? 9 : 15;
+            const code = statusOf(entry).status === "unresponsive" ? 9 : 15;
             ifc.interactions.push({ type: "user_signal", code, entry });
         });
         this.removeTabWhen(entry, () => {
-            const status = entry.echo.status.status;
+            const status = statusOf(entry).status;
             return status === "done" || status === "error";
         });
         const pz = entry.prompt!.zones.main;
@@ -232,9 +232,8 @@ function attachPopZone(pop: PopZone, bt: BucheTerm, entry: Entry): void {
 
 export class PromptZone extends Zone {
     declare element: BucheTerm;
-    echoMap: Map<Entry, EchoBox> = new Map();
 
-    installEcho(ifc: Interface, entry: Entry): HTMLElement {
+    installCell(ifc: Interface, entry: Entry): HTMLElement {
         const eb = new EchoBox();
         eb.bindEntry(entry);
         eb.addEventListener("close", () => closeBox(ifc, eb, entry));
@@ -252,16 +251,6 @@ export class PromptZone extends Zone {
         eb.addEventListener("term-appear", () => reportResize(ifc, eb, entry));
         this.element.log(eb);
         eb.observePromptActivity(this.element.prompts);
-        this.echoMap.set(entry, eb);
-        return eb;
-    }
-
-    installCell(ifc: Interface, entry: Entry): HTMLElement {
-        let eb = this.echoMap.get(entry);
-        if (!eb?.isConnected) {
-            eb = this.installEcho(ifc, entry) as EchoBox;
-            this.echoMap.set(entry, eb);
-        }
         tagCell(eb, entry);
         entry.fire();
         return eb;
@@ -382,11 +371,6 @@ export class PopZone extends Zone {
             ifc.focusPrompt();
         }
     };
-
-    installEcho(ifc: Interface, entry: Entry): HTMLElement {
-        // The pop shows its cell's echo: same single slot, same box.
-        return this.installCell(ifc, entry);
-    }
 
     private onFocusChange = (event: Event): void => {
         const pop = this.current;

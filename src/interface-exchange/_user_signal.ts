@@ -11,16 +11,20 @@ export interface UserSignalMessage {
 }
 
 export function handle$user_signal(buche: Buche, obj: UserSignalMessage): void {
+    // A cell representing a process (e.g. its `$main` cell) signals the
+    // process, not itself; the unresponsive marking lands on the process too,
+    // so every view of it (and of the cell, which mirrors it) shows it.
+    const target = obj.entry.representative() ?? obj.entry;
     buche.sendDriver({
         type: "signal",
         code: obj.code,
         from: ["$term"],
-        to: obj.entry.echo.address,
+        to: target.echo.address,
     });
     // We expect a response from the shell; hold the echo until it closes.
-    obj.entry.echo.status = { status: "unresponsive" };
+    target.echo.status = { status: "unresponsive" };
     buche.sendInterface({
         type: "update_entry",
-        entry: obj.entry,
+        entry: target,
     });
 }

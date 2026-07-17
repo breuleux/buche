@@ -6,8 +6,8 @@ export const incomingDriverMessageTypes = new Set<string>([
     "cell_configure",
     "cell_send",
     "close",
+    "configure",
     "data",
-    "echo",
     "error",
     "prompt_configure",
     "prompt_highlight",
@@ -38,7 +38,6 @@ export const incomingInterfaceMessageTypes = new Set<string>([
 /** Message `type` names for interface outgoing messages. */
 export const outgoingInterfaceMessageTypes = new Set<string>([
     "cell_command",
-    "install_echo",
     "problem",
     "update_cell",
     "update_entry",

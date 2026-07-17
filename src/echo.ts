@@ -39,6 +39,21 @@ export interface EchoConfiguration {
 
     /** If true, do not automatically focus the cell or prompt. */
     background?: boolean;
+
+    /**
+     * If true, the element showing this entry (the cell's box, and with it
+     * its tab) is removed when the entry is marked done or error. Prompts
+     * already go away when their process ends.
+     */
+    ephemeral?: boolean;
+
+    /**
+     * Address of the entry this one stands for (typically the process that
+     * owns it). While set, the entry's status mirrors that entry's, and user
+     * signals, input and resizes are routed to its address. Explicit null
+     * disables the mirroring.
+     */
+    represents?: Address | null;
 }
 
 /** The DOM id of the element showing the echo answering command `id`. */
@@ -73,6 +88,9 @@ export class Echo extends WithId() {
     /** If true, do not automatically focus the cell or prompt. */
     background = false;
 
+    /** If true, the showing element is removed once the entry is spent. */
+    ephemeral = false;
+
     /** Address of the component. */
     address: Address;
 
@@ -100,5 +118,6 @@ export class Echo extends WithId() {
         this.id = config.id ?? this.id;
         this.sticky = config.sticky ?? this.sticky;
         this.background = config.background ?? this.background;
+        this.ephemeral = config.ephemeral ?? this.ephemeral;
     }
 }

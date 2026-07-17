@@ -21,7 +21,9 @@ export interface UserResizeMessage {
 }
 
 export function handle$user_resize(buche: Buche, obj: UserResizeMessage): void {
-    if (!killable(obj.entry.echo)) {
+    // The resize reaches the represented entry (the process) that owns the pty.
+    const target = obj.entry.representative() ?? obj.entry;
+    if (!killable(target.echo)) {
         return;
     }
     buche.sendDriver({
@@ -29,6 +31,6 @@ export function handle$user_resize(buche: Buche, obj: UserResizeMessage): void {
         pixel: obj.pixel,
         ...(obj.pty ? { pty: obj.pty } : {}),
         from: ["$term"],
-        to: obj.entry.echo.address,
+        to: target.echo.address,
     });
 }
