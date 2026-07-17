@@ -177,7 +177,7 @@ const baseHandlers = {
     },
 };
 
-interface BucheRunArguments {
+export interface BucheRunArguments {
     process: ProcessCommunicator;
     interface: AsyncGenerator<InM>;
     loggers: {
@@ -186,8 +186,6 @@ interface BucheRunArguments {
         driverOut?: (arg: OutM) => void;
         interfaceOut?: (arg: OutM) => void;
     };
-    // inLogger?: (arg: InM) => void;
-    // outLogger?: (arg: OutM) => void;
 }
 
 export async function* bucheRun(args: BucheRunArguments) {

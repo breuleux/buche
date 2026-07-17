@@ -54,7 +54,7 @@ function stdioEntry(mode: StreamMode): "pipe" | "inherit" {
  * values and call `end` when no more values will arrive; the consumer drains it
  * with `for await`.
  */
-class AsyncQueue<T> {
+export class AsyncQueue<T> {
     private items: T[] = [];
     private waiting: ((result: IteratorResult<T>) => void)[] = [];
     private ended = false;
