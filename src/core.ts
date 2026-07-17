@@ -127,7 +127,7 @@ export class Buche {
     configure(type: "prompt", obj: PromptConfiguration & BaseMessage): ComponentData;
     configure(
         type: "cell" | "prompt",
-        obj: (CellConfiguration | PromptConfiguration) & BaseMessage,
+        obj: (CellConfiguration | PromptConfiguration) & CreationInfo & BaseMessage,
     ): ComponentData {
         const component = this.get(obj.from, true);
         const other = type === "cell" ? "prompt" : "cell";
@@ -140,18 +140,19 @@ export class Buche {
         }
         const { prompt: parentPrompt, zone } = this.findPlace(obj);
         if (type === "cell") {
+            const cconf: CellConfiguration = obj as CellConfiguration;
             if (component.cell) {
-                component.cell.configure(obj);
+                component.cell.configure(cconf);
             } else {
-                const cell = new Cell(obj, { address: obj.from });
-                cell.prompt = parentPrompt;
+                const cell = new Cell(cconf, { address: obj.from });
                 component.setCell(cell);
             }
         } else {
+            const pconf: PromptConfiguration = obj as PromptConfiguration;
             if (component.prompt) {
-                component.prompt.configure(obj);
+                component.prompt.configure(pconf);
             } else {
-                const prompt = new Prompt(obj, { address: obj.from });
+                const prompt = new Prompt(pconf, { address: obj.from });
                 component.setPrompt(prompt);
             }
         }
@@ -173,7 +174,7 @@ export class Buche {
         if (type === "cell" && !c.cell) {
             return this.configure(type, obj);
         } else if (type === "prompt" && !c.prompt) {
-            return this.configure(type, obj);
+            return this.configure(type, obj as PromptConfiguration & BaseMessage);
         }
         return c;
     }

@@ -37,13 +37,6 @@
     "CellConfigureMessage": {
       "type": "object",
       "properties": {
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "The cell/tab label."
-        },
         "sticky": {
           "type": "boolean",
           "description": "Toggle whether the cell keeps or relinquishes focus when it is closed."
@@ -51,6 +44,18 @@
         "background": {
           "type": "boolean",
           "description": "If true, do not automatically focus the cell."
+        },
+        "echo": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Text of the command"
+        },
+        "label": {
+          "type": "string",
+          "description": "The cell/tab label."
+        },
+        "color": {
+          "$ref": "#/definitions/Accent",
+          "description": "Accent color for the component."
         },
         "from": {
           "$ref": "#/definitions/Address",
@@ -83,6 +88,67 @@
         "type"
       ],
       "additionalProperties": false
+    },
+    "StyledText": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Text to style."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        },
+        "position": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Position of the cursor, if applicable."
+        }
+      },
+      "required": [
+        "text",
+        "ranges"
+      ],
+      "additionalProperties": false
+    },
+    "HighlightRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Inclusive start offset. `null` means the start of the text (offset 0); in an editable prompt it is an *open* boundary that also absorbs text the user inserts at the very beginning."
+        },
+        "end": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Exclusive end offset. `null` means the end of the text; in an editable prompt it is an *open* boundary that also absorbs text the user appends."
+        },
+        "style": {
+          "$ref": "#/definitions/Accent",
+          "description": "Style."
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "style"
+      ],
+      "additionalProperties": false,
+      "description": "A syntax-highlight span over the prompt text"
+    },
+    "Accent": {
+      "type": "string"
     },
     "Address": {
       "type": "array",
@@ -337,61 +403,6 @@
       ],
       "additionalProperties": false
     },
-    "StyledText": {
-      "type": "object",
-      "properties": {
-        "text": {
-          "type": "string",
-          "description": "Text to style."
-        },
-        "ranges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/HighlightRange"
-          },
-          "description": "Spans to colorize."
-        },
-        "position": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "description": "Position of the cursor, if applicable."
-        }
-      },
-      "required": [
-        "text",
-        "ranges"
-      ],
-      "additionalProperties": false
-    },
-    "HighlightRange": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "number",
-          "description": "Inclusive start offset into the prompt text."
-        },
-        "end": {
-          "type": "number",
-          "description": "Exclusive end offset."
-        },
-        "style": {
-          "$ref": "#/definitions/Accent",
-          "description": "Style."
-        }
-      },
-      "required": [
-        "start",
-        "end",
-        "style"
-      ],
-      "additionalProperties": false,
-      "description": "A syntax-highlight span over the prompt text"
-    },
-    "Accent": {
-      "type": "string"
-    },
     "ErrorMessage": {
       "type": "object",
       "properties": {
@@ -437,38 +448,29 @@
     "PromptConfigureMessage": {
       "type": "object",
       "properties": {
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "The prompt/tab label."
-        },
         "bindings": {
           "$ref": "#/definitions/PromptBindings",
           "description": "Key-chord → action-name map for this prompt."
-        },
-        "color": {
-          "$ref": "#/definitions/Accent",
-          "description": "Accent color for the prompt."
         },
         "prompt_html": {
           "type": "string",
           "description": "HTML for the prompt's leading label/marker."
         },
-        "text": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Text in the prompt."
+        "content": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Prompt contents"
         },
-        "ranges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/HighlightRange"
-          },
-          "description": "Spans to colorize."
+        "echo": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Text of the command"
+        },
+        "label": {
+          "type": "string",
+          "description": "The cell/tab label."
+        },
+        "color": {
+          "$ref": "#/definitions/Accent",
+          "description": "Accent color for the component."
         },
         "from": {
           "$ref": "#/definitions/Address",

@@ -1,4 +1,3 @@
-import type { Prompt } from "./prompt.ts";
 import type { Address, Json } from "./types.ts";
 import { WithId } from "./utils.ts";
 
@@ -26,9 +25,6 @@ export interface ExecCommand {
 export type CellCommand = TextCommand | DataCommand | ExecCommand;
 
 export interface CellConfiguration {
-    /** The cell/tab label. */
-    label?: string | null;
-
     /** Toggle whether the cell keeps or relinquishes focus when it is closed. */
     sticky?: boolean;
 
@@ -37,10 +33,8 @@ export interface CellConfiguration {
 }
 
 export class Cell extends WithId() implements CellConfiguration {
-    prompt: Prompt | null = null;
     address: Address;
 
-    label?: string | null;
     sticky?: boolean;
     background?: boolean;
 

@@ -1,8 +1,13 @@
 import type { Buche } from "../core.ts";
+import type { EchoConfiguration } from "../echo.ts";
 import type { PromptConfiguration } from "../prompt.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
 
-export interface PromptConfigureMessage extends BaseMessage, CreationInfo, PromptConfiguration {
+export interface PromptConfigureMessage
+    extends BaseMessage,
+        CreationInfo,
+        EchoConfiguration,
+        PromptConfiguration {
     type: "prompt_configure";
 }
 
