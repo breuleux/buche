@@ -31,7 +31,7 @@ import "./dom-setup.ts";
 import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { guiRuntimeDocument } from "../src/components/buche-gui.tsx";
+import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const root = join(scriptDir, "..");

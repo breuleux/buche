@@ -1,13 +1,13 @@
 // Main-process glue for the `proc://` GUI resource protocol, the Electron
 // counterpart of the runtime shim in <buche-gui> (see
-// src/components/buche-gui.tsx). This is the "native" version of the original
+// src/components/buche-gui-runtime.ts). This is the "native" version of the original
 // ~/code/buche `src/terminal/file-protocol.js`, without the `buche://`
 // hash/nonce library scheme.
 //
 // Wiring (in the Electron main process):
 //
 //   import { app, BrowserWindow } from "electron";
-//   import { guiRuntimeDocument } from "../src/components/buche-gui.tsx";
+//   import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
 //   import { initProcProtocol, registerProcScheme, setRuntimeHtml, setWebContents } from "./proc-protocol.ts";
 //
 //   registerProcScheme(); // before app is ready

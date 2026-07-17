@@ -396,6 +396,35 @@ export class EmbeddedTerm extends HTMLElement {
         ) as HTMLElement;
         clip.append(this.fadeTop, this.fadeBottom);
 
+        // Wheel split, by whether the terminal has anything to scroll:
+        //   - all lines visible (`baseY === 0`): every event passes through,
+        //     chaining to the container as if the terminal weren't there
+        //     (alt-screen apps, whose wheel use xterm turns into arrows, live
+        //     here too).
+        //   - scrollback (or pinning) to scroll: the terminal owns the wheel.
+        //     Events it cannot consume at the scroll ends are swallowed, so a
+        //     stroke — and its momentum — stops with the terminal instead of
+        //     leaking into the container; scrolling the container is done from
+        //     the gutter. Deterministic by construction: no stroke detection,
+        //     no timing heuristics.
+        // The boundary is the buffer's own position (the viewport element is
+        // not the scroller — xterm scrolls the buffer in JS); the listener is
+        // capture-phase, so a swallowed event is already `defaultPrevented`
+        // before xterm's own handler, which then ignores it.
+        clip.addEventListener(
+            "wheel",
+            (event: WheelEvent) => {
+                const { viewportY, baseY } = this.term.buffer.active;
+                if (baseY === 0) {
+                    return;
+                }
+                if (event.deltaY < 0 ? viewportY === 0 : event.deltaY > 0 && viewportY >= baseY) {
+                    event.preventDefault();
+                }
+            },
+            { capture: true, passive: false },
+        );
+
         this.syncClearHook();
         this.wireEvents();
 

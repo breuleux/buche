@@ -15,7 +15,7 @@ echo-box {
 	font-size: 13px;
 	/* line-height: 1.5; */
 	/* Ceiling for the cell; embedded views size their grid to it. */
-	max-height: 300px;
+	max-height: 500px;
 }
 
 /* A box placed *directly* in a tab-pane pane owns that pane: it fills it (no
@@ -256,6 +256,19 @@ echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
 
 .echo-box-view[hidden] {
 	display: none;
+}
+
+/* A cell with a height of its own — pinned by a gutter drag, or a box filling
+ * a tab-pane pane: the GUI view fills it rather than sizing to its content
+ * (the content-sizing mode of BucheGui, driven by `window.bucheInfo`). */
+echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"],
+.tab-pane-pane > echo-box .echo-box-cell > .echo-box-view[data-view="gui"] {
+	height: 100%;
+}
+
+echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui,
+.tab-pane-pane > echo-box .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui {
+	height: 100%;
 }
 
 /* ── Status-dependent appearance: status circle ── */

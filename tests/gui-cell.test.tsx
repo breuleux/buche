@@ -133,6 +133,81 @@ describe("cell gui views", () => {
     });
 });
 
+// ── interface: size information sent to the gui page ─────────────────────────
+
+describe("gui size information", () => {
+    const infos = (gui: BucheGui): Record<string, unknown>[] =>
+        ((gui as unknown as { queue: Record<string, unknown>[] }).queue ?? []).filter(
+            (m) => m?.["buche-gui"] === "info",
+        );
+
+    test("a box resize refreshes the sizing information in the queue, in place", () => {
+        const b = box();
+        const cell = new Cell({});
+        run(cell, b, { type: "html", content: "<p>hi</p>" });
+        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)).toHaveLength(1);
+        expect(infos(gui)[0]).toMatchObject({ "buche-gui": "info", dynamicHeight: true });
+        expect(typeof infos(gui)[0]?.width).toBe("number");
+        expect(typeof infos(gui)[0]?.maxHeight).toBe("number");
+
+        // A stale info never waits in the queue behind the fresh one.
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)).toHaveLength(1);
+    });
+
+    test("a dragged (pinned) box announces dynamicHeight false", () => {
+        const b = box();
+        const cell = new Cell({});
+        run(cell, b, { type: "data", data: {} });
+        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        (b.querySelector(".echo-box-cell") as HTMLElement).style.height = "300px";
+
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
+    });
+
+    test("a pinned cell hands the height from the content to the fill, and back", () => {
+        const b = box();
+        const cell = new Cell({});
+        run(cell, b, { type: "html", content: "<p>hi</p>" });
+        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        // Dynamic sizing drives the height from the content reports (inline).
+        gui.style.height = "300px";
+
+        // Pinning (as a gutter drag does): the inline height is dropped so the
+        // stylesheet's fill height takes over.
+        const cellEl = b.querySelector(".echo-box-cell") as HTMLElement;
+        cellEl.style.height = "200px";
+        b.setAttribute("pinned", "");
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
+        expect(gui.style.height).toBe("");
+
+        // The double-click reset: content sizing takes the height back.
+        cellEl.style.height = "";
+        b.removeAttribute("pinned");
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)[0]).toMatchObject({ dynamicHeight: true });
+    });
+
+    test("a box filling a tab-pane pane announces dynamicHeight false", () => {
+        const pane = document.createElement("div");
+        pane.className = "tab-pane-pane";
+        document.body.append(pane);
+        const b = document.createElement("echo-box") as EchoBox;
+        pane.append(b);
+        const cell = new Cell({});
+        run(cell, b, { type: "data", data: {} });
+        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+
+        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
+        expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
+    });
+});
+
 // ── interface: nav-mode escape and kill from within the gui ──────────────────
 
 describe("gui kill from the interface", () => {

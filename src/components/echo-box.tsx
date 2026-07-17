@@ -175,6 +175,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     private echoEl!: HTMLElement;
     private contextEl!: HTMLElement;
     private headerEl!: HTMLElement;
+    private bodyEl!: HTMLElement;
     private controlsEl!: HTMLElement;
     private cellEl!: HTMLElement;
     private closeEl!: HTMLButtonElement;
@@ -402,10 +403,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         // Cell: holds the views; only the active one is shown.
         this.cellEl = div("echo-box-cell");
 
-        const body = div("echo-box-body");
-        body.append(this.headerEl, this.cellEl);
+        this.bodyEl = div("echo-box-body");
+        this.bodyEl.append(this.headerEl, this.cellEl);
 
-        this.append(this.contextEl, this.gutter, body);
+        this.append(this.contextEl, this.gutter, this.bodyEl);
 
         // Compact-mode resize handles at the very top and bottom edges. They are
         // hidden unless compact + Alt-hover (see the stylesheet) and drive the
@@ -555,6 +556,12 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             // that only sizes un-dragged cells — otherwise the drag clamps at it.
             this.style.maxHeight = "none";
             this.cellEl.style.height = `${height}px`;
+            // The cell now has a height of its own: views that size themselves
+            // to their content (the GUI) switch to filling it instead (see the
+            // echo-box stylesheet and BucheGui).
+            if (!this.hasAttribute("pinned")) {
+                this.setAttribute("pinned", "");
+            }
             // Counter-scroll by however far the anchored edge actually drifted.
             // (The size poll turns the changed measurement into a "resize".)
             if (scroller.scrollHeight > scroller.clientHeight) {
@@ -591,6 +598,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         }
         this.cellEl.style.height = "";
         this.style.maxHeight = "";
+        this.removeAttribute("pinned");
     }
 
     /** The nearest scrollable ancestor, falling back to the document scroller. */
@@ -673,17 +681,36 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     /** The height in px the cell can reach before the box's CSS `max-height`
-     *  clamps it (the max-height minus the header and context chrome — the
-     *  context row claims its slice of the ceiling too), or null when the box
-     *  imposes no ceiling. Views that size dynamically grow up to it. */
+     *  clamps it, or null when the box imposes no ceiling. Views that size
+     *  dynamically grow up to it.
+     *
+     *  The chrome (the context row, the header, and the cell's own padding
+     *  and borders) is measured rather than summed. Note it cannot be read
+     *  off the *box* (`box.height - cell.height`): when the content is at or
+     *  over the ceiling the box is clamped while its children keep their
+     *  full heights, and the difference collapses to nothing — feeding that
+     *  back to a GUI whose size set the content height is a feedback loop
+     *  that walks the cell up to the ceiling. The context row and the header
+     *  stand outside the cell and are measured directly; the cell's padding
+     *  and borders come from its computed style (`offsetHeight -
+     *  clientHeight` would only show borders — `clientHeight` includes the
+     *  padding). (A hidden box reports the bare ceiling; it announces a
+     *  "resize" when shown again, and views re-read this then.) */
     get maxContentHeight(): number | null {
         this.ensureSetup();
         const max = Number.parseFloat(getComputedStyle(this).maxHeight);
         if (!Number.isFinite(max)) {
             return null;
         }
-        // An empty context row is `display: none` and measures 0.
-        return Math.max(0, max - this.headerEl.offsetHeight - this.contextEl.offsetHeight);
+        const chrome =
+            this.contextEl.offsetHeight + (this.bodyEl.offsetHeight - this.cellEl.offsetHeight);
+        const style = getComputedStyle(this.cellEl);
+        const inset =
+            (Number.parseFloat(style.paddingTop) || 0) +
+            (Number.parseFloat(style.paddingBottom) || 0) +
+            (Number.parseFloat(style.borderTopWidth) || 0) +
+            (Number.parseFloat(style.borderBottomWidth) || 0);
+        return Math.max(0, max - chrome - inset);
     }
 
     /** The cell content area's rendered size, in CSS pixels. */
