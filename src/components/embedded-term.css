@@ -1,0 +1,111 @@
+/* Styles for the <embedded-term> custom element (embedded-term.tsx).
+ * An xterm.js terminal that declares N rows to the pty but only shows the rows
+ * that have been used, growing downward from height 0. Set --embedded-term-bg to
+ * the terminal background so the scroll fades blend into it; it must match the
+ * theme background in embedded-term.tsx.
+ *
+ * xterm's own stylesheet is required, not cosmetic: it positions the render
+ * layers and rows. ./xterm.css is a symlink to
+ * node_modules/@xterm/xterm/css/xterm.css, excluded from biome in biome.json so
+ * `npm run format` does not rewrite it through the link. */
+
+@import "./xterm.css";
+
+embedded-term {
+	--embedded-term-bg: #1c1c1c;
+	/* display:block, not inline-block, on purpose: an inline-block is
+	 * baseline-aligned against the last line box in its normal flow, and a fully
+	 * clipped terminal has no line box at all (its renderer is paused), so the
+	 * first write would shift the whole element as a baseline appeared. */
+	display: block;
+	position: relative;
+	background: var(--embedded-term-bg);
+}
+
+/* Height is the high-water mark of revealed rows; the terminal inside is always
+ * the full declared grid and the remainder is clipped away. z-index:0 makes this
+ * a stacking context, so xterm's own layers (which go up to z-index 11) cannot
+ * paint over the squashed cursor sitting outside the clip. */
+.embedded-term-clip {
+	position: relative;
+	z-index: 0;
+	overflow: hidden;
+	transition: height 90ms ease-out;
+}
+
+.embedded-term-clip .xterm {
+	padding: 0;
+}
+
+/* The edge fades are this terminal's scroll affordance, so the scrollbar goes.
+ * xterm 6 scrolls with a VS Code-style overlay scrollbar element; xterm 5 used a
+ * native overflow scroller on .xterm-viewport. Both are covered. Hiding the
+ * overlay does not disable scrolling: the wheel is handled by the scrollable
+ * element itself, not by a DOM scrollbar. */
+.embedded-term-clip .xterm-scrollable-element > .scrollbar {
+	display: none;
+}
+
+.embedded-term-clip .xterm-viewport {
+	scrollbar-width: none;
+}
+
+.embedded-term-clip .xterm-viewport::-webkit-scrollbar {
+	display: none;
+}
+
+/* Scroll edge gradients, above every xterm layer. Shown by embedded-term.tsx
+ * only when content is actually hidden in that direction. */
+.embedded-term-fade {
+	position: absolute;
+	left: 0;
+	right: 0;
+	z-index: 20;
+	display: none;
+	pointer-events: none;
+}
+
+.embedded-term-fade-top {
+	top: 0;
+	background: linear-gradient(var(--embedded-term-bg), transparent);
+}
+
+.embedded-term-fade-bottom {
+	bottom: 0;
+	background: linear-gradient(transparent, var(--embedded-term-bg));
+}
+
+/* The squashed cursor: a 4px cursor straddling the bottom edge, shown while the
+ * real cursor sits on the first blank row that is still hidden. It is a child of
+ * the host rather than the clip, since overflow:hidden would eat its lower half.
+ * Position, size and colour are set from embedded-term.tsx. */
+.embedded-term-cursor {
+	position: absolute;
+	z-index: 2;
+	display: none;
+	border-radius: 1px;
+	pointer-events: none;
+}
+
+/* Matches the 1s step-end cadence of xterm's own DOM-renderer cursor. */
+.embedded-term-cursor.blink {
+	animation: embedded-term-cursor-blink 1s step-end infinite;
+}
+
+/* Declared after .blink so it wins on order at equal specificity, no !important
+ * needed, when both classes are present. */
+.embedded-term-cursor.unfocused {
+	animation: none;
+	opacity: 0.4;
+}
+
+@keyframes embedded-term-cursor-blink {
+	0%,
+	49% {
+		opacity: 1;
+	}
+	50%,
+	100% {
+		opacity: 0;
+	}
+}

@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!**/incoming.ts", "!**/incoming.schema.json"]
+    "includes": ["**", "!**/incoming.ts", "!**/incoming.schema.json", "!src/components/xterm.css"]
   },
   "vcs": {
     "enabled": true,
