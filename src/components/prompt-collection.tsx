@@ -32,6 +32,8 @@
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
 // marker, and to reset the editor's text and cursor from `entry.prompt.content`.
+// A reconfiguration that finds the Echo's status `done` or `error` (the process
+// closed) instead removes the prompt — its tab and editor are spent.
 //
 // A prompt heeds its Entry's Prompt `bindings` map (e.g. { "Ctrl+L": "clear" }):
 // pressing a bound chord in the editor fires a bubbling "command" event and
@@ -799,6 +801,13 @@ export class PromptCollection extends HTMLElement {
     private reconfigure(entry: Entry): void {
         const row = this.rows.get(entry);
         if (!row) {
+            return;
+        }
+        // A prompt whose process has terminated (close → echo status done or
+        // error) has no further use: drop its tab and editor.
+        const status = entry.echo.status.status;
+        if (status === "done" || status === "error") {
+            this.removePrompt(entry);
             return;
         }
         row.editor.setReadOnly?.(false);

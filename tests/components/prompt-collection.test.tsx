@@ -242,6 +242,35 @@ describe("prompt-collection — reconfiguration", () => {
         expect(entry.prompt?.content.position).toBe(1);
     });
 
+    test("a prompt whose echo is done or error is removed on reconfiguration", () => {
+        const pc = make();
+        const a = pc.addPrompt(makeEntry({ label: "a" }));
+        const b = pc.addPrompt(makeEntry({ label: "b" }));
+        destroyed.length = 0;
+
+        a.echo.status = { status: "done" };
+        a.fire();
+        expect(pc.prompts).toEqual([b]);
+        expect(tabOf(pc, a)).toBeNull();
+        expect(destroyed).toEqual([""]);
+        expect(pc.activePrompt).toBe(b); // 'a' was active; activation moved on
+
+        b.echo.status = { status: "error" };
+        b.fire();
+        expect(pc.prompts).toEqual([]);
+        expect(pc.activePrompt).toBeNull();
+    });
+
+    test("a running echo reconfigures normally", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("keep") }));
+        entry.echo.status = { status: "running" };
+        entry.echo.label = "still-here";
+        entry.fire();
+        expect(pc.prompts).toEqual([entry]);
+        expect(tabOf(pc, entry)?.textContent).toBe("still-here");
+    });
+
     test("active tab wears its accent; inactive tabs are grey", () => {
         const pc = make();
         const a = pc.addPrompt(makeEntry({ label: "a", color: "green" }));
