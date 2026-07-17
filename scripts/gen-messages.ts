@@ -19,9 +19,6 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
-const MESSAGES_DIR = join(ROOT, "src", "driver-exchange");
-const ALL_FILE = join(MESSAGES_DIR, "incoming.ts");
-const SCHEMA_FILE = join(MESSAGES_DIR, "incoming.schema.json");
 
 /** snake_case -> PascalCase, e.g. "foo_bar" -> "FooBar" */
 function toPascal(name: string): string {
@@ -31,88 +28,103 @@ function toPascal(name: string): string {
         .join("");
 }
 
-const files = readdirSync(MESSAGES_DIR)
-    .filter((f) => f.startsWith("_") && f.endsWith(".ts"))
-    .sort();
 
-if (files.length === 0) {
-    console.error(`No _*.ts message files found in ${MESSAGES_DIR}`);
-    process.exit(1);
-}
+class Generator {
+    directory: string;
+    dest: string;
+    schemaFile: string;
+    className: string;
 
-const project = new Project({ skipAddingFilesFromTsConfig: true });
+    constructor(directory: string, className: string) {
+        this.directory = directory;
+        this.dest = join(this.directory, "incoming.ts");
+        this.schemaFile = join(this.directory, "incoming.schema.json");
+        this.className = className;
+    }
 
-const errors: string[] = [];
-const entries: { key: string; iface: string; handler: string; module: string }[] = [];
+    run() {
+        const files = readdirSync(this.directory)
+            .filter((f) => f.startsWith("_") && f.endsWith(".ts"))
+            .sort();
 
-for (const file of files) {
-    const key = file.slice(1, -3); // strip leading "_" and trailing ".ts"
-    const interfaceName = `${toPascal(key)}Message`;
-    const handlerName = `handle$${key}`;
-    const module = `./${file.slice(0, -3)}`; // extensionless import specifier
-
-    const src = project.addSourceFileAtPath(join(MESSAGES_DIR, file));
-
-    const iface = src.getInterface(interfaceName);
-    if (!iface) {
-        errors.push(`${file}: expected exported interface \`${interfaceName}\``);
-    } else {
-        if (!iface.isExported()) {
-            errors.push(`${file}: interface \`${interfaceName}\` must be exported`);
+        if (files.length === 0) {
+            console.error(`No _*.ts message files found in ${this.directory}`);
+            process.exit(1);
         }
-        const typeProp = iface.getProperty("type");
-        if (!typeProp) {
-            errors.push(`${file}: interface \`${interfaceName}\` is missing a \`type\` field`);
-        } else {
-            const literal = typeProp
-                .getTypeNode()
-                ?.asKind(SyntaxKind.LiteralType)
-                ?.getLiteral()
-                ?.asKind(SyntaxKind.StringLiteral)
-                ?.getLiteralText();
-            if (literal !== key) {
-                errors.push(
-                    `${file}: \`${interfaceName}.type\` must be the string literal "${key}" (found ${
-                        literal === undefined ? "non-literal" : `"${literal}"`
-                    })`,
-                );
+
+        const project = new Project({ skipAddingFilesFromTsConfig: true });
+
+        const errors: string[] = [];
+        const entries: { key: string; iface: string; handler: string; module: string }[] = [];
+
+        for (const file of files) {
+            const key = file.slice(1, -3); // strip leading "_" and trailing ".ts"
+            const interfaceName = `${toPascal(key)}Message`;
+            const handlerName = `handle$${key}`;
+            const module = `./${file.slice(0, -3)}`; // extensionless import specifier
+
+            const src = project.addSourceFileAtPath(join(this.directory, file));
+
+            const iface = src.getInterface(interfaceName);
+            if (!iface) {
+                errors.push(`${file}: expected exported interface \`${interfaceName}\``);
+            } else {
+                if (!iface.isExported()) {
+                    errors.push(`${file}: interface \`${interfaceName}\` must be exported`);
+                }
+                const typeProp = iface.getProperty("type");
+                if (!typeProp) {
+                    errors.push(`${file}: interface \`${interfaceName}\` is missing a \`type\` field`);
+                } else {
+                    const literal = typeProp
+                        .getTypeNode()
+                        ?.asKind(SyntaxKind.LiteralType)
+                        ?.getLiteral()
+                        ?.asKind(SyntaxKind.StringLiteral)
+                        ?.getLiteralText();
+                    if (literal !== key) {
+                        errors.push(
+                            `${file}: \`${interfaceName}.type\` must be the string literal "${key}" (found ${
+                                literal === undefined ? "non-literal" : `"${literal}"`
+                            })`,
+                        );
+                    }
+                }
             }
+
+            const fn = src.getFunction(handlerName);
+            if (!fn) {
+                errors.push(`${file}: expected exported function \`${handlerName}\``);
+            } else {
+                if (!fn.isExported()) {
+                    errors.push(`${file}: function \`${handlerName}\` must be exported`);
+                }
+                // Handlers must be async (return a Promise).
+                if (fn.getReturnType().getSymbol()?.getName() !== "Promise") {
+                    errors.push(
+                        `${file}: function \`${handlerName}\` must be async (return a Promise)`,
+                    );
+                }
+            }
+
+            entries.push({ key, iface: interfaceName, handler: handlerName, module });
         }
-    }
 
-    const fn = src.getFunction(handlerName);
-    if (!fn) {
-        errors.push(`${file}: expected exported function \`${handlerName}\``);
-    } else {
-        if (!fn.isExported()) {
-            errors.push(`${file}: function \`${handlerName}\` must be exported`);
+        if (errors.length > 0) {
+            console.error("Message file validation failed:\n" + errors.map((e) => `  - ${e}`).join("\n"));
+            process.exit(1);
         }
-        // Handlers must be async (return a Promise).
-        if (fn.getReturnType().getSymbol()?.getName() !== "Promise") {
-            errors.push(
-                `${file}: function \`${handlerName}\` must be async (return a Promise)`,
-            );
-        }
-    }
 
-    entries.push({ key, iface: interfaceName, handler: handlerName, module });
-}
+        // ---- Emit incoming.ts -----------------------------------------------------------
 
-if (errors.length > 0) {
-    console.error("Message file validation failed:\n" + errors.map((e) => `  - ${e}`).join("\n"));
-    process.exit(1);
-}
+        const imports = entries
+            .map((e) => `import { ${e.handler}, type ${e.iface} } from "${e.module}";`)
+            .join("\n");
 
-// ---- Emit incoming.ts -----------------------------------------------------------
+        const registry = entries.map((e) => `    ${e.key}: ${e.handler},`).join("\n");
+        const union = entries.map((e) => e.iface).join(" | ");
 
-const imports = entries
-    .map((e) => `import { ${e.handler}, type ${e.iface} } from "${e.module}";`)
-    .join("\n");
-
-const registry = entries.map((e) => `    ${e.key}: ${e.handler},`).join("\n");
-const union = entries.map((e) => e.iface).join(" | ");
-
-const allOutput = `// AUTO-GENERATED by scripts/gen-messages.ts — do not edit.
+        const allOutput = `// AUTO-GENERATED by scripts/gen-messages.ts — do not edit.
 // Run \`bun run gen\` to regenerate.
 ${imports}
 
@@ -122,27 +134,35 @@ ${registry}
 } as const;
 
 /** Union of every message type. */
-export type IncomingDriverMessage = ${union};
+export type ${this.className} = ${union};
 `;
 
-writeFileSync(ALL_FILE, allOutput);
+        writeFileSync(this.dest, allOutput);
 
-// ---- Emit incoming.schema.json ---------------------------------------------
+        // ---- Emit incoming.schema.json ---------------------------------------------
 
-const generator = createGenerator({
-    path: ALL_FILE,
-    tsconfig: join(ROOT, "tsconfig.json"),
-    type: "IncomingDriverMessage",
-    jsDoc: "extended", // carry JSDoc comments into `description` fields
-    additionalProperties: false, // reject unknown properties
-    topRef: true,
-});
+        const generator = createGenerator({
+            path: this.dest,
+            tsconfig: join(ROOT, "tsconfig.json"),
+            type: this.className,
+            jsDoc: "extended", // carry JSDoc comments into `description` fields
+            additionalProperties: false, // reject unknown properties
+            topRef: true,
+        });
 
-const schema = generator.createSchema("IncomingDriverMessage");
-writeFileSync(SCHEMA_FILE, JSON.stringify(schema, null, 2) + "\n");
+        const schema = generator.createSchema(this.className);
+        writeFileSync(this.schemaFile, JSON.stringify(schema, null, 2) + "\n");
 
-console.log(
-    `Wrote ${ALL_FILE} and ${SCHEMA_FILE} (${entries.length} message${
-        entries.length === 1 ? "" : "s"
-    })`,
-);
+        console.log(
+            `Wrote ${this.dest} and ${this.schemaFile} (${entries.length} message${
+                entries.length === 1 ? "" : "s"
+            })`,
+        );
+    }
+}
+
+const dr = new Generator(
+    join(ROOT, "src", "driver-exchange"),
+    "IncomingDriverMessage",
+)
+dr.run();
