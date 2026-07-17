@@ -1,4 +1,4 @@
 {"$role":"driverIn","type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
 {"$role":"interfaceOut","type":"update_component","component":{"zones":{},"echo":"#101"}}
 {"$role":"driverIn","type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
-{"$role":"interfaceOut","type":"buche_error","code":"exists","reason":"An element already exists at address $proc,cq,2","input":{"type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}}
+{"$role":"interfaceOut","type":"problem","code":"exists","reason":"An element already exists at address $proc,cq,2","input":{"type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}}

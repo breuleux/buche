@@ -1,7 +1,7 @@
 import { cpSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bucheRun } from "../src/core.ts";
+import { bucheStream } from "../src/core.ts";
 import type { IncomingInterfaceMessage } from "../src/interface-exchange/incoming.ts";
 import { AsyncQueue, ProcessCommunicator } from "../src/process.ts";
 import { resetId } from "../src/utils.ts";
@@ -181,9 +181,9 @@ export async function* simulate(args: SimulateArgs | ReplayArgs): AsyncGenerator
         },
     } as unknown as ProcessCommunicator;
 
-    const run = bucheRun({
+    const run = bucheStream({
         process,
-        interface: replay ? staggerByReplay() : staggerByPause(),
+        interactionStream: replay ? staggerByReplay() : staggerByPause(),
         loggers: {
             driverIn: tagAndPush("driverIn"),
             driverOut: tagAndPush("driverOut"),
@@ -380,11 +380,11 @@ export async function runSim(values: SimCliArgs, config: RunSimConfig = {}): Pro
             collected.push(message);
             log(message);
         }
-    } catch (err: any) {
-        console.error(`\n${err.message}`);
-        globalThis.process.exitCode = 1;
-        // A timed-out replay leaves the driver process running; stop it.
-        common.process.kill();
+        // } catch (err: any) {
+        //     console.error(`\n${err.message}`);
+        //     globalThis.process.exitCode = 1;
+        //     // A timed-out replay leaves the driver process running; stop it.
+        //     common.process.kill();
     } finally {
         if (values.output) {
             const bootLine: BootLine = { type: "boot", command, pause };

@@ -151,7 +151,7 @@ export function formatMessage(message: any, options: FormatOptions = {}): string
             const rendered = JSON.stringify(value);
             const avail = width - indent.length - key.length - 2;
             const cut =
-                rendered.length > avail
+                rendered && rendered.length > avail
                     ? `${rendered.slice(0, Math.max(0, avail - 1))}…`
                     : rendered;
             lines.push(`${indent}${label} ${cut}`);

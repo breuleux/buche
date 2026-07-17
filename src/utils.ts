@@ -16,12 +16,15 @@ export class IdClass {
     }
 }
 
-export interface BucheErrorMessage {
-    type: "buche_error";
+export interface BucheErrorFields {
     code: string;
     subcode?: string;
     reason: string;
     input?: any;
+}
+
+export interface BucheErrorMessage extends BucheErrorFields {
+    type: "buche_error";
 }
 
 export class BucheError extends Error {

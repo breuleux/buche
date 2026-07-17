@@ -1,5 +1,6 @@
 import type { CellCommand } from "../cell.ts";
 import type { ComponentData } from "../core.ts";
+import type { BucheErrorFields } from "../utils.ts";
 
 /**
  * Install or update a component (echo, cell and/or prompt) at a location.
@@ -23,5 +24,15 @@ export interface CellCommandMessage {
     component: ComponentData;
 }
 
+export interface ProblemMessage extends BucheErrorFields {
+    type: "problem";
+
+    /** The component regarding which there was a problem, if one may be found. */
+    component?: ComponentData;
+}
+
 /** Union of every message type. */
-export type OutgoingInterfaceMessage = UpdateComponentMessage | CellCommandMessage;
+export type OutgoingInterfaceMessage =
+    | UpdateComponentMessage
+    | CellCommandMessage
+    | ProblemMessage;

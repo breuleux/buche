@@ -1,2 +1,2 @@
 {"$role":"driverIn","type":"cell_configure","from":["$proc","cq","53"],"to":["$term"],"zone":"bogus","background":false}
-{"$role":"interfaceOut","type":"buche_error","code":"nozone","reason":"No zone named bogus could be found","input":{"type":"cell_configure","from":["$proc","cq","53"],"to":["$term"],"zone":"bogus","background":false}}
+{"$role":"interfaceOut","type":"problem","code":"nozone","reason":"No zone named bogus could be found","input":{"type":"cell_configure","from":["$proc","cq","53"],"to":["$term"],"zone":"bogus","background":false}}

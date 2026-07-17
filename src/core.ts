@@ -6,7 +6,7 @@ import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
 import type { Echo } from "./echo.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
-import type { OutgoingInterfaceMessage } from "./interface-exchange/outgoing.ts";
+import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import { Machine } from "./machine.ts";
 import { outgoingDriverMessageTypes } from "./message-directory.ts";
 import type { ProcessCommunicator } from "./process.ts";
@@ -14,8 +14,8 @@ import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import { BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
 import { Zone } from "./zone.ts";
 
-export type InM = IncomingDriverMessage | IncomingInterfaceMessage;
-export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage | BucheErrorMessage;
+export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
+export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage;
 export type HandlerT = Record<string, (buche: Buche, message: InM) => AsyncIterable<OutM>>;
 
 export interface BucheArguments {
@@ -86,11 +86,13 @@ export class Buche extends Machine<InM, OutM> {
         } catch (err: any) {
             if (err instanceof BucheError) {
                 err.errorData.input = input;
-                yield err.errorData;
+                yield Object.assign({}, err.errorData, {
+                    type: "problem",
+                }) as unknown as ProblemMessage;
             } else {
                 /* node:coverage disable */
                 yield {
-                    type: "buche_error",
+                    type: "problem",
                     code: "internal",
                     reason: err.toString(),
                     input: err,
@@ -221,13 +223,29 @@ async function* _awrap<T>(stream: AsyncGenerator<T>, fn?: (arg: T) => void) {
 
 const baseHandlers = {
     async *buche_error(buche: Buche, obj: BucheErrorMessage): AsyncGenerator<OutM> {
-        // TODO
+        let component: ComponentData | undefined;
+        if (Array.isArray(obj.input?.from)) {
+            // If the original input had an address, find the closest
+            // non-null component in the hierarchy.
+            let node: Hierarchy = buche.hierarchy;
+            for (const segment of obj.input.from) {
+                const child = node.children[segment];
+                if (!child) {
+                    break;
+                }
+                node = child;
+            }
+            component = node.component;
+        }
+        yield Object.assign({}, obj, {
+            type: "problem",
+            component: component,
+        }) as unknown as ProblemMessage;
     },
 };
 
-export interface BucheRunArguments {
+export interface BucheFunctionArguments {
     process: ProcessCommunicator;
-    interface: AsyncGenerator<InM>;
     loggers: {
         driverIn?: (arg: InM) => void;
         interfaceIn?: (arg: InM) => void;
@@ -236,7 +254,11 @@ export interface BucheRunArguments {
     };
 }
 
-export async function* bucheRun(args: BucheRunArguments) {
+export interface BucheStreamArguments extends BucheFunctionArguments {
+    interactionStream: AsyncGenerator<InM>;
+}
+
+export async function* bucheStream(args: BucheStreamArguments) {
     const buche = new Buche({
         handlers: Object.assign(
             baseHandlers as unknown as HandlerT,
@@ -247,7 +269,7 @@ export async function* bucheRun(args: BucheRunArguments) {
     });
     const instream = mergeIterables(
         _awrap(args.process.messages() as AsyncGenerator<InM>, args.loggers.driverIn),
-        _awrap(args.interface, args.loggers.interfaceIn),
+        _awrap(args.interactionStream, args.loggers.interfaceIn),
     );
     const stream = buche.stream(instream);
     for await (const message of stream) {
@@ -266,8 +288,18 @@ export async function* bucheRun(args: BucheRunArguments) {
             args.process.send(message as OutgoingDriverMessage);
         } else {
             args.loggers.interfaceOut?.(message);
-            yield message;
+            yield message as OutgoingInterfaceMessage;
         }
+    }
+}
+
+export interface BucheRunArguments extends BucheStreamArguments {
+    interfaceProcessor: (m: OutgoingInterfaceMessage) => void;
+}
+
+export async function bucheRun(args: BucheRunArguments) {
+    for await (const message of bucheStream(args)) {
+        args.interfaceProcessor(message);
     }
 }
 

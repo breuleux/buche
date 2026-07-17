@@ -16,10 +16,13 @@ export interface ErrorMessage extends BaseMessage {
 }
 
 export async function* handle$error(buche: Buche, obj: ErrorMessage): AsyncIterable<OutM> {
+    const component = buche.hierarchy.getAt(obj.from, false)?.component;
+
     yield {
-        type: "buche_error",
+        type: "problem",
         code: "process",
         reason: obj.message,
         input: obj,
+        component: component,
     };
 }
