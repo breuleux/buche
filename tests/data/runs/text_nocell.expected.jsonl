@@ -1,3 +1,3 @@
 {"$role":"driverIn","type":"text","from":["$proc","cq","50"],"to":["$term"],"stream":"stdout","text":"orphan output"}
-{"$role":"interfaceOut","type":"update_component","zone":"#100","component":{"echo":"#102","cell":"#103","prompt":null,"zones":{}}}
-{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"orphan output"},"component":{"echo":"#102","cell":"#103","prompt":null,"zones":{}}}
+{"$role":"interfaceOut","type":"update_component","zone":"#100","component":{"echo":"#104","cell":"#105","prompt":null,"zones":{}}}
+{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"orphan output"},"component":{"echo":"#104","cell":"#105","prompt":null,"zones":{}}}

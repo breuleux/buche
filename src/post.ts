@@ -1,20 +1,26 @@
 import type { Cell } from "./cell";
-import type { Echo } from "./echo";
+import { Echo } from "./echo";
 import type { Prompt } from "./prompt";
+import { Hierarchy, type HierarchyArgs } from "./utils";
 import { type Zone, zoneMap } from "./zone";
 
-export class Post {
-    parent?: Post;
+interface PostArgs extends HierarchyArgs {
+    zones?: Record<string, Zone>;
+}
 
+export class Post extends Hierarchy {
     echo: Echo;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
     zones: Record<string, Zone> = {};
 
-    constructor(args: { echo: Echo; zones?: Record<string, Zone>; parent?: Post }) {
-        this.echo = args.echo;
+    constructor(args: PostArgs) {
+        super(args);
+        this.echo = new Echo({
+            from: this.address(),
+            color: this.parent?.echo.color,
+        });
         this.zones = args.zones ?? {};
-        this.parent = args.parent;
     }
 
     setEcho(echo: Echo) {

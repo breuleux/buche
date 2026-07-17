@@ -101,36 +101,51 @@ export async function* mergeIterables<T, U>(
     }
 }
 
-export class Hierarchy<T> {
-    entry?: T;
-    parent?: Hierarchy<T>;
-    children: Record<string, Hierarchy<T>>;
+export interface HierarchyArgs {
+    parent?: Hierarchy;
+    field?: string;
+}
 
-    constructor(entry?: T, parent?: Hierarchy<T>) {
-        this.entry = entry;
-        this.parent = parent;
+export class Hierarchy {
+    parent?: this;
+    field?: string;
+    children: Record<string, this>;
+
+    constructor(args: { parent?: Hierarchy; field?: string }) {
+        this.parent = args.parent as this;
+        this.field = args.field;
         this.children = {};
     }
 
-    getAt(addr: Address, create: boolean = false): Hierarchy<T> | null {
-        let node: Hierarchy<T> = this;
+    address(): Address {
+        if (!this.parent) {
+            return [];
+        } else {
+            return [...this.parent.address(), this.field!];
+        }
+    }
+
+    getAt(addr: Address, create: boolean = false): this | null {
+        let node: this = this;
         for (const segment of addr) {
             let child = node.children[segment];
             if (!child) {
                 if (!create) {
                     return null;
                 }
-                child = node.children[segment] = new Hierarchy(undefined, node);
+                child = node.children[segment] = new (
+                    this.constructor as new (
+                        _: HierarchyArgs,
+                    ) => this
+                )({ parent: node, field: segment });
             }
             node = child;
         }
         return node;
     }
 
-    *walk(): Generator<T> {
-        if (this.entry) {
-            yield this.entry;
-        }
+    *walk(): Generator<this> {
+        yield this;
         for (const child of Object.values(this.children)) {
             yield* child.walk();
         }

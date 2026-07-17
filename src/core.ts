@@ -4,7 +4,6 @@ import { Cell, type CellConfiguration } from "./cell.ts";
 import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import { Echo } from "./echo.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
@@ -12,7 +11,7 @@ import { Post } from "./post.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import type { Address } from "./types.ts";
-import { awrap, BucheError, type BucheErrorMessage, Hierarchy, mergeIterables } from "./utils.ts";
+import { awrap, BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
 import { type Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
@@ -37,12 +36,12 @@ export class Buche {
         driverHandlers,
         interfaceHandlers,
     );
-    hierarchy: Hierarchy<Post>;
+    hierarchy: Post;
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.hierarchy = new Hierarchy(new Post({ echo: new Echo({}), zones: args.initialZones }));
+        this.hierarchy = new Post({ zones: args.initialZones });
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -78,18 +77,12 @@ export class Buche {
      */
     get(addr: Address, create: boolean = false): Post {
         const node = this.hierarchy.getAt(addr, create);
-        let c = node?.entry;
+        const c = node;
         if (!c) {
-            if (!create) {
-                throw new BucheError({
-                    type: "buche_error",
-                    code: "missingcell",
-                    reason: `Cell at ${JSON.stringify(addr)} is missing`,
-                });
-            }
-            c = (node as Hierarchy<Post>).entry = new Post({
-                echo: new Echo({}),
-                parent: node!.parent!.entry,
+            throw new BucheError({
+                type: "buche_error",
+                code: "missingcell",
+                reason: `Cell at ${JSON.stringify(addr)} is missing`,
             });
         }
         return c;
@@ -101,9 +94,9 @@ export class Buche {
         let prompt: Prompt | null = null;
         let zone: Zone | null = null;
 
-        let node: Hierarchy<Post> | undefined = this.hierarchy;
+        let node: Post | undefined = this.hierarchy;
         for (let i = 0; node; node = node.children[arr[i++]]) {
-            const data = node.entry;
+            const data = node;
             if (data?.prompt) {
                 prompt = data.prompt;
             }
