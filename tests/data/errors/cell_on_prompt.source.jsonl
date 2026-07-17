@@ -1,2 +1,2 @@
-{"type":"prompt_configure","from":["cq"],"to":["$term"],"label":"cq"}
-{"type":"cell_configure","from":["cq"],"to":["$term"],"zone":null,"background":false}
+{"type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq"}
+{"type":"cell_configure","from":["$proc","cq"],"to":["$term"],"zone":null,"background":false}

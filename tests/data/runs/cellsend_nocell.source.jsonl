@@ -1,1 +1,1 @@
-{"type":"cell_send","from":["cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
+{"type":"cell_send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}

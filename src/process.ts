@@ -140,7 +140,7 @@ export class ProcessCommunicator {
         this.command = command;
         this.options = options;
         this.from = options.from ?? [];
-        this.to = options.to ?? ["$terminal"];
+        this.to = options.to ?? ["$term"];
         this.start();
     }
 

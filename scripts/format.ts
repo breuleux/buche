@@ -68,7 +68,7 @@ function fmtAddr(addr: unknown): string {
     return Array.isArray(addr) ? addr.join(".") : "";
 }
 
-/** Format the from→to routing, e.g. "cq.2 → $terminal" (empty if neither exists). */
+/** Format the from→to routing, e.g. "cq.2 → $term" (empty if neither exists). */
 function fmtRoute(message: any): string {
     const from = fmtAddr(message.from);
     const to = fmtAddr(message.to);

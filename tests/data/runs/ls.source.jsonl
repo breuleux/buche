@@ -1,5 +1,5 @@
-{"type":"prompt_configure","from":["cq"],"to":["$term"],"prompt_html":"<span style='color:#569cd6;'>&gt;&gt;</span>","label":"cq","bindings":{"Control+T":"bbd0e542-5313-469f-8a3a-9d2b3af60d3a","Meta+E":"cac6171e-0ed4-47c0-ae92-96d0f530ac04","Meta+D":"91948b0d-2c16-4dab-9696-eec55a667986","Tab Tab":"0f50ed65-3f2b-47c1-b7e5-5772a6eab293"}}
-{"type":"echo","from":["cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
-{"type":"cell_configure","from":["cq","2"],"to":["$term"],"zone":null,"background":false}
-{"type":"text","from":["cq","2"],"to":["$term"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
-{"type":"close","from":["cq","2"],"to":["$term"],"outcome":{"type":"success","code":0}}
+{"type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"prompt_html":"<span style='color:#569cd6;'>&gt;&gt;</span>","label":"cq","bindings":{"Control+T":"bbd0e542-5313-469f-8a3a-9d2b3af60d3a","Meta+E":"cac6171e-0ed4-47c0-ae92-96d0f530ac04","Meta+D":"91948b0d-2c16-4dab-9696-eec55a667986","Tab Tab":"0f50ed65-3f2b-47c1-b7e5-5772a6eab293"}}
+{"type":"echo","from":["$proc","cq","2"],"to":["$term"],"text":"ls","ranges":[{"start":0,"end":2,"cls":"sh-cmd"}]}
+{"type":"cell_configure","from":["$proc","cq","2"],"to":["$term"],"zone":null,"background":false}
+{"type":"text","from":["$proc","cq","2"],"to":["$term"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
+{"type":"close","from":["$proc","cq","2"],"to":["$term"],"outcome":{"type":"success","code":0}}

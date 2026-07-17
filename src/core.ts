@@ -251,7 +251,11 @@ export async function* bucheRun(args: BucheRunArguments) {
     );
     const stream = buche.stream(instream);
     for await (const message of stream) {
-        if (message.type === "signal" && (message as SignalRequest).to.length === 0) {
+        if (
+            message.type === "signal" &&
+            (message as SignalRequest).to.length === 1 &&
+            (message as SignalRequest).to[0] === "$proc"
+        ) {
             const signal = message as SignalRequest;
             args.loggers.driverOut?.(signal);
             args.process.kill(signal.code);
