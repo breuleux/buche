@@ -83,12 +83,14 @@ export class Buche extends Machine<InM, OutM> {
                 err.errorData.input = input;
                 yield err.errorData;
             } else {
+                /* node:coverage disable */
                 yield {
                     type: "error",
                     code: "internal",
                     reason: err.toString(),
                     input: err,
                 };
+                /* node:coverage enable */
             }
         }
     }

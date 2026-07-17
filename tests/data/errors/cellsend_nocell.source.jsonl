@@ -1,0 +1,1 @@
+{"type":"cell_send","from":["cq","52"],"to":["$terminal"],"message":{"type":"text","stream":"stdout","text":"hi"}}
