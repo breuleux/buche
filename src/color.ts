@@ -114,11 +114,11 @@ export function styleToCss(style: Style): string {
 
 export class Theme {
     bgLum: number = 0.18;
-    fgLum: number = 0.9;
+    fgLum: number = 1.0;
     defaults: ColorCoords = {
         h: 0,
         s: 60,
-        l: 60,
+        l: 70,
     };
     maxChroma: number = 0.35;
     fontFamilies: Record<string, string> = {

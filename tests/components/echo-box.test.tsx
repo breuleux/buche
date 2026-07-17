@@ -95,6 +95,20 @@ describe("echo-box — colour", () => {
         box.color = "#f44";
         expect(box.style.getPropertyValue("--echo-color")).toBe("#f44");
     });
+
+    test("a colour accent is parsed through the theme", () => {
+        const box = make({ color: "green" });
+        expect(box.style.getPropertyValue("--echo-color")).toBe(th.calculateColor("green"));
+
+        box.color = "blue L80";
+        expect(box.style.getPropertyValue("--echo-color")).toBe(th.calculateColor("blue L80"));
+    });
+
+    test("an unparseable value (a plain CSS colour) is used verbatim", () => {
+        const box = make();
+        box.color = "rebeccapurple";
+        expect(box.style.getPropertyValue("--echo-color")).toBe("rebeccapurple");
+    });
 });
 
 describe("echo-box — status", () => {

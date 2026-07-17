@@ -1,22 +1,20 @@
 import { describe, expect, test } from "vitest";
-import {
-    // type Anchors,
-    // calculateColor,
-    // calculateStyle,
-    // coordsToCss,
-    // parseColor,
-    styleToCss,
-    Theme,
-    defaultTheme as th,
-} from "../src/color.ts";
+import { styleToCss, Theme } from "../src/color.ts";
 
-// const LIGHT: Anchors = { bg: 0.93, fg: 0.2 };
-// const DARK: Anchors = { bg: 0.22, fg: 0.95 };
+const common = {
+    defaults: {
+        h: 0,
+        s: 60,
+        l: 60,
+    },
+    maxChroma: 0.35,
+};
 
-const lth = new Theme({ bgLum: 0.93, fgLum: 0.2 });
-const dth = new Theme({ bgLum: 0.22, fgLum: 0.95 });
-const dth2 = new Theme({ bgLum: 0.2, fgLum: 0.9 });
-const eth = new Theme({ bgLum: 0.5, fgLum: 0.5 });
+const th = new Theme({ bgLum: 0.18, fgLum: 0.9, ...common });
+const lth = new Theme({ bgLum: 0.93, fgLum: 0.2, ...common });
+const dth = new Theme({ bgLum: 0.22, fgLum: 0.95, ...common });
+const dth2 = new Theme({ bgLum: 0.2, fgLum: 0.9, ...common });
+const eth = new Theme({ bgLum: 0.5, fgLum: 0.5, ...common });
 
 describe("parseColor — channels", () => {
     test("defaults when nothing is specified", () => {

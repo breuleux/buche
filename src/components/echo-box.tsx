@@ -208,7 +208,7 @@ export class EchoBox extends HTMLElement {
         this.applyStatus();
         const color = this.getAttribute("color");
         if (color) {
-            this.style.setProperty("--echo-color", color);
+            this.style.setProperty("--echo-color", this.resolveColor(color));
         }
         const echo = this.getAttribute("echo");
         if (echo != null) {
@@ -349,18 +349,33 @@ export class EchoBox extends HTMLElement {
 
     // ── Colour ──────────────────────────────────────────────────────────────
 
-    /** The status-circle and gutter-line colour (sets the `--echo-color` var). */
+    /** The resolved status-circle and gutter-line colour (the `--echo-color` var). */
     get color(): string {
         this.ensureSetup();
         return this.style.getPropertyValue("--echo-color").trim();
     }
 
+    /**
+     * Set the status-circle / gutter-line colour. The value is an accent parsed
+     * through {@link defaultTheme} (e.g. `"green"`, `"blue L80"`); a value that
+     * isn't a valid accent is used verbatim, so plain CSS colours still work.
+     */
     set color(value: string) {
         this.ensureSetup();
         if (value) {
-            this.style.setProperty("--echo-color", value);
+            this.style.setProperty("--echo-color", this.resolveColor(value));
         } else {
             this.style.removeProperty("--echo-color");
+        }
+    }
+
+    /** Resolve a colour accent to a CSS colour, falling back to the raw value
+     *  when it cannot be parsed (already a CSS colour like `#8ae234`). */
+    private resolveColor(value: string): string {
+        try {
+            return defaultTheme.calculateColor(value);
+        } catch {
+            return value;
         }
     }
 
