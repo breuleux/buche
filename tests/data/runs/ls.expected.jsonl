@@ -7,3 +7,4 @@
 {"$role":"in","type":"text","from":["cq","2"],"to":["$terminal"],"stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"}
 {"$role":"out","type":"cell_send","command":{"type":"text","stream":"stdout","text":"bun.lock\t\tnode_modules\t\tterminal_messages.ts\r\nCLAUDE.md\t\tpackage-lock.json\ttests\r\njunkyard\t\tpackage.json\t\tTODO.md\r\nlayouts\t\t\tscripts\t\t\ttsconfig.json\r\nmain.ts\t\t\tsrc\r\n"},"component":{"zones":{},"echo":"#102","cell":"#103"}}
 {"$role":"in","type":"close","from":["cq","2"],"to":["$terminal"],"outcome":{"type":"success","code":0}}
+{"$role":"out","type":"close_component","component":{"zones":{},"echo":"#102","cell":"#103"}}

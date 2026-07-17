@@ -30,14 +30,49 @@ export interface ComponentData {
     zones: Record<string, Zone> | null;
 }
 
+export class Hierarchy {
+    component?: ComponentData;
+    children: Record<string, Hierarchy>;
+
+    constructor(component?: ComponentData) {
+        this.component = component;
+        this.children = {};
+    }
+
+    getAt(addr: Address, create: boolean = false): Hierarchy | null {
+        let node: Hierarchy = this;
+        for (const segment of addr) {
+            let child = node.children[segment];
+            if (!child) {
+                if (!create) {
+                    return null;
+                }
+                child = node.children[segment] = new Hierarchy();
+            }
+            node = child;
+        }
+        return node;
+    }
+
+    /** Yield every component in this subtree (this node first, then descendants). */
+    *iterateComponents(): Generator<ComponentData> {
+        if (this.component) {
+            yield this.component;
+        }
+        for (const child of Object.values(this.children)) {
+            yield* child.iterateComponents();
+        }
+    }
+}
+
 export class Buche extends Machine<InM, OutM> {
     handlers!: HandlerT;
-    hierarchy: Record<string, ComponentData>;
+    hierarchy: Hierarchy;
 
     constructor(args: BucheArguments) {
         super();
         this.handlers = args.handlers;
-        this.hierarchy = {"[]": {zones: args.initialZones}};
+        this.hierarchy = new Hierarchy({ zones: args.initialZones });
     }
 
     async *process(input: InM): AsyncIterable<OutM> {
@@ -63,20 +98,20 @@ export class Buche extends Machine<InM, OutM> {
     }
 
     get(addr: Address): ComponentData {
-        const key = this.addressKey(addr);
-        if (!(key in this.hierarchy)) {
+        const node = this.hierarchy.getAt(addr, false);
+        if (!node?.component) {
             throw new BucheError({
                 type: "error",
                 code: "missingcell",
-                reason: `Cell at ${key} is missing`,
+                reason: `Cell at ${this.addressKey(addr)} is missing`,
             });
         }
-        return this.hierarchy[key];
+        return node.component;
     }
 
     fresh(addr: Address, allowEcho: boolean = true): ComponentData {
-        const key = this.addressKey(addr);
-        let c = this.hierarchy[key];
+        const node = this.hierarchy.getAt(addr, true)!;
+        let c = node.component;
         if (c) {
             if (c.cell || c.prompt || (!allowEcho && c.echo)) {
                 throw new BucheError({
@@ -85,9 +120,8 @@ export class Buche extends Machine<InM, OutM> {
                     reason: `An element already exists at address ${addr}`,
                 });
             }
-        }
-        else {
-            c = this.hierarchy[key] = {zones: {}};
+        } else {
+            c = node.component = { zones: {} };
         }
         return c;
     }
@@ -97,19 +131,16 @@ export class Buche extends Machine<InM, OutM> {
         const arr = Array.from(info.from) as Address;
         let prompt: Prompt | null = null;
         let zone: Zone | null = null;
-        while (true) {
-            const key = this.addressKey(arr);
-            const data = this.hierarchy[key];
-            if (prompt === null && data?.prompt) {
-                prompt = data?.prompt;
+
+        let node: Hierarchy | undefined = this.hierarchy;
+        for (let i = 0; node; node = node.children[arr[i++]]) {
+            const data = node.component;
+            if (data?.prompt) {
+                prompt = data.prompt;
             }
-            if (zone === null && data && data.zones && zoneName in data.zones) {
+            if (data?.zones && zoneName in data.zones) {
                 zone = data.zones[zoneName];
             }
-            if (arr.length === 0) {
-                break;
-            }
-            arr.pop();
         }
         if (zone === null) {
             throw new BucheError({

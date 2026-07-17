@@ -18,6 +18,11 @@ export interface InstallPromptMessage extends InstallMessage {
     type: "install_prompt";
 }
 
+export interface CloseComponentMessage {
+    type: "close_component";
+    component: ComponentData;
+}
+
 export interface TextCommand {
     type: "text";
     stream: string;
@@ -44,5 +49,6 @@ export type OutgoingInterfaceMessage =
     | InstallEchoMessage
     | InstallCellMessage
     | InstallPromptMessage
+    | CloseComponentMessage
     | CellSendMessage
     | PromptSubmitMessage;

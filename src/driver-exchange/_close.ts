@@ -18,5 +18,11 @@ export interface CloseMessage extends BaseMessage {
 }
 
 export async function* handle$close(buche: Buche, obj: CloseMessage): AsyncIterable<OutM> {
-    // TODO
+    const h = buche.hierarchy.getAt(obj.from);
+    for (const component of h ? h.iterateComponents() : []) {
+        yield {
+            type: "close_component",
+            component: component,
+        };
+    }
 }
