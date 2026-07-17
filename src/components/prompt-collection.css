@@ -64,3 +64,10 @@ prompt-collection {
 	pointer-events: none;
 	user-select: none;
 }
+
+/* Frozen prompt (a `freeze` binding fired, until the next prompt_configure):
+ * dimmed to signal the text is dead while commands still fire. Opacity (not
+ * color) so it also dims inline-styled content. */
+.cm-editor.cm-frozen {
+	opacity: 0.45;
+}

@@ -2,7 +2,12 @@ import type { StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
 import { PromptZone } from "./zone.ts";
 
-export type PromptBindings = Record<string, string>;
+export interface PromptBinding {
+    command: string;
+    freeze?: boolean;
+}
+
+export type PromptBindings = Record<string, string | PromptBinding>;
 
 export interface PromptConfiguration {
     /** Key-chord → action-name map for this prompt. */

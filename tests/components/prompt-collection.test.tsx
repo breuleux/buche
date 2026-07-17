@@ -11,7 +11,7 @@ import type {
 } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
 import { Entry } from "../../src/entry.ts";
-import { Prompt } from "../../src/prompt.ts";
+import { Prompt, type PromptBindings } from "../../src/prompt.ts";
 import type { StyledText } from "../../src/types.ts";
 
 afterEach(() => {
@@ -30,6 +30,7 @@ type StubEditor = ReturnType<EditorFactory> & {
     baseStyle?: string;
     position?: number;
     filigrane?: string | null;
+    readOnly?: boolean;
 };
 
 function stubFactory(): EditorFactory {
@@ -57,6 +58,9 @@ function stubFactory(): EditorFactory {
             },
             setFiligrane: (filigrane) => {
                 editor.filigrane = filigrane;
+            },
+            setReadOnly: (readOnly) => {
+                editor.readOnly = readOnly;
             },
             getPosition: () => editor.position ?? value.length,
             focus: () => {},
@@ -86,7 +90,7 @@ function makeEntry(
         color?: string;
         marker?: StyledText;
         content?: StyledText;
-        bindings?: Record<string, string>;
+        bindings?: PromptBindings;
     } = {},
 ): Entry {
     const entry = new Entry({});
@@ -388,6 +392,49 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         press("ArrowRight");
         expect(pc.getValue(entry)).toBe("ls -l");
         expect(editor.getPosition?.()).toBe(3);
+    });
+
+    test("a frozen editor ignores ArrowRight ghost acceptance", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({
+            label: "a",
+            content: plain("ls"),
+            bindings: { "Ctrl+L": { command: "lock", freeze: true } },
+        });
+        entry.prompt!.filigrane = "ls -l";
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        const press = (init: KeyboardEventInit) =>
+            editor.dom
+                .querySelector(".cm-content")!
+                .dispatchEvent(
+                    new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
+                );
+
+        // Fire the freezing binding: the prompt dims (frozen class).
+        press({ key: "l", ctrlKey: true });
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
+
+        // Focus changes rewrite the root's class attribute — the frozen
+        // class must survive the blur/refocus cycle.
+        const content = editor.dom.querySelector<HTMLElement>(".cm-content")!;
+        content.focus();
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
+        content.blur();
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
+
+        // Cursor at the end: ArrowRight no longer accepts the ghost.
+        editor.setPosition?.(2);
+        press({ key: "ArrowRight" });
+        expect(pc.getValue(entry)).toBe("ls");
+
+        // Reconfiguration (prompt_configure) unblocks it: dim gone.
+        entry.fire();
+        expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
+        editor.setPosition?.(2);
+        press({ key: "ArrowRight" });
+        expect(pc.getValue(entry)).toBe("ls -l");
     });
 
     test("Escape clears the field and the ghost text", () => {
@@ -761,5 +808,189 @@ describe("prompt-collection — key bindings", () => {
         entry.prompt!.bindings = { "Ctrl+L": "clear" };
         press(editor.dom, { key: "l", ctrlKey: true });
         expect(commands).toEqual(["clear"]);
+    });
+
+    test("an object binding fires its command and freezes the editor; reconfiguring unblocks it", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({ label: "a", bindings: { "Ctrl+L": { command: "lock", freeze: true } } }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        press(editor.dom, { key: "l", ctrlKey: true });
+        expect(commands).toEqual(["lock"]);
+        expect(editor.readOnly).toBe(true);
+
+        // The next prompt_configure (entry.fire() from the driver message)
+        // unblocks the editor.
+        entry.fire();
+        expect(editor.readOnly).toBe(false);
+
+        // A non-freezing object binding fires without freezing.
+        entry.prompt!.bindings = { "Ctrl+J": { command: "jump" } };
+        press(editor.dom, { key: "j", ctrlKey: true });
+        expect(commands).toEqual(["lock", "jump"]);
+        expect(editor.readOnly).toBe(false);
+    });
+});
+
+describe("prompt-collection — previous/next virtual chords", () => {
+    const press = (el: Element, init: KeyboardEventInit) => {
+        const ev = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+        el.dispatchEvent(ev);
+        return ev;
+    };
+
+    test("ArrowUp on the first line fires the 'previous' binding; elsewhere it falls through", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({
+                label: "a",
+                content: plain("one\ntwo\nthree"),
+                bindings: { Previous: "prev-history", Next: "next-history" },
+            }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        // Cursor on the first line: Up fires "previous" and is swallowed.
+        editor.setPosition?.(1);
+        const up = press(editor.dom, { key: "ArrowUp" });
+        expect(commands).toEqual(["prev-history"]);
+        expect(up.defaultPrevented).toBe(true);
+
+        // Cursor on a middle line: no command, the key reaches the editor.
+        commands.length = 0;
+        editor.setPosition?.(5);
+        const upMid = press(editor.dom, { key: "ArrowUp" });
+        expect(commands).toEqual([]);
+        expect(upMid.defaultPrevented).toBe(false);
+    });
+
+    test("ArrowDown on the last line fires the 'next' binding; elsewhere it falls through", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({
+                label: "a",
+                content: plain("one\ntwo\nthree"),
+                bindings: { Previous: "prev-history", Next: "next-history" },
+            }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        // Cursor on the last line: Down fires "next".
+        editor.setPosition?.(10);
+        const down = press(editor.dom, { key: "ArrowDown" });
+        expect(commands).toEqual(["next-history"]);
+        expect(down.defaultPrevented).toBe(true);
+
+        // Cursor on the first line: no command, ordinary cursor motion.
+        commands.length = 0;
+        editor.setPosition?.(1);
+        const downTop = press(editor.dom, { key: "ArrowDown" });
+        expect(commands).toEqual([]);
+        expect(downTop.defaultPrevented).toBe(false);
+    });
+
+    test("a single-line prompt is both first and last line", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({
+                label: "a",
+                content: plain("ls"),
+                bindings: { Previous: "prev", Next: "next" },
+            }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        press(editor.dom, { key: "ArrowUp" });
+        press(editor.dom, { key: "ArrowDown" });
+        expect(commands).toEqual(["prev", "next"]);
+    });
+
+    test("without a previous/next binding the arrows keep their default behavior", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("one\ntwo") }));
+        const editor = pc.getEditor(entry) as StubEditor;
+        let fired = 0;
+        pc.addEventListener("command", () => fired++);
+
+        editor.setPosition?.(0);
+        const up = press(editor.dom, { key: "ArrowUp" });
+        const down = press(editor.dom, { key: "ArrowDown" });
+        expect(fired).toBe(0);
+        expect(up.defaultPrevented).toBe(false);
+        expect(down.defaultPrevented).toBe(false);
+    });
+
+    test("modified arrows never trigger the virtual chords", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({ label: "a", content: plain("ls"), bindings: { Previous: "prev" } }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        let fired = 0;
+        pc.addEventListener("command", () => fired++);
+
+        editor.setPosition?.(0);
+        press(editor.dom, { key: "ArrowUp", shiftKey: true });
+        press(editor.dom, { key: "ArrowUp", ctrlKey: true });
+        expect(fired).toBe(0);
+    });
+
+    test("an explicit ArrowUp binding wins over the previous binding on the first line", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({
+                label: "a",
+                content: plain("ls"),
+                bindings: { ArrowUp: "top", Previous: "prev" },
+            }),
+        );
+        const editor = pc.getEditor(entry) as StubEditor;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+
+        editor.setPosition?.(0);
+        press(editor.dom, { key: "ArrowUp" });
+        expect(commands).toEqual(["top"]);
+    });
+
+    test("with the real editor, ArrowUp on the first line fires previous instead of moving the cursor", () => {
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({
+            label: "a",
+            content: plain("one\ntwo"),
+            bindings: { Previous: "prev-history" },
+        });
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        const press = (key: string) =>
+            editor.dom
+                .querySelector(".cm-content")!
+                .dispatchEvent(
+                    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+                );
+
+        // Cursor on the second line: plain cursor motion, no command.
+        editor.setPosition?.(5);
+        press("ArrowUp");
+        expect(commands).toEqual([]);
+        expect(editor.getPosition?.()).toBe(0);
+
+        // Cursor back on the first line: the command fires, cursor untouched.
+        press("ArrowUp");
+        expect(commands).toEqual(["prev-history"]);
+        expect(editor.getPosition?.()).toBe(0);
     });
 });

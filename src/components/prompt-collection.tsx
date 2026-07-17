@@ -35,7 +35,10 @@
 //
 // A prompt heeds its Entry's Prompt `bindings` map (e.g. { "Ctrl+L": "clear" }):
 // pressing a bound chord in the editor fires a bubbling "command" event and
-// swallows the key so the editor doesn't also act on it.
+// swallows the key so the editor doesn't also act on it. A binding may also be
+// an object ({ command, freeze }): when a binding with `freeze` fires, the
+// prompt turns read-only — commands keep firing but typing is dead — until the
+// next prompt_configure (the Entry's reconfiguration) unblocks it.
 //
 // Events (all bubble):
 //   "promptchange"  detail: { entry: Entry }                      — active prompt changed
@@ -69,6 +72,12 @@ import { buildStyledText } from "./utils.tsx";
 // bound chord is pressed in that prompt's editor, a bubbling "command" event is
 // fired carrying the command name, the keyboard event and the Entry. Chord
 // parsing is shared with the global bindings (see keychord.ts).
+//
+// Bare ArrowUp on the first line and bare ArrowDown on the last line are also
+// matched as the virtual chords "previous" and "next" (no such physical keys
+// exist; the names come from history navigation). A binding on "previous"/
+// "next" therefore fires exactly at those line boundaries; with no such binding
+// the arrow keys fall through to the editor's ordinary cursor motion.
 
 /** A resolved colorization span: a `[start, end)` range with an inline style. */
 export interface StyleSpan {
@@ -109,6 +118,12 @@ export interface PromptEditor {
      * non-extension) hides the ghost. Optional; no-op if unsupported.
      */
     setFiligrane?(filigrane: string | null): void;
+    /**
+     * Make the editor read-only (typing dead, cursor movement and bound
+     * commands kept). Used by bindings that `freeze` the prompt. Optional;
+     * no-op if unsupported.
+     */
+    setReadOnly?(readOnly: boolean): void;
 }
 
 export type EditorFactory = (options: {
@@ -276,6 +291,9 @@ const filigraneField = StateField.define<{ filigrane: string | null; deco: Decor
 // ghost hides, and deleting back re-reveals it (the shell resends per parse).
 function acceptFiligrane(view: EditorView): boolean {
     const { state } = view;
+    if (state.readOnly) {
+        return false;
+    }
     const { empty, head } = state.selection.main;
     const text = state.doc.toString();
     if (!empty || head !== state.doc.length) {
@@ -308,6 +326,9 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
     // A reconfigurable inline style on `.cm-content` (the editor-wide base style).
     // An inline style beats the theme's class rules, and applies to typed text.
     const baseStyle = new Compartment();
+    // Reconfigurable read-only mode (bindings that `freeze` the prompt). Only
+    // user input is blocked; programmatic resets (prompt_configure) go through.
+    const readOnly = new Compartment();
     const view = new EditorView({
         state: EditorState.create({
             doc,
@@ -352,7 +373,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                             key: "Escape",
                             run: (v) => {
                                 const len = v.state.doc.length;
-                                if (!len) {
+                                if (!len || v.state.readOnly) {
                                     return false;
                                 }
                                 v.dispatch({
@@ -371,6 +392,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                 spansField,
                 filigraneField,
                 baseStyle.of([]),
+                readOnly.of([]),
                 darkTheme,
                 EditorView.updateListener.of((u) => {
                     if (u.docChanged) {
@@ -387,6 +409,20 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }),
         setHighlights: (spans) => view.dispatch({ effects: setSpansEffect.of(spans) }),
         setFiligrane: (filigrane) => view.dispatch({ effects: setFiligraneEffect.of(filigrane) }),
+        setReadOnly: (ro) =>
+            // The frozen class must come through the editorAttributes facet:
+            // CodeMirror rewrites the root's `class` attribute on every focus
+            // change, which would wipe a class set directly on view.dom.
+            view.dispatch({
+                effects: readOnly.reconfigure(
+                    ro
+                        ? [
+                              EditorState.readOnly.of(true),
+                              EditorView.editorAttributes.of({ class: "cm-frozen" }),
+                          ]
+                        : [],
+                ),
+            }),
         setBaseStyle: (css) =>
             view.dispatch({
                 effects: baseStyle.reconfigure(
@@ -652,29 +688,73 @@ export class PromptCollection extends HTMLElement {
 
     // Match a keydown against the Entry's `bindings` map. On a match, swallow the
     // key (so the editor doesn't also act on it) and fire a bubbling "command"
-    // event carrying the command name, the keyboard event and the Entry.
+    // event carrying the command name, the keyboard event and the Entry. The
+    // pressed chord is tried first; at a line boundary the virtual chord
+    // ("previous"/"next", see virtualChord) is tried as a fallback, so an
+    // explicit ArrowUp/ArrowDown binding still wins everywhere.
     private handleBindings(entry: Entry, e: KeyboardEvent): void {
         const bindings = entry.prompt?.bindings;
         if (!bindings) {
             return;
         }
-        const chord = chordFromEvent(e);
-        for (const [key, command] of Object.entries(bindings)) {
-            if (normalizeChord(key) === chord) {
-                e.preventDefault();
-                e.stopPropagation();
-                const editor = this.rows.get(entry)?.editor;
-                const text = editor?.getValue() ?? "";
-                const position = editor?.getPosition?.() ?? text.length;
-                this.dispatchEvent(
-                    new CustomEvent<PromptCommandDetail>("command", {
-                        detail: { command, event: e, entry, text, position },
-                        bubbles: true,
-                    }),
-                );
-                return;
+        const chords = [chordFromEvent(e)];
+        const virtual = this.virtualChord(entry, e);
+        if (virtual) {
+            chords.push(virtual);
+        }
+        for (const chord of chords) {
+            for (const [key, binding] of Object.entries(bindings)) {
+                if (normalizeChord(key) === chord) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const command = typeof binding === "string" ? binding : binding.command;
+                    const editor = this.rows.get(entry)?.editor;
+                    // A freezing binding turns the prompt read-only as the
+                    // command fires; the next reconfiguration unblocks it.
+                    if (typeof binding === "object" && binding.freeze) {
+                        editor?.setReadOnly?.(true);
+                    }
+                    const text = editor?.getValue() ?? "";
+                    const position = editor?.getPosition?.() ?? text.length;
+                    this.dispatchEvent(
+                        new CustomEvent<PromptCommandDetail>("command", {
+                            detail: { command, event: e, entry, text, position },
+                            bubbles: true,
+                        }),
+                    );
+                    return;
+                }
             }
         }
+    }
+
+    // Virtual chord for a bare ArrowUp/ArrowDown pressed at a line boundary:
+    // "previous" when the cursor is on the first line, "next" when it is on the
+    // last (null otherwise, or for modified arrows, or unknown editors). The
+    // cursor's line is inferred from the text around its offset.
+    private virtualChord(entry: Entry, e: KeyboardEvent): string | null {
+        if (e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) {
+            return null;
+        }
+        const virtual = e.key === "ArrowUp" ? "previous" : e.key === "ArrowDown" ? "next" : null;
+        if (!virtual) {
+            return null;
+        }
+        const editor = this.rows.get(entry)?.editor;
+        if (!editor) {
+            return null;
+        }
+        const text = editor.getValue();
+        const position = editor.getPosition?.() ?? text.length;
+        const before = text.slice(0, position);
+        const after = text.slice(position);
+        if (virtual === "previous" && before.includes("\n")) {
+            return null;
+        }
+        if (virtual === "next" && after.includes("\n")) {
+            return null;
+        }
+        return virtual;
     }
 
     /** Rotate the active prompt cyclically (-1 = previous, +1 = next) and focus
@@ -713,13 +793,15 @@ export class PromptCollection extends HTMLElement {
 
     // ── Reconfiguration ─────────────────────────────────────────────────────
 
-    // Re-read an Entry's label, accent and marker after it was reconfigured, and
-    // reset the editor's text and cursor from the Prompt's `content` (if any).
+    // Re-read an Entry's label, accent and marker after it was reconfigured
+    // (a prompt_configure), reset the editor's text and cursor from the
+    // Prompt's `content` (if any), and unblock a frozen editor.
     private reconfigure(entry: Entry): void {
         const row = this.rows.get(entry);
         if (!row) {
             return;
         }
+        row.editor.setReadOnly?.(false);
         row.tab.textContent = entry.echo.label;
         this.renderMarker(row.marker, entry.prompt?.prompt);
         this.applyTabStyle(row);

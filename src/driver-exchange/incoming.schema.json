@@ -510,8 +510,30 @@
     "PromptBindings": {
       "type": "object",
       "additionalProperties": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/definitions/PromptBinding"
+          }
+        ]
       }
+    },
+    "PromptBinding": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "freeze": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
     },
     "PromptHighlightMessage": {
       "type": "object",
