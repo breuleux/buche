@@ -9,7 +9,7 @@ export type Json =
   | { [key: string]: Json };
 
 
-export type Address = [string];
+export type Address = Array<string>;
 export type To = Address;
 
 export type ZoneDescriptor = string;
@@ -23,6 +23,14 @@ export interface BaseMessage {
 
     /** Target of the message. */
     to: To;
+}
+
+export interface CreationInfo {
+    /** Address of the issuing process. */
+    from: Address;
+
+    /** Which zone to put the element in. */
+    zone?: ZoneDescriptor | null;
 }
 
 /** A syntax-highlight span over the prompt text */

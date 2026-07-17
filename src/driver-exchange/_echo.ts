@@ -4,9 +4,6 @@ import { type BaseMessage, type HighlightRange } from "./common.ts";
 export interface EchoMessage extends BaseMessage {
   type: "echo";
 
-  /** Associates the echo with an existing prompt. */
-  parent_prompt: string | null;
-
   /** Text of the command. */
   text: string | null;
 

@@ -1,18 +1,9 @@
 import { type CellConfiguration } from "../cell.ts";
 import { type OutM, type Buche } from "../core.ts";
-import { type BaseMessage, type ZoneDescriptor } from "./common.ts";
+import { type BaseMessage, type CreationInfo } from "./common.ts";
 
-export interface CellCreateMessage extends BaseMessage, CellConfiguration {
+export interface CellCreateMessage extends BaseMessage, CreationInfo, CellConfiguration {
   type: "cell_create";
-
-  /** Which cell handler to instantiate. Unknown modes are ignored with an error. */
-  mode: string;
-
-  /** Associates the cell with an existing prompt. */
-  parent_prompt?: string | null;
-
-  /** Which zone to put the cell in. */
-  zone?: ZoneDescriptor | null;
 }
 
 export async function* handle$cell_create(

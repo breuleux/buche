@@ -1,14 +1,14 @@
 import { Prompt } from "./prompt.ts";
 
 export interface CellConfiguration {
-  /** The cell/tab label. */
-  label?: string | null;
+    /** The cell/tab label. */
+    label?: string | null;
 
-  /** Toggle whether the cell keeps or relinquishes focus when it is closed. */
-  sticky?: boolean;
+    /** Toggle whether the cell keeps or relinquishes focus when it is closed. */
+    sticky?: boolean;
 
-  /** If true, do not automatically focus the cell. */
-  background?: boolean;
+    /** If true, do not automatically focus the cell. */
+    background?: boolean;
 }
 
 export class Cell implements CellConfiguration {
