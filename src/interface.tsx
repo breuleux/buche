@@ -3,6 +3,7 @@ import { showToast } from "./components/toast.ts";
 import { extractZones } from "./components/zone.tsx";
 import type { Buche } from "./core";
 import type { Entry } from "./entry.ts";
+import { FocusManager } from "./focus-draft.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
@@ -13,6 +14,7 @@ import type {
     UpdateEntryMessage,
     UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
+import { ModalKeys } from "./keybindings.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 import type { Zone } from "./zone";
@@ -67,12 +69,47 @@ export class BucheInterface implements Interface {
     interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
     zones: Array<Zone>;
     map: Map<Entry, Reification> = new Map();
+    /** Global keyboard bindings installed on the container (see keybindings.ts). */
+    keys: ModalKeys;
+    /** Cell selection / prompt focus (see focus-draft.ts — draft, to rethink). */
+    focus: FocusManager;
 
     constructor(args: BucheInterfaceArguments) {
         this.container = args.container;
         this.area = reifyTemplate(args.template);
         this.zones = extractZones(this.area as HTMLElement);
         this.interactions = new AsyncQueue();
+        this.focus = new FocusManager({
+            container: this.container,
+            zones: this.zones,
+            interactions: this.interactions,
+        });
+        this.keys = this.installKeys();
+    }
+
+    // ── Global key bindings ───────────────────────────────────────────────────
+    // Chords ("Mod+p") are always live; capture mode (Ctrl+Q, held) taps keys —
+    // p, ↑/↓, k, d — until Ctrl is released. Extend or override through
+    // `iface.keys.on(...) / .onCapture(...) / .onRelease(...)`.
+
+    installKeys(): ModalKeys {
+        const focus = this.focus;
+        const keys = new ModalKeys({
+            chords: {
+                "Mod+p": () => focus.focusPrompt(),
+            },
+            enter: "Ctrl+q",
+            capture: {
+                p: () => focus.focusPrompt(),
+                ArrowUp: () => focus.moveCellFocus(-1),
+                ArrowDown: () => focus.moveCellFocus(1),
+                k: () => focus.killFocusedCell(),
+                d: () => focus.closeFocusedCell(),
+            },
+            release: () => focus.focusFocusedCell(),
+        });
+        keys.attach(this.container);
+        return keys;
     }
 
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {

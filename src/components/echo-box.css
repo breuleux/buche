@@ -349,3 +349,16 @@ echo-box[compact] .echo-box-status-inline {
 echo-box[compact][data-alt] .echo-box-handle {
 	display: block;
 }
+
+/* ── Keyboard selection (interface capture mode) ──────────────────────────
+ * The capture-mode bindings (Ctrl+Q, then ↑/↓) highlight the selected cell
+ * with a tinted outline; once Ctrl is released the DOM focus lands on it too,
+ * without adding the browser's own outline. */
+echo-box:focus {
+	outline: none;
+}
+
+echo-box.cell-focused {
+	outline: 1px solid var(--echo-color, #6ea8fe);
+	outline-offset: -1px;
+}
