@@ -1,10 +1,10 @@
 root = true
 
-[**.{ts,js,json}]
+[**.{ts,tsx,js,jsx,json}]
 indent_style = space
 trim_trailing_whitespace = true
 
-[**.{ts,js}]
+[**.{ts,tsx,js,jsx}]
 indent_size = 4
 
 [**.{json}]

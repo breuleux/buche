@@ -8,7 +8,13 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "myjsx",
+    "paths": {
+      "myjsx/jsx-runtime": ["./src/jsx/jsx-runtime.ts"]
+    }
   },
-  "include": ["src", "scripts", "*.ts"]
+  "include": ["src", "scripts", "tests", "*.ts"]
 }
