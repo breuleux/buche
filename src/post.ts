@@ -4,13 +4,17 @@ import type { Prompt } from "./prompt";
 import { type Zone, zoneMap } from "./zone";
 
 export class Post {
-    echo: Echo | null = null;
+    parent?: Post;
+
+    echo: Echo;
     cell: Cell | null = null;
     prompt: Prompt | null = null;
     zones: Record<string, Zone> = {};
 
-    constructor(zones?: Record<string, Zone>) {
-        this.zones = zones ?? {};
+    constructor(args: { echo: Echo; zones?: Record<string, Zone>; parent?: Post }) {
+        this.echo = args.echo;
+        this.zones = args.zones ?? {};
+        this.parent = args.parent;
     }
 
     setEcho(echo: Echo) {
@@ -25,5 +29,14 @@ export class Post {
     setPrompt(prompt: Prompt) {
         this.prompt = prompt;
         Object.assign(this.zones, zoneMap(Object.values(prompt.zones)));
+    }
+
+    toJSON() {
+        return {
+            echo: this.echo,
+            cell: this.cell,
+            prompt: this.prompt,
+            zones: this.zones,
+        };
     }
 }

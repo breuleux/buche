@@ -4,10 +4,11 @@ import { Cell, type CellConfiguration } from "./cell.ts";
 import type { BaseMessage, CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import { Post } from "./post.ts";
+import { Echo } from "./echo.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
+import { Post } from "./post.ts";
 import type { ProcessCommunicator } from "./process.ts";
 import { Prompt, type PromptConfiguration } from "./prompt.ts";
 import type { Address } from "./types.ts";
@@ -41,7 +42,7 @@ export class Buche {
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 
     constructor(args: BucheArguments) {
-        this.hierarchy = new Hierarchy(new Post(args.initialZones));
+        this.hierarchy = new Hierarchy(new Post({ echo: new Echo({}), zones: args.initialZones }));
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -86,7 +87,10 @@ export class Buche {
                     reason: `Cell at ${JSON.stringify(addr)} is missing`,
                 });
             }
-            c = (node as Hierarchy<Post>).entry = new Post();
+            c = (node as Hierarchy<Post>).entry = new Post({
+                echo: new Echo({}),
+                parent: node!.parent!.entry,
+            });
         }
         return c;
     }

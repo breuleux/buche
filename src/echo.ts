@@ -1,5 +1,4 @@
 import type { ComponentStatus } from "./cell.ts";
-import type { Prompt } from "./prompt.ts";
 import type { Accent, StyledText } from "./types.ts";
 import { WithId } from "./utils.ts";
 
@@ -15,17 +14,14 @@ export interface EchoConfiguration {
 }
 
 export class Echo extends WithId() {
-    /** The originating prompt. */
-    prompt: Prompt | null = null;
-
     /** Text of the command */
     echo?: StyledText;
 
     /** The cell/tab label. */
-    label: string;
+    label!: string;
 
     /** Accent color for the component. */
-    color: Accent;
+    color!: Accent;
 
     /** Status of the component. */
     status: ComponentStatus;
@@ -33,13 +29,16 @@ export class Echo extends WithId() {
     /** List of views. */
     views?: Set<string>;
 
-    constructor(config: EchoConfiguration, location: { prompt: Prompt | null }) {
+    constructor(config: EchoConfiguration) {
         super();
-        this.prompt = location.prompt;
+        this.views = new Set();
+        this.status = { status: "running" };
+        this.configure(config);
+    }
+
+    configure(config: EchoConfiguration) {
         this.label = config.label ?? `%${this.serialId}`;
         this.color = config.color ?? "purple";
         this.echo = config.echo;
-        this.status = { status: "running" };
-        this.views = new Set();
     }
 }

@@ -2,7 +2,6 @@ import type { BasicTerm } from "./components/basic-term";
 import type { EchoBox } from "./components/echo-box";
 import type { PromptCollection } from "./components/prompt-collection";
 import type { Buche } from "./core";
-import type { Post } from "./post.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
@@ -10,6 +9,7 @@ import type {
     ProblemMessage,
     UpdateComponentMessage,
 } from "./interface-exchange/outgoing";
+import type { Post } from "./post.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 import { extractZones, type Zone } from "./zone";
