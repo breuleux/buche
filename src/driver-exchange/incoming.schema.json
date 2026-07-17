@@ -202,8 +202,7 @@
             "$ref": "#/definitions/Json"
           }
         }
-      ],
-      "description": "Any JSON-serializable value (payloads exchanged over the FDs)."
+      ]
     },
     "ExecCommand": {
       "type": "object",
@@ -305,19 +304,17 @@
     "EchoMessage": {
       "type": "object",
       "properties": {
-        "text": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Text of the command."
+        "echo": {
+          "$ref": "#/definitions/StyledText",
+          "description": "Text of the command"
         },
-        "ranges": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/HighlightRange"
-          },
-          "description": "Spans to colorize."
+        "label": {
+          "type": "string",
+          "description": "The cell/tab label."
+        },
+        "color": {
+          "$ref": "#/definitions/Accent",
+          "description": "Accent color for the component."
         },
         "type": {
           "type": "string",
@@ -335,10 +332,36 @@
       },
       "required": [
         "from",
-        "ranges",
-        "text",
         "to",
         "type"
+      ],
+      "additionalProperties": false
+    },
+    "StyledText": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Text to style."
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HighlightRange"
+          },
+          "description": "Spans to colorize."
+        },
+        "position": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Position of the cursor, if applicable."
+        }
+      },
+      "required": [
+        "text",
+        "ranges"
       ],
       "additionalProperties": false
     },
@@ -353,18 +376,21 @@
           "type": "number",
           "description": "Exclusive end offset."
         },
-        "cls": {
-          "type": "string",
-          "description": "CSS class."
+        "style": {
+          "$ref": "#/definitions/Accent",
+          "description": "Style."
         }
       },
       "required": [
         "start",
         "end",
-        "cls"
+        "style"
       ],
       "additionalProperties": false,
       "description": "A syntax-highlight span over the prompt text"
+    },
+    "Accent": {
+      "type": "string"
     },
     "ErrorMessage": {
       "type": "object",
@@ -423,7 +449,7 @@
           "description": "Key-chord → action-name map for this prompt."
         },
         "color": {
-          "$ref": "#/definitions/PromptColor",
+          "$ref": "#/definitions/Accent",
           "description": "Accent color for the prompt."
         },
         "prompt_html": {
@@ -481,20 +507,6 @@
       "additionalProperties": {
         "type": "string"
       }
-    },
-    "PromptColor": {
-      "type": "object",
-      "properties": {
-        "hue": {
-          "type": "number",
-          "description": "OKLCH hue"
-        },
-        "chroma": {
-          "type": "number",
-          "description": "OKLCH chroma"
-        }
-      },
-      "additionalProperties": false
     },
     "SyncMessage": {
       "type": "object",

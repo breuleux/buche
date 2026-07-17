@@ -1,5 +1,5 @@
 import type { CellCommand } from "../cell.ts";
-import type { ComponentData } from "../core.ts";
+import type { ComponentData } from "../exchange.ts";
 import type { BucheErrorFields } from "../utils.ts";
 import type { Zone } from "../zone.ts";
 
@@ -7,7 +7,7 @@ export interface UpdateComponentMessage {
     type: "update_component";
 
     /** The zone in which to install or move the component. */
-    zone?: Zone;
+    zone?: Zone | null;
 
     /** The component's current state (echo, cell, prompt, zones). */
     component: ComponentData;

@@ -17,7 +17,7 @@ export function handle$echo(buche: Buche, obj: EchoMessage): void {
         });
     }
     const { zone, prompt } = buche.findPlace(obj);
-    const echo = new Echo(obj, { zone, prompt });
+    const echo = new Echo(obj, { prompt });
     Object.assign(component, { echo });
     buche.sendInterface({
         type: "update_component",

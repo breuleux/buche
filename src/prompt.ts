@@ -1,4 +1,4 @@
-import type { Address, ColorDef, HighlightRange } from "./types.ts";
+import type { Accent, Address, HighlightRange } from "./types.ts";
 import { WithId } from "./utils.ts";
 import { PromptZone } from "./zone.ts";
 
@@ -12,7 +12,7 @@ export interface PromptConfiguration {
     bindings?: PromptBindings;
 
     /** Accent color for the prompt. */
-    color?: ColorDef;
+    color?: Accent;
 
     /** HTML for the prompt's leading label/marker. */
     prompt_html?: string;
@@ -29,7 +29,7 @@ export class Prompt extends WithId() implements PromptConfiguration {
 
     label?: string | null;
     bindings?: PromptBindings;
-    color?: ColorDef;
+    color?: Accent;
     prompt_html?: string;
 
     zones: { main: PromptZone };

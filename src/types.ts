@@ -5,6 +5,8 @@ export type To = Address;
 
 export type ZoneDescriptor = string;
 
+export type Accent = string;
+
 /** A syntax-highlight span over the prompt text */
 export interface HighlightRange {
     /** Inclusive start offset into the prompt text. */
@@ -13,14 +15,17 @@ export interface HighlightRange {
     /** Exclusive end offset. */
     end: number;
 
-    /** CSS class. */
-    cls: string;
+    /** Style. */
+    style: Accent;
 }
 
-export interface ColorDef {
-    /** OKLCH hue */
-    hue?: number;
+export interface StyledText {
+    /** Text to style. */
+    text: string;
 
-    /** OKLCH chroma */
-    chroma?: number;
+    /** Spans to colorize. */
+    ranges: HighlightRange[];
+
+    /** Position of the cursor, if applicable. */
+    position?: number | null;
 }
