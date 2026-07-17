@@ -79,7 +79,13 @@ export async function* simulate(args: SimulateArgs | ReplayArgs): AsyncGenerator
         // through here. Snapshot immediately (serialize as early as possible) so
         // both the replay comparison and any recorded output capture the message
         // exactly as it was at this moment, not some later mutated state.
-        const snapshot = structuredClone(x);
+        const snapshot = JSON.parse(
+            JSON.stringify(x, (_key, value) =>
+                value !== null && typeof value === "object" && "serialId" in value
+                    ? `#${value.serialId}`
+                    : value,
+            ),
+        );
         snapshot.$role = role;
         lastActivity = Date.now();
         if (globalThis.process.env.SIM_DEBUG) {
