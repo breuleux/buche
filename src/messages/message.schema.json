@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/Message",
+  "definitions": {
+    "Message": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CellConfigureMessage"
+        },
+        {
+          "$ref": "#/definitions/CellCreateMessage"
+        }
+      ],
+      "description": "Union of every message type."
+    },
+    "CellConfigureMessage": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The cell/tab label."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "Toggle whether the cell persists after its process closes."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, unfocus the cell and return focus to its zone."
+        },
+        "type": {
+          "type": "string",
+          "const": "cell_configure",
+          "description": "Type of the message."
+        },
+        "address": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        }
+      },
+      "required": [
+        "address",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "To": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "CellCreateMessage": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The cell/tab label."
+        },
+        "sticky": {
+          "type": "boolean",
+          "description": "Toggle whether the cell persists after its process closes."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "If true, unfocus the cell and return focus to its zone."
+        },
+        "type": {
+          "type": "string",
+          "const": "cell_create",
+          "description": "Type of the message."
+        },
+        "address": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "mode": {
+          "$ref": "#/definitions/CellMode",
+          "description": "Which cell handler to instantiate. Unknown modes are ignored with an error."
+        },
+        "prompt_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Associates the cell with an existing prompt."
+        },
+        "zone": {
+          "$ref": "#/definitions/ZoneDescriptor",
+          "description": "Which handler to instantiate. Unknown modes are ignored with an error."
+        },
+        "echo_html": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Inline HTML echo of the command line, shown in the cell header."
+        }
+      },
+      "required": [
+        "address",
+        "mode",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "CellMode": {
+      "type": "string",
+      "enum": [
+        "text",
+        "term",
+        "auto",
+        "data"
+      ]
+    },
+    "ZoneDescriptor": {
+      "type": "string"
+    }
+  }
+}
