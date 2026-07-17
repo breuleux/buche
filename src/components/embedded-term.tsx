@@ -79,6 +79,8 @@ export class EmbeddedTerm extends HTMLElement {
     private fadeBottom!: HTMLElement;
     private stub!: HTMLElement;
     private observer: ResizeObserver | null = null;
+    private observed: Element[] = [];
+    private refitScheduled = false;
     // Registered only while the ed2-clears-scrollback attribute is present, so
     // the CSI J identifier carries no extra handler when the feature is off.
     private clearHook: { dispose(): void } | null = null;
@@ -106,14 +108,53 @@ export class EmbeddedTerm extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
-        this.observer ??= new ResizeObserver(() => this.refit());
-        this.observer.observe(this);
+        this.observer ??= new ResizeObserver(() => this.scheduleRefit());
+        // Watch the whole ancestor chain, not just this element: the available
+        // width is decided upstream (zone, grid pane, window), and an
+        // intermediate clamp could leave this box's own size unchanged while
+        // the width it should fill has moved.
+        this.observed = [];
+        for (let el: Element | null = this; el; el = el.parentElement) {
+            this.observer.observe(el);
+            this.observed.push(el);
+        }
+        // Grid dividers announce their drag directly (see `grid-resize` in
+        // grid.tsx); the observer alone has proved unreliable mid-drag. The
+        // event is dispatched on the grid and bubbles, so it passes over the
+        // term — window is where it can actually be caught.
+        window.addEventListener("grid-resize", this.onGridResize);
         this.dispatchEvent(new CustomEvent("term-appear", { bubbles: true }));
     }
 
     disconnectedCallback(): void {
         // Keep the terminal alive so re-attaching the element just works.
-        this.observer?.unobserve(this);
+        window.removeEventListener("grid-resize", this.onGridResize);
+        if (this.observer) {
+            for (const el of this.observed) {
+                this.observer.unobserve(el);
+            }
+        }
+        this.observed = [];
+    }
+
+    private onGridResize = (): void => {
+        this.scheduleRefit();
+    };
+
+    // Coalesce ResizeObserver bursts (a divider drag fires a stream of them)
+    // into one refit per frame. The rAF also lands after layout, so the
+    // measurement sees the final geometry, and keeping term.resize out of the
+    // observer callback itself avoids the ResizeObserver-loop guard that
+    // otherwise drops notifications when the callback mutates the layout.
+    private scheduleRefit(): void {
+        if (this.refitScheduled) {
+            return;
+        }
+        this.refitScheduled = true;
+        requestAnimationFrame(() => {
+            this.refitScheduled = false;
+            this.refit();
+        });
     }
 
     attributeChangedCallback(name: string): void {

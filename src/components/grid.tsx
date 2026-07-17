@@ -102,6 +102,10 @@ class ResizableGrid extends HTMLElement {
             parts.push(`${f}fr`);
         });
         this.style[this.axis.template] = parts.join(" ");
+        // Announce the new geometry as it happens (ResizeObserver delivery
+        // cannot be relied on during a fast drag); descendants that lay out
+        // by pixel measure — embedded terminals — refit on this.
+        this.dispatchEvent(new CustomEvent("grid-resize", { bubbles: true }));
     }
 
     private startDrag(event: PointerEvent, index: number, divider: HTMLElement): void {

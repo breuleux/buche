@@ -119,6 +119,126 @@ describe("embedded-term — held newlines", () => {
     });
 });
 
+describe("embedded-term — resize watching", () => {
+    function fakeResizeObserver() {
+        const observed: unknown[] = [];
+        const unobserved: unknown[] = [];
+        const frames: (() => void)[] = [];
+        let fire: (() => void) | null = null;
+        class FakeRO {
+            constructor(cb: () => void) {
+                fire = cb;
+            }
+            observe(el: unknown) {
+                observed.push(el);
+            }
+            unobserve(el: unknown) {
+                unobserved.push(el);
+            }
+            disconnect() {}
+        }
+        const realRO = globalThis.ResizeObserver;
+        const realRaf = globalThis.requestAnimationFrame;
+        globalThis.ResizeObserver = FakeRO as unknown as typeof ResizeObserver;
+        globalThis.requestAnimationFrame = ((cb: () => void) =>
+            frames.push(cb)) as unknown as typeof requestAnimationFrame;
+        return {
+            observed,
+            unobserved,
+            frames,
+            fire: () => fire!(),
+            restore: () => {
+                globalThis.ResizeObserver = realRO;
+                globalThis.requestAnimationFrame = realRaf;
+            },
+        };
+    }
+
+    test("observes the element and its whole ancestor chain, and unobserves on disconnect", () => {
+        const ro = fakeResizeObserver();
+        try {
+            const outer = document.createElement("div");
+            const inner = document.createElement("div");
+            outer.append(inner);
+            document.body.append(outer);
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
+            inner.append(t);
+            for (const el of [t, inner, outer, document.body, document.documentElement]) {
+                expect(ro.observed).toContain(el);
+            }
+            t.remove();
+            for (const el of [t, inner, outer]) {
+                expect(ro.unobserved).toContain(el);
+            }
+        } finally {
+            ro.restore();
+        }
+    });
+
+    test("a bubbling grid-resize schedules a deferred refit", () => {
+        const ro = fakeResizeObserver();
+        try {
+            const wrap = document.createElement("div");
+            document.body.append(wrap);
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
+            wrap.append(t);
+            let refits = 0;
+            const anyT = t as unknown as { refit(): void };
+            const real = anyT.refit.bind(t);
+            anyT.refit = () => {
+                refits++;
+                real();
+            };
+            const pending = ro.frames.length;
+            wrap.dispatchEvent(new CustomEvent("grid-resize", { bubbles: true }));
+            expect(refits).toBe(0);
+            const added = ro.frames.splice(pending);
+            for (const f of added) {
+                f();
+            }
+            expect(refits).toBe(1);
+        } finally {
+            ro.restore();
+        }
+    });
+
+    test("observer notifications coalesce into one rAF-deferred refit", () => {
+        const ro = fakeResizeObserver();
+        try {
+            const t = document.createElement("embedded-term") as EmbeddedTerm;
+            document.body.append(t);
+            let refits = 0;
+            const anyT = t as unknown as { refit(): void };
+            const real = anyT.refit.bind(t);
+            anyT.refit = () => {
+                refits++;
+                real();
+            };
+            // (xterm schedules its own rAF frames too, so run only the frames
+            // added since the last run, and assert on refits, not frame count.)
+            let pending = ro.frames.length;
+            const runNew = () => {
+                const added = ro.frames.splice(pending);
+                pending = ro.frames.length;
+                for (const f of added) {
+                    f();
+                }
+            };
+            ro.fire();
+            ro.fire();
+            ro.fire();
+            expect(refits).toBe(0); // deferred, and coalesced
+            runNew();
+            expect(refits).toBe(1);
+            ro.fire();
+            runNew();
+            expect(refits).toBe(2);
+        } finally {
+            ro.restore();
+        }
+    });
+});
+
 describe("embedded-term — fit", () => {
     // happy-dom reports a zero-sized character cell, so rowsForHeight() cannot
     // derive a row count from pixels here and falls back to max-rows. What is

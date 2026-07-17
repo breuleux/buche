@@ -171,9 +171,14 @@ export class EchoBox extends HTMLElement {
 
     connectedCallback(): void {
         this.ensureSetup();
+        // A grid divider announcement bubbles from the grid past its
+        // ancestors — only window sees it here (see grid.tsx). Treat it like
+        // the tail of a user drag: debounced "resize" re-announces the size.
+        window.addEventListener("grid-resize", this.onGridResize);
     }
 
     disconnectedCallback(): void {
+        window.removeEventListener("grid-resize", this.onGridResize);
         this.stopHover();
         // A box that goes away mid-drag should not announce a resize.
         if (this.resizeTimer !== null) {
@@ -181,6 +186,10 @@ export class EchoBox extends HTMLElement {
             this.resizeTimer = null;
         }
     }
+
+    private onGridResize = (): void => {
+        this.scheduleResize();
+    };
 
     // Typed event listeners for this element's custom events (see
     // {@link EchoBoxEventMap}); falls back to the standard signature.
@@ -301,6 +310,7 @@ export class EchoBox extends HTMLElement {
         this.handleBottom.addEventListener("pointerdown", (e) => this.startResize(e, false));
         this.handleTop.addEventListener("dblclick", () => this.resetHeight());
         this.handleBottom.addEventListener("dblclick", () => this.resetHeight());
+
         this.append(this.handleTop, this.handleBottom);
 
         // Reveal the compact overlay/handles only while the pointer is over this

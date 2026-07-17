@@ -82,6 +82,10 @@ export class TabbedZone extends Zone {
     }
 }
 
+// The size last reported per box, so announcements that changed nothing
+// (e.g. a grid drag that only moved other zones) stay quiet.
+const lastReported = new WeakMap<EchoBox, string>();
+
 /** Report the box's current size to the machine as a `user_resize`
  *  interaction. Deferred to a microtask so whatever synchronous listeners the
  *  triggering event has (including Cell's initial pty fit) run first and the
@@ -90,12 +94,14 @@ function reportResize(ifc: Interface, eb: EchoBox, entry: Entry): void {
     queueMicrotask(() => {
         const view = eb.getView("pty")?.childNodes[0] as EmbeddedTerm | undefined;
         const term = view?.terminal;
-        ifc.interactions.push({
-            type: "user_resize",
-            pixel: eb.cellSize,
-            pty: term ? { height: term.rows, width: term.cols } : undefined,
-            entry,
-        });
+        const pixel = eb.cellSize;
+        const pty = term ? { height: term.rows, width: term.cols } : undefined;
+        const sig = `${pixel.height}x${pixel.width}/${pty ? `${pty.height}x${pty.width}` : "-"}`;
+        if (lastReported.get(eb) === sig) {
+            return;
+        }
+        lastReported.set(eb, sig);
+        ifc.interactions.push({ type: "user_resize", pixel, pty, entry });
     });
 }
 

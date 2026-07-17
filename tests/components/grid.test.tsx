@@ -97,6 +97,13 @@ describe("grid-rows / grid-columns", () => {
         expect(after[2]).toBeCloseTo(1 / 3, 5); // untouched
     });
 
+    test("dragging announces the new geometry with a bubbling grid-resize", () => {
+        let fired = 0;
+        document.body.addEventListener("grid-resize", () => fired++);
+        drag(0, 20);
+        expect(fired).toBeGreaterThanOrEqual(1);
+    });
+
     test("grid-columns uses col-resize dividers", () => {
         const cols = document.createElement("grid-columns");
         cols.append(document.createElement("div"), document.createElement("div"));

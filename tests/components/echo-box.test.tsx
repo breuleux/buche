@@ -325,6 +325,17 @@ describe("echo-box — resize handle", () => {
         expect(fired).toBe(1);
     });
 
+    test("a grid-resize announcement re-announces the size, debounced", async () => {
+        const box = make();
+        let fired = 0;
+        box.addEventListener("resize", () => fired++);
+        window.dispatchEvent(new CustomEvent("grid-resize"));
+        window.dispatchEvent(new CustomEvent("grid-resize"));
+        expect(fired).toBe(0); // still debouncing
+        await new Promise((r) => setTimeout(r, 80));
+        expect(fired).toBe(1);
+    });
+
     test("double-click without a user height is a no-op", () => {
         const box = make();
         const gutter = q(box, ".echo-box-gutter") as HTMLElement;
