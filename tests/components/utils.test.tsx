@@ -111,11 +111,11 @@ describe("buildStyledText", () => {
         expect(span.getAttribute("style")).toBeNull();
     });
 
-    test("ignores the interactive fields (position, editability, filigrane)", () => {
+    test("ignores the interactive fields (selection, editability, filigrane)", () => {
         const interactive: InteractiveStyledText = {
             text: "abc",
             ranges: [],
-            position: 2,
+            selection: { start: 2, end: 2 },
             editability: "editable",
             filigrane: "abc -l",
         };

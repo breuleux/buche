@@ -156,12 +156,16 @@
           ],
           "description": "Editability status of the text. Defaults to \"editable\" in a prompt, \"readonly\" in an echo (only \"readonly\" is supported in echos for now). \"frozen\" — set when a freezing binding fires — acts like \"readonly\", but is styled differently to denote a temporary condition."
         },
-        "position": {
-          "type": [
-            "number",
-            "null"
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Selection"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Position of the cursor, if applicable."
+          "description": "Selection range, if applicable."
         },
         "filigrane": {
           "type": "string",
@@ -206,6 +210,24 @@
     },
     "Accent": {
       "type": "string"
+    },
+    "Selection": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive starting position of the selection"
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive ending position of the selection"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
     },
     "StyledText": {
       "type": "object",

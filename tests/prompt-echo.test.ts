@@ -112,7 +112,7 @@ describe("prompt_configure echo", () => {
             type: "prompt_configure", // the submit reset
             from: PROMPT,
             to: ["$term"],
-            submission: { content: { text: "", ranges: [], position: 0 } },
+            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         } as never);
         const p = prompt(f).prompt!;
         expect(p.submission.content.text).toBe("");

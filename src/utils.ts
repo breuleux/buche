@@ -9,8 +9,8 @@ export function emptySubmission(): Submission {
  * Merge a partial {@link SubmissionConfiguration} into a {@link Submission}:
  * a subfield the configuration leaves out keeps its current value (so a
  * configuration can update the content without restating the context, or the
- * other way around). A provided content without a cursor position inherits
- * the current one, so a reconfiguration doesn't teleport the cursor.
+ * other way around). A provided content without a selection inherits the
+ * current one, so a reconfiguration doesn't move the cursor.
  */
 export function applySubmission(
     submission: Submission,
@@ -20,10 +20,10 @@ export function applySubmission(
         return;
     }
     if (configuration.content !== undefined) {
-        const { position, ...rest } = configuration.content;
-        const current = submission.content.position;
-        const merged = position ?? current;
-        submission.content = merged === undefined ? rest : { ...rest, position: merged };
+        const { selection, ...rest } = configuration.content;
+        const current = submission.content.selection;
+        const merged = selection ?? current;
+        submission.content = merged === undefined ? rest : { ...rest, selection: merged };
     }
     if (configuration.context !== undefined) {
         submission.context = configuration.context;
