@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "buche",
+  "owner": { "name": "Olivier Nguyen" },
+  "description": "Skills for programming buche: GUI cell protocol, iframe runtime, proc:// resources",
+  "plugins": [
+    {
+      "name": "buche",
+      "source": "./",
+      "description": "Reference skills for programming buche GUI cells"
+    }
+  ]
+}

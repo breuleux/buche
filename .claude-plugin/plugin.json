@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "buche",
+  "version": "0.0.0",
+  "description": "Reference skills for programming buche: the GUI cell protocol, the iframe runtime API, proc:// resources, focus and sizing",
+  "author": { "name": "Olivier Nguyen" },
+  "repository": "https://github.com/olivier-nguyen/buche",
+  "keywords": ["buche", "terminal", "gui", "iframe"]
+}
