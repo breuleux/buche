@@ -1,5 +1,5 @@
 import type { SyncMessage } from "./_sync.ts";
-import type { Address, Json } from "./common.ts";
+import type { Address, Json, Selection } from "./common.ts";
 
 export interface BaseRequest {
     type: string;
@@ -10,7 +10,10 @@ export interface BaseRequest {
 export interface CommandRequest extends BaseRequest {
     type: "command";
     text: string;
-    position: number;
+
+    /** The prompt's selection when the command fired. */
+    selection: Selection;
+
     command: string;
 
     /**

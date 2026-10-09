@@ -1,6 +1,13 @@
 import type { Address, To, ZoneDescriptor } from "../types.ts";
 
-export type { Address, HighlightRange, Json, To, ZoneDescriptor } from "../types.ts";
+export type {
+    Address,
+    HighlightRange,
+    Json,
+    Selection,
+    To,
+    ZoneDescriptor,
+} from "../types.ts";
 
 export interface BaseMessage {
     /** Type of the message. */

@@ -52,14 +52,7 @@
           "description": "Reference number for this parse. Whatever answers it — the highlight echo (a `prompt_configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
         }
       },
-      "required": [
-        "from",
-        "position",
-        "request_id",
-        "text",
-        "to",
-        "type"
-      ],
+      "required": ["from", "position", "request_id", "text", "to", "type"],
       "additionalProperties": false
     },
     "Address": {
@@ -84,8 +77,9 @@
         "text": {
           "type": "string"
         },
-        "position": {
-          "type": "number"
+        "selection": {
+          "$ref": "#/definitions/Selection",
+          "description": "The prompt's selection when the command fired (`start === end` is the plain cursor position)."
         },
         "command": {
           "type": "string"
@@ -95,14 +89,22 @@
           "description": "Identifies this command. A driver that produces an echo in response repeats it as the echo's `id`, so the terminal can relate the two (e.g. to focus the new cell)."
         }
       },
-      "required": [
-        "command",
-        "from",
-        "position",
-        "text",
-        "to",
-        "type"
-      ],
+      "required": ["command", "from", "selection", "text", "to", "type"],
+      "additionalProperties": false
+    },
+    "Selection": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive starting position of the selection"
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive ending position of the selection"
+        }
+      },
+      "required": ["start", "end"],
       "additionalProperties": false
     },
     "SignalRequest": {
@@ -122,12 +124,7 @@
           "type": "number"
         }
       },
-      "required": [
-        "code",
-        "from",
-        "to",
-        "type"
-      ],
+      "required": ["code", "from", "to", "type"],
       "additionalProperties": false
     },
     "TextRequest": {
@@ -153,13 +150,7 @@
           "description": "Raw input text, as produced by the terminal emulator."
         }
       },
-      "required": [
-        "from",
-        "stream",
-        "text",
-        "to",
-        "type"
-      ],
+      "required": ["from", "stream", "text", "to", "type"],
       "additionalProperties": false
     },
     "DataRequest": {
@@ -180,12 +171,7 @@
           "description": "Arbitrary JSON relayed from the interface (a GUI cell message, a `proc://` request, an exec response, ...)."
         }
       },
-      "required": [
-        "data",
-        "from",
-        "to",
-        "type"
-      ],
+      "required": ["data", "from", "to", "type"],
       "additionalProperties": false
     },
     "Json": {
@@ -239,10 +225,7 @@
               "type": "number"
             }
           },
-          "required": [
-            "height",
-            "width"
-          ],
+          "required": ["height", "width"],
           "additionalProperties": false,
           "description": "The cell's content area, in CSS pixels."
         },
@@ -256,20 +239,12 @@
               "type": "number"
             }
           },
-          "required": [
-            "height",
-            "width"
-          ],
+          "required": ["height", "width"],
           "additionalProperties": false,
           "description": "The terminal grid, in character cells, when the cell holds a pty."
         }
       },
-      "required": [
-        "from",
-        "pixel",
-        "to",
-        "type"
-      ],
+      "required": ["from", "pixel", "to", "type"],
       "additionalProperties": false
     },
     "SyncRequest": {
@@ -295,12 +270,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "from",
-        "nonce",
-        "to",
-        "type"
-      ],
+      "required": ["from", "nonce", "to", "type"],
       "additionalProperties": false
     },
     "To": {

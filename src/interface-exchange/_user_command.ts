@@ -1,5 +1,6 @@
 import type { Buche } from "../core.ts";
 import type { Entry } from "../entry.ts";
+import type { Selection } from "../types.ts";
 
 export interface UserCommandMessage {
     type: "user_command";
@@ -7,7 +8,7 @@ export interface UserCommandMessage {
     entry: Entry;
 
     text: string;
-    position: number;
+    selection: Selection;
     command: string;
 
     /** Identifies the command; forwarded to the driver (see CommandRequest). */
@@ -20,7 +21,7 @@ export function handle$user_command(buche: Buche, obj: UserCommandMessage): void
         from: ["$term"],
         to: obj.entry.echo.address,
         text: obj.text,
-        position: obj.position,
+        selection: obj.selection,
         command: obj.command,
         ...(obj.id !== undefined ? { id: obj.id } : {}),
     });

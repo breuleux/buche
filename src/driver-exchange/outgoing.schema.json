@@ -77,8 +77,9 @@
         "text": {
           "type": "string"
         },
-        "position": {
-          "type": "number"
+        "selection": {
+          "$ref": "#/definitions/Selection",
+          "description": "The prompt's selection when the command fired (`start === end` is the plain cursor position)."
         },
         "command": {
           "type": "string"
@@ -88,7 +89,22 @@
           "description": "Identifies this command. A driver that produces an echo in response repeats it as the echo's `id`, so the terminal can relate the two (e.g. to focus the new cell)."
         }
       },
-      "required": ["command", "from", "position", "text", "to", "type"],
+      "required": ["command", "from", "selection", "text", "to", "type"],
+      "additionalProperties": false
+    },
+    "Selection": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive starting position of the selection"
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive ending position of the selection"
+        }
+      },
+      "required": ["start", "end"],
       "additionalProperties": false
     },
     "SignalRequest": {
