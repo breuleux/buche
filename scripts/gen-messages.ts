@@ -23,10 +23,14 @@
  * incoming/outgoing). A warning is printed if any `type` appears in more than
  * one of the four sets.
  *
+ * It also refreshes the copy of the driver schemas shipped with the buche
+ * skill (skills/buche/references/), so the protocol reference app authors
+ * install stays in step with the generated one.
+ *
  * Run with: bun run gen
  */
 
-import { readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGenerator } from "ts-json-schema-generator";
@@ -336,3 +340,14 @@ ${setDecls}
 const directoryFile = join(ROOT, "src", "message-directory.ts");
 writeFileSync(directoryFile, directoryOutput);
 console.log(`Wrote ${directoryFile}`);
+
+// ---- Refresh the driver schemas shipped with the buche skill ---------------------
+
+const skillReferences = join(ROOT, "skills", "buche", "references");
+mkdirSync(skillReferences, { recursive: true });
+for (const schema of ["incoming.schema.json", "outgoing.schema.json"]) {
+    const from = join(ROOT, "src", "driver-exchange", schema);
+    const to = join(skillReferences, schema);
+    copyFileSync(from, to);
+    console.log(`Copied ${from} to ${to}`);
+}
