@@ -6,13 +6,14 @@ import type {
     EditorFactory,
     PromptCollection,
     PromptCommandDetail,
+    PromptEditor,
     PromptTextChangeDetail,
     StyleSpan,
 } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
 import { Entry } from "../../src/entry.ts";
 import { Prompt, type PromptBindings } from "../../src/prompt.ts";
-import type { InteractiveStyledText, StyledText } from "../../src/types.ts";
+import type { InteractiveStyledText, Selection, StyledText } from "../../src/types.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -25,10 +26,10 @@ const destroyed: string[] = [];
 // real CodeMirror editor binds to Cmd/Ctrl-Left/Right.
 type StubEditor = ReturnType<EditorFactory> & {
     navigate?: (dir: -1 | 1) => void;
-    /** Last spans/base-style/position handed to the editor, for assertions. */
+    /** Last spans/base-style/selection handed to the editor, for assertions. */
     spans?: StyleSpan[];
     baseStyle?: string;
-    position?: number;
+    selection?: Selection;
     filigrane?: string | null;
     readOnly?: boolean;
 };
@@ -53,8 +54,8 @@ function stubFactory(): EditorFactory {
             setBaseStyle: (css) => {
                 editor.baseStyle = css;
             },
-            setPosition: (position) => {
-                editor.position = position;
+            setSelection: (selection) => {
+                editor.selection = selection;
             },
             setFiligrane: (filigrane) => {
                 editor.filigrane = filigrane;
@@ -62,7 +63,7 @@ function stubFactory(): EditorFactory {
             setEditability: (editability) => {
                 editor.readOnly = editability !== "editable";
             },
-            getPosition: () => editor.position ?? value.length,
+            getSelection: () => editor.selection ?? { start: value.length, end: value.length },
             focus: () => {},
             destroy: () => {
                 destroyed.push(value);
@@ -82,6 +83,10 @@ function make(): PromptCollection {
 }
 
 const plain = (text: string): StyledText => ({ text, ranges: [] });
+
+// Move the cursor (an empty selection) to an offset.
+const setCursor = (editor: PromptEditor, offset: number) =>
+    editor.setSelection?.({ start: offset, end: offset });
 
 // Build a prompt Entry: label + accent on its Echo; marker + content on its Prompt.
 function makeEntry(
@@ -218,7 +223,7 @@ describe("prompt-collection — reconfiguration", () => {
         );
     });
 
-    test("firing the Entry resets the editor text and cursor from content", () => {
+    test("firing the Entry resets the editor text and selection from content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("first") }));
         const editor = pc.getEditor(entry) as StubEditor;
@@ -226,22 +231,22 @@ describe("prompt-collection — reconfiguration", () => {
 
         // Mutate the Prompt's content and fire: the editor resets to it.
         entry.prompt!.submission.content.text = "reset";
-        entry.prompt!.submission.content.position = 2;
+        entry.prompt!.submission.content.selection = { start: 2, end: 2 };
         entry.fire();
 
         expect(pc.getValue(entry)).toBe("reset");
-        expect(editor.position).toBe(2);
+        expect(editor.selection).toEqual({ start: 2, end: 2 });
     });
 
     test("resetting from content does not feed back into content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
         entry.prompt!.submission.content.text = "reset";
-        entry.prompt!.submission.content.position = 1;
+        entry.prompt!.submission.content.selection = { start: 1, end: 1 };
         entry.fire();
         // The reset is applied to the editor but the stored content is preserved.
         expect(entry.prompt?.submission.content.text).toBe("reset");
-        expect(entry.prompt?.submission.content.position).toBe(1);
+        expect(entry.prompt?.submission.content.selection).toEqual({ start: 1, end: 1 });
     });
 
     test("a prompt whose echo is done or error is removed on reconfiguration", () => {
@@ -311,16 +316,16 @@ describe("prompt-collection — editor values", () => {
         expect(entry.prompt?.submission.content.text).toBe("two");
     });
 
-    test("editing updates the Entry's content text and cursor position", () => {
+    test("editing updates the Entry's content text and selection", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
         const editor = pc.getEditor(entry) as StubEditor;
 
-        editor.setPosition?.(3); // move the cursor
+        setCursor(editor, 3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
 
         expect(entry.prompt?.submission.content.text).toBe("hello");
-        expect(entry.prompt?.submission.content.position).toBe(3);
+        expect(entry.prompt?.submission.content.selection).toEqual({ start: 3, end: 3 });
     });
 
     test("editing fires textchange with entry, text and position", () => {
@@ -333,7 +338,7 @@ describe("prompt-collection — editor values", () => {
             events.push((e as CustomEvent<PromptTextChangeDetail>).detail);
         });
 
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
         editor.setValue("hello");
 
         expect(events).toHaveLength(1);
@@ -407,22 +412,22 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
                 .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 
         // Cursor not at the end: plain cursor move, no acceptance.
-        editor.setPosition?.(1);
+        setCursor(editor, 1);
         press("ArrowRight");
         expect(pc.getValue(entry)).toBe("ls");
 
         // Cursor at the end: the suffix is accepted.
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
         press("ArrowRight");
         expect(pc.getValue(entry)).toBe("ls -l");
-        expect(editor.getPosition?.()).toBe(5);
+        expect(editor.getSelection?.()).toEqual({ start: 5, end: 5 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
         // Ghost gone (fully typed): ArrowRight is an ordinary cursor move.
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
         press("ArrowRight");
         expect(pc.getValue(entry)).toBe("ls -l");
-        expect(editor.getPosition?.()).toBe(3);
+        expect(editor.getSelection?.()).toEqual({ start: 3, end: 3 });
     });
 
     test("a frozen editor ignores ArrowRight ghost acceptance", () => {
@@ -456,18 +461,25 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
 
         // Cursor at the end: ArrowRight no longer accepts the ghost.
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
         press({ key: "ArrowRight" });
         expect(pc.getValue(entry)).toBe("ls");
 
         // Reconfiguration (prompt_configure) unblocks it: dim gone once fresh
         // content arrives (no editability on it: editable is the default).
         entry.prompt!.configure({
-            submission: { content: { text: "ls", ranges: [], position: 2, filigrane: "ls -l" } },
+            submission: {
+                content: {
+                    text: "ls",
+                    ranges: [],
+                    selection: { start: 2, end: 2 },
+                    filigrane: "ls -l",
+                },
+            },
         });
         entry.fire();
         expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
         press({ key: "ArrowRight" });
         expect(pc.getValue(entry)).toBe("ls -l");
     });
@@ -477,7 +489,12 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         document.body.append(pc);
         const entry = makeEntry({
             label: "a",
-            content: { text: "ls", ranges: [], position: 2, editability: "readonly" },
+            content: {
+                text: "ls",
+                ranges: [],
+                selection: { start: 2, end: 2 },
+                editability: "readonly",
+            },
             bindings: { "Ctrl+L": { command: "lock", freeze: true } },
         });
         pc.addPrompt(entry);
@@ -499,7 +516,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         // A content reset without an editability restores the prompt default.
         entry.prompt!.configure({
-            submission: { content: { text: "ls", ranges: [], position: 2 } },
+            submission: { content: { text: "ls", ranges: [], selection: { start: 2, end: 2 } } },
         });
         entry.fire();
         expect(entry.prompt!.submission.content.editability).toBeUndefined();
@@ -523,7 +540,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         expect(pc.getValue(entry)).toBe("");
         expect(entry.prompt?.submission.content.text).toBe(""); // synced back to the Entry
         expect(entry.prompt?.submission.content.filigrane).toBeUndefined(); // dropped as stale
-        expect(editor.getPosition?.()).toBe(0);
+        expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
         // Already empty: a no-op that does not throw.
@@ -544,7 +561,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // the content is replaced whole, so the ghost it doesn't carry goes
         // away — and stays away through later updates.
         entry.prompt!.configure({
-            submission: { content: { text: "", ranges: [], position: 0 } },
+            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
@@ -577,7 +594,7 @@ describe("prompt-collection — styled values", () => {
                 { start: 0, end: 3, style: "green bold" },
                 { start: 4, end: 10, style: "blue" },
             ],
-            position: 4,
+            selection: { start: 4, end: 4 },
         });
 
         // Text goes through the editor.
@@ -605,8 +622,8 @@ describe("prompt-collection — styled values", () => {
         expect(editor.spans?.[0].css).toContain("font-weight: bold");
         expect(editor.spans?.[0].css).toContain("color: oklch(");
 
-        // The cursor position is forwarded.
-        expect(editor.position).toBe(4);
+        // The selection is forwarded.
+        expect(editor.selection).toEqual({ start: 4, end: 4 });
     });
 
     test("a partially-open boundary resolves to the text edge and marks the span open", () => {
@@ -679,32 +696,32 @@ describe("prompt-collection — styled values", () => {
         expect(editor.spans).toEqual([]);
     });
 
-    test("a plain string leaves highlights and position untouched", () => {
+    test("a plain string leaves highlights and selection untouched", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = pc.getEditor(entry) as StubEditor;
         // Clear whatever the initial content seeded, to isolate setValue's effect.
         editor.spans = undefined;
-        editor.position = undefined;
+        editor.selection = undefined;
 
         pc.setValue(entry, "plain");
 
         expect(pc.getValue(entry)).toBe("plain");
         expect(editor.spans).toBeUndefined();
-        expect(editor.position).toBeUndefined();
+        expect(editor.selection).toBeUndefined();
     });
 
-    test("omitting position does not move the cursor", () => {
+    test("omitting the selection does not move the cursor", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = pc.getEditor(entry) as StubEditor;
-        editor.position = undefined; // clear the seeded position
+        editor.selection = undefined; // clear the seeded selection
 
-        pc.setValue(entry, { text: "hello", ranges: [], position: null });
+        pc.setValue(entry, { text: "hello", ranges: [], selection: null });
 
         expect(pc.getValue(entry)).toBe("hello");
         expect(editor.spans).toEqual([]);
-        expect(editor.position).toBeUndefined();
+        expect(editor.selection).toBeUndefined();
     });
 
     test("ranges with an unparseable accent are skipped, not fatal", () => {
@@ -739,7 +756,7 @@ describe("prompt-collection — styled values", () => {
                 content: {
                     text: "git commit",
                     ranges: [{ start: 0, end: 3, style: "green bold" }],
-                    position: 3,
+                    selection: { start: 3, end: 3 },
                 },
             }),
         );
@@ -754,7 +771,7 @@ describe("prompt-collection — styled values", () => {
                 inclusiveEnd: false,
             },
         ]);
-        expect(editor.position).toBe(3);
+        expect(editor.selection).toEqual({ start: 3, end: 3 });
     });
 });
 
@@ -869,7 +886,7 @@ describe("prompt-collection — key bindings", () => {
             makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" }, content: plain("hello") }),
         );
         const editor = pc.getEditor(entry) as StubEditor;
-        editor.setPosition?.(2);
+        setCursor(editor, 2);
 
         // The listener param is typed as PromptCommandEvent via the event map.
         const events: PromptCommandDetail[] = [];
@@ -956,7 +973,7 @@ describe("prompt-collection — key bindings", () => {
         // unblocks the editor when it brings fresh content: the whole-content
         // replacement carries no editability, and editable is the default.
         entry.prompt!.configure({
-            submission: { content: { text: "", ranges: [], position: 0 } },
+            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.readOnly).toBe(false);
@@ -990,14 +1007,14 @@ describe("prompt-collection — previous/next virtual chords", () => {
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
         // Cursor on the first line: Up fires "previous" and is swallowed.
-        editor.setPosition?.(1);
+        setCursor(editor, 1);
         const up = press(editor.dom, { key: "ArrowUp" });
         expect(commands).toEqual(["prev-history"]);
         expect(up.defaultPrevented).toBe(true);
 
         // Cursor on a middle line: no command, the key reaches the editor.
         commands.length = 0;
-        editor.setPosition?.(5);
+        setCursor(editor, 5);
         const upMid = press(editor.dom, { key: "ArrowUp" });
         expect(commands).toEqual([]);
         expect(upMid.defaultPrevented).toBe(false);
@@ -1017,14 +1034,14 @@ describe("prompt-collection — previous/next virtual chords", () => {
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
         // Cursor on the last line: Down fires "next".
-        editor.setPosition?.(10);
+        setCursor(editor, 10);
         const down = press(editor.dom, { key: "ArrowDown" });
         expect(commands).toEqual(["next-history"]);
         expect(down.defaultPrevented).toBe(true);
 
         // Cursor on the first line: no command, ordinary cursor motion.
         commands.length = 0;
-        editor.setPosition?.(1);
+        setCursor(editor, 1);
         const downTop = press(editor.dom, { key: "ArrowDown" });
         expect(commands).toEqual([]);
         expect(downTop.defaultPrevented).toBe(false);
@@ -1055,7 +1072,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
         let fired = 0;
         pc.addEventListener("command", () => fired++);
 
-        editor.setPosition?.(0);
+        setCursor(editor, 0);
         const up = press(editor.dom, { key: "ArrowUp" });
         const down = press(editor.dom, { key: "ArrowDown" });
         expect(fired).toBe(0);
@@ -1072,7 +1089,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
         let fired = 0;
         pc.addEventListener("command", () => fired++);
 
-        editor.setPosition?.(0);
+        setCursor(editor, 0);
         press(editor.dom, { key: "ArrowUp", shiftKey: true });
         press(editor.dom, { key: "ArrowUp", ctrlKey: true });
         expect(fired).toBe(0);
@@ -1091,7 +1108,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
-        editor.setPosition?.(0);
+        setCursor(editor, 0);
         press(editor.dom, { key: "ArrowUp" });
         expect(commands).toEqual(["top"]);
     });
@@ -1116,15 +1133,15 @@ describe("prompt-collection — previous/next virtual chords", () => {
                 );
 
         // Cursor on the second line: plain cursor motion, no command.
-        editor.setPosition?.(5);
+        setCursor(editor, 5);
         press("ArrowUp");
         expect(commands).toEqual([]);
-        expect(editor.getPosition?.()).toBe(0);
+        expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
 
         // Cursor back on the first line: the command fires, cursor untouched.
         press("ArrowUp");
         expect(commands).toEqual(["prev-history"]);
-        expect(editor.getPosition?.()).toBe(0);
+        expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
     });
 });
 

@@ -15,7 +15,7 @@ export interface PromptConfiguration {
 
     /**
      * The prompt as a submission: its content (what the user is typing, with
-     * the cursor `position`, the ghost-text `filigrane` and its `editability`)
+     * the `selection`, the ghost-text `filigrane` and its `editability`)
      * and its context (the marker text above the editor).
      */
     submission?: SubmissionConfiguration;
@@ -24,7 +24,7 @@ export interface PromptConfiguration {
 export class Prompt extends WithId() implements PromptConfiguration {
     bindings: PromptBindings = {};
     submission: Submission = {
-        content: { text: "", ranges: [], position: 0 },
+        content: { text: "", ranges: [], selection: { start: 0, end: 0 } },
         context: { text: "", ranges: [] },
     };
     /**

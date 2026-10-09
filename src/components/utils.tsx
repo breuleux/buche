@@ -10,7 +10,7 @@ import type { StyledText } from "../types.ts";
  * Ranges are clamped to the text, sorted by start, and rendered non-overlapping
  * (a range overlapping already-emitted text is trimmed to what remains). A range
  * whose accent cannot be parsed still renders its text, just unstyled. The
- * `position` field is a cursor concept and is ignored here.
+ * `selection` field is a cursor concept and is ignored here.
  *
  *   buildStyledText(
  *     { text: "git commit", ranges: [{ start: 0, end: 3, style: "green bold" }] },

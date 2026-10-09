@@ -13,7 +13,7 @@
 // The tab's label and accent colour come from the Entry's {@link Echo}; the
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.submission.content` (its text and cursor position). The
+// flow back into `entry.prompt.submission.content` (its text and selection). The
 // Prompt's `filigrane` (a history suggestion, echoed by the "prompt_configure"
 // answer to a parse) shows as faded ghost text extending the content;
 // ArrowRight at the end of the text accepts it.
@@ -71,7 +71,7 @@ import type { DomProps } from "myjsx/jsx-runtime";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
-import type { HighlightRange, InteractiveStyledText, StyledText } from "../types.ts";
+import type { HighlightRange, InteractiveStyledText, Selection, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
 
 // ── Key bindings ────────────────────────────────────────────────────────────
@@ -114,10 +114,10 @@ export interface PromptEditor {
      * a span to. Optional; no-op if unsupported.
      */
     setBaseStyle?(css: string): void;
-    /** Move the cursor to an offset into the text. Optional. */
-    setPosition?(position: number): void;
-    /** The current cursor position (offset into the text). Optional. */
-    getPosition?(): number;
+    /** Apply a selection (`start === end` is a plain cursor). Optional. */
+    setSelection?(selection: Selection): void;
+    /** The current selection range. Optional. */
+    getSelection?(): Selection;
     /**
      * Show ghost text: a suggestion extending the current text (e.g. a history
      * entry). The suffix past the current text is rendered inline, faded; it
@@ -453,11 +453,16 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
                     css ? EditorView.contentAttributes.of({ style: css }) : [],
                 ),
             }),
-        setPosition: (position) => {
-            const pos = Math.max(0, Math.min(view.state.doc.length, position));
-            view.dispatch({ selection: { anchor: pos } });
+        setSelection: (selection) => {
+            const len = view.state.doc.length;
+            const start = Math.max(0, Math.min(len, selection.start));
+            const end = Math.max(start, Math.min(len, selection.end));
+            view.dispatch({ selection: { anchor: start, head: end } });
         },
-        getPosition: () => view.state.selection.main.head,
+        getSelection: () => {
+            const { from, to } = view.state.selection.main;
+            return { start: from, end: to };
+        },
         focus: () => view.focus(),
         destroy: () => view.destroy(),
     };
@@ -586,19 +591,19 @@ export class PromptCollection extends HTMLElement {
         editorHost.className = "prompt-collection-editor";
         const editor = this.editorFactory({
             doc: content.text,
-            // Keep the Entry's Prompt content (text and cursor) in sync with the
+            // Keep the Entry's Prompt content (text and selection) in sync with the
             // editor as the user edits. Suppressed while we push content into the
             // editor ourselves (see `applyingContent`), so a reset can't feed back.
             onChange: (value) => {
                 if (this.applyingContent) {
                     return;
                 }
-                const pos = this.rows.get(entry)?.editor.getPosition?.();
+                const sel = this.rows.get(entry)?.editor.getSelection?.();
                 if (entry.prompt) {
                     const promptContent = entry.prompt.submission.content;
                     promptContent.text = value;
-                    if (pos != null) {
-                        promptContent.position = pos;
+                    if (sel != null) {
+                        promptContent.selection = sel;
                     }
                     // A suggestion the text no longer extends is stale —
                     // divergent typing and Escape (emptied text) drop it (the
@@ -612,7 +617,7 @@ export class PromptCollection extends HTMLElement {
                 }
                 this.dispatchEvent(
                     new CustomEvent<PromptTextChangeDetail>("textchange", {
-                        detail: { entry, text: value, position: pos ?? 0 },
+                        detail: { entry, text: value, position: sel?.end ?? 0 },
                         bubbles: true,
                     }),
                 );
@@ -804,7 +809,7 @@ export class PromptCollection extends HTMLElement {
                         editor?.setEditability?.("frozen");
                     }
                     const text = editor?.getValue() ?? "";
-                    const position = editor?.getPosition?.() ?? text.length;
+                    const position = editor?.getSelection?.().end ?? text.length;
                     this.dispatchEvent(
                         new CustomEvent<PromptCommandDetail>("command", {
                             detail: { command, event: e, entry, text, position },
@@ -834,7 +839,7 @@ export class PromptCollection extends HTMLElement {
             return null;
         }
         const text = editor.getValue();
-        const position = editor.getPosition?.() ?? text.length;
+        const position = editor.getSelection?.().end ?? text.length;
         const before = text.slice(0, position);
         const after = text.slice(position);
         if (virtual === "previous" && before.includes("\n")) {
@@ -902,8 +907,8 @@ export class PromptCollection extends HTMLElement {
         this.renderMarker(row, entry);
         this.applyTabStyle(row);
 
-        // Reset the editor from `content`: its text, colorization and cursor
-        // position. Guarded so the resulting change doesn't sync back into it.
+        // Reset the editor from `content`: its text, colorization and
+        // selection. Guarded so the resulting change doesn't sync back into it.
         const content = entry.prompt?.submission.content;
         if (content) {
             this.applyingContent = true;
@@ -958,8 +963,8 @@ export class PromptCollection extends HTMLElement {
     /**
      * Set a prompt's editor value. A plain string sets just the text. A
      * {@link StyledText} additionally colorizes the text (resolving each range's
-     * accent through {@link calculateStyle}) and, when a `position` is given,
-     * moves the cursor there.
+     * accent through {@link calculateStyle}) and, when a `selection` is given,
+     * moves the selection there.
      */
     setValue(entry: Entry, value: string | InteractiveStyledText): void {
         this.ensureSetup();
@@ -975,14 +980,13 @@ export class PromptCollection extends HTMLElement {
         this.applyContent(row.editor, value);
     }
 
-    // Apply an InteractiveStyledText's colorization and cursor position to an
-    // editor.
+    // Apply an InteractiveStyledText's colorization and selection to an editor.
     private applyContent(editor: PromptEditor, content: InteractiveStyledText): void {
         const { base, spans } = this.resolveContent(content.ranges ?? [], content.text);
         editor.setBaseStyle?.(base);
         editor.setHighlights?.(spans);
-        if (content.position != null) {
-            editor.setPosition?.(content.position);
+        if (content.selection != null) {
+            editor.setSelection?.(content.selection);
         }
     }
 

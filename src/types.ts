@@ -7,6 +7,14 @@ export type ZoneDescriptor = string;
 
 export type Accent = string;
 
+export interface Selection {
+    /** Inclusive starting position of the selection */
+    start: number;
+
+    /** Exclusive ending position of the selection */
+    end: number;
+}
+
 /** A syntax-highlight span over the prompt text */
 export interface HighlightRange {
     /**
@@ -43,8 +51,8 @@ export interface InteractiveStyledText extends StyledText {
      */
     editability?: "readonly" | "editable" | "frozen";
 
-    /** Position of the cursor, if applicable. */
-    position?: number | null;
+    /** Selection range, if applicable. */
+    selection?: Selection | null;
 
     /** Ghost text displayed next to the text as a completion suggestion. */
     filigrane?: string;
