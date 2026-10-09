@@ -51,7 +51,7 @@
 //   "promptremoved" detail: { entry: Entry }                      — a prompt was dropped (closed)
 //   "textchange"    detail: { entry, text, position }              — a prompt's editor text changed
 //   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
-//   "command"       detail: { command, event, entry, text, position }
+//   "command"       detail: { command, event, entry, text, selection }
 //                                                                  — a bound chord was pressed
 //
 // Appearance lives in the companion stylesheet `prompt-collection.css` (or the
@@ -190,8 +190,8 @@ export interface PromptCommandDetail {
     entry: Entry;
     /** The prompt's current editor text. */
     text: string;
-    /** The prompt's current cursor position (offset into `text`). */
-    position: number;
+    /** The prompt's current selection (`start === end` is the cursor). */
+    selection: Selection;
 }
 
 export type PromptChangeEvent = CustomEvent<PromptChangeDetail>;
@@ -809,10 +809,13 @@ export class PromptCollection extends HTMLElement {
                         editor?.setEditability?.("frozen");
                     }
                     const text = editor?.getValue() ?? "";
-                    const position = editor?.getSelection?.().end ?? text.length;
+                    const selection = editor?.getSelection?.() ?? {
+                        start: text.length,
+                        end: text.length,
+                    };
                     this.dispatchEvent(
                         new CustomEvent<PromptCommandDetail>("command", {
-                            detail: { command, event: e, entry, text, position },
+                            detail: { command, event: e, entry, text, selection },
                             bubbles: true,
                         }),
                     );

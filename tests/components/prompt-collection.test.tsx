@@ -880,7 +880,7 @@ describe("prompt-collection — key bindings", () => {
             new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
         );
 
-    test("a bound chord fires a command event with command, event, entry, text and position", () => {
+    test("a bound chord fires a command event with command, event, entry, text and selection", () => {
         const pc = make();
         const entry = pc.addPrompt(
             makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" }, content: plain("hello") }),
@@ -907,7 +907,7 @@ describe("prompt-collection — key bindings", () => {
         expect(events[0].entry).toBe(entry);
         expect(events[0].event).toBe(ev);
         expect(events[0].text).toBe("hello");
-        expect(events[0].position).toBe(2);
+        expect(events[0].selection).toEqual({ start: 2, end: 2 });
         // The key is swallowed so the editor doesn't also act on it.
         expect(ev.defaultPrevented).toBe(true);
     });

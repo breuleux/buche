@@ -73,7 +73,7 @@ function run(
         command: "submit",
         entry,
         text: "ls",
-        position: 2,
+        selection: { start: 2, end: 2 },
         event: new KeyboardEvent("keydown"),
     });
     flush();
@@ -179,7 +179,7 @@ describe("automatic focus", () => {
             command: "submit",
             entry,
             text: "ls",
-            position: 2,
+            selection: { start: 2, end: 2 },
             event: new KeyboardEvent("keydown"),
         });
         ctx.flush();

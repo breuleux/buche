@@ -448,7 +448,7 @@ export class BucheInterface implements Interface {
             id,
             entry: detail.entry,
             text: detail.text,
-            position: detail.position,
+            selection: detail.selection,
             command: detail.command,
         });
     }
