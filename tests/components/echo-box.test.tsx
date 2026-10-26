@@ -6,6 +6,7 @@ import type { EchoBox } from "../../src/components/echo-box.tsx";
 import "../../src/components/echo-box.tsx";
 import type { PromptCollection } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
+import type { PromptCell } from "../../src/cells/prompt.ts";
 import { Entry } from "../../src/entry.ts";
 
 afterEach(() => {
@@ -542,8 +543,7 @@ describe("echo-box — prompt activity", () => {
     function promptEntry(label: string): Entry {
         const entry = new Entry({});
         entry.cell.label = { text: label, ranges: [] };
-        entry.cell.kind = "prompt";
-        entry.cell.configurePrompt({});
+        (entry.replaceCell("prompt") as PromptCell).configurePrompt({});
         return entry;
     }
 

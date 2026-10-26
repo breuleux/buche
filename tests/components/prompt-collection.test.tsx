@@ -11,8 +11,8 @@ import type {
     StyleSpan,
 } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
+import type { PromptBindings, PromptCell } from "../../src/cells/prompt.ts";
 import { Entry } from "../../src/entry.ts";
-import type { PromptBindings } from "../../src/prompt.ts";
 import type { InteractiveStyledText, Selection, StyledText } from "../../src/types.ts";
 
 afterEach(() => {
@@ -86,6 +86,9 @@ const plain = (text: string): StyledText => ({ text, ranges: [] });
 const setCursor = (editor: PromptEditor, offset: number) =>
     editor.setSelection?.({ start: offset, end: offset });
 
+/** An entry's cell, as the prompt it is. */
+const promptCell = (entry: Entry) => entry.cell as PromptCell;
+
 // Build a prompt Entry: label + accent, marker + content, all on its cell.
 function makeEntry(
     opts: {
@@ -103,8 +106,8 @@ function makeEntry(
     if (opts.color != null) {
         entry.cell.color = opts.color;
     }
-    entry.cell.kind = "prompt";
-    entry.cell.configurePrompt({
+    entry.replaceCell("prompt");
+    promptCell(entry).configurePrompt({
         input: {
             context: opts.marker ?? { text: "", ranges: [] },
             content: opts.content ?? { text: "", ranges: [] },
@@ -209,7 +212,7 @@ describe("prompt-collection — reconfiguration", () => {
 
         entry.cell.label = { text: "renamed", ranges: [] };
         entry.cell.color = "red";
-        entry.cell.input.context = { text: ">", ranges: [] };
+        promptCell(entry).input.context = { text: ">", ranges: [] };
         entry.fire();
 
         expect(tabOf(pc, entry)?.textContent).toBe("renamed");
@@ -227,8 +230,8 @@ describe("prompt-collection — reconfiguration", () => {
         expect(pc.getValue(entry)).toBe("first");
 
         // Mutate the Prompt's content and fire: the editor resets to it.
-        entry.cell.input.content.text = "reset";
-        entry.cell.input.content.selection = { start: 2, end: 2 };
+        promptCell(entry).input.content.text = "reset";
+        promptCell(entry).input.content.selection = { start: 2, end: 2 };
         entry.fire();
 
         expect(pc.getValue(entry)).toBe("reset");
@@ -238,12 +241,12 @@ describe("prompt-collection — reconfiguration", () => {
     test("resetting from content does not feed back into content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
-        entry.cell.input.content.text = "reset";
-        entry.cell.input.content.selection = { start: 1, end: 1 };
+        promptCell(entry).input.content.text = "reset";
+        promptCell(entry).input.content.selection = { start: 1, end: 1 };
         entry.fire();
         // The reset is applied to the editor but the stored content is preserved.
-        expect(entry.cell.input.content.text).toBe("reset");
-        expect(entry.cell.input.content.selection).toEqual({
+        expect(promptCell(entry).input.content.text).toBe("reset");
+        expect(promptCell(entry).input.content.selection).toEqual({
             start: 1,
             end: 1,
         });
@@ -313,7 +316,7 @@ describe("prompt-collection — editor values", () => {
         pc.setValue(entry, "two");
         expect(pc.getValue(entry)).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
-        expect(entry.cell.input.content.text).toBe("two");
+        expect(promptCell(entry).input.content.text).toBe("two");
     });
 
     test("editing updates the Entry's content text and selection", () => {
@@ -324,8 +327,8 @@ describe("prompt-collection — editor values", () => {
         setCursor(editor, 3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
 
-        expect(entry.cell.input.content.text).toBe("hello");
-        expect(entry.cell.input.content.selection).toEqual({
+        expect(promptCell(entry).input.content.text).toBe("hello");
+        expect(promptCell(entry).input.content.selection).toEqual({
             start: 3,
             end: 3,
         });
@@ -372,12 +375,12 @@ describe("prompt-collection — editor values", () => {
     test("filigrane is handed to the editor on add and refreshed on reconfigure", () => {
         const pc = make();
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry) as StubEditor;
         expect(editor.filigrane).toBe("ls -l");
 
-        entry.cell.input.content.filigrane = undefined;
+        promptCell(entry).input.content.filigrane = undefined;
         entry.fire();
         expect(editor.filigrane).toBeNull();
     });
@@ -388,7 +391,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const dom = pc.getEditor(entry)?.dom;
         expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
@@ -406,7 +409,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -441,7 +444,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
             content: plain("ls"),
             bindings: { "Ctrl+L": { command: "lock", freeze: true } },
         });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (init: KeyboardEventInit) =>
@@ -470,7 +473,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         // Reconfiguration (prompt_configure) unblocks it: dim gone once fresh
         // content arrives (no editability on it: editable is the default).
-        entry.cell.configurePrompt({
+        promptCell(entry).configurePrompt({
             input: {
                 content: {
                     text: "ls",
@@ -513,16 +516,16 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
                 cancelable: true,
             }),
         );
-        expect(entry.cell.input.content.editability).toBe("frozen");
+        expect(promptCell(entry).input.content.editability).toBe("frozen");
         expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
         expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
 
         // A content reset without an editability restores the prompt default.
-        entry.cell.configurePrompt({
+        promptCell(entry).configurePrompt({
             input: { content: { text: "ls", ranges: [], selection: { start: 2, end: 2 } } },
         });
         entry.fire();
-        expect(entry.cell.input.content.editability).toBeUndefined();
+        expect(promptCell(entry).input.content.editability).toBeUndefined();
         expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
         expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
     });
@@ -531,7 +534,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls -l") });
-        entry.cell.input.content.filigrane = "ls -la";
+        promptCell(entry).input.content.filigrane = "ls -la";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -541,8 +544,8 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         press("Escape");
         expect(pc.getValue(entry)).toBe("");
-        expect(entry.cell.input.content.text).toBe(""); // synced back to the Entry
-        expect(entry.cell.input.content.filigrane).toBeUndefined(); // dropped as stale
+        expect(promptCell(entry).input.content.text).toBe(""); // synced back to the Entry
+        expect(promptCell(entry).input.content.filigrane).toBeUndefined(); // dropped as stale
         expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
@@ -555,7 +558,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         expect(editor.dom.querySelector(".cm-filigrane")).not.toBeNull();
@@ -563,7 +566,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // What the driver sends on submit (see coquille's command$submit):
         // the content is replaced whole, so the ghost it doesn't carry goes
         // away — and stays away through later updates.
-        entry.cell.configurePrompt({
+        promptCell(entry).configurePrompt({
             input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
@@ -576,10 +579,10 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.cell.input.content.filigrane = "ls -l";
+        promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
-        entry.cell.configurePrompt({ bindings: {} });
+        promptCell(entry).configurePrompt({ bindings: {} });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
     });
@@ -924,7 +927,7 @@ describe("prompt-collection — key bindings", () => {
         expect(commands).toEqual([]);
 
         // Add a binding; it takes effect without re-adding the prompt.
-        entry.cell.bindings = { "Ctrl+L": "clear" };
+        promptCell(entry).bindings = { "Ctrl+L": "clear" };
         press(editor.dom, { key: "l", ctrlKey: true });
         expect(commands).toEqual(["clear"]);
     });
@@ -945,14 +948,14 @@ describe("prompt-collection — key bindings", () => {
         // The next prompt_configure (entry.fire() from the driver message)
         // unblocks the editor when it brings fresh content: the whole-content
         // replacement carries no editability, and editable is the default.
-        entry.cell.configurePrompt({
+        promptCell(entry).configurePrompt({
             input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.readOnly).toBe(false);
 
         // A non-freezing object binding fires without freezing.
-        entry.cell.bindings = { "Ctrl+J": { command: "jump" } };
+        promptCell(entry).bindings = { "Ctrl+J": { command: "jump" } };
         press(editor.dom, { key: "j", ctrlKey: true });
         expect(commands).toEqual(["lock", "jump"]);
         expect(editor.readOnly).toBe(false);

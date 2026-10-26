@@ -1,6 +1,6 @@
 import type { CellConfiguration, ViewKind } from "../cell.ts";
+import { PromptCell, type PromptConfiguration } from "../cells/prompt.ts";
 import type { Buche } from "../core.ts";
-import type { PromptConfiguration } from "../prompt.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
 
 /** The fields that make (or retune) what an entry shows. */
@@ -52,10 +52,11 @@ export function handle$configure(buche: Buche, obj: ConfigureMessage): void {
         // of this prompt; anything older is dropped (it would clobber text
         // typed since, with ranges computed for text that is gone).
         const entry = buche.hierarchy.getAt(obj.from, false);
-        if (entry?.cell.kind !== "prompt" || entry.cell.request_id !== obj.request_id) {
+        const prompt = entry?.cell;
+        if (!entry || !(prompt instanceof PromptCell) || prompt.request_id !== obj.request_id) {
             return;
         }
-        entry.cell.configurePrompt(obj);
+        prompt.configurePrompt(obj);
         buche.sendInterface({ type: "update_cell", target: null, entry });
         return;
     }
@@ -94,10 +95,10 @@ function configureView(buche: Buche, obj: ConfigureMessage, kind: ViewKind): voi
     const fresh = !entry.visual;
     let target = null;
     if (fresh) {
-        entry.cell.kind = kind;
+        entry.replaceCell(kind);
         target = entry.target = buche.targetFor(entry, obj.zone, kind);
     }
-    if (kind === "prompt") {
+    if (entry.cell instanceof PromptCell) {
         // Any parse still awaiting its answer is now void. A live prompt
         // (submit reset, cd, config reload) keeps its status.
         entry.cell.request_id = null;

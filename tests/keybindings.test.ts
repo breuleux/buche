@@ -10,6 +10,7 @@ import { GlobalKeys } from "../src/keybindings.ts";
 import { isMac } from "../src/keychord.ts";
 import "../src/components/echo-box.tsx";
 import "../src/components/prompt-collection.tsx";
+import type { PromptCell } from "../src/cells/prompt.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -129,8 +130,9 @@ function makePromptCollection(): [PromptCollection, Entry] {
         };
     }) as EditorFactory;
     const entry = new Entry({});
-    entry.cell.kind = "prompt";
-    entry.cell.configurePrompt({ input: { context: { text: "$", ranges: [] } } });
+    (entry.replaceCell("prompt") as PromptCell).configurePrompt({
+        input: { context: { text: "$", ranges: [] } },
+    });
     pc.addPrompt(entry);
     return [pc, entry];
 }

@@ -1,4 +1,4 @@
-import { type CellCommand, commandKind } from "../cell.ts";
+import type { CellCommand } from "../cell.ts";
 import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
@@ -10,7 +10,7 @@ export interface SendMessage extends BaseMessage {
 }
 
 export function handle$send(buche: Buche, obj: SendMessage): void {
-    const entry = buche.output(obj, commandKind(obj.message));
+    const entry = buche.output(obj, obj.message);
     buche.sendInterface({
         type: "cell_command",
         command: obj.message,

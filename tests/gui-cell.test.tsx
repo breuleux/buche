@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test } from "vitest";
-import { Cell, type CellCommand } from "../src/cell.ts";
+import type { Cell, CellCommand } from "../src/cell.ts";
+import { FrameCell, PendingCell, TerminalCell } from "../src/cells/index.ts";
 import { BucheGui, GUI_SEND_EVENT } from "../src/components/buche-gui.tsx";
 import { EchoBox } from "../src/components/echo-box.tsx";
 import type { PromptCollection } from "../src/components/prompt-collection.tsx";
@@ -79,7 +80,7 @@ function run(cell: Cell, boxEl: EchoBox, ...commands: CellCommand[]): void {
 describe("cell content", () => {
     test("a data command creates the gui", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "data", data: { hello: "world" } });
         const gui = b.content;
         expect(gui).toBeInstanceOf(BucheGui);
@@ -90,7 +91,7 @@ describe("cell content", () => {
 
     test("html, exec, register and register_schemas share the one gui", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(
             cell,
             b,
@@ -104,7 +105,7 @@ describe("cell content", () => {
 
     test("text goes to the terminal", () => {
         const b = box();
-        const cell = new Cell("terminal");
+        const cell = new TerminalCell();
         run(cell, b, { type: "text", stream: "stdout", text: "hello\n" });
         expect(b.content?.localName).toBe("embedded-term");
         expect(b.querySelector("buche-gui")).toBeNull();
@@ -112,20 +113,20 @@ describe("cell content", () => {
 
     test("a placeholder's terminal goes when it becomes a frame", () => {
         const b = box();
-        const cell = new Cell("pending");
         const entry = new Entry({});
-        entry.cell = cell;
-        cell.initialize(entry, b);
+        entry.cell = new PendingCell();
+        b.bindEntry(entry);
+        entry.cell.initialize(entry, b);
         expect(b.content?.localName).toBe("embedded-term");
-        cell.kind = "frame";
-        run(cell, b, { type: "data", data: {} });
+        const frame = entry.replaceCell("frame");
+        frame.handle({ type: "data", data: {} }, entry, b);
         expect(b.content).toBeInstanceOf(BucheGui);
         expect(b.querySelector("embedded-term")).toBeNull();
     });
 
     test("a response does not bring the gui into existence", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "response", response_id: "r1", value: 1 });
         expect(b.content).toBeNull();
     });
@@ -141,7 +142,7 @@ describe("gui size information", () => {
 
     test("a box resize refreshes the sizing information in the queue, in place", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "html", content: "<p>hi</p>" });
         const gui = b.content as BucheGui;
 
@@ -158,7 +159,7 @@ describe("gui size information", () => {
 
     test("a dragged (pinned) box announces dynamicHeight false", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "data", data: {} });
         const gui = b.content as BucheGui;
         (b.querySelector(".echo-box-cell") as HTMLElement).style.height = "300px";
@@ -169,7 +170,7 @@ describe("gui size information", () => {
 
     test("a pinned cell hands the height from the content to the fill, and back", () => {
         const b = box();
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "html", content: "<p>hi</p>" });
         const gui = b.content as BucheGui;
         // Dynamic sizing drives the height from the content reports (inline).
@@ -195,7 +196,7 @@ describe("gui size information", () => {
         const b = document.createElement("echo-box") as EchoBox;
         b.setAttribute("fills", "");
         document.body.append(b);
-        const cell = new Cell("frame");
+        const cell = new FrameCell();
         run(cell, b, { type: "data", data: {} });
         const gui = b.content as BucheGui;
 

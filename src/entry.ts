@@ -1,4 +1,5 @@
-import { Cell, type CellKind, type Status } from "./cell";
+import type { Cell, CellKind, Status } from "./cell";
+import { GroupCell, makeCell } from "./cells/index.ts";
 import type { Address, Target } from "./types";
 import { Hierarchy, type HierarchyArgs } from "./utils";
 
@@ -29,7 +30,15 @@ export class Entry extends Hierarchy {
 
     constructor(args: HierarchyArgs) {
         super(args);
-        this.cell = new Cell("group", { color: this.parent?.cell.color });
+        this.cell = new GroupCell({ color: this.parent?.cell.color });
+    }
+
+    /** Give the entry a new cell of `kind` (it shows something else now: a
+     *  group or a placeholder becoming what it shows). The new cell takes
+     *  over the look and status of the one it replaces. */
+    replaceCell(kind: CellKind): Cell {
+        this.cell = makeCell(kind).inherit(this.cell);
+        return this.cell;
     }
 
     /** Whether it shows something. */

@@ -2,6 +2,7 @@
 // authoritative reconfigurations of a live prompt.
 
 import { describe, expect, test } from "vitest";
+import type { PromptCell } from "../src/cells/prompt.ts";
 import { Buche, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import type { Entry } from "../src/entry.ts";
@@ -37,6 +38,10 @@ function prompt(f: Fixture): Entry {
     return f.buche.get(PROMPT);
 }
 
+function promptCell(f: Fixture): PromptCell {
+    return prompt(f).cell as PromptCell;
+}
+
 function type(f: Fixture, text: string): void {
     f.buche.handle({
         type: "user_input",
@@ -69,7 +74,7 @@ describe("prompt configure echo", () => {
         type(f, "ls");
         const parse = f.driverOut.at(-1)!;
         expect(parse).toMatchObject({ type: "parse", text: "ls", request_id: "r1" });
-        expect(prompt(f).cell.request_id).toBe("r1");
+        expect(promptCell(f).request_id).toBe("r1");
     });
 
     test("the matching echo applies content and filigrane, not status", () => {
@@ -79,7 +84,7 @@ describe("prompt configure echo", () => {
         prompt(f).cell.status = { status: "unresponsive" }; // whatever mirrors it
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "ls -l");
-        const p = prompt(f).cell;
+        const p = promptCell(f);
         expect(p.input.content.text).toBe("ls");
         expect(p.input.content.filigrane).toBe("ls -l");
         expect(prompt(f).cell.status.status).toBe("unresponsive"); // untouched
@@ -94,10 +99,10 @@ describe("prompt configure echo", () => {
         type(f, "ls -a"); // typed on before r1's answer (r2) — here, r1 late
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "stale"); // stale: dropped
-        expect(prompt(f).cell.input.content.filigrane).toBe("ls -l");
+        expect(promptCell(f).input.content.filigrane).toBe("ls -l");
         expect(f.interfaceOut).toEqual([]);
         echo(f, "r2", "ls -a", "ls -a -l"); // the fresh one applies
-        expect(prompt(f).cell.input.content.filigrane).toBe("ls -a -l");
+        expect(promptCell(f).input.content.filigrane).toBe("ls -a -l");
     });
 
     test("an echo without a suggestion clears the ghost", () => {
@@ -107,7 +112,7 @@ describe("prompt configure echo", () => {
         echo(f, "r1", "ls", "ls -l");
         type(f, "ls -lx");
         echo(f, "r2", "ls -lx"); // nothing extends it: the content carries no filigrane
-        expect(prompt(f).cell.input.content.filigrane).toBeUndefined();
+        expect(promptCell(f).input.content.filigrane).toBeUndefined();
     });
 
     test("an authoritative configure takes over and voids the outstanding echo", () => {
@@ -122,7 +127,7 @@ describe("prompt configure echo", () => {
             to: ["$term"],
             input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         } as never);
-        const p = prompt(f).cell;
+        const p = promptCell(f);
         expect(p.input.content.text).toBe("");
         expect(p.input.content.filigrane).toBeUndefined(); // replaced whole
         f.interfaceOut.length = 0;

@@ -1,2 +1,2 @@
 {"$role":"driverIn","type":"configure","kind":"frame","from":["$proc","cq","53"],"to":["$term"],"zone":"bogus","background":false}
-{"$role":"interfaceOut","type":"update_cell","target":{"zone":"bogus","anchor":null},"entry":{"cell":"#103"}}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"bogus","anchor":null},"entry":{"cell":"#104"}}

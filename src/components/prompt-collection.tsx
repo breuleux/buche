@@ -4,7 +4,7 @@
 //   const entry = new Entry({});
 //   entry.cell.label = { text: "sh", ranges: [] };
 //   entry.cell.color = "green";
-//   entry.cell.kind = "prompt";
+//   entry.replaceCell("prompt");
 //   pc.addPrompt(entry);
 //   container.appendChild(pc);
 //
@@ -68,7 +68,7 @@ import {
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
-import type { Cell } from "../cell.ts";
+import { PromptCell } from "../cells/prompt.ts";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
@@ -76,8 +76,8 @@ import type { HighlightRange, InteractiveStyledText, Selection, StyledText } fro
 import { buildStyledText } from "./utils.tsx";
 
 /** The cell of an entry of the collection, if it is a prompt. */
-function promptOf(entry: Entry): Cell | null {
-    return entry.cell.kind === "prompt" ? entry.cell : null;
+function promptOf(entry: Entry): PromptCell | null {
+    return entry.cell instanceof PromptCell ? entry.cell : null;
 }
 
 // ── Key bindings ────────────────────────────────────────────────────────────

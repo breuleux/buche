@@ -1,6 +1,12 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import { type CellConfiguration, type CellKind, cellConfiguration } from "./cell.ts";
+import {
+    type CellCommand,
+    type CellConfiguration,
+    type CellKind,
+    cellConfiguration,
+    commandKind,
+} from "./cell.ts";
 import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
@@ -158,7 +164,7 @@ export class Buche {
         if (existing && (existing.visual || Object.keys(existing.children).length)) {
             return null;
         }
-        ph.cell.kind = kind;
+        ph.replaceCell(kind);
         // A view (`$stdout`, `$frame`...) claiming it brings its own look: the
         // one it was configured with, else its parent's.
         if (field.startsWith("$")) {
@@ -195,8 +201,8 @@ export class Buche {
         }
         const ph = entry.getAt([PLACEHOLDER], true)!;
         ph.represents = entry.address();
+        ph.replaceCell("pending");
         ph.cell.configure(cellConfiguration(entry.cell));
-        ph.cell.kind = "pending";
         ph.cell.status = { status: "running" };
         ph.target = this.targetFor(entry, zone, "pending");
         entry.primary = ph;
@@ -212,7 +218,7 @@ export class Buche {
         if (entry.visual || entry === this.hierarchy) {
             return;
         }
-        entry.cell.kind = kind;
+        entry.replaceCell(kind);
         entry.target ??= this.targetFor(entry, null, kind);
         if (entry.cell.status.status === "absent") {
             entry.cell.status = { status: "running" };
@@ -272,15 +278,21 @@ export class Buche {
     }
 
     /**
-     * The entry that output for a cell of `kind` sent from `message.from` goes
-     * to: it claims its parent's placeholder, or gets a cell of its own, if it
-     * shows nothing yet. Output for a cell of another kind is an error.
+     * The entry that `command`, sent from `message.from`, goes to: it claims
+     * its parent's placeholder, or gets a cell of its own (of the kind the
+     * command is for), if it shows nothing yet. A cell that does not take the
+     * command is an error.
      */
-    output(message: CreationInfo, kind: CellKind): Entry {
+    output(message: CreationInfo, command: CellCommand): Entry {
         const existing = this.hierarchy.getAt(message.from, false);
-        if (existing) {
-            this.checkKind(existing, kind);
+        if (existing?.visual && !existing.cell.accepts(command)) {
+            throw new BucheError({
+                type: "buche_error",
+                code: "kindmismatch",
+                reason: `The ${existing.cell.kind} at ${JSON.stringify(message.from)} does not take ${command.type}`,
+            });
         }
+        const kind = commandKind(command);
         this.claim(message.from, kind);
         const entry = this.ensure(message);
         this.ensureCell(entry, kind);

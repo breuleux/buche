@@ -1,3 +1,4 @@
+import { PromptCell } from "../cells/prompt.ts";
 import type { Buche } from "../core.ts";
 import type { Entry } from "../entry.ts";
 import type { Selection } from "../types.ts";
@@ -16,7 +17,7 @@ export function handle$user_input(buche: Buche, obj: UserInputMessage): void {
     // it (a prompt `configure` carrying the same request_id) is only applied
     // while it is still the latest parse for this prompt.
     const requestId = `r${++buche.requestSeq}`;
-    if (obj.entry.cell.kind === "prompt") {
+    if (obj.entry.cell instanceof PromptCell) {
         obj.entry.cell.request_id = requestId;
     }
     buche.sendDriver({
