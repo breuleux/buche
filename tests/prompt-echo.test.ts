@@ -50,7 +50,7 @@ function echo(f: Fixture, requestId: string, text: string, filigrane?: string): 
         from: PROMPT,
         to: ["$term"],
         request_id: requestId,
-        submission: {
+        input: {
             content: { text, ranges: [], ...(filigrane === undefined ? {} : { filigrane }) },
         },
     } as never);
@@ -74,8 +74,8 @@ describe("prompt_configure echo", () => {
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "ls -l");
         const p = prompt(f).prompt!;
-        expect(p.submission.content.text).toBe("ls");
-        expect(p.submission.content.filigrane).toBe("ls -l");
+        expect(p.input.content.text).toBe("ls");
+        expect(p.input.content.filigrane).toBe("ls -l");
         expect(prompt(f).echo.status.status).toBe("unresponsive"); // untouched
         expect(f.interfaceOut).toEqual([
             { type: "update_prompt", target: null, entry: prompt(f) },
@@ -90,10 +90,10 @@ describe("prompt_configure echo", () => {
         type(f, "ls -a"); // typed on before r1's answer (r2) — here, r1 late
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "stale"); // stale: dropped
-        expect(prompt(f).prompt!.submission.content.filigrane).toBe("ls -l");
+        expect(prompt(f).prompt!.input.content.filigrane).toBe("ls -l");
         expect(f.interfaceOut).toEqual([]);
         echo(f, "r2", "ls -a", "ls -a -l"); // the fresh one applies
-        expect(prompt(f).prompt!.submission.content.filigrane).toBe("ls -a -l");
+        expect(prompt(f).prompt!.input.content.filigrane).toBe("ls -a -l");
     });
 
     test("an echo without a suggestion clears the ghost", () => {
@@ -103,7 +103,7 @@ describe("prompt_configure echo", () => {
         echo(f, "r1", "ls", "ls -l");
         type(f, "ls -lx");
         echo(f, "r2", "ls -lx"); // nothing extends it: the content carries no filigrane
-        expect(prompt(f).prompt!.submission.content.filigrane).toBeUndefined();
+        expect(prompt(f).prompt!.input.content.filigrane).toBeUndefined();
     });
 
     test("an authoritative configure takes over and voids the outstanding echo", () => {
@@ -115,14 +115,14 @@ describe("prompt_configure echo", () => {
             type: "prompt_configure", // the submit reset
             from: PROMPT,
             to: ["$term"],
-            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         } as never);
         const p = prompt(f).prompt!;
-        expect(p.submission.content.text).toBe("");
-        expect(p.submission.content.filigrane).toBeUndefined(); // replaced whole
+        expect(p.input.content.text).toBe("");
+        expect(p.input.content.filigrane).toBeUndefined(); // replaced whole
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "ls -l"); // the pre-submit echo: now void
-        expect(p.submission.content.filigrane).toBeUndefined();
+        expect(p.input.content.filigrane).toBeUndefined();
         expect(f.interfaceOut).toEqual([]);
     });
 

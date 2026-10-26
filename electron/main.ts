@@ -92,6 +92,20 @@ async function start(): Promise<void> {
                             }
                         },
                     },
+                    {
+                        // Unlike Cmd+Q (held: see guardQuit), right away. Nothing
+                        // in the page can hold it open (no beforeunload); the
+                        // window's processes die with it, and the app quits.
+                        label: "Close Window Now",
+                        // (Not Cmd+Shift+Q: macOS keeps that one for Log Out.)
+                        accelerator:
+                            process.platform === "darwin" ? "Cmd+Shift+W" : "CmdOrCtrl+Shift+W",
+                        click: (_item, win) => {
+                            if (win instanceof BrowserWindow && !win.isDestroyed()) {
+                                win.destroy();
+                            }
+                        },
+                    },
                     { role: "minimize" },
                     { role: "zoom" },
                     { role: "front" },

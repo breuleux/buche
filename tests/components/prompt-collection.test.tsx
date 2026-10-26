@@ -105,7 +105,7 @@ function makeEntry(
     }
     entry.setPrompt(
         new Prompt({
-            submission: {
+            input: {
                 context: opts.marker ?? { text: "", ranges: [] },
                 content: opts.content ?? { text: "", ranges: [] },
             },
@@ -210,7 +210,7 @@ describe("prompt-collection — reconfiguration", () => {
 
         entry.echo.label = { text: "renamed", ranges: [] };
         entry.echo.color = "red";
-        entry.prompt!.submission.context = { text: ">", ranges: [] };
+        entry.prompt!.input.context = { text: ">", ranges: [] };
         entry.fire();
 
         expect(tabOf(pc, entry)?.textContent).toBe("renamed");
@@ -228,8 +228,8 @@ describe("prompt-collection — reconfiguration", () => {
         expect(pc.getValue(entry)).toBe("first");
 
         // Mutate the Prompt's content and fire: the editor resets to it.
-        entry.prompt!.submission.content.text = "reset";
-        entry.prompt!.submission.content.selection = { start: 2, end: 2 };
+        entry.prompt!.input.content.text = "reset";
+        entry.prompt!.input.content.selection = { start: 2, end: 2 };
         entry.fire();
 
         expect(pc.getValue(entry)).toBe("reset");
@@ -239,12 +239,12 @@ describe("prompt-collection — reconfiguration", () => {
     test("resetting from content does not feed back into content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
-        entry.prompt!.submission.content.text = "reset";
-        entry.prompt!.submission.content.selection = { start: 1, end: 1 };
+        entry.prompt!.input.content.text = "reset";
+        entry.prompt!.input.content.selection = { start: 1, end: 1 };
         entry.fire();
         // The reset is applied to the editor but the stored content is preserved.
-        expect(entry.prompt?.submission.content.text).toBe("reset");
-        expect(entry.prompt?.submission.content.selection).toEqual({ start: 1, end: 1 });
+        expect(entry.prompt?.input.content.text).toBe("reset");
+        expect(entry.prompt?.input.content.selection).toEqual({ start: 1, end: 1 });
     });
 
     test("a prompt whose echo is done or error is removed on reconfiguration", () => {
@@ -311,7 +311,7 @@ describe("prompt-collection — editor values", () => {
         pc.setValue(entry, "two");
         expect(pc.getValue(entry)).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
-        expect(entry.prompt?.submission.content.text).toBe("two");
+        expect(entry.prompt?.input.content.text).toBe("two");
     });
 
     test("editing updates the Entry's content text and selection", () => {
@@ -322,8 +322,8 @@ describe("prompt-collection — editor values", () => {
         setCursor(editor, 3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
 
-        expect(entry.prompt?.submission.content.text).toBe("hello");
-        expect(entry.prompt?.submission.content.selection).toEqual({ start: 3, end: 3 });
+        expect(entry.prompt?.input.content.text).toBe("hello");
+        expect(entry.prompt?.input.content.selection).toEqual({ start: 3, end: 3 });
     });
 
     test("editing fires textchange with entry, text and selection", () => {
@@ -367,12 +367,12 @@ describe("prompt-collection — editor values", () => {
     test("filigrane is handed to the editor on add and refreshed on reconfigure", () => {
         const pc = make();
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry) as StubEditor;
         expect(editor.filigrane).toBe("ls -l");
 
-        entry.prompt!.submission.content.filigrane = undefined;
+        entry.prompt!.input.content.filigrane = undefined;
         entry.fire();
         expect(editor.filigrane).toBeNull();
     });
@@ -383,7 +383,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const dom = pc.getEditor(entry)?.dom;
         expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
@@ -401,7 +401,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -436,7 +436,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
             content: plain("ls"),
             bindings: { "Ctrl+L": { command: "lock", freeze: true } },
         });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (init: KeyboardEventInit) =>
@@ -466,7 +466,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // Reconfiguration (prompt_configure) unblocks it: dim gone once fresh
         // content arrives (no editability on it: editable is the default).
         entry.prompt!.configure({
-            submission: {
+            input: {
                 content: {
                     text: "ls",
                     ranges: [],
@@ -508,16 +508,16 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
                 cancelable: true,
             }),
         );
-        expect(entry.prompt!.submission.content.editability).toBe("frozen");
+        expect(entry.prompt!.input.content.editability).toBe("frozen");
         expect(editor.dom.classList.contains("cm-frozen")).toBe(true);
         expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
 
         // A content reset without an editability restores the prompt default.
         entry.prompt!.configure({
-            submission: { content: { text: "ls", ranges: [], selection: { start: 2, end: 2 } } },
+            input: { content: { text: "ls", ranges: [], selection: { start: 2, end: 2 } } },
         });
         entry.fire();
-        expect(entry.prompt!.submission.content.editability).toBeUndefined();
+        expect(entry.prompt!.input.content.editability).toBeUndefined();
         expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
         expect(editor.dom.classList.contains("cm-readonly")).toBe(false);
     });
@@ -526,7 +526,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls -l") });
-        entry.prompt!.submission.content.filigrane = "ls -la";
+        entry.prompt!.input.content.filigrane = "ls -la";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         const press = (key: string) =>
@@ -536,8 +536,8 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         press("Escape");
         expect(pc.getValue(entry)).toBe("");
-        expect(entry.prompt?.submission.content.text).toBe(""); // synced back to the Entry
-        expect(entry.prompt?.submission.content.filigrane).toBeUndefined(); // dropped as stale
+        expect(entry.prompt?.input.content.text).toBe(""); // synced back to the Entry
+        expect(entry.prompt?.input.content.filigrane).toBeUndefined(); // dropped as stale
         expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
@@ -550,7 +550,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         expect(editor.dom.querySelector(".cm-filigrane")).not.toBeNull();
@@ -559,7 +559,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // the content is replaced whole, so the ghost it doesn't carry goes
         // away — and stays away through later updates.
         entry.prompt!.configure({
-            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
@@ -571,7 +571,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const pc = document.createElement("prompt-collection") as PromptCollection;
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
-        entry.prompt!.submission.content.filigrane = "ls -l";
+        entry.prompt!.input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
         const editor = pc.getEditor(entry)!;
         entry.prompt!.configure({ bindings: {} });
@@ -941,7 +941,7 @@ describe("prompt-collection — key bindings", () => {
         // unblocks the editor when it brings fresh content: the whole-content
         // replacement carries no editability, and editable is the default.
         entry.prompt!.configure({
-            submission: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.readOnly).toBe(false);
