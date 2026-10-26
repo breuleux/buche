@@ -373,6 +373,18 @@ export class Layout {
         return this.entries.get(tabId) ?? null;
     }
 
+    /** Whether the tab showing the entry is being closed (see `close`). */
+    isClosing(entry: Entry): boolean {
+        const tabId = this.tabs.get(entry);
+        return tabId !== undefined && this.ws.isClosing(tabId);
+    }
+
+    /** Whether the entry's cell is in a prompt-column (a prompt's scroll stream). */
+    inPromptColumn(entry: Entry): boolean {
+        const ft = this.findTab(this.tabs.get(entry) ?? "");
+        return !!ft && this.ws.index().parent(ft.pane.id)?.type === "prompt-column";
+    }
+
     /** Whether the entry is shown. */
     has(entry: Entry): boolean {
         return this.tabs.has(entry);

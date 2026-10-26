@@ -643,8 +643,9 @@ export class BucheInterface implements Interface {
     // produces in response; the cell's element (see echoElementId) is then
     // expected, and takes the focus when it appears unless the focus moved in
     // the meantime, or the cell is `background`. When the focused cell's
-    // process ends, the focus goes back to where it was, unless the cell is
-    // `sticky`. A new prompt takes the focus unless it is `background`.
+    // process ends, the focus goes back to where it was, if the cell is in a
+    // prompt's stream and isn't `sticky`. A new prompt takes the focus unless
+    // it is `background`.
 
     /** Relay a prompt's command to the machine, expecting the cell answering it. */
     pushCommand(detail: PromptCommandDetail): void {
@@ -681,7 +682,8 @@ export class BucheInterface implements Interface {
         }
     }
 
-    // The focused cell's process ended: give the focus back, unless sticky.
+    // The focused cell's process ended: give the focus back, if it is in a
+    // prompt's stream and not sticky.
     private releaseEndedCell(entry: Entry): void {
         const { status } = entry.echo.status;
         if (status !== "done" && status !== "error") {
@@ -700,7 +702,16 @@ export class BucheInterface implements Interface {
             // Stickiness is a property of the echo on screen, which is not
             // the entry whose process ended when the echo only `represents`
             // it (a cell showing a process's output, say).
-            if (!ent.echo.sticky && !entry.echo.sticky) {
+            // Its tab is being closed (that's why it ended): where the focus
+            // goes is carreau's to decide once the tab is gone (in its tab
+            // group or linked group: see `focusAfterClose`), not the history's,
+            // which could be anywhere.
+            if (this.layout.isClosing(ent)) {
+                return;
+            }
+            // Only in a prompt's stream, where the prompt is right below:
+            // elsewhere (its own tab or pane), the cell keeps the focus.
+            if (!ent.echo.sticky && !entry.echo.sticky && this.layout.inPromptColumn(ent)) {
                 this.focus.back();
             }
         }

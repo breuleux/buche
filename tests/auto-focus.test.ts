@@ -133,6 +133,19 @@ describe("automatic focus", () => {
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 
+    test("but not out of a prompt's stream (in a tab of its own)", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+
+        ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+    });
+
     test("a terminal created in the focused cell gets the focus", async () => {
         const focus = vi.spyOn(EmbeddedTerm.prototype, "focus").mockImplementation(() => {});
         try {
@@ -220,6 +233,20 @@ describe("automatic focus", () => {
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 
+    test("switching back to the prompt's tab focuses the prompt", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+
+        ctx.iface.cycleTabs(true);
+        await settle();
+        expect(shown(prompt(ctx.container))).toBe(true);
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+
     test("a background cell's new tab stays in the background", async () => {
         const ctx = setup();
         ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
@@ -266,6 +293,27 @@ describe("tab ✕", () => {
         expect(hasTab(ctx.container, "sleep")).toBe(false);
         // The layout puts the focus where it belongs: back on the prompt.
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+
+    test("the focus stays in the tab group, even if it was elsewhere before", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "far" });
+        driver({ type: "cell_configure", from: [...SHELL, "3"], zone: "tab", label: "near" });
+        await settle();
+        const boxOf = (i: string) => iface.layout.boxOf(ctx.buche.get([...SHELL, i]))!;
+        // Last in the other pane, then in the tab beside the prompt.
+        iface.focus.focus(boxOf("2"), "nav");
+        iface.focus.focus(boxOf("3"), "nav");
+        await settle();
+
+        tabClose(container, "near")?.click();
+        driver({ type: "close", from: [...SHELL, "3"], outcome: { type: "error" } });
+        await settle();
+        await settle();
+        expect(hasTab(container, "near")).toBe(false);
+        expect(iface.focus.current).toBe(prompt(container));
     });
 
     test("on an ended cell's tab, removes it right away", async () => {
@@ -362,6 +410,36 @@ describe("placement", () => {
             label: "logged",
         });
         expect(paneOf("logged")?.name).toBe("logs");
+    });
+
+    test("a merged shell ending: the focus stays in its linked group", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const sub = [...SHELL, "1"];
+        driver({ type: "configure", from: sub, label: "coquille" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        driver({ type: "cell_configure", from: [...sub, "cq", "2"], zone: "tab", label: "ls" });
+        await settle();
+        const labels = () =>
+            [...container.querySelectorAll(".carreau-tab")]
+                .filter(shown)
+                .map((t) => t.querySelector(".carreau-tab-short")?.textContent);
+        expect(labels()).toEqual(["cq", "sub", "ls"]);
+        // Back to the merged stream (its prompt takes the focus), typing as `sub`.
+        [...container.querySelectorAll<HTMLElement>(".carreau-tab")]
+            .find((t) => shown(t) && t.querySelector(".carreau-tab-short")?.textContent === "sub")
+            ?.click();
+        await settle();
+        expect(iface.focus.current).toBe(prompt(container, "sub"));
+
+        // Ctrl+D: the sub-shell ends.
+        driver({ type: "close", from: sub, outcome: { type: "success" } });
+        await settle();
+        await settle();
+        expect(labels()).toEqual(["cq", "ls"]);
+        expect(iface.focus.current).toBe(prompt(container, "cq"));
+        expect(shown(prompt(container, "cq"))).toBe(true);
     });
 
     test("a nested shell started inline gets a tab linked to its parent's", async () => {
