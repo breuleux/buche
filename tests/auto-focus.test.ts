@@ -485,6 +485,28 @@ describe("slots", () => {
         expect([...container.querySelectorAll("slot-chooser")].filter(shown)).toHaveLength(0);
     });
 
+    test("Alt+Q I F offers a slot in a new floating window", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const ws = iface.layout.ws;
+        ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
+        const press = (type: string, key: string, code: string, altKey = true) =>
+            container.dispatchEvent(new KeyboardEvent(type, { key, code, altKey, bubbles: true }));
+        press("keydown", "Alt", "AltLeft");
+        for (const code of ["KeyQ", "KeyI", "KeyF"]) {
+            const key = code.slice(3).toLowerCase();
+            press("keydown", key, code);
+            press("keyup", key, code);
+        }
+        press("keyup", "Alt", "AltLeft", false);
+        await settle();
+        expect(ws.floating).toHaveLength(1);
+        const [win] = ws.floating;
+        expect(win.root.type === "pane" && win.root.tabs).toHaveLength(1);
+        expect([...container.querySelectorAll("slot-chooser")].filter(shown)).toHaveLength(1);
+    });
+
     test("typing in a slot runs a command there, from the last prompt", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;

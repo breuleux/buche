@@ -71,7 +71,7 @@ const navConfig = (iface: BucheInterface): NavConfig => ({
         "Shift+ArrowDown": "expandDown",
         KeyU: "unexpand",
         KeyL: "clear",
-        KeyN: "namePane",
+        "Shift+KeyN": "namePane",
         KeyX: "mark",
         KeyV: "moveMarked",
         Comma: "prevTab",
@@ -87,7 +87,7 @@ const navConfig = (iface: BucheInterface): NavConfig => ({
         KeyF: "float",
         KeyG: "group",
         "Shift+KeyG": "collapse",
-        "Shift+Digit5": "renameTab",
+        KeyN: "renameTab",
         KeyZ: "undo",
         "Shift+KeyZ": "redo",
         KeyW: "closeTab",
@@ -106,10 +106,12 @@ const navConfig = (iface: BucheInterface): NavConfig => ({
     },
     prefixes: {
         // I, then: Enter, a new tab in the focused cell's pane; a direction,
-        // in the pane on that side; Shift+direction, a new pane on that side.
+        // in the pane on that side; Shift+direction, a new pane on that side;
+        // F, a new floating window (carreau's, over the focused cell).
         // What goes in it, the user then picks (see Layout's slots).
         KeyI: {
             Enter: () => iface.layout.insert(),
+            KeyF: () => iface.layout.insertFloat(),
             ArrowLeft: () => iface.layout.insert("left"),
             ArrowRight: () => iface.layout.insert("right"),
             ArrowUp: () => iface.layout.insert("up"),

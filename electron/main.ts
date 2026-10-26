@@ -11,7 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, systemPreferences } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, systemPreferences } from "electron";
 import { formatMessage } from "../scripts/format.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
@@ -114,11 +114,20 @@ async function start(): Promise<void> {
         ]),
     );
 
+    // The app icon (assets/buche.svg, rasterized by hand into buche.png and
+    // copied next to the bundle by the build script; nativeImage only reads
+    // SVG on Linux). The Dock tile on macOS — set before the window opens to
+    // keep Electron's default icon from flashing — and the window's icon
+    // elsewhere (macOS shows the Dock icon on windows regardless).
+    const icon = nativeImage.createFromPath(join(here, "buche.png"));
+    app.dock?.setIcon(icon); // (app.dock is macOS-only; the window icon below covers the rest.)
+
     const win = new BrowserWindow({
         width: 1280,
         height: 860,
         backgroundColor: "#141414",
         title: `buche — ${command}`,
+        icon,
         webPreferences: {
             preload: join(here, "preload.cjs"),
         },

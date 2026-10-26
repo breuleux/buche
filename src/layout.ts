@@ -929,6 +929,29 @@ export class Layout {
         }
     }
 
+    /**
+     * Insert a new tab (a slot, as `insert`) in a new floating window, over
+     * the focused cell (or the pane holding the prompt or stream it is in).
+     * (Carreau's own `insertFloat` does nothing from a prompt with no cell
+     * above it: this goes by the same base as `insert`.)
+     */
+    insertFloat(): void {
+        const ws = this.ws;
+        const sel = ws.node(ws.selection.id);
+        const base =
+            sel &&
+            this.outerPane(
+                sel.type === "pane" || sel.type === "prompt" ? sel.id : ws.descend(sel),
+            );
+        if (!base) {
+            return;
+        }
+        const rect = this.view.floatRect(base.id) ?? { x: 40, y: 40, w: 420, h: 280 };
+        // (The new tab is the lifecycle's spawn: a chooser.)
+        ws.select({ id: base.id });
+        ws.spawnFloat(rect);
+    }
+
     /** Whether a slot is still there (its tab, or its pane). */
     private slotLive(where: Slot, live?: Set<string>): boolean {
         if ("tabId" in where) {

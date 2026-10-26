@@ -12,6 +12,7 @@
     "electron",
     "src",
     "layouts",
+    "assets",
     "tsconfig.json"
   ],
   "scripts": {

@@ -28,7 +28,7 @@
  * die with "Electron failed to install correctly".
  */
 import "./dom-setup.ts";
-import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
@@ -70,6 +70,7 @@ const page = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <title>Buche</title>
+<link rel="icon" href="buche.png" />
 <style>
 ${readFileSync(join(carreauDir, "style.css"), "utf8")}
 ${readFileSync(join(carreauDir, "prompt.css"), "utf8")}
@@ -138,6 +139,10 @@ await build("electron/main.ts", "main.cjs", false);
 writeFileSync(join(outDir, "index.html"), page);
 // The document the native `proc://<cell-id>/` origin serves (see proc-protocol.ts).
 writeFileSync(join(outDir, "runtime.html"), guiRuntimeDocument());
+// The app icon, next to the bundle: main.ts takes it from there for the Dock
+// and the window, index.html as the favicon. (assets/buche.png is buche.svg
+// rasterized — see assets/README.md.)
+copyFileSync(join(root, "assets/buche.png"), join(outDir, "buche.png"));
 
 // Spawn the Electron binary directly rather than through node_modules/.bin —
 // the .bin entry is a node wrapper that would sit between this process and
