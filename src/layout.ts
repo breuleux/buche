@@ -26,7 +26,7 @@ import {
     promptColumn,
     speakerOf,
 } from "carreau/src/prompt";
-import type { LayoutNode, PaneNode, Tab, WorkspaceData } from "carreau/src/types";
+import type { LayoutNode, PaneNode, SplitNode, Tab, WorkspaceData } from "carreau/src/types";
 import { View } from "carreau/src/view";
 import { Workspace } from "carreau/src/workspace";
 import { defaultTheme } from "./color.ts";
@@ -836,22 +836,32 @@ export class Layout {
         const zone = `~${"tabId" in where ? where.tabId : where.paneId}`;
         this.slots.set(zone, where);
         const el = new SlotChooser();
-        // A new stream, empty, which stays when emptied: things go there later.
-        const group = (name: string, make: typeof scrollColumn): Tab => {
-            const stream = make([]);
-            stream.keep = true;
-            return { id: genId("t"), title: name, short: escapeHtml(name), group: slot(stream) };
+        // A new group, empty, which stays when emptied: things go there later.
+        const group = (name: string, make: () => PaneNode | SplitNode): Tab => {
+            const root = make();
+            root.keep = true;
+            return { id: genId("t"), title: name, short: escapeHtml(name), group: slot(root) };
         };
         // Named at random, the name being edited in its tab right away (like
         // renaming it: Enter keeps it, typing replaces it).
-        const stream = (make: typeof scrollColumn) => {
+        const named = (make: () => PaneNode | SplitNode) => {
             const tab = group(randomName(), make);
             this.fill(zone, tab);
             this.view.editTabTitle(tab.id);
         };
+        // An empty pane: kept, it stays to be filled — with a tab dropped in, or
+        // from the slot the view shows in it (its renderEmpty).
+        const emptyPane = (): PaneNode => ({
+            type: "pane",
+            id: genId("p"),
+            weight: 1,
+            tabs: [],
+            active: 0,
+        });
         el.setOptions([
-            { label: "New scroll column", pick: () => stream(scrollColumn) },
-            { label: "New scroll row", pick: () => stream(scrollRow) },
+            { label: "New pane", pick: () => named(emptyPane) },
+            { label: "New scroll column", pick: () => named(() => scrollColumn([])) },
+            { label: "New scroll row", pick: () => named(() => scrollRow([])) },
             {
                 // From the last prompt (in its directory); with none, a shell
                 // of its own (in the terminal's).

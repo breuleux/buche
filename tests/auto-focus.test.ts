@@ -454,7 +454,7 @@ describe("slots", () => {
         iface.focus.focus(prompt(container));
         iface.interactions.purge();
 
-        pick(chooser, "3");
+        pick(chooser, "4");
         const [command] = [...iface.interactions.purge()] as any[];
         const zone = `~${ws.paneByName("logs")!.id}`;
         expect(command).toMatchObject({ type: "user_command", text: "cq", command: "run", zone });
@@ -474,7 +474,7 @@ describe("slots", () => {
         iface.layout.insert();
         await settle();
         const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
-        pick(chooser, "1");
+        pick(chooser, "2");
         await settle();
         // (Its name is then edited in its tab: see View.editTabTitle.)
         const named = (t: { title: string }) => /^[a-z]+-[a-z]+$/.test(t.title);
@@ -483,6 +483,28 @@ describe("slots", () => {
         expect(stream?.type).toBe("scroll-column");
         expect(stream && "children" in stream && stream.children).toEqual([]);
         expect([...container.querySelectorAll("slot-chooser")].filter(shown)).toHaveLength(0);
+    });
+
+    test("insert offers a new pane: a kept empty pane in a group, offering a slot", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const ws = iface.layout.ws;
+        ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
+        iface.layout.insert();
+        await settle();
+        const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
+        pick(chooser, "1");
+        await settle();
+        const named = (t: { title: string }) => /^[a-z]+-[a-z]+$/.test(t.title);
+        // (Found after the normalization that ran on the change: kept, empty, it stays.)
+        const tab = ws.root.type === "pane" ? ws.root.tabs.find(named) : undefined;
+        const root = tab?.group?.children[0];
+        expect(root?.type).toBe("pane");
+        expect(root && "tabs" in root && root.tabs).toEqual([]);
+        expect(root && "keep" in root && root.keep).toBe(true);
+        // (The empty pane is no dead space: it offers what can go in it.)
+        expect([...container.querySelectorAll("slot-chooser")].filter(shown)).toHaveLength(1);
     });
 
     test("Alt+Q I F offers a slot in a new floating window", async () => {
@@ -532,7 +554,7 @@ describe("slots", () => {
         const { iface, container } = ctx;
         await settle();
         const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
-        pick(chooser, "3");
+        pick(chooser, "4");
         const [spawn] = [...iface.interactions.purge()] as any[];
         expect(spawn).toMatchObject({ type: "user_spawn", command: "cq" });
         // The machine starts it at an address of its own, its prompt going there.

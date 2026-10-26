@@ -57,6 +57,13 @@ const isVisible = (el: HTMLElement): boolean =>
     !el.closest("[hidden]") &&
     (typeof el.checkVisibility === "function" ? el.checkVisibility() : true);
 
+/** The gap between two rectangles (0 if they touch or overlap). */
+const rectDistance = (a: DOMRect, b: DOMRect): number => {
+    const dx = Math.max(0, b.left - a.right, a.left - b.right);
+    const dy = Math.max(0, b.top - a.bottom, a.top - b.bottom);
+    return Math.hypot(dx, dy);
+};
+
 /** Layout operations (carreau's navigation mode: Alt+Q, then these). */
 const navConfig = (iface: BucheInterface): NavConfig => ({
     activation: { modifier: "Alt", code: "KeyQ", side: "either" },
@@ -93,12 +100,12 @@ const navConfig = (iface: BucheInterface): NavConfig => ({
         KeyW: "closeTab",
         "Shift+KeyW": "closePane",
         // Buche's own: kill the cell (from a prompt, the one above it) without
-        // closing it; select the latest prompt; rename the window.
+        // closing it; focus a prompt (as Mod+p); rename the window.
         KeyK: function kill() {
             iface.killCell();
         },
         KeyP: function prompt() {
-            iface.selectPrompt();
+            iface.focusPrompt();
         },
         KeyT: function title() {
             iface.renameWindow();
@@ -387,7 +394,7 @@ export class BucheInterface implements Interface {
     // ── Global key bindings ───────────────────────────────────────────────────
     // Always-live chords (see keybindings.ts); what acts on cells and the
     // layout is in carreau's navigation mode (Alt+Q: see navConfig).
-    //   Mod+p               focus the latest prompt
+    //   Mod+p               focus the closest visible prompt (see focusPrompt)
     //   Ctrl+l              in a prompt: clear its stream's spent cells
     //   Ctrl+Tab /          switch to the next / previous tab of the current
     //   Ctrl+Shift+Tab      pane (the focus follows into the new tab); also
@@ -474,17 +481,64 @@ export class BucheInterface implements Interface {
         return n?.type === "pane" ? (n.tabs[n.active]?.id ?? null) : null;
     }
 
-    /** Focus the latest prompt focused in the history (bringing its tab back
-     *  into view if needed). */
+    /**
+     * Focus a prompt (Mod+p, and Alt+Q P): the visible live prompt closest to
+     * the focus, else the latest one in the history (bringing its tab back
+     * into view). In navigation mode, leave it: the prompt takes the focus.
+     */
     focusPrompt(): void {
-        const prompt = this.latestPrompt();
+        const prompt = this.closestVisiblePrompt() ?? this.latestPrompt();
         if (!prompt) {
             return;
         }
         this.focus.focus(prompt, "nav");
-        if (!this.focus.holdCommits) {
+        if (this.nav.mode !== "off") {
+            this.nav.leave();
+        } else if (!this.focus.holdCommits) {
             this.focus.commitFocus();
         }
+    }
+
+    /**
+     * Of the live prompts shown, the one closest to the focus: one in the
+     * same prompt-collection, else the nearest on screen; ties go to the one
+     * focused last, then to the first in the page.
+     */
+    private closestVisiblePrompt(): HTMLElement | null {
+        const candidates = [
+            ...this.container.querySelectorAll<HTMLElement>('[focusable="prompt"]'),
+        ].filter((el) => isVisible(el) && this.isLivePrompt(el));
+        if (candidates.length === 0) {
+            return null;
+        }
+        const ref = this.focus.current?.isConnected ? this.focus.current : null;
+        const refRect = ref?.getBoundingClientRect();
+        const history = this.focus.history.map((h) => h.element);
+        const score = (el: HTMLElement): [number, number] => {
+            const pc = el.closest("prompt-collection");
+            const distance =
+                !ref || !refRect
+                    ? 0
+                    : pc?.contains(ref)
+                      ? -1
+                      : rectDistance(refRect, el.getBoundingClientRect());
+            return [distance, -history.lastIndexOf(el)];
+        };
+        const scored = candidates.map((el) => ({ el, score: score(el) }));
+        scored.sort((a, b) => a.score[0] - b.score[0] || a.score[1] - b.score[1]);
+        return scored[0].el;
+    }
+
+    /** Whether a prompt element shows a prompt that is still live (one we
+     *  can't tell about counts as live). */
+    private isLivePrompt(el: HTMLElement): boolean {
+        const pc = el.closest("prompt-collection") as PromptCollection | null;
+        const entry = pc?.prompts?.find((e) => pc.promptElement(e) === el);
+        if (!entry?.prompt) {
+            return true;
+        }
+        const status = statusOf(entry).status;
+        return status !== "done" && status !== "error";
     }
 
     /** The live prompt focused last (else any live one). */
@@ -503,19 +557,6 @@ export class BucheInterface implements Interface {
             }
         }
         return this.layout.anyPrompt();
-    }
-
-    /**
-     * Select the latest prompt in the layout (its tab shown), without giving
-     * it the keyboard focus: in navigation mode, the keys that follow are
-     * still navigation. Leaving it gives the prompt the focus, as for any
-     * selected cell.
-     */
-    selectPrompt(): void {
-        const entry = this.lastPromptEntry();
-        if (entry) {
-            this.layout.revealPrompt(entry);
-        }
     }
 
     private latestPrompt(): HTMLElement | null {

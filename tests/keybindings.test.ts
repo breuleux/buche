@@ -147,7 +147,7 @@ const promptRow = (pc: PromptCollection) =>
     pc.querySelector<HTMLElement>('[focusable="prompt"]:not([hidden])')!;
 
 describe("BucheInterface global bindings", () => {
-    test("Mod+p focuses the latest prompt in the history", () => {
+    test("Mod+p focuses a visible prompt, the latest one focused first", () => {
         const [iface, container] = makeInterface();
         column(container);
         const [pc1] = makePromptCollection();
@@ -156,12 +156,33 @@ describe("BucheInterface global bindings", () => {
         container.append(pc1, b1, pc2);
         const mod = isMac() ? { metaKey: true } : { ctrlKey: true };
 
-        // No prompt in the history yet: nothing to go back to.
+        // No prompt in the history yet: the first one shown.
         key(container, "keydown", { key: "p", ...mod });
-        expect(iface.focus.current).toBeNull();
+        expect(iface.focus.current).toBe(promptRow(pc1));
 
         iface.focus.focus(promptRow(pc2));
         iface.focus.focus(b1);
+        key(container, "keydown", { key: "p", ...mod });
+        expect(iface.focus.current).toBe(promptRow(pc2));
+
+        iface.keys.detach();
+    });
+
+    test("Mod+p prefers a visible prompt to a hidden one focused last", () => {
+        const [iface, container] = makeInterface();
+        column(container);
+        const hidden = document.createElement("div");
+        const [pc1] = makePromptCollection();
+        hidden.append(pc1);
+        const [b1] = makeCell();
+        const [pc2] = makePromptCollection();
+        container.append(hidden, b1, pc2);
+        const mod = isMac() ? { metaKey: true } : { ctrlKey: true };
+
+        iface.focus.focus(promptRow(pc2));
+        iface.focus.focus(promptRow(pc1));
+        iface.focus.focus(b1);
+        hidden.hidden = true;
         key(container, "keydown", { key: "p", ...mod });
         expect(iface.focus.current).toBe(promptRow(pc2));
 
@@ -254,20 +275,20 @@ describe("cell actions", () => {
         iface.keys.detach();
     });
 
-    test("'p' selects the latest prompt; leaving navigation focuses it", () => {
+    test("'p' focuses the prompt and leaves navigation, like Mod+p", () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         const [{ box }] = cells(SHELL, "running");
         iface.focus.focus(promptOf(SHELL));
         iface.focus.focus(box);
-        // Alt still held: selected, but the keys still go to navigation.
         key(container, "keydown", { key: "Alt", code: "AltLeft", altKey: true });
         for (const code of ["KeyQ", "KeyP"]) {
             key(container, "keydown", { key: code.slice(3).toLowerCase(), code, altKey: true });
         }
         const q = iface.layout.promptNodeOf(iface.layout.anyPrompt()!);
         expect(iface.layout.ws.selection.id).toBe(q);
-        expect(promptOf(SHELL).contains(document.activeElement)).toBe(false);
+        expect(iface.nav.mode).toBe("off");
+        expect(iface.focus.current).toBe(promptOf(SHELL));
         key(container, "keyup", { key: "Alt", code: "AltLeft" });
         expect(iface.focus.current).toBe(promptOf(SHELL));
         iface.keys.detach();
