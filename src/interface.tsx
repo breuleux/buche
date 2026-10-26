@@ -340,6 +340,7 @@ export class BucheInterface implements Interface {
     //   nextTab /     switch to the next / previous tab of the current pane
     //   prevTab       (the focus follows into the new tab)
     //   kill          kill the current cell (see killCell)
+    //   rerun         run the current cell's process again (see rerunCell)
     //   renameWindow  rename the window
     //   insert...     a new tab, offering what goes in it (see Layout.insert)
     // (setMode and leaveMode are the keymap's.) The others are carreau's
@@ -477,6 +478,7 @@ export class BucheInterface implements Interface {
             nextTab: () => this.cycleTabs(true),
             prevTab: () => this.cycleTabs(false),
             kill: () => this.killCell(),
+            rerun: () => this.rerunCell(),
             renameWindow: () => this.renameWindow(),
             insert: () => this.layout.insert(),
             insertInto: () => this.layout.insert(),
@@ -656,6 +658,15 @@ export class BucheInterface implements Interface {
         }
         const code = status === "unresponsive" ? 9 : 15;
         this.interactions.push({ type: "user_signal", code, entry });
+    }
+
+    /** Ask the target cell's driver to run its process again, in the same
+     *  cell (see RerunRequest): running or not, it's the driver's call. */
+    rerunCell(): void {
+        const entry = this.targetCell()?.boundEntry;
+        if (entry) {
+            this.interactions.push({ type: "user_rerun", entry });
+        }
     }
 
     /** Behave exactly like clicking the target cell's ✕. UNUSED: nothing calls

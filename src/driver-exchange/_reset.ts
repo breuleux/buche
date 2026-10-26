@@ -1,3 +1,4 @@
+import { isSpent } from "../cell.ts";
 import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
@@ -6,10 +7,12 @@ import type { BaseMessage } from "./common.ts";
  * away for a fresh iframe, with no DOM, script state, handlers or cached
  * resources left from the old one (send them again), and keeps the focus if
  * the old one had it; a terminal (or a placeholder's) is cleared, screen and
- * scrollback. Prompts, and entries that show nothing, are left alone. It
- * creates nothing: only the cells that exist are reset, and an address with
- * nothing at it is ignored. E.g. a program restarting its child resets its
- * own address (`["$proc"]`) to reset whichever views the child had.
+ * scrollback. What was done (or failed) runs again: a process that ended is
+ * started over (its driver closes it again when it ends). Prompts are left
+ * alone. It creates nothing: only the cells that exist are reset, and an
+ * address with nothing at it is ignored. E.g. a program restarting its child
+ * resets its own address (`["$proc"]`) to reset whichever views the child
+ * had.
  */
 export interface ResetMessage extends BaseMessage {
     type: "reset";
@@ -23,8 +26,15 @@ export function handle$reset(buche: Buche, obj: ResetMessage): void {
     const entries = h ? (obj.propagate === false ? [h] : h.walk()) : [];
     for (const entry of entries) {
         const kind = entry.cell.kind;
+        if (kind === "prompt") {
+            continue;
+        }
         if (kind === "terminal" || kind === "frame" || kind === "pending") {
             buche.sendInterface({ type: "reset_cell", entry });
+        }
+        if (isSpent(entry.cell.status.status)) {
+            entry.cell.status = { status: "running" };
+            buche.sendInterface({ type: "update_entry", entry });
         }
     }
 }

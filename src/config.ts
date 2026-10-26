@@ -346,6 +346,7 @@ export const BUCHE_ACTIONS = [
     "focusPrompt",
     "clearPrompt",
     "kill",
+    "rerun",
     "renameWindow",
     "nextTab",
     "prevTab",

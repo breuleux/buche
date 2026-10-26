@@ -197,6 +197,50 @@ describe("statuses", () => {
         handle(f, { type: "configure", from: PROCESS, status: "standby" });
         expect(f.buche.get(STDOUT).cell.status.status).toBe("done");
     });
+
+    test("a reset starts an ended process over: it and its views run again", () => {
+        resetId(100);
+        const f = started();
+        handle(f, { type: "configure", kind: "terminal", from: STDOUT });
+        handle(f, { type: "close", from: PROCESS, outcome: { type: "error", code: 2 } });
+        f.interfaceOut.length = 0;
+        handle(f, { type: "reset", from: PROCESS });
+        expect(f.buche.get(PROCESS).cell.status).toEqual({ status: "running" });
+        expect(f.buche.get(STDOUT).cell.status).toEqual({ status: "running" });
+        expect(f.interfaceOut).toContainEqual({
+            type: "update_entry",
+            entry: f.buche.get(STDOUT),
+        });
+        handle(f, { type: "close", from: PROCESS, outcome: { type: "success", code: 0 } });
+        expect(f.buche.get(STDOUT).cell.status).toEqual({ status: "done", code: 0 });
+    });
+
+    test("a reset leaves a live process's status, and prompts, alone", () => {
+        resetId(100);
+        const f = started();
+        handle(f, { type: "configure", kind: "terminal", from: STDOUT });
+        handle(f, { type: "configure", from: PROCESS, status: "standby" });
+        handle(f, { type: "reset", from: PROCESS });
+        expect(f.buche.get(STDOUT).cell.status.status).toBe("standby");
+        handle(f, { type: "close", from: SHELL, outcome: { type: "success" } });
+        handle(f, { type: "reset", from: SHELL });
+        expect(f.buche.get(SHELL).cell.status.status).toBe("done");
+        expect(f.buche.get(STDOUT).cell.status.status).toBe("running");
+    });
+});
+
+describe("rerun", () => {
+    test("rerunning a cell asks its driver, at the cell's address, and changes nothing yet", () => {
+        resetId(100);
+        const f = started();
+        handle(f, { type: "configure", kind: "terminal", from: STDOUT });
+        handle(f, { type: "close", from: PROCESS, outcome: { type: "success" } });
+        f.interfaceOut.length = 0;
+        f.buche.handle({ type: "user_rerun", entry: f.buche.get(STDOUT) } as never);
+        expect(f.driverOut).toEqual([{ type: "rerun", from: ["$term"], to: STDOUT }]);
+        expect(f.interfaceOut).toEqual([]);
+        expect(f.buche.get(STDOUT).cell.status.status).toBe("done");
+    });
 });
 
 describe("signals, input and resizes", () => {

@@ -49,7 +49,8 @@
 # Actions:
 #   setMode, leaveMode
 #   focusPrompt, clearPrompt (in a prompt: clear its stream), nextTab,
-#   prevTab, kill, renameWindow
+#   prevTab, kill, rerun (run the cell's process again, from the start),
+#   renameWindow
 #   insert, insertFloat, insertInto{Left,Right,Up,Down} (a new tab in the pane
 #   on that side), insert{Left,Right,Up,Down} (in a new pane on that side)
 #   carreau's layout operations: focus*, expand*, unexpand, swap*, move*,
@@ -113,8 +114,10 @@ bindings:
   - { key: shift+z,       action: redo, when: mode == nav }
 
   # Buche's own: kill the cell (from a prompt, the one above it) without closing
-  # it; focus a prompt (as Mod+P); rename the window.
+  # it; run its process again, in the same cell (ending it first, if it still
+  # runs); focus a prompt (as Mod+P); rename the window.
   - { key: k,             action: kill, when: mode == nav }
+  - { key: r,             action: rerun, when: mode == nav }
   - { key: p,             action: focusPrompt, when: mode == nav }
   - { key: t,             action: renameWindow, when: mode == nav }
 

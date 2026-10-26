@@ -754,7 +754,7 @@
         "type"
       ],
       "additionalProperties": false,
-      "description": "Start the cells at and under `from` over, blank: a frame throws its GUI away for a fresh iframe, with no DOM, script state, handlers or cached resources left from the old one (send them again), and keeps the focus if the old one had it; a terminal (or a placeholder's) is cleared, screen and scrollback. Prompts, and entries that show nothing, are left alone. It creates nothing: only the cells that exist are reset, and an address with nothing at it is ignored. E.g. a program restarting its child resets its own address (`[\"$proc\"]`) to reset whichever views the child had."
+      "description": "Start the cells at and under `from` over, blank: a frame throws its GUI away for a fresh iframe, with no DOM, script state, handlers or cached resources left from the old one (send them again), and keeps the focus if the old one had it; a terminal (or a placeholder's) is cleared, screen and scrollback. What was done (or failed) runs again: a process that ended is started over (its driver closes it again when it ends). Prompts are left alone. It creates nothing: only the cells that exist are reset, and an address with nothing at it is ignored. E.g. a program restarting its child resets its own address (`[\"$proc\"]`) to reset whichever views the child had."
     },
     "SendMessage": {
       "type": "object",

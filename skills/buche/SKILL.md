@@ -147,6 +147,12 @@ under `ConfigureMessage`):
   past which the cell scrolls on its own): the cell takes all the height its
   content needs, and the user scrolls the stream instead. Meant for long,
   growing content such as a chat transcript.
+- `delegate` (for the shell running you, coquille: buche never sees it):
+  which requests about this cell, by type (`["rerun"]`; `true`: all), you
+  leave to the shell, instead of receiving them. E.g. a cell you make
+  (`["$proc", "log"]`, say) that delegates `rerun`: rerunning it (Alt+Q R)
+  has the shell run you again, as for your `$stdout` and `$frame`. Delegated
+  requests the shell has no use for are dropped.
 
 **The GUI does not exist yet** at this point: it comes into being with the
 first GUI command, starting from an empty document. Everything in it arrives
@@ -179,7 +185,9 @@ only the one at `from`), and creates none, so you need not know which of
 `$stdout` and `$frame` you have. A frame gets a fresh iframe, with no DOM,
 script state, registered handlers or cached `proc://` resources left from the
 old one (send what you need again); it keeps the focus if the old GUI had it.
-A terminal is cleared, screen and scrollback. Prompts are left alone.
+A terminal is cleared, screen and scrollback. A cell whose process had ended
+(done, or failed) is running again, until you close it again. Prompts are left
+alone.
 
 ### Refusing to close
 

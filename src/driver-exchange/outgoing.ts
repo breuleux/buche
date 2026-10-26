@@ -65,6 +65,20 @@ export interface SignalRequest extends BaseRequest {
 }
 
 /**
+ * Run the process the cell at `to` shows again, from the start: as it was
+ * first run (same command, working directory and environment), in the same
+ * cells, reset (see `reset`). If it still runs, it is ended first. Which
+ * process that is, the drivers on the way decide: e.g. a shell reruns a
+ * process it runs for the cells it made for it (`$stdout`, `$frame`...), and
+ * passes the request on to the process for its own cells (unless the process
+ * left them to the shell). An address that can't be run again (nothing ran
+ * there, a builtin, or too long ago) is ignored.
+ */
+export interface RerunRequest extends BaseRequest {
+    type: "rerun";
+}
+
+/**
  * Start another driver (a shell), at the address `to` (one segment, e.g.
  * `["$d1"]`): its messages come with their addresses under it, and messages
  * to addresses under it go to it. For the host running the drivers, not for a
@@ -133,6 +147,7 @@ export type OutgoingDriverMessage =
     | ParseRequest
     | CommandRequest
     | SignalRequest
+    | RerunRequest
     | SpawnRequest
     | TextRequest
     | DataRequest
