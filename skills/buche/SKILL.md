@@ -145,6 +145,21 @@ once its cell has stayed scrolled out of view (out of sight even with its
 stream scrolled to the bottom) for a while. `"status": "running"` takes it
 back, e.g. while the user is in the middle of something.
 
+### Refusing to close
+
+Closing your cell's tab (its ✕, Cmd+W, Alt+Q W) sends your process a SIGTERM,
+and the tab goes once your process has ended. To refuse (e.g. to ask about
+unsaved changes first), trap SIGTERM and stay alive: the tab shows as closing
+meanwhile. Then either exit (the tab goes), or say you are running again,
+which cancels the close (the tab stays):
+
+```json
+{"type": "configure", "from": ["$proc"], "to": ["$term"], "status": "running"}
+```
+
+The user can still force it: Alt+Q Shift+W (or a click on the closing tab's
+spinner) kills your process and closes the tab right away.
+
 ---
 
 ## 3. Commands — you → GUI

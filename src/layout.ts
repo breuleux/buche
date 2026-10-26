@@ -1194,7 +1194,9 @@ export class Layout {
      * Closing a tab ends its process: terminated (killed, if it doesn't
      * answer anymore), and closed once it has ended. Unless another tab still
      * shows that process (its terminal, beside its GUI): that one stays, and
-     * the process with it.
+     * the process with it. The process can refuse (e.g. to ask about unsaved
+     * changes, then be told to stay): marked unresponsive by the SIGTERM, it
+     * says it is running (or on standby) again, and the close is cancelled.
      */
     private close(tab: Tab): Promise<void> {
         const entry = this.entries.get(tab.id);
@@ -1213,10 +1215,24 @@ export class Layout {
         if (unresponsive) {
             return Promise.resolve();
         }
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            // (Until the SIGTERM has marked it unresponsive, "running" is
+            // only what it was before.)
+            let signalled = false;
             const check = (): void => {
-                if (!this.alive(entry)) {
-                    process.listeners = process.listeners.filter((l) => l !== check);
+                const { status } = statusOf(entry);
+                if (status === "unresponsive") {
+                    signalled = true;
+                    return;
+                }
+                const alive = this.alive(entry);
+                if (alive && !signalled) {
+                    return;
+                }
+                process.listeners = process.listeners.filter((l) => l !== check);
+                if (alive) {
+                    reject(new Error("the process refused to close"));
+                } else {
                     resolve();
                 }
             };

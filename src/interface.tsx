@@ -98,7 +98,9 @@ const navConfig = (iface: BucheInterface): NavConfig => ({
         KeyZ: "undo",
         "Shift+KeyZ": "redo",
         KeyW: "closeTab",
-        "Shift+KeyW": "closePane",
+        // Close without waiting for the cell to agree (one that refuses, or
+        // hangs): its process is killed.
+        "Shift+KeyW": "forceCloseTab",
         // Buche's own: kill the cell (from a prompt, the one above it) without
         // closing it; focus a prompt (as Mod+p); rename the window.
         KeyK: function kill() {

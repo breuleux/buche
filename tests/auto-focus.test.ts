@@ -316,6 +316,76 @@ describe("tab ✕", () => {
         expect(iface.focus.current).toBe(prompt(container));
     });
 
+    test("a process saying it runs again refuses the close: the tab stays", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "edit" }, { zone: "tab" });
+        await settle();
+        const ws = ctx.iface.layout.ws;
+        const tabId = () =>
+            ws
+                .trees()
+                .flatMap((t) => panesOf(t))
+                .flatMap((p) => p.tabs)
+                .find((t) => t.title === "edit")?.id;
+
+        // Before the SIGTERM lands, it was already running: nothing cancelled.
+        tabClose(ctx.container, "edit")?.click();
+        ctx.driver({ type: "text", from: [...SHELL, "2"], stream: "stdout", text: "x" });
+        await settle();
+        expect(ws.isClosing(tabId()!)).toBe(true);
+        ctx.flush(); // the SIGTERM: unresponsive
+        await settle();
+        expect(ws.isClosing(tabId()!)).toBe(true);
+
+        ctx.driver({ type: "configure", from: [...SHELL, "2"], status: "running" });
+        await settle();
+        expect(hasTab(ctx.container, "edit")).toBe(true);
+        expect(ws.isClosing(tabId()!)).toBe(false);
+        expect(tabClose(ctx.container, "edit")).not.toBeNull();
+        expect(box()).not.toBeNull();
+
+        // Closing again: it can still go.
+        tabClose(ctx.container, "edit")?.click();
+        ctx.flush();
+        ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        await settle();
+        await settle();
+        expect(hasTab(ctx.container, "edit")).toBe(false);
+    });
+
+    test("Alt+Q Shift+W force closes a cell that refuses", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx, { label: "edit" }, { zone: "tab" });
+        await settle();
+        const entry = box()?.boundEntry;
+        ctx.iface.interactions.purge();
+        const key = (code: string, opts: KeyboardEventInit = {}) => {
+            window.dispatchEvent(
+                new KeyboardEvent("keydown", { code, key: code, bubbles: true, ...opts }),
+            );
+            window.dispatchEvent(
+                new KeyboardEvent("keyup", { code, key: code, bubbles: true, ...opts }),
+            );
+        };
+        window.dispatchEvent(
+            new KeyboardEvent("keydown", { code: "AltLeft", key: "Alt", altKey: true }),
+        );
+        key("KeyQ", { altKey: true });
+        key("KeyW", { altKey: true, shiftKey: true });
+        window.dispatchEvent(new KeyboardEvent("keyup", { code: "AltLeft", key: "Alt" }));
+        await settle();
+        expect(hasTab(ctx.container, "edit")).toBe(false);
+        expect([...ctx.iface.interactions.purge()]).toContainEqual({
+            type: "user_signal",
+            code: 9,
+            entry,
+        });
+    });
+
     test("on an ended cell's tab, removes it right away", async () => {
         const ctx = setup();
         ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
