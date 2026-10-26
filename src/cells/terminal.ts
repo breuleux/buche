@@ -45,8 +45,9 @@ export class TerminalCell extends Cell {
         ensureTerminal(entry, box);
     }
 
-    /** Reset the terminal to as new: screen, scrollback and modes gone, no
-     *  rows revealed (the same terminal stays, so the focus is left alone). */
+    /** Reset the terminal to as new — screen, scrollback and modes gone —
+     *  but the rows stay revealed, so a rerun does not flicker the height.
+     *  (The same terminal stays, so the focus is left alone.) */
     reset(entry: Entry, box: EchoBox, focus: boolean): void {
         ensureTerminal(entry, box).reset();
     }

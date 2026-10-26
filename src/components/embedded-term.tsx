@@ -18,7 +18,10 @@
 //
 // The terminal always declares `max-rows` rows to the pty, but the element only
 // shows the rows that have ever been used — so it starts at height 0 and grows
-// downward as output arrives. A row, once revealed, is never hidden again.
+// downward as output arrives. A row, once revealed, is never hidden again,
+// not even by `reset()`: a rerun will most likely want the same height back,
+// and holding it through the blank moment is what keeps the cell from
+// collapsing and growing again (flicker).
 //
 //   ┌ embedded-term ───────────┐  host is as tall as the revealed rows
 //   │ ┌ clip ────────────────┐ │  overflow:hidden, height = revealed rows
@@ -251,9 +254,9 @@ export class EmbeddedTerm extends HTMLElement {
      * Start over as a fresh terminal, in order with the writes: the screen,
      * the scrollback and the modes go (a full reset, RIS: out of the alt
      * screen, default attributes, cursor shown...), a held newline is
-     * dropped, and the revealed rows fall back to none — just the squashed
-     * cursor, as when new. (Unlike `clear()`, which keeps the rows revealed,
-     * so the cursor sits on row 0 at full height.)
+     * dropped, and the cursor goes home. The revealed rows stay revealed, so
+     * the cell keeps its height through the blank moment before a rerun's
+     * output arrives.
      */
     reset(): void {
         this.ensureSetup();
@@ -590,9 +593,11 @@ export class EmbeddedTerm extends HTMLElement {
         const next = this.queue.shift()!;
         if (next === RESET) {
             // The held newline goes with the rest. (RIS shows the cursor.)
+            // The revealed rows stay: a reset is nearly always a rerun that
+            // will reach for the same height again, and collapsing the cell
+            // for the blank moment between is just flicker.
             this.held = "";
             this.term.write("\x1bc\x1b[3J", () => {
-                this.usedRows = 0;
                 this.cursorHidden = false;
                 if (!this.cursorEnabled) {
                     this.cursorHidden = true;
@@ -783,8 +788,8 @@ export class EmbeddedTerm extends HTMLElement {
 
         // Nothing written and nothing pending: height 0 with only the squashed
         // cursor, whose row is clipped away along with the rest of row 0.
-        // `usedRows` only drops back to 0 on a reset, so this can only be the
-        // initial state (or a reset's) — never the aftermath of a clear.
+        // `usedRows` never drops back to 0 after setup — not on a reset, not
+        // on a clear — so this is only ever the initial state.
         if (
             !this.holding() &&
             !this.writing &&

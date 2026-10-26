@@ -77,7 +77,7 @@ describe("embedded-term — held newlines", () => {
         expect(rowText(t, 1)).toBe("world");
     });
 
-    test("a reset goes back to the squashed cursor alone, as when new", async () => {
+    test("a reset clears the content but keeps the revealed rows", async () => {
         const t = make({ "max-rows": "10" });
         await drain(t);
         t.write("one\r\ntwo\r\n");
@@ -88,20 +88,21 @@ describe("embedded-term — held newlines", () => {
         t.reset();
         await drain(t);
         expect(guts(t).held).toBe("");
-        expect(guts(t).usedRows).toBe(0);
-        expect(guts(t).stubOn).toBe(true);
+        expect(guts(t).usedRows).toBe(2); // kept: a rerun will want them back
+        expect(guts(t).stubOn).toBe(false);
         expect(t.getText()).toBe("");
 
-        // And it grows from there like a new one.
+        // The rerun refills the kept height instead of growing from zero.
         t.write("again\r\n");
         await drain(t);
-        expect(guts(t).usedRows).toBe(1);
-        expect(guts(t).stubOn).toBe(true);
+        expect(guts(t).usedRows).toBe(2);
         expect(rowText(t, 0)).toBe("again");
     });
 
-    test("a reset leaves the alt screen", async () => {
+    test("a reset leaves the alt screen, rows revealed before it kept", async () => {
         const t = make({ "max-rows": "10" });
+        await drain(t);
+        t.write("normal\r\n");
         await drain(t);
         t.write("\x1b[?1049hfull screen");
         await drain(t);
@@ -109,8 +110,8 @@ describe("embedded-term — held newlines", () => {
         t.reset();
         await drain(t);
         expect(t.terminal.buffer.active.type).toBe("normal");
-        expect(guts(t).usedRows).toBe(0);
-        expect(guts(t).stubOn).toBe(true);
+        expect(guts(t).usedRows).toBe(2); // the normal buffer's mark, kept
+        expect(guts(t).stubOn).toBe(false);
     });
 
     test("a reset is applied in order with the writes", async () => {
