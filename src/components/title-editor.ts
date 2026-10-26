@@ -1,4 +1,4 @@
-// A small popup to rename the window (bound to C-q-t by the interface): one
+// A small popup to rename the window (Alt+Q T, in the interface): one
 // input prefilled with the current title — Enter applies, Esc or a click
 // outside cancels. The document title is always updated; in Electron the title
 // is also pushed to the window itself through the preload bridge

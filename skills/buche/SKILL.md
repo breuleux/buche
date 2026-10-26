@@ -339,8 +339,9 @@ with zero round trips.
   focus off your cell (never delivered to your process; the cell and your
   process survive untouched).
 - Some chords always escape your page, even with the focus inside it, and
-  reach the terminal as if typed there: **Ctrl+Q** (navigation mode) and
-  **Ctrl+Tab / Ctrl+Shift+Tab** (switch tabs). Don't rely on capturing them.
+  reach the terminal as if typed there: **Alt+Q** (navigation mode),
+  **Ctrl+Tab / Ctrl+Shift+Tab** and **Cmd/Ctrl+←/→** (switch tabs). Don't
+  rely on capturing them.
 - A click inside the page focuses it naturally, like in any browser.
 
 ---

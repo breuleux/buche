@@ -1,105 +1,29 @@
-// Global keyboard bindings for the interface.
+// Global keyboard chords for the interface: always-live bindings like "Mod+p"
+// (Cmd on Mac, Ctrl elsewhere), matched against the full modifier set of the
+// event. A chord handler returning `false` did not handle the event: it passes
+// through untouched (a conditional chord, e.g. one that only applies to some
+// target). (Layout operations, with their navigation mode, are carreau's:
+// Alt+Q, see the interface.)
 //
-// Two layers, both installed with plain `keydown`/`keyup` listeners on
-// `window` (tinykeys was considered and dropped: it matches static chords and
-// timed sequences, but not the "hold Ctrl, tap keys, act on Ctrl release" mode
-// needed here — that needs raw keyup tracking anyway):
-//
-//   - Chords: always-live bindings like "Mod+p" (Cmd on Mac, Ctrl elsewhere),
-//     matched against the full modifier set of the event. A chord handler
-//     returning `false` did not handle the event: it passes through untouched
-//     (a conditional chord, e.g. one that only applies to some target).
-//   - Capture mode: `enter` (default Ctrl+Q) starts capturing every non-modifier
-//     keydown — swallowing it — until Ctrl is released, which runs the
-//     `release` handlers (e.g. commit the focus). Entering runs the `enter`
-//     handlers (`onEnter`). Keys are registered with `onCapture`, by name ("p",
-//     "ArrowUp", …) or with modifiers other than Ctrl ("Shift+ArrowUp"), Ctrl
-//     being held throughout: a key pressed with modifiers first tries the
-//     binding with those modifiers, then the bare key's, whatever modifiers
-//     ride along.
-//
-// The keydown listener runs in the *capture* phase on window so global chords
-// and capture mode win over descendants (CodeMirror stops propagation of keys
-// it handles) — and still see every key, even when the DOM focus sits outside
-// the interface altogether (a click in empty space leaves it on `body`).
+// The keydown listener runs in the *capture* phase on window so the chords win
+// over descendants (CodeMirror stops propagation of keys it handles) — and
+// still see every key, even when the DOM focus sits outside the interface
+// altogether (a click in empty space leaves it on `body`).
 
 import { chordFromEvent, expandMod, normalizeChord } from "./keychord.ts";
 
 // A chord handler returning `false` declines the event (it is not swallowed);
-// any other return value handles it. Capture handlers ignore the value:
-// capture mode swallows whatever it captures.
+// any other return value handles it.
 export type KeyHandler = (event: KeyboardEvent) => unknown;
 
-const MODIFIER_KEYS = new Set([
-    "Control",
-    "ControlLeft",
-    "ControlRight",
-    "Alt",
-    "AltLeft",
-    "AltRight",
-    "Shift",
-    "ShiftLeft",
-    "ShiftRight",
-    "Meta",
-    "MetaLeft",
-    "MetaRight",
-]);
-
-const CONTROL_KEYS = new Set(["Control", "ControlLeft", "ControlRight"]);
-
-function normalizeKey(key: string): string {
-    return key.toLowerCase();
-}
-
-// A canonical chord without Ctrl, which is held throughout capture mode.
-function captureKey(chord: string): string {
-    return chord
-        .split("+")
-        .filter((part) => part !== "ctrl")
-        .join("+");
-}
-
-export interface ModalKeysConfig {
-    /** Always-live chords, e.g. { "Mod+p": focusPrompt }. */
-    chords?: Record<string, KeyHandler>;
-    /** The chord that enters capture mode. Default: "Ctrl+q". */
-    enter?: string;
-    /** Keys captured while in capture mode, e.g. { "ArrowDown": moveDown }. */
-    capture?: Record<string, KeyHandler>;
-    /** Handlers run when capture mode is entered. */
-    onEnter?: KeyHandler | Array<KeyHandler>;
-    /** Handlers run when Ctrl is released after entering capture mode. */
-    release?: KeyHandler | Array<KeyHandler>;
-}
-
-export class ModalKeys {
-    /** Capture-mode entry chord, canonical form. */
-    enter: string;
-    /** Whether capture mode is currently active. */
-    capturing = false;
-
+export class GlobalKeys {
     chords = new Map<string, KeyHandler>();
-    capture = new Map<string, KeyHandler>();
-    enters: KeyHandler[] = [];
-    releases: KeyHandler[] = [];
 
     private detachFn: (() => void) | null = null;
 
-    constructor(config: ModalKeysConfig = {}) {
-        this.enter = normalizeChord(expandMod(config.enter ?? "Ctrl+q"));
-        for (const [chord, handler] of Object.entries(config.chords ?? {})) {
+    constructor(chords: Record<string, KeyHandler> = {}) {
+        for (const [chord, handler] of Object.entries(chords)) {
             this.on(chord, handler);
-        }
-        for (const [key, handler] of Object.entries(config.capture ?? {})) {
-            this.onCapture(key, handler);
-        }
-        const release = config.release;
-        if (release) {
-            this.releases.push(...(Array.isArray(release) ? release : [release]));
-        }
-        const onEnter = config.onEnter;
-        if (onEnter) {
-            this.enters.push(...(Array.isArray(onEnter) ? onEnter : [onEnter]));
         }
     }
 
@@ -109,88 +33,29 @@ export class ModalKeys {
         return this;
     }
 
-    /** Bind a key handled while in capture mode (e.g. "p", "ArrowDown",
-     *  "Shift+ArrowDown"; Ctrl, held throughout, is ignored). */
-    onCapture(key: string, handler: KeyHandler): this {
-        this.capture.set(captureKey(normalizeChord(key)), handler);
-        return this;
-    }
-
-    /** Add a handler run when capture mode is entered. */
-    onEnter(handler: KeyHandler): this {
-        this.enters.push(handler);
-        return this;
-    }
-
-    /** Add a handler run when Ctrl is released after capture mode. */
-    onRelease(handler: KeyHandler): this {
-        this.releases.push(handler);
-        return this;
-    }
-
-    /** Install the window-level listeners; returns the detach function. Keys
+    /** Install the window-level listener; returns the detach function. Keys
      *  are listened for on `window` rather than the interface container: after
      *  a click in empty space (or any blur) the DOM focus sits on `body`, and
      *  events from there never reach a container listener. */
     attach(): () => void {
         this.detach();
         const onKeyDown = (e: Event) => this.handleKeyDown(e as KeyboardEvent);
-        const onKeyUp = (e: Event) => this.handleKeyUp(e as KeyboardEvent);
         // Capture phase: run before descendants (editors) can swallow the key.
         window.addEventListener("keydown", onKeyDown, true);
-        // Ctrl may be released with focus anywhere; likewise keyup.
-        window.addEventListener("keyup", onKeyUp);
-        this.detachFn = () => {
-            window.removeEventListener("keydown", onKeyDown, true);
-            window.removeEventListener("keyup", onKeyUp);
-        };
+        this.detachFn = () => window.removeEventListener("keydown", onKeyDown, true);
         return this.detachFn;
     }
 
     detach(): void {
         this.detachFn?.();
         this.detachFn = null;
-        this.capturing = false;
     }
 
     private handleKeyDown(e: KeyboardEvent): void {
-        if (this.capturing) {
-            // Modifier transitions (incl. releasing Ctrl, seen as a keydown
-            // autorepeat elsewhere) pass through untouched.
-            if (MODIFIER_KEYS.has(e.key)) {
-                return;
-            }
-            e.preventDefault();
-            e.stopPropagation();
-            const handler =
-                this.capture.get(captureKey(chordFromEvent(e))) ??
-                this.capture.get(normalizeKey(e.key));
-            handler?.(e);
-            return;
-        }
-        const chord = chordFromEvent(e);
-        if (chord === this.enter) {
-            e.preventDefault();
-            e.stopPropagation();
-            this.capturing = true;
-            for (const handler of this.enters) {
-                handler(e);
-            }
-            return;
-        }
-        const handler = this.chords.get(chord);
+        const handler = this.chords.get(chordFromEvent(e));
         if (handler && handler(e) !== false) {
             e.preventDefault();
             e.stopPropagation();
-        }
-    }
-
-    private handleKeyUp(e: KeyboardEvent): void {
-        if (this.capturing && CONTROL_KEYS.has(e.key)) {
-            this.capturing = false;
-            for (const handler of this.releases) {
-                handler(e);
-            }
         }
     }
 }

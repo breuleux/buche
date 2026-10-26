@@ -229,16 +229,13 @@ describe("gui kill from the interface", () => {
         return { iface, driver, sent };
     }
 
-    test("every gui hands the capture-mode and navigation-mode chords to the page", () => {
-        const { iface, driver } = setup();
+    test("every gui hands the navigation-mode chord to the page", () => {
+        const { driver } = setup();
         driver({ type: "cell_configure", from: ["p"] });
         driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui");
         expect(gui).not.toBeNull();
-        // Ctrl+Q (the capture-mode entry) escapes the iframe into nav mode.
-        expect(gui!.interceptChords()).toContain(iface.keys.enter);
-        expect(gui!.interceptChords()).toContain("ctrl+q");
-        // Alt+Q (the layout's navigation mode) too.
+        // Alt+Q (the layout's navigation mode) escapes the iframe.
         expect(gui!.interceptChords()).toContain("Alt+q");
     });
 
@@ -421,7 +418,7 @@ describe("gui kill from the interface", () => {
         driver({ type: "cell_configure", from: ["p"] });
         driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui")!;
-        // What Ctrl+Q does to the focus: it lands on the <buche-gui> host.
+        // What Alt+Q does to the focus: it lands on the <buche-gui> host.
         iface.focus.focus(gui, "nav");
         const target = iface.targetCell();
         expect(target).toBeInstanceOf(EchoBox);
