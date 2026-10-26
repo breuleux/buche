@@ -3,10 +3,7 @@
  *   <link rel="stylesheet" href="/src/components/components.css" />
  * Each component's styles live next to its .tsx file. */
 
-@import "./grid.css";
-@import "./scroll-fader.css";
-@import "./buche-term.css";
-@import "./tab-pane.css";
+@import "./layout.css";
 @import "./embedded-term.css";
 @import "./echo-box.css";
 @import "./prompt-collection.css";

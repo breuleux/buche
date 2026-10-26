@@ -6,19 +6,11 @@
  * preload (electron/preload.ts) carries messages both ways — incoming ones
  * arrive as window messages, outgoing ones go through `window.buche.driver`.
  */
-import "../src/components/grid.tsx";
-import "../src/components/zone.tsx";
-import "../src/components/scroll-fader.tsx";
 import "../src/components/echo-box.tsx";
 
 import { Buche, type InM } from "../src/core.ts";
 import { BucheInterface } from "../src/interface.tsx";
-import { zoneMap } from "../src/zone.ts";
-
-const container = document.getElementById("buche");
-if (!container?.firstElementChild) {
-    throw new Error("electron: #buche container (or its layout) is missing");
-}
+import { pageSetup } from "../src/page.ts";
 
 interface DriverBridge {
     driver?: { send(message: unknown): void };
@@ -28,10 +20,9 @@ if (!bridge?.driver) {
     throw new Error("electron: the driver bridge is missing (preload not loaded?)");
 }
 
-const iface = new BucheInterface({ container, template: container.firstElementChild });
+const iface = new BucheInterface(pageSetup());
 
 const buche = new Buche({
-    initialZones: zoneMap(iface.zones),
     sendDriver(message) {
         console.debug("[buche] driverOut", message);
         bridge.driver?.send(message);

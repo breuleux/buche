@@ -1,4 +1,6 @@
 {"$role":"driverIn","type":"configure","from":["$proc","cq","3"],"to":["$term"],"zone":null}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"echo":"#104","cell":"#105","prompt":null,"represents":["$proc","cq","3"]}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"error","code":1}}
-{"$role":"interfaceOut","type":"update_entry","entry":{"echo":"#104","cell":null,"prompt":null,"zones":{"":"#100","origin":"#100","@":"#100","Z100":"#100"}}}
+{"$role":"interfaceOut","type":"update_entry","entry":{"echo":"#103","cell":null,"prompt":null}}
+{"$role":"interfaceOut","type":"update_entry","entry":{"echo":"#104","cell":"#105","prompt":null,"represents":["$proc","cq","3"]}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"success","code":0}}

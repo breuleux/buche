@@ -1,13 +1,13 @@
 import type { CellCommand } from "../cell.ts";
 import type { Entry } from "../entry.ts";
+import type { Target } from "../types.ts";
 import type { BucheErrorFields } from "../utils.ts";
-import type { Zone } from "../zone.ts";
 
 export interface UpdatePromptMessage {
     type: "update_prompt";
 
-    /** The zone in which to install or move the component. */
-    zone?: Zone | null;
+    /** Where to install the component, if it is new (null: it stays). */
+    target?: Target | null;
 
     /** The component's entry (echo, cell, prompt, zones). */
     entry: Entry;
@@ -16,8 +16,8 @@ export interface UpdatePromptMessage {
 export interface UpdateCellMessage {
     type: "update_cell";
 
-    /** The zone in which to install or move the component. */
-    zone?: Zone | null;
+    /** Where to install the component, if it is new (null: it stays). */
+    target?: Target | null;
 
     /** The component's entry (echo, cell, prompt, zones). */
     entry: Entry;

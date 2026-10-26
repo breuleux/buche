@@ -143,3 +143,9 @@ prompt-collection {
 		animation: none;
 	}
 }
+
+/* One prompt at a time (a prompt-column's editor, in the layout): the layout's
+ * tabs say whose it is, so the collection's own tab strip goes. */
+prompt-collection[single] .prompt-collection-tabs {
+	display: none;
+}

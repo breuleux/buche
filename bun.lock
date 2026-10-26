@@ -10,6 +10,7 @@
         "@codemirror/view": "^6.43.9",
         "@xterm/xterm": "^6.0.0",
         "ajv": "^8.20.0",
+        "carreau": "link:carreau",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.8",
@@ -25,6 +26,9 @@
       },
     },
   },
+  "trustedDependencies": [
+    "electron",
+  ],
   "packages": {
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
 
@@ -237,6 +241,8 @@
     "cacheable-lookup": ["cacheable-lookup@5.0.4", "", {}, "sha512-2/kNscPhpcxrOigMZzbiWF7dz8ilhb/nIHU3EyZiXWXpeq/au8qJ8VhdftMkty3n7Gj6HIGalQG8oiBNB3AJgA=="],
 
     "cacheable-request": ["cacheable-request@7.0.4", "", { "dependencies": { "clone-response": "^1.0.2", "get-stream": "^5.1.0", "http-cache-semantics": "^4.0.0", "keyv": "^4.0.0", "lowercase-keys": "^2.0.0", "normalize-url": "^6.0.1", "responselike": "^2.0.0" } }, "sha512-v+p6ongsrp0yTGbJXjgxPow2+DL93DASP4kXCDKb8/bwRtt9OEF3whggkkDkGNzgcWy2XaF4a8nZglC7uElscg=="],
+
+    "carreau": ["carreau@link:carreau", {}],
 
     "chai": ["chai@6.2.2", "", {}, "sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg=="],
 

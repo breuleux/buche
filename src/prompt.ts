@@ -1,6 +1,5 @@
 import type { Submission, SubmissionConfiguration } from "./types.ts";
 import { applySubmission, WithId } from "./utils.ts";
-import { PopZone, PromptZone } from "./zone.ts";
 
 export interface PromptBinding {
     command: string;
@@ -35,15 +34,9 @@ export class Prompt extends WithId() implements PromptConfiguration {
      */
     request_id: string | null = null;
 
-    zones: { main: PromptZone; pop: PopZone };
-
     constructor(config: PromptConfiguration) {
         super();
         this.configure(config);
-        this.zones = {
-            main: new PromptZone({ names: ["@"] }),
-            pop: new PopZone({ names: ["pop"] }),
-        };
     }
 
     configure(config: PromptConfiguration): void {

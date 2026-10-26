@@ -1,0 +1,2 @@
+{"$role":"driverIn","type":"cell_configure","from":["$proc","cq","53"],"to":["$term"],"zone":"bogus","background":false}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"bogus","anchor":null},"entry":{"echo":"#103","cell":"#104","prompt":null}}

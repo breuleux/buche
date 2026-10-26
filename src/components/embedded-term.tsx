@@ -126,6 +126,11 @@ export class EmbeddedTerm extends HTMLElement {
         this.stopPolling();
     }
 
+    // Moved (moveBefore: the layout re-renders around it), it stays as it is:
+    // without this, a move disconnects and reconnects it, and polling restarts
+    // from the new size as its baseline — a layout change would never refit.
+    connectedMoveCallback(): void {}
+
     // Rather than observing resizes (a ResizeObserver on the ancestor chain
     // proved flimsy mid-drag, and grid-divider announcements couple the term to
     // grid code), poll the container's effective dimensions once per frame and

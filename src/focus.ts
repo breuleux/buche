@@ -116,6 +116,13 @@ export interface FocusManagerOptions {
     historySize?: number;
     /** Attribute that marks elements as focusable (default "focusable"). */
     attribute?: string;
+    /**
+     * The focused element was removed or hidden: where the focus goes is up
+     * to this, if given (e.g. a layout engine that knows where it belongs).
+     * Returns whether it took care of it; otherwise, the focus goes back in
+     * the history.
+     */
+    onLost?: (element: HTMLElement) => boolean;
 }
 
 // Native elements that should receive DOM focus when their focusable is focused.
@@ -139,6 +146,7 @@ export class FocusManager {
     private readonly attribute: string;
     private readonly selector: string;
     private readonly historySize: number;
+    private readonly onLost?: (element: HTMLElement) => boolean;
 
     /**
      * While true, automatic commits (after the focused element is removed)
@@ -166,6 +174,7 @@ export class FocusManager {
         this.attribute = options.attribute ?? "focusable";
         this.selector = `[${this.attribute}]`;
         this.historySize = options.historySize ?? 10;
+        this.onLost = options.onLost;
 
         root.addEventListener("pointerdown", this.onPointerDown, true);
         root.addEventListener("mousedown", this.onMouseDown, true);
@@ -569,6 +578,9 @@ export class FocusManager {
         }
         this.past = this.past.filter((r) => r.element.isConnected);
         if (this.valid(current)) {
+            return;
+        }
+        if (this.onLost?.(current)) {
             return;
         }
         // Still there but hidden: go to the closest visible container.

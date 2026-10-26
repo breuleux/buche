@@ -18,13 +18,13 @@ echo-box {
 	max-height: 500px;
 }
 
-/* A box placed *directly* in a tab-pane pane owns that pane: it fills it (no
+/* A box that is a pane's whole content (not a cell in a scroll stream: the
+ * `fills` attribute, kept by the layout) owns that pane: it fills it (no
  * 300px ceiling), and the cell takes the height the header leaves, so an
  * embedded terminal can span the whole pane (see the fitting in cell.ts).
- * Scoped to direct pane children: boxes inside a <buche-term> keep their
- * dynamic content sizing (100% there feeds a content/height feedback loop
- * through the scroll-fader). */
-.tab-pane-pane > echo-box {
+ * Boxes in a stream keep their dynamic content sizing (100% there feeds a
+ * content/height feedback loop through the scroller). */
+echo-box[fills] {
 	max-height: none;
 	height: 100%;
 }
@@ -259,15 +259,15 @@ echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
 }
 
 /* A cell with a height of its own — pinned by a gutter drag, or a box filling
- * a tab-pane pane: the GUI view fills it rather than sizing to its content
+ * its pane: the GUI view fills it rather than sizing to its content
  * (the content-sizing mode of BucheGui, driven by `window.bucheInfo`). */
 echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"],
-.tab-pane-pane > echo-box .echo-box-cell > .echo-box-view[data-view="gui"] {
+echo-box[fills] .echo-box-cell > .echo-box-view[data-view="gui"] {
 	height: 100%;
 }
 
 echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui,
-.tab-pane-pane > echo-box .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui {
+echo-box[fills] .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui {
 	height: 100%;
 }
 
@@ -429,42 +429,6 @@ echo-box[compact] .echo-box-status-inline {
 	flex: 0 0 auto;
 }
 
-/* ── Compact resize handles: short, centred, shown with the overlay ───────── */
-
-.echo-box-handle {
-	display: none;
-	position: absolute;
-	left: 50%;
-	width: 36px;
-	height: 4px;
-	z-index: 6;
-	cursor: ns-resize;
-	touch-action: none;
-	background: var(--echo-color);
-	border-radius: 2px;
-	opacity: 0.25;
-}
-
-/* Straddle the top / bottom edge (centred on the border line). */
-.echo-box-handle-top {
-	top: 0;
-	transform: translate(-50%, -50%);
-}
-
-.echo-box-handle-bottom {
-	bottom: 0;
-	transform: translate(-50%, 50%);
-}
-
-.echo-box-handle:hover,
-.echo-box-handle.resizing {
-	opacity: 0.55;
-}
-
-echo-box[compact][data-alt] .echo-box-handle {
-	display: block;
-}
-
 /* ── Focus (focus.ts) ──────────────────────────────────────────────────────
  * The focused cell is highlighted: the gutter bar widens and brightens and
  * the background lightens a touch. The highlight follows the cell, not the
@@ -510,20 +474,21 @@ echo-box[focus-path] embedded-term {
 /* ── Inactive source prompt ──────────────────────────────────────────────
  * While the prompt the echo originated from is not the collection's active
  * one (see EchoBox.observePromptActivity), the box's accents recede: status
- * circle, gutter line and handles dim, and the header's dim accent
+ * circle and gutter line dim, and the header's dim accent
  * rectangle all but disappears. The text and the cell content stay put. */
 echo-box[prompt-inactive] .echo-box-gutter::before,
-echo-box[prompt-inactive] .echo-box-status,
-echo-box[prompt-inactive] .echo-box-handle {
+echo-box[prompt-inactive] .echo-box-status {
 	opacity: 0.35;
-}
-
-echo-box[prompt-inactive] .echo-box-handle:hover,
-echo-box[prompt-inactive] .echo-box-handle.resizing {
-	opacity: 0.5;
 }
 
 echo-box[prompt-inactive]:has(.echo-box-context:not(:empty)) .echo-box-context,
 echo-box[prompt-inactive]:has(.echo-box-context:not(:empty)) .echo-box-header {
 	background: color-mix(in srgb, var(--echo-color) 4%, transparent);
+}
+
+/* A cell in the layout (carreau): the tab shows its label, command and status,
+ * and closes it, so the box is only its content. */
+echo-box[bare] > .echo-box-context,
+echo-box[bare] > .echo-box-body > .echo-box-header {
+	display: none;
 }

@@ -68,31 +68,70 @@ process was started any other way.
 
 ---
 
-## 2. Creating and configuring the cell
+## 2. Cells: where your output goes
 
-`cell_configure` creates the cell (and reconfigures it later — send it again
-with changed fields):
+A process started by `coquille` shows up as **a placeholder** at first (its
+address plus `"?"`): an empty terminal, standing in for the first thing you
+show, and taking keyboard input meanwhile. Then:
+
+- What you print goes to `<process>.$stdout`: your **terminal** cell.
+- What you write on fd 4 (and GUI commands, §3) goes to `<process>.$gui`:
+  your **GUI** cell.
+
+Whichever comes first takes the placeholder's place; the other one, if it
+comes, becomes a tab beside it (a new GUI comes to the front). Both stand for
+your process: closing one tab leaves the process running while the other is
+there; closing the last one terminates it.
+
+**GUI only.** To have what you print show up inside the GUI instead (as
+`"buche:text"` data blocks, §3), ask the shell, before printing:
 
 ```json
-{"type": "cell_configure", "from": ["myapp"], "to": ["$term"],
- "mode": "unified", "label": "myapp"}
+{"type": "stdout_mode", "from": ["$proc"], "to": ["$shell"], "mode": "gui"}
+```
+
+(`"mode": "text"` switches back.)
+
+**Any address is a cell.** Output sent from an address that shows nothing yet
+creates a cell there. `cell_configure` configures it (or creates it first —
+send it again with changed fields to reconfigure):
+
+```json
+{"type": "cell_configure", "from": ["myapp"], "to": ["$term"], "label": "myapp"}
 ```
 
 Fields that matter for GUI apps (full set in `references/incoming.schema.json`
 under `CellConfigureMessage`):
 
-- `mode`: `"split"` (terminal + switchable GUI view, the default) or
-  `"unified"` (GUI only — text you print becomes text blocks inside the GUI).
 - `label`: tab/cell title.
+- `zone`: where a new cell goes. `"inline"` (the default: in the stream of the
+  prompt it was started from), `"tab"` (a new tab beside it), `"left"`,
+  `"right"`, `"up"`, `"down"` (or `l`, `r`, `u`, `d`: into the pane on that
+  side, made if there is none), or the name of a pane (made if there is none).
+  Users type the same as `@zone` before a command (`@left ls`).
 - `id`: when answering a submitted command, repeat the `id` from the `command`
   message you received; buche then moves the focus to your cell when it
   appears.
 - `background`: create the cell without stealing the focus.
 - `sticky`: keep the focus in the cell when your process ends.
 
-**The GUI view does not exist yet** at this point: it comes into being with
-the first GUI command, starting from an empty document. Everything in it
-arrives through your commands.
+**The GUI does not exist yet** at this point: it comes into being with the
+first GUI command, starting from an empty document. Everything in it arrives
+through your commands.
+
+### Temporary interfaces: `standby`
+
+A GUI the user may just glance at (a souped-up `ps`, say: it keeps running to
+take button clicks, but most of the time nobody clicks) can say so:
+
+```json
+{"type": "configure", "from": ["$proc"], "to": ["$term"], "status": "standby"}
+```
+
+A standby process is terminated when the user clears spent cells (Ctrl+L), or
+once its cell has stayed scrolled out of view (out of sight even with its
+stream scrolled to the bottom) for a while. `"status": "running"` takes it
+back, e.g. while the user is in the middle of something.
 
 ---
 
@@ -145,8 +184,8 @@ message (no envelope) is a shorthand for a `data` command.
 The iframe dispatches on `data.$schema`:
 
 - `"buche:plain"` (default when no handler): pretty-printed JSON block.
-- `"buche:text"`: raw text block (this is what printed text becomes in
-  `"unified"` mode).
+- `"buche:text"`: raw text block (this is what printed text becomes with
+  `stdout_mode` `"gui"`, §2).
 - your own: registered with `register_schemas`.
 
 ### `register` — add command handlers
@@ -194,9 +233,8 @@ of `"value"`).
 ### `text` — the terminal view
 
 `{"type": "text", "stream": "stdout", "text": "..."}` (this is also what
-stdout becomes). In `"split"` mode it goes to the terminal view; in
-`"unified"` mode there is none, and it shows up inside the GUI as a
-`"buche:text"` data block.
+stdout becomes, at `$stdout`). Sent to a cell, it goes to a terminal view in
+that cell (switchable with its GUI view, if it has one).
 
 ---
 
@@ -313,7 +351,7 @@ The control-channel conversation of a tiny counter app (process address
 `["counter"]`; `→` = you write to fd 5, `←` = you read):
 
 ```jsonl
-→ {"type":"cell_configure","from":["counter"],"to":["$term"],"mode":"unified","label":"counter"}
+→ {"type":"cell_configure","from":["counter"],"to":["$term"],"label":"counter"}
 → {"type":"cell_send","from":["counter"],"to":["$term"],"message":{"type":"html","content":
   "<p>Count: <b id=\"n\">0</b></p>
    <button autofocus onclick=\"buche({action:'inc'})\">+1</button>

@@ -422,7 +422,11 @@ export function bucheGuiRuntime(): void {
         if (e.metaKey) {
             parts.push("meta");
         }
-        parts.push(e.key === " " ? "space" : e.key.toLowerCase());
+        // With Alt (Option, on a Mac), a letter or digit types another
+        // character (Alt+Q: "œ"): the chord is the key's, not the character's.
+        const physical = e.altKey ? /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code) : null;
+        const key = physical ? (physical[1] ?? physical[2]).toLowerCase() : e.key;
+        parts.push(key === " " ? "space" : key.toLowerCase());
         return parts.join("+");
     };
 

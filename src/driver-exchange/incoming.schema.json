@@ -37,9 +37,6 @@
     "CellConfigureMessage": {
       "type": "object",
       "properties": {
-        "mode": {
-          "$ref": "#/definitions/CellMode"
-        },
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
@@ -79,6 +76,14 @@
           ],
           "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
         },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "standby"
+          ],
+          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
+        },
         "from": {
           "$ref": "#/definitions/Address",
           "description": "Address of the issuing process."
@@ -110,14 +115,6 @@
         "type"
       ],
       "additionalProperties": false
-    },
-    "CellMode": {
-      "type": "string",
-      "enum": [
-        "split",
-        "unified"
-      ],
-      "description": "Cell view layout.\n- `\"split\"`: `text` commands go to the terminal view, GUI commands to the   GUI view (the two are switchable).\n- `\"unified\"`: no terminal; `text` commands are sent to the GUI as a   special case of the `data` command (schema `\"buche:text\"`)."
     },
     "SubmissionConfiguration": {
       "type": "object",
@@ -644,6 +641,14 @@
           ],
           "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
         },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "standby"
+          ],
+          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
+        },
         "from": {
           "$ref": "#/definitions/Address",
           "description": "Address of the issuing process."
@@ -675,7 +680,7 @@
         "type"
       ],
       "additionalProperties": false,
-      "description": "Declares (or reconfigures) an entry without installing anything in any zone: a process, or any non-visual parent of cells and prompts. It carries the shared echo configuration (label, color, `represents`, `ephemeral`, ...) — applied without creating a cell, so it can retune an entry that already has one, or state things about one that doesn't — and records its placement: descendants resolve their zones through this entry (an unnamed request gets the configured zone, recorded under `\"\"`; a named one matches the configured zone's own names; `origin` names the zone an unnamed request would have resolved to anyway, typically the spawning prompt)."
+      "description": "Declares (or reconfigures) an entry: a process, or any non-visual parent of cells and prompts. It carries the shared echo configuration (label, color, `represents`, `ephemeral`, ...), which the entry's views show too, and says where the entry goes: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
     },
     "DataMessage": {
       "type": "object",
@@ -793,6 +798,14 @@
             }
           ],
           "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "standby"
+          ],
+          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
         },
         "from": {
           "$ref": "#/definitions/Address",

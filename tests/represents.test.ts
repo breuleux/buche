@@ -3,7 +3,6 @@ import { Buche, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { statusOf } from "../src/entry.ts";
 import { resetId } from "../src/utils.ts";
-import { Zone, type Zone as ZoneT, zoneMap } from "../src/zone.ts";
 
 interface Fixture {
     buche: Buche;
@@ -11,13 +10,12 @@ interface Fixture {
     interfaceOut: OutM[];
 }
 
-function machine(zones: ZoneT[] = [new Zone({ names: ["@"] })]): Fixture {
+function machine(): Fixture {
     const fixture = {
         driverOut: [] as OutgoingDriverMessage[],
         interfaceOut: [] as OutM[],
     } as Fixture;
     fixture.buche = new Buche({
-        initialZones: zoneMap(zones),
         sendDriver: (m) => fixture.driverOut.push(m),
         sendInterface: (m) => fixture.interfaceOut.push(m),
     });
@@ -46,7 +44,7 @@ const PROCESS = ["$proc", "cq", "1"];
 const CELL = ["$proc", "cq", "1", "$main"];
 
 describe("represents", () => {
-    test("a configured entry installs nothing and records its zones", () => {
+    test("a configured entry shows a placeholder, inline in its prompt's stream", () => {
         resetId(100);
         const f = machine();
         f.buche.handle({
@@ -55,37 +53,43 @@ describe("represents", () => {
             to: ["$term"],
         } as never);
         f.interfaceOut.length = 0;
-        f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"] } as never);
-        // No visual element whatsoever.
-        expect(f.interfaceOut).toEqual([]);
-        expect(f.driverOut).toEqual([]);
+        f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"], label: "ls" } as never);
         const entry = f.buche.get(PROCESS);
-        const promptZone = f.buche.get(["$proc", "cq"]).zones["@"];
-        // Placement under "" and the zone's own names, origin under "origin".
-        expect(entry.zones[""]).toBe(promptZone);
-        expect(entry.zones.origin).toBe(promptZone);
-        expect(entry.zones["@"]).toBe(promptZone);
+        const ph = f.buche.get([...PROCESS, "?"]);
+        expect(f.interfaceOut).toEqual([
+            {
+                type: "update_cell",
+                target: { zone: "inline", anchor: ["$proc", "cq"] },
+                entry: ph,
+            },
+        ]);
+        expect(f.driverOut).toEqual([]);
+        expect(entry.primary).toBe(ph);
+        expect(ph.placeholder).toBe(true);
+        // It stands for the process, and shows what it was configured with.
+        expect(ph.represents).toEqual(PROCESS);
+        expect(ph.echo.label).toBe("ls");
         expect(statusOf(entry).status).toBe("running");
     });
 
-    test('a nameless cell_configure resolves through the parent\'s ""', () => {
+    test("the first cell claims the placeholder: same entry, same place", () => {
         resetId(100);
-        const left = new Zone({ names: ["left"] });
-        const f = machine([new Zone({ names: ["@"] }), left]);
-        f.buche.handle({
-            type: "configure",
-            from: PROCESS,
-            to: ["$term"],
-            zone: "left",
-        } as never);
-        // Nothing on the way up defines "@": the cell must land in the
-        // configured zone through the parent's "".
-        f.buche.handle({ type: "cell_configure", from: CELL, to: ["$term"] } as never);
-        const update = f.interfaceOut.find((m: any) => m.type === "update_cell") as any;
-        expect(update.zone).toBe(left);
+        const f = booted();
+        const cell = f.buche.get(CELL);
+        expect(f.buche.hierarchy.getAt([...PROCESS, "?"])).toBe(null);
+        expect(f.buche.get(PROCESS).primary).toBe(cell);
+        expect(cell.placeholder).toBe(false);
+        expect(cell.echo.address).toEqual(CELL);
+        const updates = f.interfaceOut.filter((m: any) => m.type === "update_cell") as any[];
+        // Installed once (as the placeholder), then only refreshed.
+        expect(updates.map((m) => m.target)).toEqual([
+            { zone: "inline", anchor: ["$proc", "cq"] },
+            null,
+        ]);
+        expect(updates.every((m) => m.entry === cell)).toBe(true);
     });
 
-    test("named lookups reach the configured zone through its spread names", () => {
+    test("later cells go in a tab beside the first; zones are relative to the anchor", () => {
         resetId(100);
         const f = machine();
         f.buche.handle({
@@ -93,18 +97,111 @@ describe("represents", () => {
             from: ["$proc", "cq"],
             to: ["$term"],
         } as never);
-        const promptZone = f.buche.get(["$proc", "cq"]).zones["@"];
-        f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"] } as never);
-        // The prompt zone is named "@": its spread answers "@" from the
-        // process entry, ahead of anything further up.
+        f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"], zone: "@r" } as never);
+        f.buche.handle({
+            type: "data",
+            from: [...PROCESS, "$gui"],
+            to: ["$term"],
+            data: 1,
+        } as never);
+        f.buche.handle({
+            type: "text",
+            from: [...PROCESS, "$stdout"],
+            to: ["$term"],
+            stream: "stdout",
+            text: "x",
+        } as never);
         f.buche.handle({
             type: "cell_configure",
-            from: CELL,
+            from: [...PROCESS, "plot"],
             to: ["$term"],
-            zone: "@",
+            zone: "@left",
         } as never);
-        const update = f.interfaceOut.find((m: any) => m.type === "update_cell") as any;
-        expect(update.zone).toBe(promptZone);
+        const targets = (f.interfaceOut.filter((m: any) => m.type === "update_cell") as any[]).map(
+            (m) => m.target,
+        );
+        expect(targets).toEqual([
+            { zone: "right", anchor: ["$proc", "cq"] },
+            { zone: "tab", anchor: [...PROCESS, "$gui"] },
+            { zone: "left", anchor: [...PROCESS, "$gui"] },
+        ]);
+        // `$` views stand for their process; other cells don't unless told.
+        expect(f.buche.get([...PROCESS, "$stdout"]).represents).toEqual(PROCESS);
+        expect(f.buche.get([...PROCESS, "plot"]).represents).toBe(null);
+    });
+
+    test("a prompt claims a placeholder in a tab, not an inline one", () => {
+        resetId(100);
+        const f = machine();
+        f.buche.handle({
+            type: "prompt_configure",
+            from: ["$proc", "cq"],
+            to: ["$term"],
+        } as never);
+        f.buche.handle({
+            type: "configure",
+            from: ["$proc", "cq", "1"],
+            to: ["$term"],
+            zone: "tab",
+        } as never);
+        f.buche.handle({ type: "configure", from: ["$proc", "cq", "2"], to: ["$term"] } as never);
+        f.buche.handle({
+            type: "prompt_configure",
+            from: ["$proc", "cq", "1", "cq"],
+            to: ["$term"],
+        } as never);
+        f.buche.handle({
+            type: "prompt_configure",
+            from: ["$proc", "cq", "2", "cq"],
+            to: ["$term"],
+        } as never);
+        expect(f.buche.get(["$proc", "cq", "1", "cq"])).toBe(
+            f.buche.get(["$proc", "cq", "1"]).primary,
+        );
+        expect(f.buche.get(["$proc", "cq", "1", "cq"]).cell).toBe(null);
+        expect(f.buche.get(["$proc", "cq", "2", "?"]).placeholder).toBe(true);
+        const last = f.interfaceOut.at(-1) as any;
+        expect(last.target).toEqual({
+            zone: "tab",
+            anchor: ["$proc", "cq", "2", "?"],
+            link: true,
+        });
+    });
+
+    test("typing into a placeholder makes it the terminal", () => {
+        resetId(100);
+        const f = machine();
+        f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"] } as never);
+        const ph = f.buche.get([...PROCESS, "?"]);
+        f.buche.handle({ type: "user_text", text: "y", entry: ph } as never);
+        expect(f.buche.get([...PROCESS, "$stdout"])).toBe(ph);
+        expect((f.driverOut[0] as any).to).toEqual(PROCESS);
+    });
+
+    test("standby: set by a configure, and spent like running", () => {
+        resetId(100);
+        const f = booted();
+        f.buche.handle({
+            type: "configure",
+            from: PROCESS,
+            to: ["$term"],
+            status: "standby",
+        } as never);
+        expect(statusOf(f.buche.get(CELL)).status).toBe("standby");
+        f.buche.handle({
+            type: "close",
+            from: PROCESS,
+            to: ["$term"],
+            outcome: { type: "success" },
+        } as never);
+        expect(statusOf(f.buche.get(CELL)).status).toBe("done");
+        f.buche.handle({
+            type: "configure",
+            from: PROCESS,
+            to: ["$term"],
+            status: "standby",
+        } as never);
+        expect(statusOf(f.buche.get(CELL)).status).toBe("done");
     });
 
     test("signals, input and resize are routed to the represented address", () => {

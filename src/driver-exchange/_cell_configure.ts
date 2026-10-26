@@ -12,19 +12,22 @@ export interface CellConfigureMessage
 }
 
 export function handle$cell_configure(buche: Buche, obj: CellConfigureMessage): void {
+    buche.claim(obj.from, "cell");
     const entry = buche.ensure(obj);
-    const zone = buche.findPlace(entry, obj);
+    // A reconfiguration (or a claimed placeholder) stays where it is.
+    let target = null;
     if (entry.cell) {
         entry.cell.configure(obj);
     } else {
-        const cell = new Cell(obj);
-        entry.setCell(cell);
+        entry.setCell(new Cell(obj));
+        target = entry.target = buche.targetFor(entry, obj.zone, "cell");
     }
-
-    entry.echo.status = { status: "running" };
+    if (obj.status === undefined || entry.representative() !== null) {
+        entry.echo.status = { status: "running" };
+    }
     buche.sendInterface({
         type: "update_cell",
-        zone: zone,
+        target,
         entry: entry,
     });
 }

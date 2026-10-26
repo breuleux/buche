@@ -12,7 +12,7 @@ export interface TextMessage extends BaseMessage {
 }
 
 export function handle$text(buche: Buche, obj: TextMessage): void {
-    const entry = buche.ensure(obj);
+    const entry = buche.output(obj);
     buche.sendInterface({
         type: "cell_command",
         command: {
