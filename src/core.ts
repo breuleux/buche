@@ -29,7 +29,17 @@ export interface BucheArguments {
 }
 
 /** Short names of the reserved zones. */
-const ZONE_ALIASES: Record<string, string> = { l: "left", r: "right", u: "up", d: "down" };
+const ZONE_ALIASES: Record<string, string> = {
+    l: "left",
+    r: "right",
+    u: "up",
+    d: "down",
+    sl: "sleft",
+    sr: "sright",
+    su: "sup",
+    sd: "sdown",
+    f: "float",
+};
 
 export class Buche {
     handlers: HandlerT = Object.assign(
@@ -119,7 +129,8 @@ export class Buche {
     /**
      * Where a new cell or prompt for `entry` goes, given the zone it asks for
      * (null or "": the default). Leading "@" are ignored, and l/r/u/d are
-     * short for left/right/up/down. By default, a cell goes in a tab beside
+     * short for left/right/up/down (sl/sr/su/sd for sleft/sright/sup/sdown, f
+     * for float). By default, a cell goes in a tab beside
      * the entry showing its parent (a process's later outputs: beside the
      * first one), else inline; a prompt goes in a new tab, linked to the
      * prompt it lands next to.

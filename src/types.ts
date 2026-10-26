@@ -13,6 +13,9 @@ export type ZoneDescriptor = string;
  *  - "tab": a new tab beside the anchor (a prompt's default);
  *  - "left" | "right" | "up" | "down": into the neighbour pane on that side,
  *    created if there is none;
+ *  - "sleft" | "sright" | "sup" | "sdown": a new pane on that side of the
+ *    anchor's pane (a split), whatever is already there;
+ *  - "float": a new floating window over the anchor's pane;
  *  - "pop": a floating window over the anchor's prompt, closed (its process
  *    terminated) when the focus leaves it.
  * Any other zone names a pane.

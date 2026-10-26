@@ -128,9 +128,11 @@ under `ConfigureMessage`):
 - `zone`: where a new cell goes. `"inline"` (the default: in the stream of the
   prompt it was started from), `"tab"` (a new tab beside it), `"left"`,
   `"right"`, `"up"`, `"down"` (or `l`, `r`, `u`, `d`: into the pane on that
-  side, made if there is none), `"pop"` (a floating window over the prompt,
-  closed — the process terminated — as soon as the focus leaves it), or the
-  name of a pane (made if there is none).
+  side, made if there is none), `"sleft"`, `"sright"`, `"sup"`, `"sdown"` (or
+  `sl`, `sr`, `su`, `sd`: a new pane split off on that side, even if there is
+  one already), `"float"` (or `f`: a new floating window), `"pop"` (a
+  floating window over the prompt, closed — the process terminated — as soon
+  as the focus leaves it), or the name of a pane (made if there is none).
   Users type the same as `@zone` before a command (`@left ls`).
 - `id`: when answering a submitted command, repeat the `id` from the `command`
   message you received; buche then moves the focus to your cell when it

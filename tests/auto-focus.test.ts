@@ -675,6 +675,50 @@ describe("placement", () => {
         expect(paneOf("logged")?.name).toBe("logs");
     });
 
+    test("split zones always make a new pane; float zones a new window", async () => {
+        const ctx = setup();
+        const { driver, iface } = ctx;
+        const ws = iface.layout.ws;
+        const paneOf = (label: string) => {
+            for (const t of ws.trees()) {
+                for (const p of panesOf(t)) {
+                    if (p.tabs.some((tab: any) => tab.title === label)) {
+                        return p.id;
+                    }
+                }
+            }
+            return null;
+        };
+        const term = (n: string, zone: string, label: string) =>
+            driver({ type: "configure", kind: "terminal", from: [...SHELL, n], zone, label });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        const main = paneOf("cq");
+
+        // `@r`: a new pane on the right (there is none yet).
+        term("1", "@r", "right");
+        const right = paneOf("right");
+        expect(right).not.toBe(main);
+        // `@r` again: into that pane; `@sr`/`@sright`: a new pane each time.
+        term("2", "@r", "right2");
+        expect(paneOf("right2")).toBe(right);
+        term("3", "@sr", "split");
+        term("4", "@sright", "split2");
+        expect(new Set([main, right, paneOf("split"), paneOf("split2")]).size).toBe(4);
+        term("5", "@sd", "down");
+        expect(
+            new Set([main, right, paneOf("split"), paneOf("split2"), paneOf("down")]).size,
+        ).toBe(5);
+
+        // `@f`/`@float`: each in a floating window of its own.
+        const before = ws.floating.length;
+        term("6", "@f", "floaty");
+        term("7", "@float", "floaty2");
+        expect(ws.floating.length).toBe(before + 2);
+        const floated = ws.floating.flatMap((w) => panesOf(w.root).map((p) => p.id));
+        expect(floated).toContain(paneOf("floaty"));
+        expect(floated).toContain(paneOf("floaty2"));
+    });
+
     test("a merged shell ending: the focus stays in its linked group", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;

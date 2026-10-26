@@ -75,8 +75,19 @@ export interface LayoutOptions {
 
 /** Zones relative to the anchor: into the neighbour pane on that side. */
 const DIRECTIONS = new Set(["left", "right", "up", "down"]);
+/** Zones relative to the anchor: a new pane on that side of it. */
+const SPLITS: Record<string, "left" | "right" | "top" | "bottom"> = {
+    sleft: "left",
+    sright: "right",
+    sup: "top",
+    sdown: "bottom",
+};
 /** What a pane can't be named: the reserved zones (see Target). */
-const RESERVED = ["left", "right", "up", "down", "l", "r", "u", "d", "tab", "inline", "pop"];
+const RESERVED = [
+    ...["left", "right", "up", "down", "l", "r", "u", "d"],
+    ...["sleft", "sright", "sup", "sdown", "sl", "sr", "su", "sd"],
+    ...["tab", "inline", "pop", "float", "f"],
+];
 
 /** The default layout: one pane, named "main", where the first prompt goes. */
 export function defaultLayout(): WorkspaceData {
@@ -720,6 +731,27 @@ export class Layout {
                     { split: "tab", base: [{ id: base.id }, dir], force: true, focus: false },
                     tab,
                 );
+            }
+            return;
+        }
+        if (target.zone in SPLITS) {
+            // A new pane on that side of the anchor's (out of scroll streams).
+            const base = pane(at ? this.outerPane(at.pane.id) : null);
+            const id = this.ws.hostPlace(
+                { split: SPLITS[target.zone], base: { id: base.id }, focus: false },
+                tab,
+            );
+            if (id === null) {
+                into(base);
+            }
+            return;
+        }
+        if (target.zone === "float") {
+            // A floating window of its own, over the anchor's pane.
+            const base = pane(at ? this.outerPane(at.pane.id) : null);
+            const rect = this.view.floatRect(base.id) ?? { x: 40, y: 40, w: 420, h: 280 };
+            if (!this.ws.hostFloat(newPane(), rect)) {
+                into(base);
             }
             return;
         }
