@@ -12,6 +12,7 @@
     "electron",
     "src",
     "layouts",
+    "config",
     "assets",
     "tsconfig.json"
   ],

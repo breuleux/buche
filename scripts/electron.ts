@@ -2,6 +2,7 @@
  * Build the Electron app and run it — rebuild and relaunch in one command.
  *
  *   bun run electron [-c COMMAND] [-d DIR] [-l LAYOUT] [--devtools] [--print-messages]
+ *   bun run electron --reset-bindings
  *
  * Options:
  *   -c, --command COMMAND   Shell command driving the session. Default: cq.
@@ -11,6 +12,13 @@
  *       --devtools          Open the window's devtools on start.
  *       --print-messages    Print the incoming/outgoing driver messages on
  *                           stdout (hidden by default).
+ *       --reset-bindings    Back to the default modifiers and bindings: the
+ *                           configuration file's own are commented out (the
+ *                           rest of the file is kept). Then exit.
+ *
+ * Configuration: ~/.config/buche/config.yaml (or under $XDG_CONFIG_HOME),
+ * over the defaults (config/default.yaml); created, if missing, as a copy of
+ * the defaults commented out (see scripts/user-config.ts).
  *
  * Co-developing with carreau? Set BUCHE_CARREAU_WATCH=1 to join its dev loop:
  * while a linked carreau's sources change (`cd ../carreau`, edit and save),
@@ -38,7 +46,8 @@ import { copyFileSync, readFileSync, renameSync, rmSync, watch, writeFileSync } 
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
-import { layoutScript } from "../src/page.ts";
+import { configScript, layoutScript } from "../src/page.ts";
+import { loadUserConfig, resetBindings } from "./user-config.ts";
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const root = join(scriptDir, "..");
@@ -51,8 +60,21 @@ const { values } = parseArgs({
         layout: { type: "string", short: "l" },
         devtools: { type: "boolean" },
         "print-messages": { type: "boolean" },
+        "reset-bindings": { type: "boolean" },
     },
 });
+
+if (values["reset-bindings"]) {
+    const { path, changed } = resetBindings();
+    console.log(
+        changed
+            ? `buche: ${path}: modifiers and bindings reset to the defaults`
+            : `buche: ${path}: no modifiers or bindings of its own, nothing to reset`,
+    );
+    process.exit(0);
+}
+
+const config = loadUserConfig();
 
 const layout = values.layout ? readFileSync(values.layout, "utf8") : null;
 const componentsDir = join(root, "src/components");
@@ -99,6 +121,7 @@ ${stylesheet("components.css")}
 </head>
 <body>
 ${layoutScript(layout)}
+${configScript(config)}
 <div id="buche"></div>
 <script defer src="renderer.js"></script>
 </body>

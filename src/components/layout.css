@@ -61,8 +61,17 @@
 /* So does a maximized stream cell. (Not a stream cell given a height of its
  * own: it fills it too, yet keeps its padding, so that resizing it doesn't
  * shift its content.) */
-.carreau-pane:not(.carreau-scrollcell) > .carreau-body > .carreau-content > echo-box[fills] .echo-box-cell,
-.carreau.is-maximized .carreau-scrollcell.max-path > .carreau-body > .carreau-content > echo-box[fills] .echo-box-cell {
+.carreau-pane:not(.carreau-scrollcell)
+	> .carreau-body
+	> .carreau-content
+	> echo-box[fills]
+	.echo-box-cell,
+.carreau.is-maximized
+	.carreau-scrollcell.max-path
+	> .carreau-body
+	> .carreau-content
+	> echo-box[fills]
+	.echo-box-cell {
 	padding: 0;
 }
 

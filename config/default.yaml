@@ -1,0 +1,129 @@
+# buche's default configuration.
+#
+# Your own, ~/.config/buche/config.yaml, goes over it: what you set there wins
+# (a binding by its chord, a modifier by its name, a prefix's table key by
+# key), the rest is taken from here; `~` removes a default (`Nav+k: ~`). It is
+# made the first time buche runs, as a copy of this file commented out. To
+# get back to the default modifiers and bindings (your own are commented out,
+# the rest of the file is kept), run:
+#
+#     buche --reset-bindings
+#
+# Chord syntax: modifiers and a key, joined with "+", e.g. "Ctrl+Shift+Tab".
+#   Modifiers: Ctrl (Control), Alt (Option), Shift, Meta (Cmd, Super), and Mod
+#              (Cmd on macOS, Ctrl elsewhere).
+#   Keys:      a letter or digit (a, 7), a punctuation key (, . / ; ' ` [ ] \ - =),
+#              Left, Right, Up, Down, Enter, Tab, Space, Escape, Backspace, F1...
+#              Key codes work too (KeyQ, ArrowLeft, Comma). Keys with Shift are
+#              written as the unshifted key: Shift+, rather than <.
+#
+# Bindings with a modifier work anywhere ("global"). Bindings of the form
+# Nav+<chord> work in the Nav mode (see modifiers below), where they take keys
+# without the mode's modifier (holding it or not makes no difference).
+# A Nav binding whose value is a table is a prefix: after it, the next key is
+# looked up in that table (e.g. Nav+i, then Left).
+
+# Modifiers: modes of their own, by name. Each is entered with its chord, and
+# lasts while that chord's modifier is held; pressing the key again while
+# still holding it (Alt+q, q) makes it last until the chord or Escape is
+# pressed again. A chord has exactly one modifier, which can be restricted to
+# the key on one side: AltLeft+q, CtrlRight+q, ...
+#
+# Nav is the navigation mode below. Define more as you like (e.g.
+# `Move: Ctrl+e`) and bind keys in them the same way (`Move+Left: swapLeft`);
+# one mode is on at a time. Any navigation action works in any mode.
+modifiers:
+  Nav: Alt+q
+
+bindings:
+  # ── Global ──────────────────────────────────────────────────────────────────
+  # Actions: focusPrompt, clearPrompt (only in a prompt), nextTab, prevTab,
+  # closeTab, kill, renameWindow.
+  Mod+p: focusPrompt
+  Ctrl+l: clearPrompt
+  Ctrl+Tab: nextTab
+  Ctrl+Shift+Tab: prevTab
+  Mod+Right: nextTab
+  Mod+Left: prevTab
+
+  # ── Navigation mode ─────────────────────────────────────────────────────────
+  # Focus, and widen the focus to the containing cells.
+  Nav+Left: focusLeft
+  Nav+Right: focusRight
+  Nav+Up: focusUp
+  Nav+Down: focusDown
+  Nav+Shift+Left: expandLeft
+  Nav+Shift+Right: expandRight
+  Nav+Shift+Up: expandUp
+  Nav+Shift+Down: expandDown
+  Nav+u: unexpand
+  "Nav+/": root
+  "Nav+Shift+,": parent
+  "Nav+Shift+.": child
+
+  # Tabs and panes.
+  "Nav+,": prevTab
+  "Nav+.": nextTab
+  Nav+n: renameTab
+  Nav+Shift+n: namePane
+  Nav+w: closeTab
+  # Close without waiting for the cell to agree (one that refuses, or hangs):
+  # its process is killed.
+  Nav+Shift+w: forceCloseTab
+  Nav+m: toggleMaximize
+  Nav+f: float
+  Nav+g: group
+  Nav+Shift+g: collapse
+  Nav+x: mark
+  Nav+v: moveMarked
+  Nav+l: clear
+
+  # Sizes.
+  "Nav+]": growHeight
+  "Nav+Shift+]": growWidth
+  "Nav+[": shrinkHeight
+  "Nav+Shift+[": shrinkWidth
+
+  # History.
+  Nav+z: undo
+  Nav+Shift+z: redo
+
+  # Buche's own: kill the cell (from a prompt, the one above it) without closing
+  # it; focus a prompt (as Mod+p); rename the window.
+  Nav+k: kill
+  Nav+p: focusPrompt
+  Nav+t: renameWindow
+
+  # Insert a new tab (what goes in it, you then pick): Enter, in the focused
+  # cell's pane; a direction, in the pane on that side; Shift+direction, in a
+  # new pane on that side; f, in a new floating window.
+  Nav+i:
+    Enter: insert
+    f: insertFloat
+    Left: insertIntoLeft
+    Right: insertIntoRight
+    Up: insertIntoUp
+    Down: insertIntoDown
+    Shift+Left: insertLeft
+    Shift+Right: insertRight
+    Shift+Up: insertUp
+    Shift+Down: insertDown
+
+  # Swap the focused cell with its neighbour.
+  Nav+s:
+    Left: swapLeft
+    Right: swapRight
+    Up: swapUp
+    Down: swapDown
+
+  # Move the focused tab: into the tabs of the cell on that side, or (with
+  # Shift) beside the focused cell.
+  Nav+a:
+    Left: moveIntoLeft
+    Right: moveIntoRight
+    Up: moveIntoUp
+    Down: moveIntoDown
+    Shift+Left: moveLeft
+    Shift+Right: moveRight
+    Shift+Up: moveUp
+    Shift+Down: moveDown

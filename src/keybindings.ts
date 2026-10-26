@@ -2,8 +2,9 @@
 // (Cmd on Mac, Ctrl elsewhere), matched against the full modifier set of the
 // event. A chord handler returning `false` did not handle the event: it passes
 // through untouched (a conditional chord, e.g. one that only applies to some
-// target). (Layout operations, with their navigation mode, are carreau's:
-// Alt+Q, see the interface.)
+// target). Which chords, and what they do, is configured (see config.ts).
+// (Layout operations, with their navigation mode, are carreau's: the
+// configured Nav chord, Alt+Q by default; see the interface.)
 //
 // The keydown listener runs in the *capture* phase on window so the chords win
 // over descendants (CodeMirror stops propagation of keys it handles) — and

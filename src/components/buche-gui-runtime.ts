@@ -444,7 +444,24 @@ export function bucheGuiRuntime(): void {
     // Whether a chord was handed to the page and the focus hasn't left yet.
     let handingOff = false;
 
-    // Same format as chordFromEvent in keychord.ts.
+    // Keys named by their physical key, for Alt chords (as in keychord.ts).
+    const CODE_KEYS: Record<string, string> = {
+        Minus: "-",
+        Equal: "=",
+        BracketLeft: "[",
+        BracketRight: "]",
+        Backslash: "\\",
+        Semicolon: ";",
+        Quote: "'",
+        Backquote: "`",
+        Comma: ",",
+        Period: ".",
+        Slash: "/",
+    };
+    const MODIFIER_CODE = /^(Alt|Control|Meta|Shift)(Left|Right)$/;
+
+    // Same format as chordFromEvent in keychord.ts (and the same key: see
+    // eventKey there).
     const chordOf = (e: KeyboardEvent): string => {
         const parts: string[] = [];
         if (e.ctrlKey) {
@@ -459,17 +476,22 @@ export function bucheGuiRuntime(): void {
         if (e.metaKey) {
             parts.push("meta");
         }
-        // With Alt (Option, on a Mac), a letter or digit types another
-        // character (Alt+Q: "œ"): the chord is the key's, not the character's.
-        const physical = e.altKey ? /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code) : null;
-        const key = physical ? (physical[1] ?? physical[2]).toLowerCase() : e.key;
+        // With Alt (Option, on a Mac), a key types another character (Alt+Q:
+        // "œ") or starts a dead key (Alt+E): the chord is the key's, then.
+        let key = e.key;
+        const typed = key === "Dead" || (key.length === 1 && !/[\x20-\x7e]/.test(key));
+        if (e.altKey && typed && e.code) {
+            const m = /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code);
+            key = m ? (m[1] ?? m[2]).toLowerCase() : (CODE_KEYS[e.code] ?? key);
+        }
         parts.push(key === " " ? "space" : key.toLowerCase());
         return parts.join("+");
     };
 
-    const forward = (type: "keydown" | "keyup", e: KeyboardEvent): void => {
+    const forward = (type: "keydown" | "keyup" | "modifier", e: KeyboardEvent): void => {
         toParent({
             [TAG]: type,
+            type: e.type,
             key: e.key,
             code: e.code,
             ctrlKey: e.ctrlKey,
@@ -487,6 +509,11 @@ export function bucheGuiRuntime(): void {
                 e.stopImmediatePropagation();
                 handingOff = true;
                 forward("keydown", e);
+            } else if (MODIFIER_CODE.test(e.code)) {
+                // The page tracks which modifier keys are down (a mode's
+                // chord can be on one side only: AltLeft+q): tell it, and
+                // let the key be.
+                forward("modifier", e);
             }
         },
         true,
@@ -499,6 +526,8 @@ export function bucheGuiRuntime(): void {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 forward("keyup", e);
+            } else if (MODIFIER_CODE.test(e.code)) {
+                forward("modifier", e);
             }
         },
         true,

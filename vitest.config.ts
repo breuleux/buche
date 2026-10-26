@@ -15,6 +15,8 @@ export default defineConfig({
     ssr: { resolve: { conditions: ["source"] } },
     test: {
         include: ["tests/**/*.test.{ts,tsx}"],
+        // The default configuration (config/default.yaml), for the interfaces.
+        setupFiles: ["tests/setup.ts"],
         server: { deps: { inline: ["carreau"] } },
         // DOM globals (HTMLElement, customElements, …) available everywhere.
         // Individual files can still opt out with `// @vitest-environment node`.

@@ -1,4 +1,10 @@
-import { KeyboardNav, type NavConfig, type WorkspaceData } from "carreau";
+import {
+    KeyboardNav,
+    type NavAction,
+    type NavBinding,
+    type NavConfig,
+    type WorkspaceData,
+} from "carreau";
 import { echoElementId, isSpent, killable } from "./cell.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
@@ -11,6 +17,13 @@ import {
 } from "./components/prompt-collection.tsx";
 import { refocusTitleEditor, showTitleEditor } from "./components/title-editor.ts";
 import { showToast } from "./components/toast.ts";
+import {
+    type Bindings,
+    type BucheConfig,
+    type GlobalAction,
+    type Mode,
+    resolveBindings,
+} from "./config.ts";
 import type { Buche } from "./core";
 import type { Entry } from "./entry.ts";
 import { type FocusChangeDetail, FocusManager } from "./focus.ts";
@@ -22,8 +35,10 @@ import type {
     UpdateCellMessage,
     UpdateEntryMessage,
 } from "./interface-exchange/outgoing";
-import { GlobalKeys } from "./keybindings.ts";
+import { GlobalKeys, type KeyHandler } from "./keybindings.ts";
+import { isMac } from "./keychord.ts";
 import { Layout, type LayoutOptions } from "./layout.ts";
+import { ModeRouter, ModeTarget } from "./modes.ts";
 import type { Json, Target } from "./types.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
@@ -37,6 +52,11 @@ export interface BucheInterfaceArguments extends LayoutOptions {
     container: HTMLElement;
     /** The initial layout (default: one pane, named "main"). */
     layout?: WorkspaceData;
+    /** The user's configuration (see config.ts), over the defaults. */
+    config?: BucheConfig;
+    /** The default configuration (config/default.yaml; if not given:
+     *  BucheInterface.defaultConfig). */
+    defaultConfig?: BucheConfig;
 }
 
 export class InertInterface implements Interface {
@@ -61,92 +81,56 @@ const rectDistance = (a: DOMRect, b: DOMRect): number => {
     return Math.hypot(dx, dy);
 };
 
-/** Layout operations (carreau's navigation mode: Alt+Q, then these). */
-const navConfig = (iface: BucheInterface): NavConfig => ({
-    activation: { modifier: "Alt", code: "KeyQ", side: "either" },
-    bindings: {
-        ArrowLeft: "focusLeft",
-        ArrowRight: "focusRight",
-        ArrowUp: "focusUp",
-        ArrowDown: "focusDown",
-        "Shift+ArrowLeft": "expandLeft",
-        "Shift+ArrowRight": "expandRight",
-        "Shift+ArrowUp": "expandUp",
-        "Shift+ArrowDown": "expandDown",
-        KeyU: "unexpand",
-        KeyL: "clear",
-        "Shift+KeyN": "namePane",
-        KeyX: "mark",
-        KeyV: "moveMarked",
-        Comma: "prevTab",
-        Period: "nextTab",
-        Slash: "root",
-        "Shift+Comma": "parent",
-        "Shift+Period": "child",
-        BracketRight: "growHeight",
-        "Shift+BracketRight": "growWidth",
-        BracketLeft: "shrinkHeight",
-        "Shift+BracketLeft": "shrinkWidth",
-        KeyM: "toggleMaximize",
-        KeyF: "float",
-        KeyG: "group",
-        "Shift+KeyG": "collapse",
-        KeyN: "renameTab",
-        KeyZ: "undo",
-        "Shift+KeyZ": "redo",
-        KeyW: "closeTab",
-        // Close without waiting for the cell to agree (one that refuses, or
-        // hangs): its process is killed.
-        "Shift+KeyW": "forceCloseTab",
-        // Buche's own: kill the cell (from a prompt, the one above it) without
-        // closing it; focus a prompt (as Mod+p); rename the window.
-        KeyK: function kill() {
-            iface.killCell();
-        },
-        KeyP: function prompt() {
-            iface.focusPrompt();
-        },
-        KeyT: function title() {
-            iface.renameWindow();
-        },
-    },
-    prefixes: {
-        // I, then: Enter, a new tab in the focused cell's pane; a direction,
-        // in the pane on that side; Shift+direction, a new pane on that side;
-        // F, a new floating window (carreau's, over the focused cell).
-        // What goes in it, the user then picks (see Layout's slots).
-        KeyI: {
-            Enter: () => iface.layout.insert(),
-            KeyF: () => iface.layout.insertFloat(),
-            ArrowLeft: () => iface.layout.insert("left"),
-            ArrowRight: () => iface.layout.insert("right"),
-            ArrowUp: () => iface.layout.insert("up"),
-            ArrowDown: () => iface.layout.insert("down"),
-            "Shift+ArrowLeft": () => iface.layout.insert("left", true),
-            "Shift+ArrowRight": () => iface.layout.insert("right", true),
-            "Shift+ArrowUp": () => iface.layout.insert("up", true),
-            "Shift+ArrowDown": () => iface.layout.insert("down", true),
-        },
-        KeyS: {
-            ArrowLeft: "swapLeft",
-            ArrowRight: "swapRight",
-            ArrowUp: "swapUp",
-            ArrowDown: "swapDown",
-        },
-        KeyA: {
-            ArrowLeft: "moveIntoLeft",
-            ArrowRight: "moveIntoRight",
-            ArrowUp: "moveIntoUp",
-            ArrowDown: "moveIntoDown",
-            "Shift+ArrowLeft": "moveLeft",
-            "Shift+ArrowRight": "moveRight",
-            "Shift+ArrowUp": "moveUp",
-            "Shift+ArrowDown": "moveDown",
-        },
-    },
-});
+/**
+ * Layout operations: a mode (carreau's navigation mode), entered with its
+ * configured chord (`Nav`, Alt+Q by default), then its `Nav+…` bindings (see
+ * config.ts). Actions are carreau's, except buche's own (BUCHE_NAV_ACTIONS).
+ */
+const navConfig = (iface: BucheInterface, mode: Mode): NavConfig => {
+    const dirs = { Left: "left", Right: "right", Up: "up", Down: "down" } as const;
+    /** Buche's own actions: functions, named (carreau labels them so). */
+    const own = (name: string, run: () => void): NavBinding =>
+        Object.defineProperty(() => run(), "name", { value: name });
+    const action = (name: string): NavBinding => {
+        const m = /^insert(Into)?(Left|Right|Up|Down)$/.exec(name);
+        if (m) {
+            // Into the pane on that side, or (insertLeft...) a new pane there.
+            return own(name, () => iface.layout.insert(dirs[m[2] as keyof typeof dirs], !m[1]));
+        }
+        switch (name) {
+            case "kill":
+                return own(name, () => iface.killCell());
+            case "focusPrompt":
+                return own(name, () => iface.focusPrompt());
+            case "renameWindow":
+                return own(name, () => iface.renameWindow());
+            case "insert":
+            case "insertInto":
+                return own(name, () => iface.layout.insert());
+            case "insertFloat":
+                return own(name, () => iface.layout.insertFloat());
+            default:
+                return name as NavAction;
+        }
+    };
+    const table = (t: Record<string, string>) =>
+        Object.fromEntries(Object.entries(t).map(([chord, name]) => [chord, action(name)]));
+    const { modifier, code, side } = mode;
+    return {
+        activation: { modifier, code, side },
+        bindings: table(mode.bindings),
+        prefixes: Object.fromEntries(
+            Object.entries(mode.prefixes).map(([chord, t]) => [chord, table(t)]),
+        ),
+    };
+};
 
 export class BucheInterface implements Interface {
+    /** The default configuration, when none is given (the pages always give
+     *  it, see scripts/user-config.ts; the tests set this to
+     *  config/default.yaml). */
+    static defaultConfig: BucheConfig | null = null;
+
     container: HTMLElement;
     interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
     /** Where cells and prompts are (carreau; see layout.ts). */
@@ -156,8 +140,13 @@ export class BucheInterface implements Interface {
     /** Focus within and across cells (see focus.ts). Where the focus goes
      *  when its cell closes is the layout's call. */
     focus: FocusManager;
-    /** Layout operations (Alt+Q). */
-    nav: KeyboardNav;
+    /** Layout operations: the configured modes, by name (Nav: Alt+Q, by
+     *  default), one on at a time (see modes.ts). */
+    modes: Record<string, KeyboardNav> = {};
+    /** The key bindings, resolved from the configuration (see config.ts). */
+    bindings: Bindings;
+    /** Hands the keys to the modes (see modes.ts). */
+    private modeRouter: ModeRouter;
     /** Counter for the ids given to user commands (see pushCommand). */
     private commandSeq = 0;
     /** The machine (to resolve addresses), once a message came from it. */
@@ -166,6 +155,16 @@ export class BucheInterface implements Interface {
     constructor(args: BucheInterfaceArguments) {
         this.container = args.container;
         this.interactions = new AsyncQueue();
+        const defaults = args.defaultConfig ?? BucheInterface.defaultConfig;
+        if (!defaults) {
+            throw new Error("buche: no default configuration (see config/default.yaml)");
+        }
+        // The user's configuration over the defaults.
+        const { bindings, errors } = resolveBindings([defaults, args.config], isMac());
+        this.bindings = bindings;
+        for (const error of errors) {
+            showToast(`config: ${error}`);
+        }
         this.focus = new FocusManager(this.container, {
             onLost: () => this.layout.commitFocus(),
         });
@@ -219,19 +218,35 @@ export class BucheInterface implements Interface {
                 this.layout.focusMoved(current);
             }
         });
-        this.nav = new KeyboardNav(this.layout.ws, this.layout.view, navConfig(this));
-        // Leaving navigation mode commits the focus to the selected cell: not
-        // away from the window-title popup, if one is up.
-        this.nav.onChange((mode) => {
-            // (During a navigation, nothing commits the focus: its end does.)
-            this.focus.holdCommits = mode !== "off";
-            if (mode === "off") {
-                queueMicrotask(refocusTitleEditor);
-                queueMicrotask(() => this.layout.focusMoved(this.focus.current));
-            }
-        });
+        this.modeRouter = new ModeRouter();
+        for (const [name, mode] of Object.entries(bindings.modes)) {
+            const target = new ModeTarget();
+            const nav = new KeyboardNav(
+                this.layout.ws,
+                this.layout.view,
+                navConfig(this, mode),
+                target.asWindow(),
+            );
+            this.modes[name] = nav;
+            this.modeRouter.add(nav, target);
+            // Leaving a mode commits the focus to the selected cell: not away
+            // from the window-title popup, if one is up.
+            nav.onChange((state) => {
+                // (During a navigation, nothing commits the focus: its end does.)
+                this.focus.holdCommits = state !== "off";
+                if (state === "off") {
+                    queueMicrotask(refocusTitleEditor);
+                    queueMicrotask(() => this.layout.focusMoved(this.focus.current));
+                }
+            });
+        }
         this.keys = this.installKeys();
         this.installGuiRelay();
+    }
+
+    /** The mode that is on, else the first one (Nav, by default). */
+    get nav(): KeyboardNav {
+        return this.modeRouter.active() ?? Object.values(this.modes)[0];
     }
 
     // ── Cells and prompts ─────────────────────────────────────────────────────
@@ -376,44 +391,55 @@ export class BucheInterface implements Interface {
     }
 
     // ── Global key bindings ───────────────────────────────────────────────────
-    // Always-live chords (see keybindings.ts); what acts on cells and the
-    // layout is in carreau's navigation mode (Alt+Q: see navConfig).
-    //   Mod+p               focus the closest visible prompt (see focusPrompt)
-    //   Ctrl+l              in a prompt: clear its stream's spent cells
-    //   Ctrl+Tab /          switch to the next / previous tab of the current
-    //   Ctrl+Shift+Tab      pane (the focus follows into the new tab); also
-    //                       Mod+→ / Mod+←
+    // Always-live chords (see keybindings.ts), as configured (see config.ts);
+    // what acts on cells and the layout is in carreau's navigation mode (see
+    // navConfig). The actions:
+    //   focusPrompt   focus the closest visible prompt (see focusPrompt)
+    //   clearPrompt   in a prompt: clear its stream's spent cells
+    //   nextTab /     switch to the next / previous tab of the current pane
+    //   prevTab       (the focus follows into the new tab)
+    //   closeTab      close the current tab (as its ✕)
+    //   kill          kill the current cell (see killCell)
+    //   renameWindow  rename the window
     // Extend or override through `iface.keys.on(...)`.
 
     installKeys(): GlobalKeys {
-        const keys = new GlobalKeys({
-            "Mod+p": () => this.focusPrompt(),
-            // C-l clears, but only in a prompt input: elsewhere it belongs to
-            // what has the focus (a pty's clear-screen). In a prompt it clears
-            // only that prompt's own stream — other tabs keep their spent cells.
-            "Ctrl+l": (e) => {
+        const actions: Record<GlobalAction, KeyHandler> = {
+            focusPrompt: () => this.focusPrompt(),
+            // Clears, but only in a prompt input: elsewhere the chord belongs
+            // to what has the focus (C-l: a pty's clear-screen). In a prompt it
+            // clears only that prompt's own stream — other tabs keep their
+            // spent cells.
+            clearPrompt: (e) => {
                 const target = e.target;
                 if (!(target instanceof Element) || !target.closest('[focusable="prompt"]')) {
                     return false;
                 }
                 this.clearStream(target);
             },
-            "Ctrl+Tab": () => this.cycleTabs(true),
-            "Ctrl+Shift+Tab": () => this.cycleTabs(false),
-            "Mod+ArrowRight": () => this.cycleTabs(true),
-            "Mod+ArrowLeft": () => this.cycleTabs(false),
-        });
+            nextTab: () => this.cycleTabs(true),
+            prevTab: () => this.cycleTabs(false),
+            closeTab: () => this.closeCurrentTab(),
+            kill: () => this.killCell(),
+            renameWindow: () => this.renameWindow(),
+        };
+        const keys = new GlobalKeys();
+        for (const [chord, action] of Object.entries(this.bindings.global)) {
+            keys.on(chord, actions[action]);
+        }
         keys.attach();
-        // Every GUI iframe hands the navigation-mode chord, and the
-        // tab-switching ones, to the page: typed inside a GUI, they escape the
-        // iframe and run exactly as they do elsewhere.
-        BucheGui.defaultInterceptChords = () => [
-            "Alt+q",
-            "Ctrl+Tab",
-            "Ctrl+Shift+Tab",
-            "Mod+ArrowRight",
-            "Mod+ArrowLeft",
+        // Every GUI iframe hands the modes' chords, and the global ones, to
+        // the page: typed inside a GUI, they escape the iframe and run exactly
+        // as they do elsewhere. (Once a mode is on, the focus has left the
+        // iframe: its bindings are the page's.) Not clearPrompt's, which only
+        // acts in a prompt: in a GUI, its chord (Ctrl+L) is the GUI's.
+        const intercepted = [
+            ...Object.values(this.bindings.modes).map((mode) => mode.chord),
+            ...Object.entries(this.bindings.global)
+                .filter(([, action]) => action !== "clearPrompt")
+                .map(([chord]) => chord),
         ];
+        BucheGui.defaultInterceptChords = () => intercepted;
         return keys;
     }
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Launch the Electron build of buche — builds dist/electron and runs it.
- * Extra arguments go to scripts/electron.ts (-c CMD, -d DIR, -l LAYOUT, --devtools).
+ * Extra arguments go to scripts/electron.ts (-c CMD, -d DIR, -l LAYOUT, --devtools,
+ * --reset-bindings).
  */
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";

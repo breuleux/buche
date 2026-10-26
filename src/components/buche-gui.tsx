@@ -31,6 +31,9 @@
 //     bubbling "keydown" on itself, so the page's bindings see it as if it had
 //     been typed there. Key-ups that happen before the focus has left the
 //     iframe (e.g. releasing Control right away) are forwarded the same way.
+//     Modifier keys pressed and released in the iframe are re-dispatched too
+//     (without taking the focus, nor keeping them from the iframe): the
+//     page's bindings know which ones are down (e.g. the left Alt).
 //   * on `commitFocus()`, restores the focus to the element that last had it
 //     inside the iframe, or else to its `[autofocus]` / `#prime-focus` element.
 //   * reports its content height; the element sizes itself to it — unless its
@@ -512,17 +515,23 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
             this.focus();
             return;
         }
-        if (type !== "keydown" && type !== "keyup") {
+        if (type !== "keydown" && type !== "keyup" && type !== "modifier") {
             return;
         }
         // Take the DOM focus back first, so what follows (e.g. navigation
         // keys, the Control release) is typed into the page, not the iframe.
+        // (Not for a modifier key pressed or released in the iframe: the page
+        // is only told, see the runtime.)
         if (type === "keydown") {
             this.focus();
         }
         const { key, code, ctrlKey, altKey, shiftKey, metaKey } = data;
+        const eventType = type === "modifier" ? data.type : type;
+        if (eventType !== "keydown" && eventType !== "keyup") {
+            return;
+        }
         this.dispatchEvent(
-            new KeyboardEvent(type, {
+            new KeyboardEvent(eventType, {
                 key,
                 code,
                 ctrlKey,

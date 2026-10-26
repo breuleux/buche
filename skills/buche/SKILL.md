@@ -460,9 +460,10 @@ same URL in Electron).
   focus off your cell (never delivered to your process; the cell and your
   process survive untouched).
 - Some chords always escape your page, even with the focus inside it, and
-  reach the terminal as if typed there: **Alt+Q** (navigation mode),
-  **Ctrl+Tab / Ctrl+Shift+Tab** and **Cmd/Ctrl+←/→** (switch tabs). Don't
-  rely on capturing them.
+  reach the terminal as if typed there: by default **Alt+Q** (navigation
+  mode), **Cmd/Ctrl+P** (focus a prompt), **Ctrl+Tab / Ctrl+Shift+Tab** and
+  **Cmd/Ctrl+←/→** (switch tabs) — the user can rebind them, and add more
+  (~/.config/buche/config.yaml). Don't rely on capturing them.
 - A click inside the page focuses it naturally, like in any browser.
 
 ---

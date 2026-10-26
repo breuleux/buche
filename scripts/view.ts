@@ -56,8 +56,9 @@ import { guiCsp, OUTER_PAGE_CSP } from "../src/csp.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
 import { LibraryRegistry } from "../src/library.ts";
-import { layoutScript } from "../src/page.ts";
+import { configScript, layoutScript } from "../src/page.ts";
 import { formatMessage } from "./format.ts";
+import { loadUserConfig } from "./user-config.ts";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -212,6 +213,7 @@ const page = `<!doctype html>
 </head>
 <body>
 ${layoutScript(layout)}
+${configScript(loadUserConfig())}
 <div id="buche"></div>
 <script type="module" src="/client.js"></script>
 </body>
