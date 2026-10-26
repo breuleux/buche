@@ -77,6 +77,52 @@ describe("embedded-term — held newlines", () => {
         expect(rowText(t, 1)).toBe("world");
     });
 
+    test("a reset goes back to the squashed cursor alone, as when new", async () => {
+        const t = make({ "max-rows": "10" });
+        await drain(t);
+        t.write("one\r\ntwo\r\n");
+        await drain(t);
+        expect(guts(t).held).toBe("\n");
+        expect(guts(t).usedRows).toBe(2);
+
+        t.reset();
+        await drain(t);
+        expect(guts(t).held).toBe("");
+        expect(guts(t).usedRows).toBe(0);
+        expect(guts(t).stubOn).toBe(true);
+        expect(t.getText()).toBe("");
+
+        // And it grows from there like a new one.
+        t.write("again\r\n");
+        await drain(t);
+        expect(guts(t).usedRows).toBe(1);
+        expect(guts(t).stubOn).toBe(true);
+        expect(rowText(t, 0)).toBe("again");
+    });
+
+    test("a reset leaves the alt screen", async () => {
+        const t = make({ "max-rows": "10" });
+        await drain(t);
+        t.write("\x1b[?1049hfull screen");
+        await drain(t);
+        expect(t.terminal.buffer.active.type).toBe("alternate");
+        t.reset();
+        await drain(t);
+        expect(t.terminal.buffer.active.type).toBe("normal");
+        expect(guts(t).usedRows).toBe(0);
+        expect(guts(t).stubOn).toBe(true);
+    });
+
+    test("a reset is applied in order with the writes", async () => {
+        const t = make({ "max-rows": "10" });
+        await drain(t);
+        t.write("before\r\n");
+        t.reset();
+        t.write("after");
+        await drain(t);
+        expect(t.getText().trim()).toBe("after");
+    });
+
     test("two blocks in a row leave no blank line between them", async () => {
         const t = make({ "max-rows": "10" });
         await drain(t);

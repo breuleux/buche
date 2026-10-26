@@ -124,8 +124,9 @@ const TAG = "buche-gui";
 export const GUI_SEND_EVENT = "gui-send";
 
 /** Event bubbled by `<buche-gui>` when the element is first created (a frame's
- *  GUI has just come into existence); the interface uses it to move the focus
- *  to the new GUI. */
+ *  GUI has just come into existence, or replaced a reset one); the interface
+ *  uses it to move the focus to the new GUI, unless its detail says
+ *  `focus: false` (a reset GUI that did not have it). */
 export const GUI_APPEAR_EVENT = "gui-appear";
 
 /** An answer to a pending `proc://` request (see {@link BucheGui.respond}). */

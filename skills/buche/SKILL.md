@@ -166,6 +166,21 @@ once its cell has stayed scrolled out of view (out of sight even with its
 stream scrolled to the bottom) for a while. `"status": "running"` takes it
 back, e.g. while the user is in the middle of something.
 
+### Starting over: `reset`
+
+To start your cells over, blank (say, before restarting what feeds them):
+
+```json
+{"type": "reset", "from": ["$proc"], "to": ["$term"]}
+```
+
+This resets every cell at and under `from` that exists (`"propagate": false`:
+only the one at `from`), and creates none, so you need not know which of
+`$stdout` and `$frame` you have. A frame gets a fresh iframe, with no DOM,
+script state, registered handlers or cached `proc://` resources left from the
+old one (send what you need again); it keeps the focus if the old GUI had it.
+A terminal is cleared, screen and scrollback. Prompts are left alone.
+
 ### Refusing to close
 
 Closing your cell's tab (its ✕, Cmd+W, Alt+Q W) sends your process a SIGTERM,

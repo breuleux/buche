@@ -28,6 +28,7 @@ import type {
     CellCommandMessage,
     OutgoingInterfaceMessage,
     ProblemMessage,
+    ResetCellMessage,
     UpdateCellMessage,
     UpdateEntryMessage,
 } from "./interface-exchange/outgoing";
@@ -277,7 +278,7 @@ export class BucheInterface implements Interface {
                     ...this.inheritedKeys(entry),
                 ];
             }
-            if (entry?.cell.background) {
+            if (entry?.cell.background || (e as CustomEvent).detail?.focus === false) {
                 return;
             }
             this.focus.focusAndCommit(el, "auto");
@@ -784,6 +785,19 @@ export class BucheInterface implements Interface {
     }
 
     // ── Interface messages ────────────────────────────────────────────────────
+
+    handle$reset_cell(buche: Buche, message: ResetCellMessage) {
+        const box = this.layout.boxOf(message.entry);
+        if (box) {
+            // A rebuilt content keeps the focus if the old one had it.
+            const current = this.focus.current;
+            message.entry.cell.reset(
+                message.entry,
+                box,
+                current !== null && box.contains(current),
+            );
+        }
+    }
 
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         const { entry, target } = message;

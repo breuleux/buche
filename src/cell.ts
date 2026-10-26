@@ -326,6 +326,11 @@ export abstract class Cell extends WithId() {
      *  update). By default, there is none. */
     initialize(entry: Entry, box: EchoBox): void {}
 
+    /** Start the box's content over, blank (the driver's `reset`): a
+     *  rebuilt content takes the focus if `focus` (the old one had it). By
+     *  default, there is nothing to reset. */
+    reset(entry: Entry, box: EchoBox, focus: boolean): void {}
+
     /** Act on `command`, one for the cell's kind (see `commandKind`; the
      *  engine refuses the others). */
     handle(command: CellCommand, entry: Entry, box: EchoBox): void {}

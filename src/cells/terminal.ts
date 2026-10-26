@@ -45,6 +45,12 @@ export class TerminalCell extends Cell {
         ensureTerminal(entry, box);
     }
 
+    /** Reset the terminal to as new: screen, scrollback and modes gone, no
+     *  rows revealed (the same terminal stays, so the focus is left alone). */
+    reset(entry: Entry, box: EchoBox, focus: boolean): void {
+        ensureTerminal(entry, box).reset();
+    }
+
     handle(command: CellCommand, entry: Entry, box: EchoBox): void {
         if (command.type === "text") {
             ensureTerminal(entry, box).write(command.text);

@@ -9,6 +9,7 @@ export const incomingDriverMessageTypes = new Set<string>([
     "error",
     "library",
     "library_content",
+    "reset",
     "send",
     "sync",
 ]);
@@ -42,6 +43,7 @@ export const incomingInterfaceMessageTypes = new Set<string>([
 export const outgoingInterfaceMessageTypes = new Set<string>([
     "cell_command",
     "problem",
+    "reset_cell",
     "update_cell",
     "update_entry",
 ]);

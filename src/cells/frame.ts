@@ -48,12 +48,24 @@ export class FrameCell extends Cell {
         }
     }
 
+    /** Throw the GUI away for a blank one (a fresh iframe: no DOM, no script
+     *  state, no cached resources), which takes the focus only if `focus`
+     *  (the old one had it). A frame with no GUI yet gets its first. */
+    reset(entry: Entry, box: EchoBox, focus: boolean): void {
+        this.makeGui(box, focus);
+    }
+
     /** The frame's GUI (the <buche-gui> iframe), creating it on first use. */
     ensureGui(box: EchoBox): BucheGui {
         const existing = box.content;
         if (existing instanceof BucheGui) {
             return existing;
         }
+        return this.makeGui(box, true);
+    }
+
+    /** Put a new GUI in the box, in place of whatever it showed. */
+    private makeGui(box: EchoBox, focus: boolean): BucheGui {
         const gui = new BucheGui();
         gui.setAttribute("proc-cell-id", `c${++guiSeq}`);
         if (!gui.hasAttribute("sandbox")) {
@@ -64,7 +76,13 @@ export class FrameCell extends Cell {
         // Announce the arrival: the interface moves the focus to the GUI (the
         // box itself, if already focused, commits it via the
         // focus-commit-request that setContent already raised).
-        gui.dispatchEvent(new CustomEvent(GUI_APPEAR_EVENT, { bubbles: true, composed: true }));
+        gui.dispatchEvent(
+            new CustomEvent(GUI_APPEAR_EVENT, {
+                bubbles: true,
+                composed: true,
+                detail: { focus },
+            }),
+        );
         return gui;
     }
 }

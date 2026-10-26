@@ -5,6 +5,7 @@ import type { Cell, CellCommand } from "../src/cell.ts";
 import { FrameCell, PendingCell, TerminalCell } from "../src/cells/index.ts";
 import { BucheGui, GUI_SEND_EVENT } from "../src/components/buche-gui.tsx";
 import { EchoBox } from "../src/components/echo-box.tsx";
+import type { EmbeddedTerm } from "../src/components/embedded-term.tsx";
 import type { PromptCollection } from "../src/components/prompt-collection.tsx";
 import { Buche, type InM, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
@@ -435,6 +436,84 @@ describe("cell kinds", () => {
         expect(gui).not.toBeNull();
         expect(document.querySelector("embedded-term")).toBeNull();
         expect(iface.focus.current).toBe(gui);
+    });
+
+    const reset = (from: string[], extra: Record<string, unknown> = {}) => ({
+        type: "reset",
+        from,
+        ...extra,
+    });
+
+    test("reset replaces a frame's gui with a blank one, which keeps the focus", () => {
+        const { iface, driver } = setup();
+        driver({ type: "configure", from: ["p"], kind: "frame" });
+        driver({ type: "send", from: ["p"], message: { type: "html", content: "<p>hi</p>" } });
+        const old = document.querySelector<BucheGui>("buche-gui")!;
+        driver(reset(["p"]));
+        const guis = document.querySelectorAll<BucheGui>("buche-gui");
+        expect(guis).toHaveLength(1);
+        expect(guis[0]).not.toBe(old);
+        expect(guis[0].getAttribute("proc-cell-id")).not.toBe(old.getAttribute("proc-cell-id"));
+        expect(old.isConnected).toBe(false);
+        expect(iface.focus.current).toBe(guis[0]);
+    });
+
+    test("a reset gui does not take a focus the old one did not have", () => {
+        const { iface, driver } = setup();
+        driver({ type: "configure", from: ["a"], kind: "frame" });
+        driver({ type: "configure", from: ["b"], kind: "frame" });
+        const focused = iface.focus.current;
+        const [a] = document.querySelectorAll<BucheGui>("buche-gui");
+        expect(focused).not.toBe(a);
+        driver(reset(["a"]));
+        expect(document.querySelectorAll("buche-gui")[0]).not.toBe(a);
+        expect(iface.focus.current).toBe(focused);
+    });
+
+    test("reset clears a terminal, keeping the same one", async () => {
+        const { driver } = setup();
+        driver({ type: "configure", from: ["p"], kind: "terminal" });
+        driver({ type: "send", from: ["p"], message: { type: "text", text: "hello\r\n" } });
+        const term = document.querySelector<EmbeddedTerm>("embedded-term")!;
+        await term.flush();
+        expect(term.getText()).toContain("hello");
+        driver(reset(["p"]));
+        await term.flush();
+        expect(document.querySelector("embedded-term")).toBe(term);
+        expect(term.getText()).not.toContain("hello");
+    });
+
+    test("reset reaches the views under a process, and creates none", async () => {
+        const { buche, driver } = setup();
+        driver({ type: "configure", from: ["p"], label: "p" });
+        driver({ type: "configure", from: ["p", "$stdout"], kind: "terminal" });
+        driver({ type: "send", from: ["p", "$stdout"], message: { type: "text", text: "hello" } });
+        const term = document.querySelector<EmbeddedTerm>("embedded-term")!;
+        await term.flush();
+        driver(reset(["p"]));
+        await term.flush();
+        expect(term.getText()).not.toContain("hello");
+        expect(document.querySelector("buche-gui")).toBeNull();
+        expect(buche.hierarchy.getAt(["p", "$frame"], false)).toBeNull();
+    });
+
+    test("reset with propagate false leaves the views under alone", async () => {
+        const { driver } = setup();
+        driver({ type: "configure", from: ["p"], label: "p" });
+        driver({ type: "configure", from: ["p", "$stdout"], kind: "terminal" });
+        driver({ type: "send", from: ["p", "$stdout"], message: { type: "text", text: "hello" } });
+        const term = document.querySelector<EmbeddedTerm>("embedded-term")!;
+        await term.flush();
+        driver(reset(["p"], { propagate: false }));
+        await term.flush();
+        expect(term.getText()).toContain("hello");
+    });
+
+    test("reset at an empty address does nothing", () => {
+        const { buche, driver } = setup();
+        driver(reset(["nothing"]));
+        expect(buche.hierarchy.getAt(["nothing"], false)).toBeNull();
+        expect(document.querySelector("echo-box")).toBeNull();
     });
 
     test("a terminal cell shows its terminal right away, and takes no frame content", () => {

@@ -24,6 +24,13 @@ export interface UpdateEntryMessage {
     entry: Entry;
 }
 
+/** Start the cell an entry shows over, blank (see the driver's `reset`). */
+export interface ResetCellMessage {
+    type: "reset_cell";
+
+    entry: Entry;
+}
+
 export interface CellCommandMessage {
     type: "cell_command";
 
@@ -42,5 +49,6 @@ export interface ProblemMessage extends BucheErrorFields {
 export type OutgoingInterfaceMessage =
     | UpdateCellMessage
     | UpdateEntryMessage
+    | ResetCellMessage
     | CellCommandMessage
     | ProblemMessage;

@@ -67,6 +67,8 @@ interface RenderDims {
 }
 
 const SLIVER_HEIGHT = 4; // px; the squashed cursor
+/** A `reset()` waiting in the write queue. */
+const RESET = Symbol("reset");
 const FADE_ROWS = 1.5; // edge gradient height, in rows
 const FADE_MIN = 16; // px floor for the gradient
 const DEFAULT_MAX_ROWS = 10;
@@ -94,7 +96,8 @@ export class EmbeddedTerm extends HTMLElement {
     private clearHook: { dispose(): void } | null = null;
 
     private maxRows = DEFAULT_MAX_ROWS;
-    // High-water mark of revealed rows. Never decreases while sizing is dynamic.
+    // High-water mark of revealed rows. Never decreases while sizing is
+    // dynamic, short of a `reset()`.
     private usedRows = 0;
     private inAlt = false;
     private stubOn = false;
@@ -107,7 +110,7 @@ export class EmbeddedTerm extends HTMLElement {
 
     // Held-newline state, see the block below.
     private held = ""; // a trailing "\n" not yet written, or ""
-    private queue: (string | Uint8Array)[] = [];
+    private queue: (string | Uint8Array | typeof RESET)[] = [];
     private writing = false;
     private cursorHidden = false;
     // When false, the real xterm cursor is kept hidden and the squashed cursor
@@ -242,6 +245,20 @@ export class EmbeddedTerm extends HTMLElement {
     /** Clear the screen and the scrollback, leaving the cursor at home. */
     clear(): void {
         this.write("\x1b[H\x1b[2J\x1b[3J");
+    }
+
+    /**
+     * Start over as a fresh terminal, in order with the writes: the screen,
+     * the scrollback and the modes go (a full reset, RIS: out of the alt
+     * screen, default attributes, cursor shown...), a held newline is
+     * dropped, and the revealed rows fall back to none — just the squashed
+     * cursor, as when new. (Unlike `clear()`, which keeps the rows revealed,
+     * so the cursor sits on row 0 at full height.)
+     */
+    reset(): void {
+        this.ensureSetup();
+        this.queue.push(RESET);
+        this.pump();
     }
 
     /** Resolves once everything written so far has been parsed into the
@@ -570,10 +587,25 @@ export class EmbeddedTerm extends HTMLElement {
             this.cursorHidden = false;
             this.term.write("\x1b[?25h");
         }
+        const next = this.queue.shift()!;
+        if (next === RESET) {
+            // The held newline goes with the rest. (RIS shows the cursor.)
+            this.held = "";
+            this.term.write("\x1bc\x1b[3J", () => {
+                this.usedRows = 0;
+                this.cursorHidden = false;
+                if (!this.cursorEnabled) {
+                    this.cursorHidden = true;
+                    this.term.write("\x1b[?25l");
+                }
+                this.finish();
+            });
+            return;
+        }
         // The held newline goes out ahead of the chunk that released it.
         const pending = this.held;
         this.held = "";
-        const [body, tail] = this.splitTail(this.queue.shift()!);
+        const [body, tail] = this.splitTail(next);
 
         // The decision needs a current cursor, so it hangs off the last write.
         const writes: (string | Uint8Array)[] = [];
@@ -751,8 +783,8 @@ export class EmbeddedTerm extends HTMLElement {
 
         // Nothing written and nothing pending: height 0 with only the squashed
         // cursor, whose row is clipped away along with the rest of row 0.
-        // `usedRows` never decreases, so this can only be the initial state —
-        // never the aftermath of a clear.
+        // `usedRows` only drops back to 0 on a reset, so this can only be the
+        // initial state (or a reset's) — never the aftermath of a clear.
         if (
             !this.holding() &&
             !this.writing &&

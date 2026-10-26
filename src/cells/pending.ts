@@ -15,4 +15,9 @@ export class PendingCell extends Cell {
     initialize(entry: Entry, box: EchoBox): void {
         ensureTerminal(entry, box);
     }
+
+    /** Clear the terminal (what was typed into it, say). */
+    reset(entry: Entry, box: EchoBox, focus: boolean): void {
+        ensureTerminal(entry, box).reset();
+    }
 }
