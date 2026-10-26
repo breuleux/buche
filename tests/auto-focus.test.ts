@@ -465,6 +465,30 @@ describe("slots", () => {
         expect(ws.paneByName("logs")!.tabs.map((t) => t.title)).toEqual(["sub"]);
     });
 
+    test("Alt+Q W closes an empty named pane", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "x" });
+        driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        const ws = iface.layout.ws;
+        await ws.closeTab(ws.paneByName("logs")!.tabs[0].id);
+        await settle();
+        expect(ws.paneByName("logs")?.tabs).toEqual([]);
+        ws.select({ id: ws.paneByName("logs")!.id });
+        const press = (type: string, key: string, code: string, altKey = true) =>
+            container.dispatchEvent(new KeyboardEvent(type, { key, code, altKey, bubbles: true }));
+        press("keydown", "Alt", "AltLeft");
+        for (const code of ["KeyQ", "KeyW"]) {
+            const key = code.slice(3).toLowerCase();
+            press("keydown", key, code);
+            press("keyup", key, code);
+        }
+        press("keyup", "Alt", "AltLeft", false);
+        await settle();
+        expect(ws.paneByName("logs")).toBeNull();
+    });
+
     test("insert offers a new scroll column, named at random, empty, which stays", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
@@ -564,5 +588,117 @@ describe("slots", () => {
         expect(sent).toEqual([{ type: "spawn", from: ["$term"], to: ["$d1"], command: "cq" }]);
         ctx.driver({ type: "prompt_configure", from: ["$d1", "$proc", "cq"], label: "cq" });
         expect(iface.layout.ws.paneByName("main")!.tabs.map((t) => t.title)).toEqual(["cq"]);
+    });
+});
+
+describe("@pop", () => {
+    // A command from the prompt, answered by a cell at `from` in the pop.
+    function pop(ctx: ReturnType<typeof setup>, n: string, echo: Record<string, unknown> = {}) {
+        const entry = (prompt(ctx.container).closest("prompt-collection") as PromptCollection)
+            .prompts[0];
+        ctx.iface.pushCommand({
+            command: "submit",
+            entry,
+            text: "ls",
+            selection: { start: 2, end: 2 },
+            event: new KeyboardEvent("keydown"),
+        });
+        ctx.flush();
+        const id = (ctx.sent.at(-1) as { id: string }).id;
+        const from = [...SHELL, n];
+        ctx.driver({ type: "cell_configure", from, zone: "@pop", id, label: `pop${n}`, ...echo });
+        const box = () => ctx.container.querySelector<EchoBox>(`#echo-${id}`);
+        return { from, box, entry: () => box()?.boundEntry };
+    }
+
+    async function started() {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        await settle();
+        return ctx;
+    }
+
+    test("a cell goes in a floating window of its own, and takes the focus", async () => {
+        const ctx = await started();
+        const { box } = pop(ctx, "2");
+        await settle();
+        const ws = ctx.iface.layout.ws;
+        expect(ws.floating).toHaveLength(1);
+        const [win] = ws.floating;
+        const cell = box();
+        expect(shown(cell)).toBe(true);
+        expect(
+            ctx.container.querySelector(`[data-id="${panesOf(win.root)[0].id}"]`)?.contains(cell!),
+        ).toBe(true);
+        expect(ctx.iface.focus.current).toBe(cell);
+        // No chrome; as tall as the cell (which doesn't fill it).
+        expect(win).toMatchObject({ bare: true, fit: true });
+        const winEl = cell!.closest(".carreau-float")!;
+        expect(winEl.classList.contains("carreau-float-bare")).toBe(true);
+        expect(winEl.querySelector(".carreau-float-bar, .carreau-float-resize")).toBeNull();
+        expect(cell!.hasAttribute("fills")).toBe(false);
+    });
+
+    test("the focus leaving it terminates it, and the window goes right away", async () => {
+        const ctx = await started();
+        const { box, entry } = pop(ctx, "2");
+        await settle();
+        const e = entry();
+        ctx.iface.interactions.purge();
+
+        ctx.iface.focus.focus(prompt(ctx.container), "click");
+        expect([...ctx.iface.interactions.purge()]).toEqual([
+            { type: "user_signal", code: 15, entry: e },
+        ]);
+        expect(ctx.iface.layout.ws.floating).toHaveLength(0);
+        expect(box()).toBeNull();
+    });
+
+    test("ended, it keeps the focus; Esc goes back to the prompt and closes it", async () => {
+        const ctx = await started();
+        const { box, from } = pop(ctx, "2");
+        await settle();
+        ctx.driver({ type: "close", from, outcome: { type: "success" } });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+        ctx.iface.interactions.purge();
+
+        box()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await settle();
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+        expect(ctx.iface.layout.ws.floating).toHaveLength(0);
+        // (Nothing left to signal.)
+        expect(
+            [...ctx.iface.interactions.purge()].filter((m) => m.type === "user_signal"),
+        ).toEqual([]);
+    });
+
+    test("Esc while it runs is the app's", async () => {
+        const ctx = await started();
+        const { box } = pop(ctx, "2");
+        await settle();
+        box()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+        expect(ctx.iface.layout.ws.floating).toHaveLength(1);
+    });
+
+    test("a new pop closes the previous one", async () => {
+        const ctx = await started();
+        const first = pop(ctx, "2");
+        await settle();
+        const e = first.entry();
+        ctx.iface.interactions.purge();
+
+        const second = pop(ctx, "3");
+        await settle();
+        expect(first.box()).toBeNull();
+        expect(ctx.iface.layout.ws.floating).toHaveLength(1);
+        expect(ctx.iface.focus.current).toBe(second.box());
+        expect([...ctx.iface.interactions.purge()]).toContainEqual({
+            type: "user_signal",
+            code: 15,
+            entry: e,
+        });
     });
 });

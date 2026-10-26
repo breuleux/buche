@@ -12,7 +12,9 @@ export type ZoneDescriptor = string;
  *  - "inline": in the scroll stream the anchor is in (a cell's default);
  *  - "tab": a new tab beside the anchor (a prompt's default);
  *  - "left" | "right" | "up" | "down": into the neighbour pane on that side,
- *    created if there is none.
+ *    created if there is none;
+ *  - "pop": a floating window over the anchor's prompt, closed (its process
+ *    terminated) when the focus leaves it.
  * Any other zone names a pane.
  */
 export interface Target {

@@ -211,11 +211,15 @@ export class BucheInterface implements Interface {
             args.layout,
             args,
         );
-        // The layout's selection follows the focus.
+        // The layout's selection follows the focus; the pop closes when the
+        // focus leaves it (not mid-navigation: where it ends, see below).
         this.container.addEventListener("focus-change", (e: Event) => {
             const { current } = (e as CustomEvent<FocusChangeDetail>).detail;
             if (current) {
                 this.layout.follow(current);
+            }
+            if (!this.focus.holdCommits) {
+                this.layout.focusMoved(current);
             }
         });
         this.nav = new KeyboardNav(this.layout.ws, this.layout.view, navConfig(this));
@@ -226,6 +230,7 @@ export class BucheInterface implements Interface {
             this.focus.holdCommits = mode !== "off";
             if (mode === "off") {
                 queueMicrotask(refocusTitleEditor);
+                queueMicrotask(() => this.layout.focusMoved(this.focus.current));
             }
         });
         this.keys = this.installKeys();

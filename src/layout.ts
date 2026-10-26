@@ -26,7 +26,7 @@ import {
     promptColumn,
     speakerOf,
 } from "carreau/src/prompt";
-import type { LayoutNode, PaneNode, SplitNode, Tab, WorkspaceData } from "carreau/src/types";
+import type { LayoutNode, PaneNode, Rect, SplitNode, Tab, WorkspaceData } from "carreau/src/types";
 import { View } from "carreau/src/view";
 import { Workspace } from "carreau/src/workspace";
 import { defaultTheme } from "./color.ts";
@@ -75,7 +75,7 @@ export interface LayoutOptions {
 /** Zones relative to the anchor: into the neighbour pane on that side. */
 const DIRECTIONS = new Set(["left", "right", "up", "down"]);
 /** What a pane can't be named: the reserved zones (see Target). */
-const RESERVED = ["left", "right", "up", "down", "l", "r", "u", "d", "tab", "inline"];
+const RESERVED = ["left", "right", "up", "down", "l", "r", "u", "d", "tab", "inline", "pop"];
 
 /** The default layout: one pane, named "main", where the first prompt goes. */
 export function defaultLayout(): WorkspaceData {
@@ -272,6 +272,9 @@ export class Layout {
                 this.syncFills();
             }
         }).observe(element, { attributes: true, attributeFilter: ["class"], subtree: true });
+        // Esc on a spent pop (see `popUp`), in capture: seen before xterm's
+        // textarea turns it into pty input.
+        element.addEventListener("keydown", (e) => this.popKey(e), true);
         setInterval(() => this.checkStandby(), 1000);
     }
 
@@ -301,6 +304,10 @@ export class Layout {
      * area then).
      */
     private fills(box: EchoBox, maximized: boolean): boolean {
+        // (The pop's window is as tall as the box: see `popUp`.)
+        if (box.closest(".carreau-float-fit")) {
+            return false;
+        }
         if (!box.closest(".carreau-scroll") || box.closest(".carreau-cell-sized")) {
             return true;
         }
@@ -550,6 +557,10 @@ export class Layout {
                 this.slots.delete(zone);
             }
         }
+        // (The pop's window went some other way: an ephemeral cell, ✕...)
+        if (this.pop && !this.ws.node(this.pop.paneId)) {
+            this.pop = null;
+        }
     }
 
     /** Bring an entry's tab up to date (label, command, status). */
@@ -642,6 +653,10 @@ export class Layout {
                 { kind: "tab", paneId: p.id, index },
             );
 
+        if (target.zone === "pop") {
+            this.popUp(entry, anchor || null, newPane(), this.popRect(anchor || null, at));
+            return;
+        }
         if (target.zone === "inline" && !isPrompt && at) {
             // Into the stream the anchor is in (its own, for a prompt).
             const col = this.columnOf(anchorTab!);
@@ -1001,6 +1016,133 @@ export class Layout {
         if (ok && inner) {
             this.ws.select({ id: inner.id });
             this.view.commitFocus();
+        }
+    }
+
+    // ── Pop ──────────────────────────────────────────────────────────────────
+    // `@pop`: a cell in a floating window of its own, over the prompt it was
+    // run from, for a quick look or interaction. One at a time: a new pop
+    // closes the previous one. Once it had the focus, the focus leaving it
+    // closes it: what runs in it is terminated (killed, if unresponsive), and
+    // the window goes right away. Its end doesn't move the focus (it is
+    // sticky): it stays to be read, and Esc then goes back to the prompt.
+    // The window has no chrome (no tab bar, can't be moved or resized); its
+    // height is the cell's, its bottom staying just above the prompt.
+
+    /** The pop shown: its window's pane, what it was run from, and whether it had the focus. */
+    private pop: { paneId: string; anchor: Entry | null; focused: boolean } | null = null;
+
+    /**
+     * Where a pop goes: across the anchor's pane, its bottom just above its
+     * prompt (if it is one). Its height is the most it can take (the cell's
+     * own decides): up to the top of the pane.
+     */
+    private popRect(anchor: Entry | null, at: { pane: PaneNode; index: number } | null): Rect {
+        const base = (at && this.outerPane(at.pane.id)) ?? this.defaultPane();
+        const r = this.view.pxRect(base.id);
+        if (!r) {
+            return { x: 40, y: 40, w: 480, h: 280 };
+        }
+        const margin = 8;
+        const q = anchor?.prompt ? this.promptNodeOf(anchor) : null;
+        const p = q ? this.view.pxRect(q) : null;
+        const bottom = p ? p.y - 4 : r.y + r.h - margin;
+        const h = Math.max(60, bottom - (r.y + margin));
+        return { x: r.x + margin, y: bottom - h, w: Math.max(240, r.w - 2 * margin), h };
+    }
+
+    /** Show a cell (its pane: `node`) as the pop. */
+    private popUp(entry: Entry, anchor: Entry | null, node: PaneNode, rect: Rect): void {
+        this.dismissPop();
+        // (Its end must not send the focus away: that would close it unread.)
+        entry.echo.sticky = true;
+        if (this.ws.hostFloat(node, rect, { bare: true, fit: true })) {
+            this.pop = { paneId: node.id, anchor, focused: false };
+        } else {
+            this.place(entry, { zone: "tab", anchor: null }, node.tabs[0]);
+        }
+    }
+
+    /** The pop's window element, if it is shown. */
+    private popElement(): HTMLElement | null {
+        const id = this.pop?.paneId;
+        return id
+            ? this.element.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`)
+            : null;
+    }
+
+    /** The entries shown in the pop's window. */
+    private popEntries(): Entry[] {
+        const tree = this.pop && this.ws.trees().find((t) => find(t, this.pop!.paneId));
+        return tree
+            ? panes(tree).flatMap((p) => p.tabs.flatMap((t) => this.entries.get(t.id) ?? []))
+            : [];
+    }
+
+    /**
+     * The focus moved (to `current`; null: nowhere). Into the pop: it has had
+     * the focus. Out of it, after that: it closes. (Not during a navigation:
+     * where it ends, does. See BucheInterface.)
+     */
+    focusMoved(current: Element | null): void {
+        if (!this.pop) {
+            return;
+        }
+        const el = this.popElement();
+        if (current && el?.contains(current)) {
+            this.pop.focused = true;
+        } else if (this.pop.focused) {
+            this.dismissPop();
+        }
+    }
+
+    /** Close the pop, if any: its processes terminated, its window gone right away. */
+    dismissPop(): void {
+        const pop = this.pop;
+        if (!pop) {
+            return;
+        }
+        const signaled = new Set<Entry>();
+        for (const entry of this.popEntries()) {
+            const process = entry.representative() ?? entry;
+            if (this.alive(entry) && !signaled.has(process)) {
+                signaled.add(process);
+                this.host.signal(entry, statusOf(entry).status === "unresponsive" ? 9 : 15);
+            }
+        }
+        this.pop = null;
+        this.ws.hostChange((forest) => {
+            for (const s of forest.children as SplitNode[]) {
+                if (s.children[0] && find(s.children[0], pop.paneId)) {
+                    s.children = [];
+                    return;
+                }
+            }
+            return false;
+        });
+    }
+
+    /** Esc in a pop whose processes are all spent: back to the prompt (which closes it). */
+    private popKey(e: KeyboardEvent): void {
+        const el = this.pop && this.popElement();
+        if (
+            e.key !== "Escape" ||
+            !el?.contains(e.target as Node) ||
+            this.element.querySelector(".nav-mode") ||
+            this.popEntries().some((entry) => this.alive(entry))
+        ) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const anchor = this.pop!.anchor;
+        const prompt = anchor?.prompt && this.alive(anchor) ? anchor : this.host.lastPrompt();
+        const target = prompt && this.revealPrompt(prompt);
+        if (target) {
+            this.host.focus(target);
+        } else {
+            this.dismissPop();
+            this.host.refocus();
         }
     }
 

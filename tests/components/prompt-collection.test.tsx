@@ -1135,3 +1135,64 @@ describe("prompt-collection — pop slot", () => {
         expect(pc.popElement(b)).toBeNull();
     });
 });
+
+describe("prompt-collection — composition (real CodeMirror)", () => {
+    // A dead key ("^" then "u" for "û") composes: "^" sits in the text,
+    // provisionally, until the "u". The driver answers every change, "^"
+    // included: an update then would end the composition, "^" left behind.
+    async function setup() {
+        const { EditorView } = await import("@codemirror/view");
+        const pc = document.createElement("prompt-collection") as PromptCollection;
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content: plain("ls ") });
+        pc.addPrompt(entry);
+        const editor = pc.getEditor(entry)!;
+        const view = EditorView.findFromDOM(editor.dom)!;
+        const transactions: unknown[] = [];
+        const dispatch = view.dispatch.bind(view);
+        view.dispatch = ((...args: Parameters<typeof dispatch>) => {
+            transactions.push(args);
+            dispatch(...args);
+        }) as typeof view.dispatch;
+        // (CodeMirror's own composition state: what `view.composing` reads.)
+        const compose = (on: boolean) => {
+            (view as any).inputState.composing = on ? 1 : -1;
+        };
+        return { pc, entry, editor, view, transactions, compose };
+    }
+
+    test("an answer that changes nothing changes nothing", async () => {
+        const { pc, entry, editor, transactions } = await setup();
+        setCursor(editor, 3);
+        transactions.length = 0;
+        pc.setValue(entry, { text: "ls ", ranges: [], selection: { start: 3, end: 3 } });
+        expect(transactions).toEqual([]);
+    });
+
+    test("the same highlights over new text are applied anew", async () => {
+        const { pc, entry, editor } = await setup();
+        const styled = (text: string) => ({
+            text,
+            ranges: [{ start: 0, end: 2, style: "blue" }],
+        });
+        pc.setValue(entry, styled("ls"));
+        // (Replacing the whole text collapses the old marks: they must be set again.)
+        pc.setValue(entry, styled("cd"));
+        const marks = [...editor.dom.querySelectorAll<HTMLElement>(".cm-line span[style]")];
+        expect(marks.map((m) => m.textContent)).toEqual(["cd"]);
+    });
+
+    test("while composing, the driver's text and selection are dropped", async () => {
+        const { pc, entry, editor, view, compose } = await setup();
+        view.dispatch({ changes: { from: 3, insert: "^" }, selection: { anchor: 4 } });
+        compose(true);
+        // (A stale answer, say: it would replace the composed text.)
+        pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
+        expect(pc.getValue(entry)).toBe("ls ^");
+        expect(editor.getSelection?.()).toEqual({ start: 4, end: 4 });
+        compose(false);
+        pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
+        expect(pc.getValue(entry)).toBe("ls x");
+        expect(editor.getSelection?.()).toEqual({ start: 1, end: 1 });
+    });
+});

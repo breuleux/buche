@@ -213,31 +213,53 @@ let darkTheme: Extension | null = null;
 // Colorization decorations: a state field holding a decoration set that is
 // replaced wholesale whenever `setSpansEffect` is dispatched.
 const setSpansEffect = StateEffect.define<StyleSpan[]>();
+
+/** Spans as the editor shows them: clamped to the document (`len`), the empty
+ *  and inverted ones dropped, in order. */
+function normalizeSpans(spans: StyleSpan[], len: number): Required<StyleSpan>[] {
+    return spans
+        .map((s) => ({
+            start: Math.max(0, Math.min(len, s.start)),
+            end: Math.max(0, Math.min(len, s.end)),
+            css: s.css,
+            inclusiveStart: s.inclusiveStart ?? false,
+            inclusiveEnd: s.inclusiveEnd ?? false,
+        }))
+        .filter((s) => s.start < s.end)
+        .sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+/** The spans an editor shows now (moved along with the edits since they were set). */
+function shownSpans(deco: DecorationSet): Required<StyleSpan>[] {
+    const spans: Required<StyleSpan>[] = [];
+    for (let it = deco.iter(); it.value; it.next()) {
+        const spec = it.value.spec;
+        spans.push({
+            start: it.from,
+            end: it.to,
+            css: spec.attributes?.style ?? "",
+            inclusiveStart: spec.inclusiveStart ?? false,
+            inclusiveEnd: spec.inclusiveEnd ?? false,
+        });
+    }
+    return spans;
+}
+
 const spansField = StateField.define<DecorationSet>({
     create: () => Decoration.none,
     update(deco, tr) {
         deco = deco.map(tr.changes);
         for (const effect of tr.effects) {
             if (effect.is(setSpansEffect)) {
-                const len = tr.state.doc.length;
-                const marks = effect.value
-                    // Clamp to the document and drop empty/inverted spans.
-                    .map((s) => ({
-                        ...s,
-                        start: Math.max(0, Math.min(len, s.start)),
-                        end: Math.max(0, Math.min(len, s.end)),
-                    }))
-                    .filter((s) => s.start < s.end)
-                    .sort((a, b) => a.start - b.start || a.end - b.end)
-                    .map((s) =>
-                        Decoration.mark({
-                            attributes: { style: s.css },
-                            // Open boundaries absorb text inserted at the edge as
-                            // the decoration is re-mapped across document changes.
-                            inclusiveStart: s.inclusiveStart ?? false,
-                            inclusiveEnd: s.inclusiveEnd ?? false,
-                        }).range(s.start, s.end),
-                    );
+                const marks = normalizeSpans(effect.value, tr.state.doc.length).map((s) =>
+                    Decoration.mark({
+                        attributes: { style: s.css },
+                        // Open boundaries absorb text inserted at the edge as
+                        // the decoration is re-mapped across document changes.
+                        inclusiveStart: s.inclusiveStart,
+                        inclusiveEnd: s.inclusiveEnd,
+                    }).range(s.start, s.end),
+                );
                 deco = Decoration.set(marks);
             }
         }
@@ -400,40 +422,73 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
             ],
         }),
     });
+    // What the driver resets (on every answer to a keystroke) mostly hasn't
+    // changed: such updates are skipped. Besides being wasted, any of them
+    // mid-composition (a dead key's "^" waiting for its "u", an IME) would end
+    // it, its provisional text left behind ("^û"). And while composing, the
+    // driver's text and selection answer a provisional state: they're dropped
+    // (the composed text, once there, is sent, and answered, in turn).
+    let editability: Editability = "editable";
+    let css = "";
     return {
         dom: view.dom,
         getValue: () => view.state.doc.toString(),
-        setValue: (value) =>
-            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }),
-        setHighlights: (spans) => view.dispatch({ effects: setSpansEffect.of(spans) }),
+        setValue: (value) => {
+            if (view.composing || value === view.state.doc.toString()) {
+                return;
+            }
+            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+        },
+        setHighlights: (value) => {
+            const { state } = view;
+            const next = normalizeSpans(value, state.doc.length);
+            if (JSON.stringify(next) === JSON.stringify(shownSpans(state.field(spansField)))) {
+                return;
+            }
+            view.dispatch({ effects: setSpansEffect.of(value) });
+        },
         setFiligrane: (filigrane) => view.dispatch({ effects: setFiligraneEffect.of(filigrane) }),
-        setEditability: (editability) =>
+        setEditability: (value) => {
+            if (value === editability) {
+                return;
+            }
+            editability = value;
             // The frozen/readonly classes must come through the
             // editorAttributes facet: CodeMirror rewrites the root's `class`
             // attribute on every focus change, which would wipe a class set
             // directly on view.dom.
             view.dispatch({
                 effects: readOnly.reconfigure(
-                    editability === "editable"
+                    value === "editable"
                         ? []
                         : [
                               EditorState.readOnly.of(true),
                               EditorView.editorAttributes.of({
-                                  class: editability === "frozen" ? "cm-frozen" : "cm-readonly",
+                                  class: value === "frozen" ? "cm-frozen" : "cm-readonly",
                               }),
                           ],
                 ),
-            }),
-        setBaseStyle: (css) =>
+            });
+        },
+        setBaseStyle: (value) => {
+            if (value === css) {
+                return;
+            }
+            css = value;
             view.dispatch({
                 effects: baseStyle.reconfigure(
-                    css ? EditorView.contentAttributes.of({ style: css }) : [],
+                    value ? EditorView.contentAttributes.of({ style: value }) : [],
                 ),
-            }),
+            });
+        },
         setSelection: (selection) => {
             const len = view.state.doc.length;
             const start = Math.max(0, Math.min(len, selection.start));
             const end = Math.max(start, Math.min(len, selection.end));
+            const { anchor, head } = view.state.selection.main;
+            if (view.composing || (anchor === start && head === end)) {
+                return;
+            }
             view.dispatch({ selection: { anchor: start, head: end } });
         },
         getSelection: () => {
