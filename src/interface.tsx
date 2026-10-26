@@ -15,12 +15,7 @@ import { showToast } from "./components/toast.ts";
 import type { Buche } from "./core";
 import { echoElementId, killable } from "./echo.ts";
 import { type Entry, statusOf } from "./entry.ts";
-import {
-    type Direction,
-    type FocusChangeDetail,
-    FocusManager,
-    type NavigationMode,
-} from "./focus.ts";
+import { type FocusChangeDetail, FocusManager } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
     CellCommandMessage,
@@ -30,7 +25,7 @@ import type {
     UpdateEntryMessage,
     UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
-import { type KeyHandler, ModalKeys } from "./keybindings.ts";
+import { GlobalKeys } from "./keybindings.ts";
 import { Layout, type LayoutOptions } from "./layout.ts";
 import type { Json } from "./types.ts";
 import type { BucheErrorMessage } from "./utils";
@@ -57,20 +52,13 @@ export class InertInterface implements Interface {
     processMessage(buche: Buche, message: OutgoingInterfaceMessage) {}
 }
 
-const ARROWS: Record<string, Direction> = {
-    ArrowUp: "up",
-    ArrowDown: "down",
-    ArrowLeft: "left",
-    ArrowRight: "right",
-};
-
 const isVisible = (el: HTMLElement): boolean =>
     el.isConnected &&
     !el.closest("[hidden]") &&
     (typeof el.checkVisibility === "function" ? el.checkVisibility() : true);
 
 /** Layout operations (carreau's navigation mode: Alt+Q, then these). */
-const navConfig = (layout: Layout): NavConfig => ({
+const navConfig = (iface: BucheInterface): NavConfig => ({
     activation: { modifier: "Alt", code: "KeyQ", side: "either" },
     bindings: {
         ArrowLeft: "focusLeft",
@@ -104,21 +92,32 @@ const navConfig = (layout: Layout): NavConfig => ({
         "Shift+KeyZ": "redo",
         KeyW: "closeTab",
         "Shift+KeyW": "closePane",
+        // Buche's own: kill the cell (from a prompt, the one above it) without
+        // closing it; select the latest prompt; rename the window.
+        KeyK: function kill() {
+            iface.killCell();
+        },
+        KeyP: function prompt() {
+            iface.selectPrompt();
+        },
+        KeyT: function title() {
+            iface.renameWindow();
+        },
     },
     prefixes: {
         // I, then: Enter, a new tab in the focused cell's pane; a direction,
         // in the pane on that side; Shift+direction, a new pane on that side.
         // What goes in it, the user then picks (see Layout's slots).
         KeyI: {
-            Enter: () => layout.insert(),
-            ArrowLeft: () => layout.insert("left"),
-            ArrowRight: () => layout.insert("right"),
-            ArrowUp: () => layout.insert("up"),
-            ArrowDown: () => layout.insert("down"),
-            "Shift+ArrowLeft": () => layout.insert("left", true),
-            "Shift+ArrowRight": () => layout.insert("right", true),
-            "Shift+ArrowUp": () => layout.insert("up", true),
-            "Shift+ArrowDown": () => layout.insert("down", true),
+            Enter: () => iface.layout.insert(),
+            ArrowLeft: () => iface.layout.insert("left"),
+            ArrowRight: () => iface.layout.insert("right"),
+            ArrowUp: () => iface.layout.insert("up"),
+            ArrowDown: () => iface.layout.insert("down"),
+            "Shift+ArrowLeft": () => iface.layout.insert("left", true),
+            "Shift+ArrowRight": () => iface.layout.insert("right", true),
+            "Shift+ArrowUp": () => iface.layout.insert("up", true),
+            "Shift+ArrowDown": () => iface.layout.insert("down", true),
         },
         KeyS: {
             ArrowLeft: "swapLeft",
@@ -144,8 +143,8 @@ export class BucheInterface implements Interface {
     interactions: AsyncQueue<IncomingInterfaceMessage | BucheErrorMessage>;
     /** Where cells and prompts are (carreau; see layout.ts). */
     layout: Layout;
-    /** Global keyboard bindings, listened for on `window` (see keybindings.ts). */
-    keys: ModalKeys;
+    /** Global keyboard chords, listened for on `window` (see keybindings.ts). */
+    keys: GlobalKeys;
     /** Focus within and across cells (see focus.ts). Where the focus goes
      *  when its cell closes is the layout's call. */
     focus: FocusManager;
@@ -210,7 +209,16 @@ export class BucheInterface implements Interface {
                 this.layout.follow(current);
             }
         });
-        this.nav = new KeyboardNav(this.layout.ws, this.layout.view, navConfig(this.layout));
+        this.nav = new KeyboardNav(this.layout.ws, this.layout.view, navConfig(this));
+        // Leaving navigation mode commits the focus to the selected cell: not
+        // away from the window-title popup, if one is up.
+        this.nav.onChange((mode) => {
+            // (During a navigation, nothing commits the focus: its end does.)
+            this.focus.holdCommits = mode !== "off";
+            if (mode === "off") {
+                queueMicrotask(refocusTitleEditor);
+            }
+        });
         this.keys = this.installKeys();
         this.installGuiRelay();
     }
@@ -375,94 +383,38 @@ export class BucheInterface implements Interface {
     }
 
     // ── Global key bindings ───────────────────────────────────────────────────
-    // Chords ("Mod+p") are always live; capture mode (Ctrl+Q, held) taps keys
-    // until Ctrl is released, which commits the focus (e.g. into the focused
-    // cell's terminal):
+    // Always-live chords (see keybindings.ts); what acts on cells and the
+    // layout is in carreau's navigation mode (Alt+Q: see navConfig).
+    //   Mod+p               focus the latest prompt
+    //   Ctrl+l              in a prompt: clear its stream's spent cells
     //   Ctrl+Tab /          switch to the next / previous tab of the current
     //   Ctrl+Shift+Tab      pane (the focus follows into the new tab); also
     //                       Mod+→ / Mod+←
-    //   arrows        move the focus (neighbour, else layout jump)
-    //   Shift+arrows  layout jump
-    //   p             focus the latest prompt
-    //   k / d         kill / close the focused cell — from a prompt, the cell
-    //                 right above it
-    //   l             clear all spent and standby cells (Ctrl+L clears only
-    //                 those of the prompt's own stream, while typing in it)
-    //   t             rename the window (popup, see title-editor.ts)
-    // Extend or override through `iface.keys.on(...) / .onCapture(...) /
-    // .onRelease(...)`.
+    // Extend or override through `iface.keys.on(...)`.
 
-    installKeys(): ModalKeys {
-        const fm = this.focus;
-        const move =
-            (direction: Direction, mode: NavigationMode): KeyHandler =>
-            () =>
-                fm.move(direction, mode);
-        const capture: Record<string, KeyHandler> = {
-            p: () => this.focusPrompt(),
-            k: () => this.killCell(),
-            d: () => this.closeCell(),
-            l: () => this.clearSpentCells(),
-            t: () => {
-                // The popup takes the DOM focus (outside the container); when
-                // it closes, the focus goes back where it was.
-                const previous = this.focus.current;
-                showTitleEditor(() => {
-                    if (previous?.isConnected) {
-                        this.focus.focus(previous, "restore");
-                        if (!this.focus.holdCommits) {
-                            this.focus.commitFocus();
-                        }
-                    }
-                });
+    installKeys(): GlobalKeys {
+        const keys = new GlobalKeys({
+            "Mod+p": () => this.focusPrompt(),
+            // C-l clears, but only in a prompt input: elsewhere it belongs to
+            // what has the focus (a pty's clear-screen). In a prompt it clears
+            // only that prompt's own stream — other tabs keep their spent cells.
+            "Ctrl+l": (e) => {
+                const target = e.target;
+                if (!(target instanceof Element) || !target.closest('[focusable="prompt"]')) {
+                    return false;
+                }
+                this.clearStream(target);
             },
-        };
-        for (const [key, direction] of Object.entries(ARROWS)) {
-            capture[key] = move(direction, "mix");
-            capture[`Shift+${key}`] = move(direction, "jump");
-        }
-        const keys = new ModalKeys({
-            chords: {
-                "Mod+p": () => this.focusPrompt(),
-                // C-l clears, but only in a prompt input: elsewhere it belongs
-                // to what has the focus (a pty's clear-screen). In a prompt it
-                // clears only that prompt's own shell view (the <buche-term>
-                // hosting its prompt collection) — other tabs keep their
-                // spent cells.
-                "Ctrl+l": (e) => {
-                    const target = e.target;
-                    if (!(target instanceof Element) || !target.closest('[focusable="prompt"]')) {
-                        return false;
-                    }
-                    this.clearStream(target);
-                },
-                "Ctrl+Tab": () => this.cycleTabs(true),
-                "Ctrl+Shift+Tab": () => this.cycleTabs(false),
-                "Mod+ArrowRight": () => this.cycleTabs(true),
-                "Mod+ArrowLeft": () => this.cycleTabs(false),
-            },
-            enter: "Ctrl+q",
-            capture,
-            // Removing the focused cell mid-navigation must not commit the
-            // focus that replaces it: releasing Ctrl will.
-            onEnter: () => {
-                fm.holdCommits = true;
-            },
-            release: () => {
-                fm.holdCommits = false;
-                fm.commitFocus();
-            },
+            "Ctrl+Tab": () => this.cycleTabs(true),
+            "Ctrl+Shift+Tab": () => this.cycleTabs(false),
+            "Mod+ArrowRight": () => this.cycleTabs(true),
+            "Mod+ArrowLeft": () => this.cycleTabs(false),
         });
-        // Releasing Ctrl commits the focus, which can pull the DOM focus into a
-        // terminal or an editor — back to the title popup's input, if it is up.
-        keys.onRelease(() => refocusTitleEditor());
         keys.attach();
-        // Every GUI iframe hands the capture-mode and navigation-mode chords,
-        // and the tab-switching ones, to the page: typed inside a GUI, they
-        // escape the iframe and run exactly as they do elsewhere.
+        // Every GUI iframe hands the navigation-mode chord, and the
+        // tab-switching ones, to the page: typed inside a GUI, they escape the
+        // iframe and run exactly as they do elsewhere.
         BucheGui.defaultInterceptChords = () => [
-            keys.enter,
-            // Carreau's navigation mode (see navConfig).
             "Alt+q",
             "Ctrl+Tab",
             "Ctrl+Shift+Tab",
@@ -470,6 +422,18 @@ export class BucheInterface implements Interface {
             "Mod+ArrowLeft",
         ];
         return keys;
+    }
+
+    /** Rename the window (a popup: see title-editor.ts). It takes the DOM
+     *  focus; when it closes, the focus goes back where it was. */
+    renameWindow(): void {
+        const previous = this.focus.current;
+        showTitleEditor(() => {
+            if (previous?.isConnected) {
+                this.focus.focus(previous, "restore");
+                this.focus.commitFocus();
+            }
+        });
     }
 
     // ── Focus actions ─────────────────────────────────────────────────────────
@@ -537,6 +501,19 @@ export class BucheInterface implements Interface {
             }
         }
         return this.layout.anyPrompt();
+    }
+
+    /**
+     * Select the latest prompt in the layout (its tab shown), without giving
+     * it the keyboard focus: in navigation mode, the keys that follow are
+     * still navigation. Leaving it gives the prompt the focus, as for any
+     * selected cell.
+     */
+    selectPrompt(): void {
+        const entry = this.lastPromptEntry();
+        if (entry) {
+            this.layout.revealPrompt(entry);
+        }
     }
 
     private latestPrompt(): HTMLElement | null {

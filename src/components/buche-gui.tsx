@@ -151,14 +151,14 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
     /**
      * Chords every new <buche-gui> hands to the page instead of letting the
      * iframe content see them. The interface sets this once (to the
-     * capture-mode chord, so nav mode escapes any GUI); per-element overrides
+     * navigation-mode chord, so it escapes any GUI); per-element overrides
      * go through {@link interceptChords}.
      */
     static defaultInterceptChords: () => readonly string[] = () => [];
 
     /**
      * Chords the iframe hands to the page instead of handling them (e.g.
-     * "Ctrl+Q"). Called each time the focus enters the iframe. Defaults to
+     * "Alt+Q"). Called each time the focus enters the iframe. Defaults to
      * {@link BucheGui.defaultInterceptChords}.
      */
     interceptChords: () => readonly string[] = () => BucheGui.defaultInterceptChords();

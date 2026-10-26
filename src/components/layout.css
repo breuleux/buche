@@ -122,3 +122,8 @@ echo-box[bare][focused] embedded-term,
 echo-box[bare][focus-path] embedded-term {
 	--embedded-term-bg: var(--cell-bg, #1c1c1c);
 }
+
+/* The prompt selected in navigation mode: its line brightens. */
+.carreau.nav-mode .carreau-prompt.selected .prompt-collection-prompt {
+	border-top-color: var(--prompt-accent, #d6d8de);
+}

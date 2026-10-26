@@ -6,7 +6,7 @@ import type { EditorFactory, PromptCollection } from "../src/components/prompt-c
 import { Buche, type InM } from "../src/core.ts";
 import { Entry } from "../src/entry.ts";
 import { BucheInterface } from "../src/interface.tsx";
-import { ModalKeys } from "../src/keybindings.ts";
+import { GlobalKeys } from "../src/keybindings.ts";
 import { isMac } from "../src/keychord.ts";
 import { Prompt } from "../src/prompt.ts";
 import "../src/components/echo-box.tsx";
@@ -26,16 +26,14 @@ function key(
     return ev;
 }
 
-describe("ModalKeys", () => {
+describe("GlobalKeys", () => {
     test("chords fire and are swallowed", () => {
         const box = document.createElement("div");
         document.body.append(box);
         const hits: string[] = [];
-        const keys = new ModalKeys({
-            chords: {
-                "Ctrl+p": () => {
-                    hits.push("p");
-                },
+        const keys = new GlobalKeys({
+            "Ctrl+p": () => {
+                hits.push("p");
             },
         });
         keys.attach();
@@ -50,17 +48,24 @@ describe("ModalKeys", () => {
         keys.detach();
     });
 
+    test("a handler returning false lets the key through", () => {
+        const box = document.createElement("div");
+        document.body.append(box);
+        const keys = new GlobalKeys({ "Ctrl+l": () => false });
+        keys.attach();
+        expect(key(box, "keydown", { key: "l", ctrlKey: true }).defaultPrevented).toBe(false);
+        keys.detach();
+    });
+
     test("keys are seen even when the DOM focus is outside the interface", () => {
         // After a click in empty space the DOM focus sits on `body`: keydowns
         // from there never go through the container — the window listener
         // still sees them.
         document.body.append(document.createElement("div"));
         const hits: string[] = [];
-        const keys = new ModalKeys({
-            chords: {
-                "Ctrl+p": () => {
-                    hits.push("p");
-                },
+        const keys = new GlobalKeys({
+            "Ctrl+p": () => {
+                hits.push("p");
             },
         });
         keys.attach();
@@ -70,82 +75,13 @@ describe("ModalKeys", () => {
         keys.detach();
     });
 
-    test("capture mode grabs keys until Ctrl is released", () => {
-        const box = document.createElement("div");
-        document.body.append(box);
-        const hits: string[] = [];
-        const keys = new ModalKeys({
-            capture: {
-                p: () => {
-                    hits.push("p");
-                },
-            },
-            release: () => {
-                hits.push("release");
-            },
-        });
-        keys.attach();
-
-        expect(key(box, "keydown", { key: "q", ctrlKey: true }).defaultPrevented).toBe(true);
-        expect(keys.capturing).toBe(true);
-
-        // Keys are matched by name, whatever modifiers ride along.
-        expect(key(box, "keydown", { key: "p", ctrlKey: true }).defaultPrevented).toBe(true);
-        // Unknown keys are swallowed but fire no handler.
-        expect(key(box, "keydown", { key: "x", ctrlKey: true }).defaultPrevented).toBe(true);
-        // Modifier keydowns pass through.
-        expect(key(box, "keydown", { key: "Shift", shiftKey: true }).defaultPrevented).toBe(false);
-        expect(hits).toEqual(["p"]);
-
-        // Releasing Q keeps the mode; releasing Ctrl ends it and runs `release`.
-        key(box, "keyup", { key: "q", ctrlKey: true });
-        expect(keys.capturing).toBe(true);
-        key(box, "keyup", { key: "ControlLeft" });
-        expect(keys.capturing).toBe(false);
-        expect(hits).toEqual(["p", "release"]);
-
-        // After release, keys are live again (not swallowed).
-        expect(key(box, "keydown", { key: "x" }).defaultPrevented).toBe(false);
-        keys.detach();
-    });
-
-    test("capture keys can be bound with modifiers other than Ctrl", () => {
-        const box = document.createElement("div");
-        document.body.append(box);
-        const hits: string[] = [];
-        const keys = new ModalKeys({
-            capture: {
-                ArrowUp: () => {
-                    hits.push("up");
-                },
-                "Shift+ArrowUp": () => {
-                    hits.push("shift+up");
-                },
-            },
-            onEnter: () => {
-                hits.push("enter");
-            },
-        });
-        keys.attach();
-
-        key(box, "keydown", { key: "q", ctrlKey: true });
-        key(box, "keydown", { key: "ArrowUp", ctrlKey: true });
-        key(box, "keydown", { key: "ArrowUp", ctrlKey: true, shiftKey: true });
-        // No Alt binding: falls back to the bare key's.
-        key(box, "keydown", { key: "ArrowUp", ctrlKey: true, altKey: true });
-        expect(hits).toEqual(["enter", "up", "shift+up", "up"]);
-        keys.detach();
-    });
-
     test("Mod expands per-platform in chords", () => {
         const box = document.createElement("div");
         document.body.append(box);
         let hits = 0;
-        const keys = new ModalKeys({
-            chords: {
-                "Mod+p": () => {
-                    hits++;
-                },
+        const keys = new GlobalKeys({
+            "Mod+p": () => {
+                hits++;
             },
         });
         keys.attach();
@@ -211,53 +147,7 @@ const promptRow = (pc: PromptCollection) =>
     pc.querySelector<HTMLElement>('[focusable="prompt"]:not([hidden])')!;
 
 describe("BucheInterface global bindings", () => {
-    test("Ctrl+Q then ↓/↓ navigates and highlights cells", () => {
-        const [iface, container] = makeInterface();
-        column(container);
-        const [b1] = makeCell();
-        const [b2] = makeCell();
-        container.append(b1, b2);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.current).toBe(b1);
-        expect(b1.hasAttribute("focused")).toBe(true);
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.current).toBe(b2);
-        expect(b1.hasAttribute("focused")).toBe(false);
-        // Nothing past the end.
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(iface.focus.current).toBe(b2);
-        iface.keys.detach();
-    });
-
-    test("the focused cell holds the DOM focus; releasing Ctrl moves it into the terminal", () => {
-        const [iface, container] = makeInterface();
-        column(container);
-        const [b1] = makeCell();
-        const term = document.createElement("embedded-term");
-        let focused = 0;
-        term.focus = () => {
-            focused++;
-        };
-        b1.setView("pty", term);
-        container.append(b1);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        expect(iface.focus.holdCommits).toBe(true);
-        key(container, "keydown", { key: "ArrowDown", ctrlKey: true });
-        expect(document.activeElement).toBe(b1);
-        expect(b1.tabIndex).toBe(-1);
-        expect(focused).toBe(0);
-
-        key(window, "keyup", { key: "Control" });
-        expect(iface.keys.capturing).toBe(false);
-        expect(iface.focus.holdCommits).toBe(false);
-        expect(focused).toBe(1);
-        iface.keys.detach();
-    });
-
-    test("Mod+p and Ctrl+Q p focus the latest prompt in the history", () => {
+    test("Mod+p focuses the latest prompt in the history", () => {
         const [iface, container] = makeInterface();
         column(container);
         const [pc1] = makePromptCollection();
@@ -275,10 +165,6 @@ describe("BucheInterface global bindings", () => {
         key(container, "keydown", { key: "p", ...mod });
         expect(iface.focus.current).toBe(promptRow(pc2));
 
-        iface.focus.focus(b1);
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "p", ctrlKey: true });
-        expect(iface.focus.current).toBe(promptRow(pc2));
         iface.keys.detach();
     });
 
@@ -302,6 +188,20 @@ describe("BucheInterface global bindings", () => {
 // ── Cell actions, on cells in the layout ─────────────────────────────────────
 
 const SHELL = ["$proc", "cq"];
+
+/** Alt+Q, then these keys (by code), Alt held throughout, then released. */
+function nav(target: EventTarget, ...codes: string[]): void {
+    key(target, "keydown", { key: "Alt", code: "AltLeft", altKey: true });
+    for (const code of ["KeyQ", ...codes]) {
+        key(target, "keydown", {
+            key: code.replace(/^Key/, "").toLowerCase(),
+            code,
+            altKey: true,
+        });
+        key(target, "keyup", { key: code.replace(/^Key/, "").toLowerCase(), code, altKey: true });
+    }
+    key(target, "keyup", { key: "Alt", code: "AltLeft" });
+}
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function machineInterface() {
@@ -339,12 +239,11 @@ describe("cell actions", () => {
         iface.focus.focus(box);
         iface.interactions.purge();
 
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "k", ctrlKey: true });
+        nav(container, "KeyK");
         // An unresponsive cell gets SIGKILL instead.
         entry.echo.status = { status: "unresponsive" };
         entry.fire();
-        key(container, "keydown", { key: "k", ctrlKey: true });
+        nav(container, "KeyK");
         const signals = [...iface.interactions.purge()].filter(
             (m: any) => m.type === "user_signal",
         );
@@ -355,29 +254,45 @@ describe("cell actions", () => {
         iface.keys.detach();
     });
 
-    test("'d' closes the cell, like its tab's ✕", async () => {
+    test("'p' selects the latest prompt; leaving navigation focuses it", () => {
+        const { iface, container, driver, cells, promptOf } = machineInterface();
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const [{ box }] = cells(SHELL, "running");
+        iface.focus.focus(promptOf(SHELL));
+        iface.focus.focus(box);
+        // Alt still held: selected, but the keys still go to navigation.
+        key(container, "keydown", { key: "Alt", code: "AltLeft", altKey: true });
+        for (const code of ["KeyQ", "KeyP"]) {
+            key(container, "keydown", { key: code.slice(3).toLowerCase(), code, altKey: true });
+        }
+        const q = iface.layout.promptNodeOf(iface.layout.anyPrompt()!);
+        expect(iface.layout.ws.selection.id).toBe(q);
+        expect(promptOf(SHELL).contains(document.activeElement)).toBe(false);
+        key(container, "keyup", { key: "Alt", code: "AltLeft" });
+        expect(iface.focus.current).toBe(promptOf(SHELL));
+        iface.keys.detach();
+    });
+
+    test("'w' closes the cell, like its tab's ✕", async () => {
         const { iface, container, driver, cells } = machineInterface();
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         const [{ box }] = cells(SHELL, "done");
         iface.focus.focus(box);
 
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "d", ctrlKey: true });
+        nav(container, "KeyW");
         await settle();
         expect(box.isConnected).toBe(false);
         iface.keys.detach();
     });
 
-    test("from a prompt, 'k' and 'd' apply to the cell right above it", async () => {
+    test("from a prompt, 'k' and 'w' apply to the cell right above it", async () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         const [, { entry, box }] = cells(SHELL, "done", "running");
         iface.focus.focus(promptOf(SHELL));
         iface.interactions.purge();
 
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "k", ctrlKey: true });
-        key(container, "keydown", { key: "d", ctrlKey: true });
+        nav(container, "KeyK", "KeyW");
         const signals = [...iface.interactions.purge()].filter(
             (m: any) => m.type === "user_signal",
         );
@@ -391,14 +306,14 @@ describe("cell actions", () => {
         iface.keys.detach();
     });
 
-    test("'l' clears spent cells — C-q-l, or plain Ctrl+L in a prompt", async () => {
+    test("'l' clears spent cells — Alt+Q L, or plain Ctrl+L in a prompt", async () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         const [done, err, run] = cells(SHELL, "done", "error", "running");
 
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "l", ctrlKey: true });
-        key(window, "keyup", { key: "Control" });
+        // (From the prompt: its stream.)
+        iface.focus.focus(promptOf(SHELL));
+        nav(container, "KeyL");
         await settle();
         expect(done.box.isConnected).toBe(false);
         expect(err.box.isConnected).toBe(false);

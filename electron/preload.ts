@@ -32,7 +32,7 @@ contextBridge.exposeInMainWorld("buche", {
         send: (message: unknown) => ipcRenderer.send("driver:message", message),
     },
     window: {
-        // Rename the window (C-q-t popup, src/components/title-editor.ts).
+        // Rename the window (Alt+Q T popup, src/components/title-editor.ts).
         setTitle: (title: string) => ipcRenderer.send("window:title", title),
     },
     proc: {

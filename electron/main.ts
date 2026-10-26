@@ -152,7 +152,7 @@ async function start(): Promise<void> {
         drivers.send(message);
     });
 
-    // Window title changes from the renderer (C-q-t popup, see
+    // Window title changes from the renderer (Alt+Q T popup, see
     // src/components/title-editor.ts).
     ipcMain.on("window:title", (event, title: unknown) => {
         BrowserWindow.fromWebContents(event.sender)?.setTitle(String(title));
