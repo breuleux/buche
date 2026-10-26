@@ -1,4 +1,4 @@
-{"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq","submission":{"context":{"text":">>","ranges":[]}}}
+{"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq","input":{"context":{"text":">>","ranges":[]}}}
 {"$role":"interfaceOut","type":"update_prompt","target":{"zone":"tab","anchor":null,"link":true},"entry":{"echo":"#102","cell":null,"prompt":"#103"}}
 {"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"zone":null}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":["$proc","cq"]},"entry":{"echo":"#105","cell":"#106","prompt":null,"represents":["$proc","cq","2"]}}

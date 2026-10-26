@@ -13,16 +13,17 @@ export interface PromptConfiguration {
     bindings?: PromptBindings;
 
     /**
-     * The prompt as a submission: its content (what the user is typing, with
-     * the `selection`, the ghost-text `filigrane` and its `editability`)
-     * and its context (the marker text above the editor).
+     * The prompt's input: its content (what the user is typing, with the
+     * `selection`, the ghost-text `filigrane` and its `editability`) and its
+     * context (the marker text above the editor). Not to be confused with the
+     * echo's `submission` (EchoConfiguration), what a cell shows was submitted.
      */
-    submission?: SubmissionConfiguration;
+    input?: SubmissionConfiguration;
 }
 
 export class Prompt extends WithId() implements PromptConfiguration {
     bindings: PromptBindings = {};
-    submission: Submission = {
+    input: Submission = {
         content: { text: "", ranges: [], selection: { start: 0, end: 0 } },
         context: { text: "", ranges: [] },
     };
@@ -41,6 +42,6 @@ export class Prompt extends WithId() implements PromptConfiguration {
 
     configure(config: PromptConfiguration): void {
         this.bindings = config.bindings ?? this.bindings;
-        applySubmission(this.submission, config.submission);
+        applySubmission(this.input, config.input);
     }
 }

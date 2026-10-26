@@ -1,4 +1,4 @@
-{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq", "submission": {"context": {"text": ">>", "ranges": []}}}
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq", "input": {"context": {"text": ">>", "ranges": []}}}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": null}
 {"type": "cell_configure", "from": ["$proc", "cq", "2", "$main"], "to": ["$term"], "represents": ["$proc", "cq", "2"], "label": "ls", "background": false, "submission": {"content": {"text": "ls", "ranges": []}}}
 {"type": "text", "from": ["$proc", "cq", "2", "$main"], "to": ["$term"], "stream": "stdout", "text": "README.md\r\n"}

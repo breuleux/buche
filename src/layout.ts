@@ -228,7 +228,13 @@ export class Layout {
         });
         this.element = element;
         // (After the view's own listener: what is placed where is rendered.)
-        this.ws.onChange(() => {
+        this.ws.onChange((kind) => {
+            // (The selection alone changed: nothing was rendered, or moved. The
+            // maximization following it reaches syncFills through the cells'
+            // classes: see the MutationObserver below.)
+            if (kind === "selection") {
+                return;
+            }
             // (Once the change is over: a tab can be in no tree for a moment,
             // in the middle of one, without being closed.)
             if (!this.forgetting) {

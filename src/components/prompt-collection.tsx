@@ -13,7 +13,7 @@
 // The tab's label and accent colour come from the Entry's {@link Echo}; the
 // leading marker and the editor's initial content come from the Entry's
 // {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.submission.content` (its text and selection). The
+// flow back into `entry.prompt.input.content` (its text and selection). The
 // Prompt's `filigrane` (a history suggestion, echoed by the "prompt_configure"
 // answer to a parse) shows as faded ghost text extending the content;
 // ArrowRight at the end of the text accepts it.
@@ -32,7 +32,7 @@
 //
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
-// marker, and to reset the editor's text and cursor from the prompt's submission.
+// marker, and to reset the editor's text and cursor from the prompt's input.
 // A reconfiguration that finds the Echo's status `done` or `error` (the process
 // closed) instead removes the prompt — its tab and editor are spent.
 //
@@ -559,7 +559,7 @@ export class PromptCollection extends HTMLElement {
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
 
-        const content: InteractiveStyledText = entry.prompt?.submission.content ?? {
+        const content: InteractiveStyledText = entry.prompt?.input.content ?? {
             text: "",
             ranges: [],
         };
@@ -577,7 +577,7 @@ export class PromptCollection extends HTMLElement {
                 }
                 const sel = this.rows.get(entry)?.editor.getSelection?.();
                 if (entry.prompt) {
-                    const promptContent = entry.prompt.submission.content;
+                    const promptContent = entry.prompt.input.content;
                     promptContent.text = value;
                     if (sel != null) {
                         promptContent.selection = sel;
@@ -782,7 +782,7 @@ export class PromptCollection extends HTMLElement {
                     // submit reset replaces the content whole, editability
                     // (and filigrane) included.
                     if (typeof binding === "object" && binding.freeze) {
-                        const content = entry.prompt?.submission.content;
+                        const content = entry.prompt?.input.content;
                         if (content) {
                             content.editability = "frozen";
                         }
@@ -877,7 +877,7 @@ export class PromptCollection extends HTMLElement {
 
         // Reset the editor from `content`: its text, colorization and
         // selection. Guarded so the resulting change doesn't sync back into it.
-        const content = entry.prompt?.submission.content;
+        const content = entry.prompt?.input.content;
         if (content) {
             this.applyingContent = true;
             try {
@@ -897,7 +897,7 @@ export class PromptCollection extends HTMLElement {
     // Push the Entry's ghost text (`content.filigrane`) into its editor;
     // cleared when the Entry has none. No-op on editors that don't support it.
     private applyFiligrane(row: Row): void {
-        row.editor.setFiligrane?.(row.entry.prompt?.submission.content.filigrane ?? null);
+        row.editor.setFiligrane?.(row.entry.prompt?.input.content.filigrane ?? null);
     }
 
     /** Paint a tab from its Echo accent while active, or grey while inactive. The
@@ -1009,7 +1009,7 @@ export class PromptCollection extends HTMLElement {
     // itself (custom properties inherit downward, and the rectangle styles read
     // it on the row) so the stylesheet can tint the rectangle and top line.
     private renderMarker(row: Row, entry: Entry): void {
-        const styled = entry.prompt?.submission.context;
+        const styled = entry.prompt?.input.context;
         if (styled?.text) {
             row.marker.replaceChildren(buildStyledText(styled, this.theme));
         } else {

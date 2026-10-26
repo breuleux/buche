@@ -885,6 +885,10 @@
           "$ref": "#/definitions/PromptBindings",
           "description": "Key-chord → action-name map for this prompt."
         },
+        "input": {
+          "$ref": "#/definitions/SubmissionConfiguration",
+          "description": "The prompt's input: its content (what the user is typing, with the `selection`, the ghost-text `filigrane` and its `editability`) and its context (the marker text above the editor). Not to be confused with the echo's `submission` (EchoConfiguration), what a cell shows was submitted."
+        },
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
