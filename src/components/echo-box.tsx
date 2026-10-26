@@ -1,15 +1,11 @@
 // A submitted command and its output, as a custom element: `<echo-box>`.
 //
-//   <echo-box echo="ls -la" status="running" color="#6ea8fe">
-//     <div data-view="pty">…</div>
-//     <div data-view="gui">…</div>
-//   </echo-box>
+//   <echo-box echo="ls -la" status="running" color="#6ea8fe"></echo-box>
 //
 //   const box = document.createElement("echo-box") as EchoBox;
-//   box.cell = "make build";
+//   box.echo = "make build";
 //   box.color = "#8ae234";
-//   box.setView("pty", term);         // fill a view with content (icon from the map)
-//   box.bump("gui");                  // flag the gui view as holding unseen content
+//   box.setContent(term);             // what the box shows: a terminal, or a frame
 //   box.status = "done";
 //
 // Layout:
@@ -19,19 +15,16 @@
 //   │ │  ├───────────────────────────────────────────┤    one dim accent rectangle,
 //   │ │  │ echo (the command line just submitted)      │    circle riding on top,
 //   │ │  ├───────────────────────────────────────────┤    controls on the context
-//   │ │  │ cell — the active view's content            │  ← line runs down the gutter
+//   │ │  │ cell — its content (a terminal or a frame)  │  ← line runs down the gutter
 //   └────┴───────────────────────────────────────────┘
 //
 // The left gutter is drawn (not a CSS margin): a status circle at the top and a
-// straight line running down beside the cell. The cell holds one or more views
-// (keyed by ViewLabel — pty, gui); each gets an icon button (glyph from a static
-// map) at the top-right of the box — on the context line when there is one, on
-// the echo row otherwise — and clicking one switches the visible view. A view
-// can be flagged as holding unseen content with bump(label): while it is not
-// the selected view its icon shows bright white. A closing icon sits after the
-// view icons. The status
-// circle and closing icon change appearance with the cell's `status`; the circle
-// and line colour are configurable via the `color` attribute / `--echo-color`.
+// straight line running down beside the cell. The cell holds the box's content:
+// a terminal, or a frame (<buche-gui>). A closing icon sits at the top-right of
+// the box — on the context line when there is one, on the echo row otherwise.
+// The status circle and closing icon change appearance with the cell's
+// `status`; the circle and line colour are configurable via the `color`
+// attribute / `--echo-color`.
 //
 // The left gutter doubles as a resize handle: dragging *outward* from the bar
 // grows the cell, dragging *inward* shrinks it. Concretely, grabbing the top
@@ -55,9 +48,9 @@
 // Focus: the box is a focusable cell for the FocusManager (focus.ts): it is
 // tagged `focusable="cell"` and takes the DOM focus itself while navigated
 // onto, so the page keeps the keys; `commitFocus()` then moves the focus into
-// the active view (its embedded terminal or <buche-gui>). While it is the
-// focus (the manager's `focused` attribute), the box is highlighted. Setting
-// a view asks the manager to commit again ("focus-commit-request"), so a
+// its content (its embedded terminal or <buche-gui>). While it is the focus
+// (the manager's `focused` attribute), the box is highlighted. Setting the
+// content asks the manager to commit again ("focus-commit-request"), so a
 // terminal created while the box has the focus gets it.
 //
 // Prompt activity: `box.observePromptActivity(collection)` ties the box to a
@@ -66,9 +59,8 @@
 // active prompt, the box takes the `prompt-inactive` attribute and its
 // accents fade (echo-box.css).
 //
-// Events (both bubble). See the exported detail/event types below
-// ({@link EchoViewChangeEvent}, {@link EchoCloseEvent}, {@link EchoBoxEventMap}):
-//   "viewchange"  detail: { view: ViewLabel }  — the active view changed
+// Events (all bubble). See the exported event types below
+// ({@link EchoCloseEvent}, {@link EchoBoxEventMap}):
 //   "close"                                     — the closing icon was clicked
 //   "resize"                                    — the cell's measured size changed.
 //     The box polls its cell size once per frame, so *every* resize cause (a
@@ -82,7 +74,7 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
-import type { Cell, Status, StatusString, ViewLabel } from "../cell.ts";
+import type { Cell, Status, StatusString } from "../cell.ts";
 import { defaultTheme } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
@@ -110,39 +102,10 @@ function echoStatus(status: Status): StatusString {
     return status.status === "absent" ? "unresponsive" : status.status;
 }
 
-/** The icon glyph shown for each {@link ViewLabel}. */
-export const VIEW_ICONS: Record<ViewLabel, string> = {
-    pty: "▤",
-    gui: "◧",
-};
-
-/** The tooltip / accessible label shown for each {@link ViewLabel}. */
-export const VIEW_TITLES: Record<ViewLabel, string> = {
-    pty: "Output",
-    gui: "GUI",
-};
-
-export function isViewLabel(s: string): s is ViewLabel {
-    return s in VIEW_ICONS;
-}
-
-interface ViewEntry {
-    btn: HTMLButtonElement;
-    view: HTMLElement;
-    /** Whether the view may hold content the user hasn't seen yet. */
-    unseen: boolean;
-}
-
 // ── Events ────────────────────────────────────────────────────────────────
 // `detail` shapes and typed `CustomEvent` aliases for the events dispatched by
 // {@link EchoBox}. All events bubble.
 
-/** `detail` of the "viewchange" event: the active view changed. */
-export interface EchoViewChangeDetail {
-    view: ViewLabel;
-}
-
-export type EchoViewChangeEvent = CustomEvent<EchoViewChangeDetail>;
 /** The "close" event (the ✕ was clicked) carries no detail. */
 export type EchoCloseEvent = CustomEvent<null>;
 /** The "resize" event (the user resized the cell) carries no detail. */
@@ -150,7 +113,6 @@ export type EchoResizeEvent = CustomEvent<null>;
 
 /** Typed event map for {@link EchoBox} (drives `addEventListener`). */
 export interface EchoBoxEventMap {
-    viewchange: EchoViewChangeEvent;
     close: EchoCloseEvent;
     resize: EchoResizeEvent;
 }
@@ -179,8 +141,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     private cellEl!: HTMLElement;
     private closeEl!: HTMLButtonElement;
     private inlineStatusEl!: HTMLElement;
-    private viewMap = new Map<ViewLabel, ViewEntry>();
-    private _activeView: ViewLabel | null = null;
     private _status: EchoStatus = "running";
     private _compact = false;
     private _destroyWhenDone = false;
@@ -356,10 +316,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             this.tabIndex = -1;
         }
 
-        // Capture authored `[data-view]` children as views before rebuilding.
-        const authored = Array.from(this.children).filter(
-            (c): c is HTMLElement => c instanceof HTMLElement && c.hasAttribute("data-view"),
-        );
         this.replaceChildren();
 
         // Gutter: status circle at the top, line drawn beside the cell (CSS ::before).
@@ -370,8 +326,8 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.gutter.addEventListener("pointerdown", (e) => this.startResize(e));
         this.gutter.addEventListener("dblclick", () => this.resetHeight());
 
-        // Header: a status dot, the echo text, then controls (view icons, then
-        // the closing icon). With a context line, CSS lifts the controls up onto
+        // Header: a status dot, the echo text, then controls (the closing
+        // icon). With a context line, CSS lifts the controls up onto
         // it (their right end); in compact mode this row becomes a
         // right-aligned overlay: status · echo · buttons — so an empty echo
         // just closes up and the status stays put beside the buttons.
@@ -401,7 +357,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         // (echo-box.css), its dim band extending left under the circle.
         this.contextEl = div("echo-box-context");
 
-        // Cell: holds the views; only the active one is shown.
+        // Cell: holds the content (a terminal, or a frame).
         this.cellEl = div("echo-box-cell");
 
         this.bodyEl = div("echo-box-body");
@@ -438,14 +394,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             this.setEcho(echo);
         }
 
-        for (const child of authored) {
-            const lbl = child.getAttribute("data-view") ?? "";
-            if (isViewLabel(lbl)) {
-                this.setView(lbl, child);
-            }
-        }
-        this.updateControlsState();
-
         if (this.hasAttribute("compact")) {
             this.setCompact(true);
         }
@@ -453,11 +401,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     // ── Focus ─────────────────────────────────────────────────────────────────
 
-    /** Move the DOM focus into the active view: its embedded terminal (so
+    /** Move the DOM focus into the content: its embedded terminal (so
      *  keystrokes reach the pty) or <buche-gui>. Otherwise the box keeps it. */
     commitFocus(): void {
-        const view = this._activeView !== null ? this.getView(this._activeView) : null;
-        const target = view?.querySelector("embedded-term, buche-gui") as
+        const target = this.cellEl.querySelector("embedded-term, buche-gui") as
             | (HTMLElement & Partial<FocusCommittable>)
             | null;
         if (!target) {
@@ -537,8 +484,8 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
             // that only sizes un-dragged cells — otherwise the drag clamps at it.
             this.style.maxHeight = "none";
             this.cellEl.style.height = `${height}px`;
-            // The cell now has a height of its own: views that size themselves
-            // to their content (the GUI) switch to filling it instead (see the
+            // The cell now has a height of its own: content that sizes itself
+            // to what it shows (a frame) switch to filling it instead (see the
             // echo-box stylesheet and BucheGui).
             if (!this.hasAttribute("pinned")) {
                 this.setAttribute("pinned", "");
@@ -652,7 +599,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     // ── Sizing ──────────────────────────────────────────────────────────────
 
     /** The height in px imposed on the cell by a user drag, or null when the
-     *  cell has not been resized. Views that need a fixed grid (e.g.
+     *  cell has not been resized. Content that needs a fixed grid (e.g.
      *  embedded-term) size to it and otherwise stay dynamic (CSS `max-height`
      *  still caps the box either way). */
     get cellContentHeight(): number | null {
@@ -662,7 +609,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     /** The height in px the cell can reach before the box's CSS `max-height`
-     *  clamps it, or null when the box imposes no ceiling. Views that size
+     *  clamps it, or null when the box imposes no ceiling. Content that sizes
      *  dynamically grow up to it.
      *
      *  The chrome (the context row, the header, and the cell's own padding
@@ -676,7 +623,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
      *  and borders come from its computed style (`offsetHeight -
      *  clientHeight` would only show borders — `clientHeight` includes the
      *  padding). (A hidden box reports the bare ceiling; it announces a
-     *  "resize" when shown again, and views re-read this then.) */
+     *  "resize" when shown again, and its content re-reads this then.) */
     get maxContentHeight(): number | null {
         this.ensureSetup();
         const max = Number.parseFloat(getComputedStyle(this).maxHeight);
@@ -802,7 +749,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     // Freeze the overlay at its current on-screen position (`position: fixed`)
     // while it is active, so that a resize triggered from within it — e.g. the
-    // cell growing after a view-switch click — doesn't shift it out from under
+    // cell growing after a click — doesn't shift it out from under
     // the pointer. Measured after `data-alt` is set so the rect is the laid-out
     // overlay position.
     private pinOverlay(): void {
@@ -879,7 +826,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     /**
      * Configure the box from an {@link Entry}: apply its cell's command text,
-     * colour, status and views now, and re-apply on every subsequent
+     * colour and status now, and re-apply on every subsequent
      * `entry.fire()`. Any previously bound entry is detached first.
      */
     bindEntry(entry: Entry): void {
@@ -950,145 +897,20 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.status = echoStatus(statusOf(entry));
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────────
+    // ── Content ───────────────────────────────────────────────────────────────
 
-    /** The registered view labels, in insertion order. */
-    get views(): ViewLabel[] {
+    /** What the box shows: its terminal or its frame (null: nothing yet). */
+    get content(): HTMLElement | null {
         this.ensureSetup();
-        return [...this.viewMap.keys()];
+        return this.cellEl.firstElementChild as HTMLElement | null;
     }
 
-    /** The currently visible view, or null if there are no views. */
-    get activeView(): ViewLabel | null {
+    /** Show `content`, in place of what the box showed. If this box has the
+     *  focus, it may now pass it on to the content (see commitFocus). */
+    setContent(content: HTMLElement): void {
         this.ensureSetup();
-        return this._activeView;
-    }
-
-    /** Set (replace) a view's content, creating the view — and its icon, from the
-     *  static {@link VIEW_ICONS} map — if it doesn't exist yet. The first view
-     *  created becomes active. Returns the view's content container. */
-    setView(lbl: ViewLabel, content: Node): HTMLElement {
-        this.ensureSetup();
-        const entry = this.ensureView(lbl);
-        entry.view.replaceChildren(content);
-        // If this box has the focus, it may now pass it on to the new content
-        // (e.g. a terminal created by the first output; see commitFocus).
+        this.cellEl.replaceChildren(content);
         this.dispatchEvent(new Event("focus-commit-request", { bubbles: true }));
-        return entry.view;
-    }
-
-    /** Flag that a view may hold content the user hasn't seen yet: its icon is
-     *  shown in bright white while the view is not the selected one. Selecting
-     *  the view (see {@link showView}) clears the flag. */
-    bump(lbl: ViewLabel): void {
-        this.ensureSetup();
-        const entry = this.ensureView(lbl);
-        // The active view's content is already on screen, so nothing is unseen.
-        entry.unseen = this._activeView !== lbl;
-        this.updateViewStyles();
-    }
-
-    /** Remove a view; if it was active, the next view (if any) becomes active. */
-    removeView(lbl: ViewLabel): void {
-        this.ensureSetup();
-        const entry = this.viewMap.get(lbl);
-        if (!entry) {
-            return;
-        }
-        entry.btn.remove();
-        entry.view.remove();
-        this.viewMap.delete(lbl);
-        if (this._activeView === lbl) {
-            this._activeView = null;
-            const next = this.viewMap.keys().next();
-            if (!next.done) {
-                this.showView(next.value);
-            }
-        }
-        this.updateControlsState();
-    }
-
-    /** Switch to a view. No-op for a view that doesn't exist, or that is
-     *  already active. Asks the focus manager to commit again, so a box that
-     *  has the focus passes it to the newly active view's content. */
-    showView(lbl: ViewLabel): void {
-        this.ensureSetup();
-        const entry = this.viewMap.get(lbl);
-        if (!entry || this._activeView === lbl) {
-            return;
-        }
-        this._activeView = lbl;
-        // Viewing it means its content is now seen.
-        entry.unseen = false;
-        for (const [vid, e] of this.viewMap) {
-            e.view.hidden = vid !== lbl;
-        }
-        this.updateViewStyles();
-        this.dispatchEvent(
-            new CustomEvent<EchoViewChangeDetail>("viewchange", {
-                detail: { view: lbl },
-                bubbles: true,
-            }),
-        );
-        // The focused box may now pass its focus to the content shown (see
-        // setView and focus.ts).
-        this.dispatchEvent(new Event("focus-commit-request", { bubbles: true }));
-    }
-
-    /** The content container for a view, or null if unknown. */
-    getView(lbl: ViewLabel): HTMLElement | null {
-        this.ensureSetup();
-        return this.viewMap.get(lbl)?.view ?? null;
-    }
-
-    // Create a view (and its icon button) if it doesn't exist yet.
-    private ensureView(lbl: ViewLabel): ViewEntry {
-        const existing = this.viewMap.get(lbl);
-        if (existing) {
-            return existing;
-        }
-
-        const view = div("echo-box-view");
-        view.setAttribute("data-view", lbl);
-        view.hidden = true;
-        this.cellEl.append(view);
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "echo-box-view-btn";
-        btn.setAttribute("data-view", lbl);
-        btn.textContent = VIEW_ICONS[lbl];
-        btn.title = VIEW_TITLES[lbl];
-        btn.setAttribute("aria-label", btn.title);
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.showView(lbl);
-        });
-        this.controlsEl.insertBefore(btn, this.closeEl);
-
-        const entry: ViewEntry = { btn, view, unseen: false };
-        this.viewMap.set(lbl, entry);
-        if (this._activeView === null) {
-            this.showView(lbl);
-        }
-        this.updateControlsState();
-        return entry;
-    }
-
-    // Reflect the active view and the per-view "unseen" flag onto the icons. A
-    // view flagged unseen shows bright white until it becomes the selected one.
-    private updateViewStyles(): void {
-        for (const [vid, { btn, unseen }] of this.viewMap) {
-            const active = vid === this._activeView;
-            btn.classList.toggle("active", active);
-            btn.classList.toggle("has-unseen", unseen && !active);
-            btn.setAttribute("aria-pressed", String(active));
-        }
-    }
-
-    // With 0 or 1 views there is nothing to switch between, so hide the icons.
-    private updateControlsState(): void {
-        this.controlsEl.classList.toggle("single-view", this.viewMap.size <= 1);
     }
 }
 

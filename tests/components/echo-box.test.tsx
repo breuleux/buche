@@ -150,98 +150,31 @@ describe("echo-box — status", () => {
     });
 });
 
-describe("echo-box — views", () => {
-    test("setView creates an icon (from the static map) and content; first is active", () => {
+describe("echo-box — content", () => {
+    test("setContent shows it in the cell, with no view icons", () => {
         const box = make();
-        const out = box.setView("pty", document.createElement("p"));
-        expect(out.getAttribute("data-view")).toBe("pty");
-        expect(out.hidden).toBe(false); // first view is shown
-        expect(box.activeView).toBe("pty");
-        const btn = q(box, '.echo-box-view-btn[data-view="pty"]');
-        expect(btn?.textContent).toBe("▤");
-        expect(btn?.getAttribute("title")).toBe("Output");
-        // A single view: nothing to switch, icons are hidden via CSS class.
-        expect(q(box, ".echo-box-controls")?.classList.contains("single-view")).toBe(true);
+        const p = document.createElement("p");
+        box.setContent(p);
+        expect(box.content).toBe(p);
+        expect(q(box, ".echo-box-cell")?.firstElementChild).toBe(p);
+        expect(q(box, ".echo-box-controls button:not(.echo-box-close)")).toBeNull();
     });
 
-    test("a second view hides the others and drops the single-view state", () => {
+    test("setContent replaces what the box showed", () => {
         const box = make();
-        box.setView("pty", document.createElement("p"));
-        const gui = box.setView("gui", document.createElement("p"));
-        expect(gui.hidden).toBe(true); // pty still active
-        expect(box.views).toEqual(["pty", "gui"]);
-        expect(q(box, ".echo-box-controls")?.classList.contains("single-view")).toBe(false);
-    });
-
-    test("showView switches the visible view and fires viewchange", () => {
-        const box = make();
-        box.setView("pty", document.createElement("p"));
-        box.setView("gui", document.createElement("p"));
-        const events: string[] = [];
-        box.addEventListener("viewchange", (e) => {
-            events.push((e as CustomEvent<{ view: string }>).detail.view);
-        });
-
-        box.showView("gui");
-        expect(box.activeView).toBe("gui");
-        expect(box.getView("pty")?.hidden).toBe(true);
-        expect(box.getView("gui")?.hidden).toBe(false);
-        expect(q(box, '.echo-box-view-btn[data-view="gui"]')?.classList.contains("active")).toBe(
-            true,
-        );
-        expect(events).toEqual(["gui"]);
-    });
-
-    test("clicking a view icon switches to it", () => {
-        const box = make();
-        box.setView("pty", document.createElement("p"));
-        box.setView("gui", document.createElement("p"));
-        q(box, '.echo-box-view-btn[data-view="gui"]')?.dispatchEvent(
-            new MouseEvent("click", { bubbles: true }),
-        );
-        expect(box.activeView).toBe("gui");
-    });
-
-    test("removeView drops it and activates the next", () => {
-        const box = make();
-        box.setView("pty", document.createElement("p"));
-        box.setView("gui", document.createElement("p"));
-        box.removeView("pty");
-        expect(box.views).toEqual(["gui"]);
-        expect(box.activeView).toBe("gui");
-        expect(q(box, '.echo-box-view-btn[data-view="pty"]')).toBeNull();
-    });
-
-    test("setView on an existing label replaces its content", () => {
-        const box = make();
-        const a = document.createElement("p");
-        box.setView("pty", a);
+        box.setContent(document.createElement("p"));
         const b = document.createElement("p");
-        box.setView("pty", b);
-        expect(box.getView("pty")?.children.length).toBe(1);
-        expect(box.getView("pty")?.firstElementChild).toBe(b);
+        box.setContent(b);
+        expect(q(box, ".echo-box-cell")?.children.length).toBe(1);
+        expect(box.content).toBe(b);
     });
 
-    test("bump marks an unselected view's icon as unseen (bright white); viewing clears it", () => {
+    test("setContent asks the focus manager to commit again", () => {
         const box = make();
-        box.setView("pty", document.createElement("p")); // active
-        box.setView("gui", document.createElement("p"));
-        const guiBtn = q(box, '.echo-box-view-btn[data-view="gui"]');
-
-        box.bump("gui");
-        expect(guiBtn?.classList.contains("has-unseen")).toBe(true);
-
-        // Selecting the view clears the flag.
-        box.showView("gui");
-        expect(guiBtn?.classList.contains("has-unseen")).toBe(false);
-    });
-
-    test("bump on the active view is a no-op (its content is already seen)", () => {
-        const box = make();
-        box.setView("pty", document.createElement("p")); // active
-        box.bump("pty");
-        const ptyBtn = q(box, '.echo-box-view-btn[data-view="pty"]');
-        expect(ptyBtn?.classList.contains("has-unseen")).toBe(false);
+        let asked = 0;
+        box.addEventListener("focus-commit-request", () => asked++);
+        box.setContent(document.createElement("p"));
+        expect(asked).toBe(1);
     });
 });
 
@@ -362,7 +295,7 @@ describe("echo-box — resize handle", () => {
     test("a terminal settling its grid re-announces unchanged pixels", async () => {
         const { box, cell } = setup(100);
         const view = document.createElement("div");
-        box.setView("pty", view);
+        box.setContent(view);
         await frames(50); // baseline at 100; nothing announced
         let fired = 0;
         box.addEventListener("resize", () => fired++);
@@ -546,33 +479,6 @@ describe("echo-box — compact mode", () => {
         expect(box.hasAttribute("data-alt")).toBe(false);
         window.dispatchEvent(new KeyboardEvent("keydown", { altKey: true }));
         expect(box.hasAttribute("data-alt")).toBe(false);
-    });
-});
-
-describe("echo-box — authored views", () => {
-    test("adopts authored [data-view] children as views (icons from the static map)", () => {
-        const box = document.createElement("echo-box") as EchoBox;
-        const pty = document.createElement("div");
-        pty.setAttribute("data-view", "pty");
-        pty.textContent = "hello";
-        const gui = document.createElement("div");
-        gui.setAttribute("data-view", "gui");
-        box.append(pty, gui);
-        document.body.append(box);
-
-        expect(box.views).toEqual(["pty", "gui"]);
-        expect(box.activeView).toBe("pty");
-        expect(box.getView("pty")?.textContent).toBe("hello");
-        expect(q(box, '.echo-box-view-btn[data-view="gui"]')?.textContent).toBe("◧");
-    });
-
-    test("ignores authored children whose data-view is not a known ViewLabel", () => {
-        const box = document.createElement("echo-box") as EchoBox;
-        const bogus = document.createElement("div");
-        bogus.setAttribute("data-view", "stdout"); // not a ViewLabel
-        box.append(bogus);
-        document.body.append(box);
-        expect(box.views).toEqual([]);
     });
 });
 

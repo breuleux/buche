@@ -200,14 +200,6 @@ echo-box:not([compact]):focus-within .echo-box-controls {
 	opacity: 1;
 }
 
-/* Unseen content announces itself without waiting for a hover: an unseen view
- * icon (bright white, see below) reveals the controls — it is the notice. */
-echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
-	visibility: visible;
-	opacity: 1;
-}
-
-.echo-box-view-btn,
 .echo-box-close {
 	background: none;
 	border: none;
@@ -223,27 +215,7 @@ echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
 		background 0.15s;
 }
 
-.echo-box-view-btn:hover {
-	color: #ccc;
-	background: rgba(255, 255, 255, 0.06);
-}
-
-.echo-box-view-btn.active {
-	color: var(--echo-color);
-	background: rgba(255, 255, 255, 0.08);
-}
-
-/* A non-selected view that may hold unseen content: bright white icon. */
-.echo-box-view-btn.has-unseen {
-	color: #fff;
-}
-
-/* Nothing to switch between with a single view: hide the view icons. */
-.echo-box-controls.single-view .echo-box-view-btn {
-	display: none;
-}
-
-/* ── Cell + views ── */
+/* ── Cell ── */
 
 .echo-box-cell {
 	padding: 0 2px 2px;
@@ -254,20 +226,11 @@ echo-box:not([compact]) .echo-box-controls:has(.echo-box-view-btn.has-unseen) {
 	overflow: auto;
 }
 
-.echo-box-view[hidden] {
-	display: none;
-}
-
 /* A cell with a height of its own — pinned by a gutter drag, or a box filling
- * its pane: the GUI view fills it rather than sizing to its content
+ * its pane: a frame fills it rather than sizing to its content
  * (the content-sizing mode of BucheGui, driven by `window.bucheInfo`). */
-echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"],
-echo-box[fills] .echo-box-cell > .echo-box-view[data-view="gui"] {
-	height: 100%;
-}
-
-echo-box[pinned] .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui,
-echo-box[fills] .echo-box-cell > .echo-box-view[data-view="gui"] buche-gui {
+echo-box[pinned] .echo-box-cell > buche-gui,
+echo-box[fills] .echo-box-cell > buche-gui {
 	height: 100%;
 }
 

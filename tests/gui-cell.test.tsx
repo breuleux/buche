@@ -76,22 +76,19 @@ function run(cell: Cell, boxEl: EchoBox, ...commands: CellCommand[]): void {
     }
 }
 
-describe("cell gui views", () => {
-    test("a data command creates the gui view and makes it active", () => {
+describe("cell content", () => {
+    test("a data command creates the gui", () => {
         const b = box();
         const cell = new Cell("frame");
         run(cell, b, { type: "data", data: { hello: "world" } });
-        expect(b.views).toContain("gui");
-        expect(b.activeView).toBe("gui");
-        const gui = b.getView("gui")?.firstElementChild;
+        const gui = b.content;
         expect(gui).toBeInstanceOf(BucheGui);
         expect(gui?.getAttribute("sandbox")).toBe("allow-scripts");
         expect(gui?.getAttribute("proc-cell-id")).toMatch(/^c\d+$/);
-        // No terminal view was created.
-        expect(b.views).not.toContain("pty");
+        expect(b.querySelector("embedded-term")).toBeNull();
     });
 
-    test("html, exec, register and register_schemas share the one gui view", () => {
+    test("html, exec, register and register_schemas share the one gui", () => {
         const b = box();
         const cell = new Cell("frame");
         run(
@@ -102,16 +99,15 @@ describe("cell gui views", () => {
             { type: "register", handlers: { ping: "() => {}" } },
             { type: "register_schemas", schemas: { "x:y": "() => {}" } },
         );
-        expect(b.views.filter((v) => v === "gui")).toHaveLength(1);
-        expect(b.getView("gui")?.childElementCount).toBe(1);
+        expect(b.querySelectorAll("buche-gui")).toHaveLength(1);
     });
 
-    test("text goes to the terminal view", () => {
+    test("text goes to the terminal", () => {
         const b = box();
         const cell = new Cell("terminal");
         run(cell, b, { type: "text", stream: "stdout", text: "hello\n" });
-        expect(b.views).toContain("pty");
-        expect(b.views).not.toContain("gui");
+        expect(b.content?.localName).toBe("embedded-term");
+        expect(b.querySelector("buche-gui")).toBeNull();
     });
 
     test("a placeholder's terminal goes when it becomes a frame", () => {
@@ -120,17 +116,18 @@ describe("cell gui views", () => {
         const entry = new Entry({});
         entry.cell = cell;
         cell.initialize(entry, b);
-        expect(b.views).toEqual(["pty"]);
+        expect(b.content?.localName).toBe("embedded-term");
         cell.kind = "frame";
         run(cell, b, { type: "data", data: {} });
-        expect(b.views).toEqual(["gui"]);
+        expect(b.content).toBeInstanceOf(BucheGui);
+        expect(b.querySelector("embedded-term")).toBeNull();
     });
 
     test("a response does not bring the gui into existence", () => {
         const b = box();
         const cell = new Cell("frame");
         run(cell, b, { type: "response", response_id: "r1", value: 1 });
-        expect(b.views).not.toContain("gui");
+        expect(b.content).toBeNull();
     });
 });
 
@@ -146,7 +143,7 @@ describe("gui size information", () => {
         const b = box();
         const cell = new Cell("frame");
         run(cell, b, { type: "html", content: "<p>hi</p>" });
-        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        const gui = b.content as BucheGui;
 
         b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
         expect(infos(gui)).toHaveLength(1);
@@ -163,7 +160,7 @@ describe("gui size information", () => {
         const b = box();
         const cell = new Cell("frame");
         run(cell, b, { type: "data", data: {} });
-        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        const gui = b.content as BucheGui;
         (b.querySelector(".echo-box-cell") as HTMLElement).style.height = "300px";
 
         b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
@@ -174,7 +171,7 @@ describe("gui size information", () => {
         const b = box();
         const cell = new Cell("frame");
         run(cell, b, { type: "html", content: "<p>hi</p>" });
-        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        const gui = b.content as BucheGui;
         // Dynamic sizing drives the height from the content reports (inline).
         gui.style.height = "300px";
 
@@ -200,7 +197,7 @@ describe("gui size information", () => {
         document.body.append(b);
         const cell = new Cell("frame");
         run(cell, b, { type: "data", data: {} });
-        const gui = b.getView("gui")!.firstElementChild as BucheGui;
+        const gui = b.content as BucheGui;
 
         b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
         expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
@@ -259,7 +256,7 @@ describe("gui kill from the interface", () => {
             message: { type: "text", stream: "stdout", text: "hi\n" },
         });
         const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.views).toEqual(["gui"]);
+        expect(box.content).toBeInstanceOf(BucheGui);
         expect(box.querySelector("embedded-term")).toBeNull();
     });
 
@@ -458,7 +455,7 @@ describe("cell kinds", () => {
         expect(document.querySelectorAll("embedded-term").length).toBe(1);
         driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.views).toEqual(["pty"]);
+        expect(box.content?.localName).toBe("embedded-term");
     });
 
     test("a frame cell claiming a placeholder replaces its terminal", () => {
@@ -467,7 +464,7 @@ describe("cell kinds", () => {
         expect(document.querySelectorAll("embedded-term").length).toBe(1);
         driver({ type: "configure", from: ["p", "$frame"], kind: "frame" });
         const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.views).toEqual(["gui"]);
+        expect(box.content).toBeInstanceOf(BucheGui);
         expect(document.querySelectorAll("echo-box").length).toBe(1);
     });
 
@@ -486,7 +483,7 @@ describe("cell kinds", () => {
         driver({ type: "send", from: ["p", "$frame"], message: { type: "data", data: {} } });
         expect(buche.get(["p", "$frame"]).cell?.kind).toBe("frame");
         const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.views).toEqual(["gui"]);
+        expect(box.content).toBeInstanceOf(BucheGui);
         expect(document.querySelectorAll("echo-box").length).toBe(1);
     });
 

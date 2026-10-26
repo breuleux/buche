@@ -205,9 +205,6 @@ export type ViewKind = "terminal" | "frame" | "prompt";
  */
 export type CellKind = ViewKind | "pending" | "group";
 
-/** The views a box can have. */
-export type ViewLabel = "pty" | "gui";
-
 /** The DOM id of the element showing the cell answering command `id`. */
 export function echoElementId(id: string): string {
     return `echo-${id}`;
@@ -327,14 +324,14 @@ export class Cell extends WithId() {
     }
 
     /**
-     * Give the box the view the cell's kind needs (idempotent: run on every
+     * Give the box the content the cell's kind needs (idempotent: run on every
      * update): a terminal for a terminal, or a placeholder (to take input
      * before any output); a GUI for a frame — which replaces the terminal of
      * the placeholder it took over, if any.
      */
     initialize(entry: Entry, box: EchoBox): void {
         if (this.kind === "terminal" || this.kind === "pending") {
-            if (!box.getView("pty")) {
+            if (!(box.content instanceof EmbeddedTerm)) {
                 this.handle$text({ type: "text", stream: "stdout", text: "" }, entry, box);
             }
         } else if (this.kind === "frame") {
@@ -342,10 +339,9 @@ export class Cell extends WithId() {
         }
     }
 
-    /** The cell's GUI view, creating it (and the <buche-gui> iframe) on first
-     *  use. */
+    /** The frame's GUI (the <buche-gui> iframe), creating it on first use. */
     ensureGui(box: EchoBox): BucheGui {
-        const existing = box.getView("gui")?.firstElementChild;
+        const existing = box.content;
         if (existing instanceof BucheGui) {
             return existing;
         }
@@ -354,22 +350,18 @@ export class Cell extends WithId() {
         if (!gui.hasAttribute("sandbox")) {
             gui.setAttribute("sandbox", "allow-scripts");
         }
-        // The terminal of the placeholder this cell took over goes.
-        box.removeView("pty");
-        box.setView("gui", gui);
-        box.showView("gui");
+        // In place of the terminal of the placeholder this cell took over.
+        box.setContent(gui);
         // Announce the arrival: the interface moves the focus to the GUI
         // (the box itself, if already focused, commits it via the
-        // focus-commit-request that setView/showView bubbling already raised).
+        // focus-commit-request that setContent already raised).
         gui.dispatchEvent(new CustomEvent(GUI_APPEAR_EVENT, { bubbles: true, composed: true }));
         return gui;
     }
 
-    /** Forward a command to the GUI view, flagging it as holding unseen
-     *  content when it is not the active view. */
+    /** Forward a command to the frame's GUI. */
     sendToGui(message: CellCommand, box: EchoBox): void {
         this.ensureGui(box).send(message);
-        box.bump("gui");
     }
 
     handle(message: CellCommand, entry: Entry, box: EchoBox) {
@@ -379,60 +371,41 @@ export class Cell extends WithId() {
     }
 
     handle$text(message: TextCommand, entry: Entry, box: EchoBox) {
-        let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
-        if (!view) {
-            view = new EmbeddedTerm();
-            // Ctrl-L (a bare ED 2 clear) drops the scrollback too, the way
-            // `clear(1)` does (see the ed2-clears-scrollback attribute).
-            view.setAttribute("ed2-clears-scrollback", "");
-            const cursorTerm = view;
-            entry.listeners.push((entry: Entry) => {
-                const st = entry.cell.status.status;
-                if (st === "done" || st === "error") {
-                    cursorTerm.setCursorEnabled(false);
-                } else {
-                    cursorTerm.setCursorEnabled(true);
-                }
-            });
-            box.setView("pty", view);
-            // Dynamic sizing (rows grow with content) is the default, capped
-            // by the box's max-height; a user drag pins the rows to the
-            // dragged height, and double-clicking the bar frees it again.
-            // A box that is its pane's whole content fills it, so with no
-            // drag height the grid is pinned to the rendered cell height — the
-            // terminal spans the whole pane (see the `echo-box[fills]` CSS).
-            // Boxes in a scroll stream keep dynamic sizing — except when there
-            // is a GUI view: then the terminal matches the GUI's height, so
-            // switching views does not change the box's size.
-            const fit = () => {
-                const fillsPane = box.hasAttribute("fills");
-                const explicit = box.cellContentHeight;
-                if (explicit !== null) {
-                    view.fit(explicit, box.maxContentHeight);
-                    return;
-                }
-                if (fillsPane) {
-                    const height = box.cellSize.height;
-                    view.fit(height > 0 ? height : null, box.maxContentHeight);
-                    return;
-                }
-                // The GUI's reported height, read from the inline the iframe
-                // reporting left (offsetHeight is 0 while the GUI view is the
-                // hidden one).
-                const gui = box.getView("gui")?.firstElementChild as HTMLElement | null;
-                const reported = Number.parseFloat(gui?.style.height ?? "");
-                const height = Number.isFinite(reported) && reported > 0 ? reported : null;
-                view.fit(height, box.maxContentHeight);
-            };
-            box.addEventListener("resize", fit);
-            // A GUI that grows or shrinks takes the terminal's height with it.
-            box.addEventListener("gui-resize", fit);
-            fit();
+        const existing = box.content;
+        if (existing instanceof EmbeddedTerm) {
+            existing.write(message.text);
+            return;
         }
-        view.write(message.text);
-        // A message landing in a view that is not shown flags it unseen
-        // (no-op when the terminal is the active — or only — view).
-        box.bump("pty");
+        const term = new EmbeddedTerm();
+        // Ctrl-L (a bare ED 2 clear) drops the scrollback too, the way
+        // `clear(1)` does (see the ed2-clears-scrollback attribute).
+        term.setAttribute("ed2-clears-scrollback", "");
+        entry.listeners.push((entry: Entry) => {
+            const st = entry.cell.status.status;
+            term.setCursorEnabled(st !== "done" && st !== "error");
+        });
+        box.setContent(term);
+        // Dynamic sizing (rows grow with content) is the default, capped by
+        // the box's max-height; a user drag pins the rows to the dragged
+        // height, and double-clicking the bar frees it again. A box that is
+        // its pane's whole content fills it, so with no drag height the grid
+        // is pinned to the rendered cell height — the terminal spans the
+        // whole pane (see the `echo-box[fills]` CSS). Boxes in a scroll
+        // stream keep dynamic sizing.
+        const fit = () => {
+            const explicit = box.cellContentHeight;
+            if (explicit !== null) {
+                term.fit(explicit, box.maxContentHeight);
+            } else if (box.hasAttribute("fills")) {
+                const height = box.cellSize.height;
+                term.fit(height > 0 ? height : null, box.maxContentHeight);
+            } else {
+                term.fit(null, box.maxContentHeight);
+            }
+        };
+        box.addEventListener("resize", fit);
+        fit();
+        term.write(message.text);
     }
 
     handle$data(message: DataCommand, entry: Entry, box: EchoBox) {
@@ -462,16 +435,14 @@ export class Cell extends WithId() {
         } else if (message.path !== undefined) {
             gui.cache(message.path, message.content ?? "", message.mimetype, message.encoding);
         }
-        box.bump("gui");
     }
 
     // Answers a request the GUI itself made (`buche.request`); it does not
     // bring the GUI into existence (the request could only come from one).
     handle$response(message: ResponseCommand, entry: Entry, box: EchoBox) {
-        const gui = box.getView("gui")?.firstElementChild;
+        const gui = box.content;
         if (gui instanceof BucheGui) {
             gui.send(message);
-            box.bump("gui");
         }
     }
 }

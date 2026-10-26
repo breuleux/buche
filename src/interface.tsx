@@ -4,7 +4,7 @@ import type { LayoutNode, WorkspaceData } from "carreau/src/types";
 import { echoElementId, killable } from "./cell.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
-import type { EmbeddedTerm } from "./components/embedded-term.tsx";
+import { EmbeddedTerm } from "./components/embedded-term.tsx";
 import {
     PromptCollection,
     type PromptCommandDetail,
@@ -855,8 +855,8 @@ const lastReported = new WeakMap<EchoBox, string>();
  *  terminal reports its final grid. */
 function reportResize(ifc: BucheInterface, eb: EchoBox, entry: Entry): void {
     queueMicrotask(() => {
-        const view = eb.getView("pty")?.childNodes[0] as EmbeddedTerm | undefined;
-        const term = view?.terminal;
+        const content = eb.content;
+        const term = content instanceof EmbeddedTerm ? content.terminal : undefined;
         const pixel = eb.cellSize;
         const pty = term ? { height: term.rows, width: term.cols } : undefined;
         const sig = `${pixel.height}x${pixel.width}/${pty ? `${pty.height}x${pty.width}` : "-"}`;
