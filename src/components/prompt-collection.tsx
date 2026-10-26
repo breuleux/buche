@@ -2,7 +2,7 @@
 //
 //   const pc = document.createElement("prompt-collection") as PromptCollection;
 //   const entry = new Entry({});
-//   entry.echo.label = "sh";
+//   entry.echo.label = { text: "sh", ranges: [] };
 //   entry.echo.color = "green";
 //   entry.setPrompt(new Prompt({ prompt: { text: "$", ranges: [] } }));
 //   pc.addPrompt(entry);
@@ -631,7 +631,7 @@ export class PromptCollection extends HTMLElement {
         const tab = document.createElement("span");
         tab.className = "prompt-collection-tab";
         tab.setAttribute("data-prompt", id);
-        tab.textContent = entry.echo.label;
+        tab.replaceChildren(buildStyledText(entry.echo.label));
         tab.draggable = true;
         tab.addEventListener("click", () => this.showPrompt(entry));
         tab.addEventListener("dragstart", (e) => {
@@ -871,7 +871,7 @@ export class PromptCollection extends HTMLElement {
             this.removePrompt(entry);
             return;
         }
-        row.tab.textContent = entry.echo.label;
+        row.tab.replaceChildren(buildStyledText(entry.echo.label));
         this.renderMarker(row, entry);
         this.applyTabStyle(row);
 

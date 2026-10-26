@@ -68,7 +68,7 @@ describe("represents", () => {
         expect(ph.placeholder).toBe(true);
         // It stands for the process, and shows what it was configured with.
         expect(ph.represents).toEqual(PROCESS);
-        expect(ph.echo.label).toBe("ls");
+        expect(ph.echo.label.text).toBe("ls");
         expect(statusOf(entry).status).toBe("running");
     });
 
@@ -305,14 +305,14 @@ describe("represents", () => {
             ephemeral: true,
             label: "retuned",
         } as never);
-        // Nothing is installed or announced: no cell is created if none
-        // existed, and no interface message goes out.
-        expect(f.interfaceOut).toEqual([]);
+        // Nothing is installed: no cell is created if none existed. What
+        // shows it is only brought up to date (its new label).
+        expect(f.interfaceOut).toEqual([{ type: "update_entry", entry: cell }]);
         expect(f.driverOut).toEqual([]);
         // The entry itself is retuned instead.
         expect(cell.represents).toBe(null);
         expect(cell.echo.ephemeral).toBe(true);
-        expect(cell.echo.label).toBe("retuned");
+        expect(cell.echo.label.text).toBe("retuned");
         // A reconfigure of a started entry leaves the status alone.
         expect(statusOf(cell).status).toBe("running");
         // And interactions now use the entry's own address again.

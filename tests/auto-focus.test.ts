@@ -50,7 +50,7 @@ function setup() {
 
 function prompt(container: HTMLElement, label = "cq"): HTMLElement {
     for (const pc of container.querySelectorAll<PromptCollection>("prompt-collection")) {
-        const entry = pc.prompts.find((e) => e.echo.label === label);
+        const entry = pc.prompts.find((e) => e.echo.label.text === label);
         if (entry) {
             return pc.promptElement(entry)!;
         }

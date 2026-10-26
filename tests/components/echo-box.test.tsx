@@ -636,7 +636,7 @@ describe("echo-box — prompt activity", () => {
 
     function promptEntry(label: string): Entry {
         const entry = new Entry({});
-        entry.echo.label = label;
+        entry.echo.label = { text: label, ranges: [] };
         entry.setPrompt(new Prompt({}));
         return entry;
     }

@@ -134,3 +134,48 @@ echo-box[bare][focus-path] embedded-term {
 .carreau.nav-mode .carreau-prompt.selected .prompt-collection-prompt {
 	border-top-color: var(--prompt-accent, #d6d8de);
 }
+
+/* Cell/tab icons (`EchoConfiguration.icon`, see buildIcon in utils.tsx): a
+ * square the size of a line of tab text, the image or the character centred
+ * in it. */
+.buche-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex: none;
+	line-height: 1;
+	font-size: 13px;
+	overflow: hidden;
+}
+
+.buche-icon-image > img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+/* A mask image: its shape, painted in the text colour. */
+.buche-icon-mask {
+	background-color: currentColor;
+	mask-size: contain;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+}
+
+/* A character on a background: smaller, to leave the shape a margin. */
+.buche-icon-shaped {
+	font-size: 10px;
+}
+
+.buche-icon-circle {
+	border-radius: 50%;
+}
+
+.buche-icon-square {
+	border-radius: 3px;
+}

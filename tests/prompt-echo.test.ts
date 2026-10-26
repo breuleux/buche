@@ -183,6 +183,6 @@ describe("prompt_configure echo", () => {
         expect(entry.target).toBe(target);
         expect((f.interfaceOut[0] as any).target).toBe(null); // (it doesn't move)
         expect(entry.echo.status.status).toBe("done"); // not re-stamped running
-        expect(entry.echo.label).toBe("new"); // the configuration did apply
+        expect(entry.echo.label.text).toBe("new"); // the configuration did apply
     });
 });

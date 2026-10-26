@@ -1,5 +1,5 @@
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
-import type { StyledText } from "../types.ts";
+import type { Icon, StyledText } from "../types.ts";
 
 /**
  * Build a simple DOM node rendering a {@link StyledText}: its `text` split into
@@ -59,6 +59,76 @@ export function buildStyledText(styled: StyledText, theme: Theme = defaultTheme)
     }
 
     return (<span className="styled-text">{parts}</span>) as HTMLElement;
+}
+
+/** The data URI of an image icon, or null if its data can't be trusted. */
+function iconUri(icon: Extract<Icon, { type: "image" }>): string | null {
+    if (!/^image\/[\w.+-]+$/.test(icon.mimetype ?? "")) {
+        return null;
+    }
+    if (icon.encoding === "base64") {
+        return /^[A-Za-z0-9+/=\s]*$/.test(icon.data)
+            ? `data:${icon.mimetype};base64,${icon.data}`
+            : null;
+    }
+    return `data:${icon.mimetype};charset=utf-8,${encodeURIComponent(icon.data)}`;
+}
+
+/**
+ * Build the element showing an {@link Icon} (styled in layout.css): an image
+ * (an `<img>`, or, for a `mask` image, its shape in the current colour), or a
+ * character in a font, on an optional coloured circle or square.
+ *
+ *   buildIcon({ type: "glyph", text: "G", font: "cursive", color: "orange" })
+ *   buildIcon({ type: "image", mimetype: "image/svg+xml", data: "<svg…>", mask: true })
+ */
+export function buildIcon(icon: Icon, theme: Theme = defaultTheme): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "buche-icon";
+    if (icon.type === "image") {
+        el.classList.add("buche-icon-image");
+        const uri = iconUri(icon);
+        if (uri && icon.mask) {
+            el.classList.add("buche-icon-mask");
+            el.style.setProperty("mask-image", `url("${uri}")`);
+            el.style.setProperty("-webkit-mask-image", `url("${uri}")`);
+        } else if (uri) {
+            const img = document.createElement("img");
+            img.src = uri;
+            img.alt = "";
+            el.append(img);
+        }
+        return el;
+    }
+    el.classList.add("buche-icon-glyph");
+    el.textContent = icon.text ?? "";
+    if (icon.font) {
+        el.style.fontFamily = theme.fontFamilies[icon.font.toLowerCase()] ?? icon.font;
+    }
+    if (icon.color) {
+        try {
+            const { color, fontWeight, fontStyle } = theme.calculateStyle(icon.color);
+            Object.assign(el.style, {
+                color: color ?? "",
+                fontWeight: fontWeight ?? "",
+                fontStyle: fontStyle ?? "",
+            });
+        } catch {
+            // An unparseable style: the current colour.
+        }
+    }
+    if (icon.background) {
+        el.classList.add(
+            "buche-icon-shaped",
+            `buche-icon-${icon.shape === "square" ? "square" : "circle"}`,
+        );
+        try {
+            el.style.backgroundColor = theme.calculateColor(icon.background);
+        } catch {
+            // An unparseable colour: no background.
+        }
+    }
+    return el;
 }
 
 // Cycle lengths of the status-dot animations; keep in sync with echo-box.css

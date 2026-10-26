@@ -98,7 +98,7 @@ function makeEntry(
 ): Entry {
     const entry = new Entry({});
     if (opts.label != null) {
-        entry.echo.label = opts.label;
+        entry.echo.label = { text: opts.label, ranges: [] };
     }
     if (opts.color != null) {
         entry.echo.color = opts.color;
@@ -208,7 +208,7 @@ describe("prompt-collection — reconfiguration", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", color: "blue", marker: plain("$") }));
 
-        entry.echo.label = "renamed";
+        entry.echo.label = { text: "renamed", ranges: [] };
         entry.echo.color = "red";
         entry.prompt!.submission.context = { text: ">", ranges: [] };
         entry.fire();
@@ -270,7 +270,7 @@ describe("prompt-collection — reconfiguration", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("keep") }));
         entry.echo.status = { status: "running" };
-        entry.echo.label = "still-here";
+        entry.echo.label = { text: "still-here", ranges: [] };
         entry.fire();
         expect(pc.prompts).toEqual([entry]);
         expect(tabOf(pc, entry)?.textContent).toBe("still-here");

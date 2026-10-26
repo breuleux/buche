@@ -56,7 +56,14 @@
           "description": "Reference number for this parse. Whatever answers it — the highlight echo (a `prompt_configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
         }
       },
-      "required": ["from", "request_id", "selection", "text", "to", "type"],
+      "required": [
+        "from",
+        "request_id",
+        "selection",
+        "text",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "Address": {
@@ -77,7 +84,10 @@
           "description": "Exclusive ending position of the selection"
         }
       },
-      "required": ["start", "end"],
+      "required": [
+        "start",
+        "end"
+      ],
       "additionalProperties": false
     },
     "CommandRequest": {
@@ -112,7 +122,14 @@
           "description": "Where what the command shows goes (a zone, as in `@zone cmd`), when the terminal decided it (e.g. a slot the user picked it for)."
         }
       },
-      "required": ["command", "from", "selection", "text", "to", "type"],
+      "required": [
+        "command",
+        "from",
+        "selection",
+        "text",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "SignalRequest": {
@@ -132,7 +149,12 @@
           "type": "number"
         }
       },
-      "required": ["code", "from", "to", "type"],
+      "required": [
+        "code",
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "SpawnRequest": {
@@ -152,7 +174,12 @@
           "type": "string"
         }
       },
-      "required": ["command", "from", "to", "type"],
+      "required": [
+        "command",
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false,
       "description": "Start another driver (a shell), at the address `to` (one segment, e.g. `[\"$d1\"]`): its messages come with their addresses under it, and messages to addresses under it go to it. For the host running the drivers, not for a driver: it starts `command`, in the terminal's working directory."
     },
@@ -179,7 +206,13 @@
           "description": "Raw input text, as produced by the terminal emulator."
         }
       },
-      "required": ["from", "stream", "text", "to", "type"],
+      "required": [
+        "from",
+        "stream",
+        "text",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "DataRequest": {
@@ -200,7 +233,12 @@
           "description": "Arbitrary JSON relayed from the interface (a GUI cell message, a `proc://` request, an exec response, ...)."
         }
       },
-      "required": ["data", "from", "to", "type"],
+      "required": [
+        "data",
+        "from",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "Json": {
@@ -254,7 +292,10 @@
               "type": "number"
             }
           },
-          "required": ["height", "width"],
+          "required": [
+            "height",
+            "width"
+          ],
           "additionalProperties": false,
           "description": "The cell's content area, in CSS pixels."
         },
@@ -268,12 +309,20 @@
               "type": "number"
             }
           },
-          "required": ["height", "width"],
+          "required": [
+            "height",
+            "width"
+          ],
           "additionalProperties": false,
           "description": "The terminal grid, in character cells, when the cell holds a pty."
         }
       },
-      "required": ["from", "pixel", "to", "type"],
+      "required": [
+        "from",
+        "pixel",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "SyncRequest": {
@@ -299,7 +348,12 @@
           "type": "string"
         }
       },
-      "required": ["from", "nonce", "to", "type"],
+      "required": [
+        "from",
+        "nonce",
+        "to",
+        "type"
+      ],
       "additionalProperties": false
     },
     "To": {

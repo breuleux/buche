@@ -103,7 +103,17 @@ send it again with changed fields to reconfigure):
 Fields that matter for GUI apps (full set in `references/incoming.schema.json`
 under `CellConfigureMessage`):
 
-- `label`: tab/cell title.
+- `label`: tab/cell title: a string, or styled text
+  (`{"text": "myapp", "ranges": [{"start": null, "end": null, "style": "sans"}]}`;
+  range styles are accents, which can also set the font: `mono`, `sans`,
+  `serif`, `cursive`).
+- `icon`: shown before the label in its tab (`null` removes it). Either an
+  image, `{"type": "image", "mimetype": "image/png", "data": "<base64>",
+  "encoding": "base64"}` (or SVG text with no `encoding`; `"mask": true` paints
+  only its shape, in the text colour), or a character,
+  `{"type": "glyph", "text": "M", "font": "cursive", "color": "orange bold",
+  "background": "blue", "shape": "circle"}` (all but `text` optional; `shape`
+  is `"circle"` or `"square"`, and only matters with a `background`).
 - `zone`: where a new cell goes. `"inline"` (the default: in the stream of the
   prompt it was started from), `"tab"` (a new tab beside it), `"left"`,
   `"right"`, `"up"`, `"down"` (or `l`, `r`, `u`, `d`: into the pane on that

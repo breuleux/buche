@@ -1,5 +1,12 @@
 import type { CreationInfo } from "./driver-exchange/common.ts";
-import type { Accent, Address, Submission, SubmissionConfiguration } from "./types.ts";
+import type {
+    Accent,
+    Address,
+    Icon,
+    StyledText,
+    Submission,
+    SubmissionConfiguration,
+} from "./types.ts";
 import { applySubmission, emptySubmission, WithId } from "./utils.ts";
 
 export type StatusString = "absent" | "running" | "done" | "error" | "unresponsive" | "standby";
@@ -23,11 +30,17 @@ export interface EchoConfiguration {
      */
     submission?: SubmissionConfiguration;
 
-    /** The cell/tab label. */
-    label?: string;
+    /**
+     * The cell/tab label: styled text (its ranges' styles can set the font,
+     * e.g. "mono" or "sans"), or a plain string.
+     */
+    label?: StyledText | string;
 
     /** Accent color for the component. */
     color?: Accent;
+
+    /** The cell/tab icon, shown before the label. Explicit null removes it. */
+    icon?: Icon | null;
 
     /**
      * The id of the user command this echo answers (repeated from the
@@ -85,10 +98,13 @@ export class Echo extends WithId() {
     submission: Submission | null = null;
 
     /** The cell/tab label. */
-    label!: string;
+    label!: StyledText;
 
     /** Accent color for the component. */
     color!: Accent;
+
+    /** The cell/tab icon, if any. */
+    icon: Icon | null = null;
 
     /** The id of the user command this echo answers, if any. */
     id?: string;
@@ -120,8 +136,12 @@ export class Echo extends WithId() {
     }
 
     configure(config: EchoConfiguration) {
-        this.label = config.label ?? this.label ?? `%${this.serialId}`;
+        this.label =
+            toStyledText(config.label) ?? this.label ?? toStyledText(`%${this.serialId}`)!;
         this.color = config.color ?? this.color ?? "purple";
+        if (config.icon !== undefined) {
+            this.icon = config.icon;
+        }
         if (config.submission) {
             this.submission ??= emptySubmission();
             applySubmission(this.submission, config.submission);
@@ -133,12 +153,18 @@ export class Echo extends WithId() {
     }
 }
 
+/** A label as styled text (a plain string has no styling). */
+export function toStyledText(label: StyledText | string | undefined): StyledText | undefined {
+    return typeof label === "string" ? { text: label, ranges: [] } : label;
+}
+
 /** An echo's configuration, to pass on (e.g. to the views of a process). */
 export function echoConfiguration(echo: Echo): EchoConfiguration {
     return {
         submission: echo.submission ?? undefined,
         label: echo.label,
         color: echo.color,
+        icon: echo.icon,
         id: echo.id,
         sticky: echo.sticky,
         background: echo.background,
