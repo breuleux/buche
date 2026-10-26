@@ -1,0 +1,54 @@
+/* Styles for the hold-to-quit hint (quit-hint.ts): a card in the middle of
+ * the window, above everything, with a bar that fills over the hold. */
+
+.buche-quit-hint {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 1100;
+	padding: 14px 22px 12px;
+	background: #2a2d33;
+	border: 1px solid #3a3d44;
+	border-radius: 8px;
+	box-shadow: 0 8px 30px rgb(0 0 0 / 0.5);
+	color: #e6e7ea;
+	font-family: "Menlo", "Consolas", monospace;
+	font-size: 14px;
+	pointer-events: none;
+	animation: buche-quit-hint-in 0.12s ease-out;
+}
+
+.buche-quit-hint-text {
+	white-space: pre;
+	text-align: center;
+}
+
+.buche-quit-hint-bar {
+	height: 3px;
+	margin-top: 10px;
+	border-radius: 2px;
+	background: #e06c75;
+	transform-origin: left;
+	animation-name: buche-quit-hint-fill;
+	animation-timing-function: linear;
+	animation-fill-mode: both;
+}
+
+@keyframes buche-quit-hint-fill {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(1);
+	}
+}
+
+@keyframes buche-quit-hint-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
