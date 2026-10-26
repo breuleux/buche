@@ -1,5 +1,6 @@
 import type { Buche } from "../core.ts";
 import type { Entry } from "../entry.ts";
+import type { Selection } from "../types.ts";
 
 export interface UserInputMessage {
     type: "user_input";
@@ -7,7 +8,7 @@ export interface UserInputMessage {
     entry: Entry;
 
     text: string;
-    position: number;
+    selection: Selection;
 }
 
 export function handle$user_input(buche: Buche, obj: UserInputMessage): void {
@@ -24,6 +25,6 @@ export function handle$user_input(buche: Buche, obj: UserInputMessage): void {
         to: obj.entry.echo.address,
         request_id: requestId,
         text: obj.text,
-        position: obj.position,
+        selection: obj.selection,
     });
 }

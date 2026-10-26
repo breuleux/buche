@@ -193,6 +193,14 @@ function makePromptCollection(): [PromptCollection, Entry] {
     return [pc, entry];
 }
 
+// A `<buche-term>` hosting a prompt-collection — the shell view Ctrl+L clears
+// within (one per tab).
+function makeTerm(): [HTMLElement, PromptCollection] {
+    const term = document.createElement("buche-term");
+    const [pc] = makePromptCollection();
+    return [term, pc];
+}
+
 // The interface's FocusManager navigates by layout; happy-dom has none (all
 // rects are empty), but it does compute inline `display`/`flex-direction`, and
 // empty rects keep flex items in DOM order — enough for a flex column.
@@ -345,6 +353,28 @@ describe("BucheInterface global bindings", () => {
         expect(ev.defaultPrevented).toBe(true);
         expect(late.isConnected).toBe(false);
         expect(runBox.isConnected).toBe(true);
+        iface.keys.detach();
+    });
+
+    test("Ctrl+L clears only the <buche-term> hosting the prompt, not other tabs", () => {
+        const [iface, container] = makeInterface();
+        const [termA, pcA] = makeTerm();
+        const [termB, pcB] = makeTerm();
+        const [aDone] = makeCell();
+        const [aRun] = makeCell();
+        const [bDone] = makeCell();
+        aDone.status = "done";
+        aRun.status = "running";
+        bDone.status = "done";
+        termA.append(pcA, aDone, aRun);
+        termB.append(pcB, bDone);
+        container.append(termA, termB);
+
+        const editorA = termA.querySelector<HTMLElement>(".stub-editor")!;
+        key(editorA, "keydown", { key: "l", ctrlKey: true });
+        expect(aDone.isConnected).toBe(false); // the prompt's own view cleared
+        expect(aRun.isConnected).toBe(true); // running cells stay
+        expect(bDone.isConnected).toBe(true); // the other tab keeps its cells
         iface.keys.detach();
     });
 

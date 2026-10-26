@@ -49,7 +49,7 @@
 // Events (all bubble):
 //   "promptchange"  detail: { entry: Entry }                      — active prompt changed
 //   "promptremoved" detail: { entry: Entry }                      — a prompt was dropped (closed)
-//   "textchange"    detail: { entry, text, position }              — a prompt's editor text changed
+//   "textchange"    detail: { entry, text, selection }              — a prompt's editor text changed
 //   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
 //   "command"       detail: { command, event, entry, text, selection }
 //                                                                  — a bound chord was pressed
@@ -173,8 +173,9 @@ export interface PromptTextChangeDetail {
     entry: Entry;
     /** The editor's new full text. */
     text: string;
-    /** The cursor position (offset into `text`); 0 if the editor can't report it. */
-    position: number;
+    /** The current selection (`start === end` is the cursor); a point at the
+     *  end of `text` if the editor can't report it. */
+    selection: Selection;
 }
 /** `detail` of the "reorder" event: the tabs were reordered. */
 export interface PromptReorderDetail {
@@ -617,7 +618,11 @@ export class PromptCollection extends HTMLElement {
                 }
                 this.dispatchEvent(
                     new CustomEvent<PromptTextChangeDetail>("textchange", {
-                        detail: { entry, text: value, position: sel?.end ?? 0 },
+                        detail: {
+                            entry,
+                            text: value,
+                            selection: sel ?? { start: value.length, end: value.length },
+                        },
                         bubbles: true,
                     }),
                 );

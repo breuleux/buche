@@ -35,7 +35,12 @@ function prompt(f: Fixture): Entry {
 }
 
 function type(f: Fixture, text: string): void {
-    f.buche.handle({ type: "user_input", entry: prompt(f), text, position: text.length } as never);
+    f.buche.handle({
+        type: "user_input",
+        entry: prompt(f),
+        text,
+        selection: { start: text.length, end: text.length },
+    } as never);
 }
 
 // The highlight echo: a prompt_configure answering the parse, carrying its
