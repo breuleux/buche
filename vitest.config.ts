@@ -10,8 +10,12 @@ export default defineConfig({
             "myjsx/jsx-dev-runtime": fromRoot("./src/jsx/jsx-dev-runtime.ts"),
         },
     },
+    // Carreau resolves through its "source" condition; its .ts sources are
+    // transformed, not externalized (see test.server below).
+    ssr: { resolve: { conditions: ["source"] } },
     test: {
         include: ["tests/**/*.test.{ts,tsx}"],
+        server: { deps: { inline: ["carreau"] } },
         // DOM globals (HTMLElement, customElements, …) available everywhere.
         // Individual files can still opt out with `// @vitest-environment node`.
         environment: "happy-dom",

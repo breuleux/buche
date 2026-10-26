@@ -12,6 +12,12 @@
  *       --print-messages    Print the incoming/outgoing driver messages on
  *                           stdout (hidden by default).
  *
+ * Co-developing with carreau? Set BUCHE_CARREAU_WATCH=1 to join its dev loop:
+ * while a linked carreau's sources change (`cd ../carreau`, edit and save),
+ * the renderer and the page's styles re-bundle. Nothing already running is
+ * reloaded; the new bundle shows up in the next window. Unset — as `buche`
+ * always runs it — an instance you are using is left alone.
+ *
  * Everything is bundled into dist/electron (main, preload, renderer, the page
  * with the component stylesheets inlined, and the GUI runtime document served
  * at proc://…/), then Electron is started on it. Each run opens a new window;
@@ -28,7 +34,7 @@
  * die with "Electron failed to install correctly".
  */
 import "./dom-setup.ts";
-import { copyFileSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
@@ -65,7 +71,7 @@ function stylesheet(file: string, seen = new Set<string>()): string {
     );
 }
 
-const page = `<!doctype html>
+const pageHtml = (): string => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -104,7 +110,12 @@ ${layoutScript(layout)}
  * document, where module scripts are not allowed); main-process code is CJS,
  * written with the `.cjs` extension Electron needs alongside `"type": "module"`.
  */
-async function build(entry: string, out: string, browser: boolean): Promise<void> {
+async function build(
+    entry: string,
+    out: string,
+    browser: boolean,
+    exitOnError = true,
+): Promise<void> {
     const result = await Bun.build({
         entrypoints: [join(root, entry)],
         outdir: outDir,
@@ -112,6 +123,8 @@ async function build(entry: string, out: string, browser: boolean): Promise<void
         format: browser ? "iife" : "cjs",
         naming: "[name].[ext]",
         external: ["electron"],
+        // Carreau compiles from its sources (its exports' "source" condition).
+        conditions: ["source"],
         // `format.ts` ends with an `import.meta.main` CLI guard, meaningless in
         // a CJS bundle (and `import.meta` itself is not CJS).
         define: browser ? {} : { "import.meta.main": "false" },
@@ -121,7 +134,10 @@ async function build(entry: string, out: string, browser: boolean): Promise<void
         for (const log of result.logs) {
             console.error(String(log));
         }
-        process.exit(1);
+        if (exitOnError) {
+            process.exit(1);
+        }
+        return;
     }
     const produced = result.outputs[0].path;
     const target = join(outDir, out);
@@ -136,13 +152,32 @@ console.log("buche (electron): building");
 await build("electron/renderer.ts", "renderer.js", true);
 await build("electron/preload.ts", "preload.cjs", false);
 await build("electron/main.ts", "main.cjs", false);
-writeFileSync(join(outDir, "index.html"), page);
+writeFileSync(join(outDir, "index.html"), pageHtml());
 // The document the native `proc://<cell-id>/` origin serves (see proc-protocol.ts).
 writeFileSync(join(outDir, "runtime.html"), guiRuntimeDocument());
 // The app icon, next to the bundle: main.ts takes it from there for the Dock
 // and the window, index.html as the favicon. (assets/buche.png is buche.svg
 // rasterized — see assets/README.md.)
 copyFileSync(join(root, "assets/buche.png"), join(outDir, "buche.png"));
+
+// Dev loop (BUCHE_CARREAU_WATCH=1, opt-in: an instance you are using must never be
+// disturbed): while a linked carreau's sources change, re-bundle the renderer and
+// the page's inlined styles. Running windows are untouched; a new window gets the
+// new bundle. Deliberately an environment variable, not a CLI option: `buche`
+// (bin/buche.js forwards everything here) stays free of development switches.
+if (process.env.BUCHE_CARREAU_WATCH) {
+    let reBundling: ReturnType<typeof setTimeout> | undefined;
+    watch(carreauDir, { recursive: true }, () => {
+        clearTimeout(reBundling);
+        reBundling = setTimeout(async () => {
+            await build("electron/renderer.ts", "renderer.js", true, false);
+            writeFileSync(join(outDir, "index.html"), pageHtml());
+            console.log(
+                "buche (electron): carreau changed, renderer and styles rebuilt (next window)",
+            );
+        }, 100);
+    });
+}
 
 // Spawn the Electron binary directly rather than through node_modules/.bin —
 // the .bin entry is a node wrapper that would sit between this process and

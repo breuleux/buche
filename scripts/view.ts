@@ -47,7 +47,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, statSync, watch } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
@@ -144,19 +144,49 @@ const carreauDir = join(scriptDir, "../node_modules/carreau/src");
 const layout = values.layout ? readFileSync(values.layout, "utf8") : null;
 
 // Bundle the component definitions for the browser (self-registering custom
-// elements) so the layout renders. Built once at startup, in memory.
-const build = await Bun.build({
-    entrypoints: [join(scriptDir, "view-client.ts")],
-    target: "browser",
-    minify: true,
-});
-if (!build.success) {
-    for (const log of build.logs) {
-        console.error(String(log));
+// elements) so the layout renders. Built in memory, at startup, and rebuilt
+// whenever carreau's sources change (below): with carreau linked to a live
+// checkout, the loop is save → re-bundle → reload the page.
+async function buildClient(): Promise<string | null> {
+    const build = await Bun.build({
+        entrypoints: [join(scriptDir, "view-client.ts")],
+        target: "browser",
+        minify: true,
+        // Carreau compiles from its sources (its exports' "source" condition).
+        conditions: ["source"],
+    });
+    if (!build.success) {
+        for (const log of build.logs) {
+            console.error(String(log));
+        }
+        return null;
     }
+    return build.outputs[0].text();
+}
+
+let clientJs = await buildClient();
+if (clientJs === null) {
     process.exit(1);
 }
-const clientJs = await build.outputs[0].text();
+
+/**
+ * The dev loop (see buildClient): when carreau's sources change (a linked
+ * checkout — its tag and its working tree compile the same way), re-bundle the
+ * client; a page reload then carries the new code. Debounced; a transient
+ * failure (a half-written file, a broken save) waits for the next event
+ * instead of killing the server.
+ */
+let reBundling: ReturnType<typeof setTimeout> | undefined;
+watch(carreauDir, { recursive: true }, () => {
+    clearTimeout(reBundling);
+    reBundling = setTimeout(async () => {
+        const js = await buildClient();
+        if (js !== null) {
+            clientJs = js;
+            console.log("buche (view): carreau changed, client re-bundled (reload the page)");
+        }
+    }, 100);
+});
 
 const page = `<!doctype html>
 <html lang="en">

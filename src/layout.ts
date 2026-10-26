@@ -7,28 +7,32 @@
 // that end) are host changes: undo, which is for the user's own layout
 // changes, never reverts them, and closing is never undone.
 
-import "carreau/src/prompt-view";
-import { type Complex, complexAt } from "carreau/src/complex";
-import type { Lifecycle } from "carreau/src/kinds";
+import "carreau/prompt-view";
 import {
+    type Complex,
+    complexAt,
+    configurePrompts,
     find,
     findTab,
     genId,
     kind,
+    type LayoutNode,
+    type Lifecycle,
+    type PaneNode,
+    type PromptColumnNode,
     panes,
+    promptColumn,
+    type Rect,
+    type SplitNode,
     scrollColumn,
     scrollRow,
     slot,
-} from "carreau/src/model";
-import {
-    configurePrompts,
-    type PromptColumnNode,
-    promptColumn,
     speakerOf,
-} from "carreau/src/prompt";
-import type { LayoutNode, PaneNode, Rect, SplitNode, Tab, WorkspaceData } from "carreau/src/types";
-import { View } from "carreau/src/view";
-import { Workspace } from "carreau/src/workspace";
+    type Tab,
+    View,
+    Workspace,
+    type WorkspaceData,
+} from "carreau";
 import { defaultTheme, resolveColor } from "./color.ts";
 import "./components/echo-box.tsx"; // (registers <echo-box>)
 import { isSpent, type StatusString } from "./cell.ts";

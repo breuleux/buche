@@ -1,7 +1,7 @@
 // What the pages (electron/renderer.ts, scripts/view-client.ts) share: where
 // the interface goes, and the layout it starts with.
 
-import type { WorkspaceData } from "carreau/src/types";
+import type { WorkspaceData } from "carreau";
 
 /**
  * The #buche container and the initial layout, given by the page as JSON in a

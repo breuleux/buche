@@ -1,5 +1,4 @@
-import { KeyboardNav, type NavConfig } from "carreau/src/keyboard";
-import type { WorkspaceData } from "carreau/src/types";
+import { KeyboardNav, type NavConfig, type WorkspaceData } from "carreau";
 import { echoElementId, isSpent, killable } from "./cell.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";

@@ -5,8 +5,7 @@
 // (unless `background`), and gives it back when its process ends (unless
 // `sticky`); a new prompt takes the focus unless `background`.
 
-import { panes as panesOf } from "carreau/src/model";
-import type { Rect } from "carreau/src/types";
+import { panes as panesOf, type Rect } from "carreau";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { EchoBox } from "../src/components/echo-box.tsx";
 import { EmbeddedTerm } from "../src/components/embedded-term.tsx";
