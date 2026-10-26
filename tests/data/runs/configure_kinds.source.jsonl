@@ -1,0 +1,6 @@
+{"type":"configure","from":["$proc","g"],"to":["$term"],"kind":"frame","label":"g"}
+{"type":"configure","from":["$proc","g"],"to":["$term"],"kind":"frame","label":"g2"}
+{"type":"configure","from":["$proc","t"],"to":["$term"],"kind":"terminal","label":"t"}
+{"type":"configure","from":["$proc","p"],"to":["$term"],"label":"p"}
+{"type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","label":"sub","bindings":{"C-c":"interrupt"}}
+{"type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","request_id":"1","input":{"content":{"text":"ec","ranges":[]}}}

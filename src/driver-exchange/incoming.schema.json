@@ -5,38 +5,106 @@
     "IncomingDriverMessage": {
       "anyOf": [
         {
-          "$ref": "#/definitions/CellConfigureMessage"
-        },
-        {
-          "$ref": "#/definitions/CellSendMessage"
-        },
-        {
           "$ref": "#/definitions/CloseMessage"
         },
         {
           "$ref": "#/definitions/ConfigureMessage"
         },
         {
-          "$ref": "#/definitions/DataMessage"
-        },
-        {
           "$ref": "#/definitions/ErrorMessage"
         },
         {
-          "$ref": "#/definitions/PromptConfigureMessage"
+          "$ref": "#/definitions/SendMessage"
         },
         {
           "$ref": "#/definitions/SyncMessage"
-        },
-        {
-          "$ref": "#/definitions/TextMessage"
         }
       ],
       "description": "Union of every message type."
     },
-    "CellConfigureMessage": {
+    "CloseMessage": {
       "type": "object",
       "properties": {
+        "type": {
+          "type": "string",
+          "const": "close",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "outcome": {
+          "$ref": "#/definitions/CloseOutcome",
+          "description": "How the process terminated."
+        },
+        "propagate": {
+          "type": "boolean",
+          "description": "Whether the status change propagates to subaddresses."
+        }
+      },
+      "required": [
+        "from",
+        "outcome",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "To": {
+      "$ref": "#/definitions/Address"
+    },
+    "CloseOutcome": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "success",
+            "error"
+          ],
+          "description": "Whether the process ended successfully or with an error."
+        },
+        "code": {
+          "type": "number",
+          "description": "Exit/return code, when available."
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of a process that has terminated."
+    },
+    "ConfigureMessage": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "$ref": "#/definitions/PromptBindings",
+          "description": "Key-chord → action-name map for this prompt."
+        },
+        "input": {
+          "$ref": "#/definitions/SubmissionConfiguration",
+          "description": "The prompt's input: its content (what the user is typing, with the `selection`, the ghost-text `filigrane` and its `editability`) and its context (the marker text above the editor). Not to be confused with the cell's `submission` (CellConfiguration), what a cell shows was submitted."
+        },
+        "kind": {
+          "$ref": "#/definitions/ViewKind",
+          "description": "What the entry shows: a terminal, a frame (a GUI), or a prompt (the prompt fields, `bindings`, `input` and `request_id`, then apply). What it is sent must suit it (text for a terminal, the rest for a frame). An entry cannot change kind: a kind other than the one it has is an error."
+        },
+        "request_id": {
+          "type": "string",
+          "description": "For a prompt: set when this message is the *echo* answering a parse (the highlight a keystroke triggered): it repeats that parse's `request_id`, and is only applied while that parse is still the latest for this prompt — a stale echo (the user typed on in the meantime) is dropped. Absent (the norm) for authoritative configurations: the fresh prompt, the submit reset, history navigation."
+        },
         "submission": {
           "$ref": "#/definitions/SubmissionConfiguration",
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
@@ -119,7 +187,7 @@
         },
         "type": {
           "type": "string",
-          "const": "cell_configure",
+          "const": "configure",
           "description": "Type of the message."
         },
         "to": {
@@ -131,6 +199,35 @@
         "from",
         "to",
         "type"
+      ],
+      "additionalProperties": false,
+      "description": "Declares (or reconfigures) an entry. It carries the cell configuration (label, color, `represents`, `ephemeral`, ...), which the entry's views show too, and says where the entry goes (`zone`).\n\nWith a `kind`, the entry shows something itself: a terminal, a frame or a prompt (see  {@link  ViewConfiguration.kind } ); the first time, it takes the place of its parent's placeholder if it can. Without, it is a process, or any non-visual parent of cells and prompts: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
+    },
+    "PromptBindings": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/definitions/PromptBinding"
+          }
+        ]
+      }
+    },
+    "PromptBinding": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "freeze": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "command"
       ],
       "additionalProperties": false
     },
@@ -265,6 +362,15 @@
       ],
       "additionalProperties": false
     },
+    "ViewKind": {
+      "type": "string",
+      "enum": [
+        "terminal",
+        "frame",
+        "prompt"
+      ],
+      "description": "What a cell shows, as a driver declares it: a terminal, a frame (an HTML page the driver drives: a GUI), or a prompt."
+    },
     "Icon": {
       "anyOf": [
         {
@@ -354,24 +460,57 @@
       "additionalProperties": false,
       "description": "An icon drawn as a character."
     },
-    "Address": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "ZoneDescriptor": {
       "type": "string"
     },
-    "To": {
-      "$ref": "#/definitions/Address"
-    },
-    "CellSendMessage": {
+    "ErrorMessage": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "cell_send",
+          "const": "error",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "error_type": {
+          "type": "string",
+          "description": "Class/kind of the error, e.g. the exception type."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message."
+        },
+        "traceback": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Traceback lines, when available."
+        }
+      },
+      "required": [
+        "error_type",
+        "from",
+        "message",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "An error reported by the process"
+    },
+    "SendMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "send",
           "description": "Type of the message."
         },
         "from": {
@@ -651,373 +790,6 @@
       ],
       "additionalProperties": false
     },
-    "CloseMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "close",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "outcome": {
-          "$ref": "#/definitions/CloseOutcome",
-          "description": "How the process terminated."
-        },
-        "propagate": {
-          "type": "boolean",
-          "description": "Whether the status change propagates to subaddresses."
-        }
-      },
-      "required": [
-        "from",
-        "outcome",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "CloseOutcome": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "success",
-            "error"
-          ],
-          "description": "Whether the process ended successfully or with an error."
-        },
-        "code": {
-          "type": "number",
-          "description": "Exit/return code, when available."
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "additionalProperties": false,
-      "description": "Outcome of a process that has terminated."
-    },
-    "ConfigureMessage": {
-      "type": "object",
-      "properties": {
-        "submission": {
-          "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
-        },
-        "label": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StyledText"
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "description": "The cell/tab label: styled text (its ranges' styles can set the font, e.g. \"mono\" or \"sans\"), or a plain string."
-        },
-        "color": {
-          "$ref": "#/definitions/Accent",
-          "description": "Accent color for the component."
-        },
-        "icon": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Icon"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The cell/tab icon, shown before the label. Explicit null removes it."
-        },
-        "id": {
-          "type": "string",
-          "description": "The id of the user command this echo answers (repeated from the \"command\" request's `id`). The interface uses it to give the focus to the echo's element when it appears."
-        },
-        "sticky": {
-          "type": "boolean",
-          "description": "If true, keep the focus on the cell when its process ends."
-        },
-        "background": {
-          "type": "boolean",
-          "description": "If true, do not automatically focus the cell or prompt."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
-        },
-        "represents": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Address"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "running",
-            "standby"
-          ],
-          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "zone": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ZoneDescriptor"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Which zone to put the element in."
-        },
-        "type": {
-          "type": "string",
-          "const": "configure",
-          "description": "Type of the message."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        }
-      },
-      "required": [
-        "from",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false,
-      "description": "Declares (or reconfigures) an entry: a process, or any non-visual parent of cells and prompts. It carries the shared echo configuration (label, color, `represents`, `ephemeral`, ...), which the entry's views show too, and says where the entry goes: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
-    },
-    "DataMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "data",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "data": {
-          "$ref": "#/definitions/Json",
-          "description": "The data."
-        }
-      },
-      "required": [
-        "data",
-        "from",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "ErrorMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "error",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "error_type": {
-          "type": "string",
-          "description": "Class/kind of the error, e.g. the exception type."
-        },
-        "message": {
-          "type": "string",
-          "description": "Human-readable error message."
-        },
-        "traceback": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Traceback lines, when available."
-        }
-      },
-      "required": [
-        "error_type",
-        "from",
-        "message",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false,
-      "description": "An error reported by the process"
-    },
-    "PromptConfigureMessage": {
-      "type": "object",
-      "properties": {
-        "bindings": {
-          "$ref": "#/definitions/PromptBindings",
-          "description": "Key-chord → action-name map for this prompt."
-        },
-        "input": {
-          "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "The prompt's input: its content (what the user is typing, with the `selection`, the ghost-text `filigrane` and its `editability`) and its context (the marker text above the editor). Not to be confused with the echo's `submission` (EchoConfiguration), what a cell shows was submitted."
-        },
-        "submission": {
-          "$ref": "#/definitions/SubmissionConfiguration",
-          "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
-        },
-        "label": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StyledText"
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "description": "The cell/tab label: styled text (its ranges' styles can set the font, e.g. \"mono\" or \"sans\"), or a plain string."
-        },
-        "color": {
-          "$ref": "#/definitions/Accent",
-          "description": "Accent color for the component."
-        },
-        "icon": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Icon"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The cell/tab icon, shown before the label. Explicit null removes it."
-        },
-        "id": {
-          "type": "string",
-          "description": "The id of the user command this echo answers (repeated from the \"command\" request's `id`). The interface uses it to give the focus to the echo's element when it appears."
-        },
-        "sticky": {
-          "type": "boolean",
-          "description": "If true, keep the focus on the cell when its process ends."
-        },
-        "background": {
-          "type": "boolean",
-          "description": "If true, do not automatically focus the cell or prompt."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
-        },
-        "represents": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Address"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "running",
-            "standby"
-          ],
-          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "zone": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ZoneDescriptor"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Which zone to put the element in."
-        },
-        "type": {
-          "type": "string",
-          "const": "prompt_configure",
-          "description": "Type of the message."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "request_id": {
-          "type": "string",
-          "description": "Set when this message is the *echo* answering a parse (the highlight a keystroke triggered): it repeats that parse's `request_id`, and is only applied while that parse is still the latest for this prompt — a stale echo (the user typed on in the meantime) is dropped. Absent (the norm) for authoritative configurations: the fresh prompt, the submit reset, history navigation."
-        }
-      },
-      "required": [
-        "from",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "PromptBindings": {
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "$ref": "#/definitions/PromptBinding"
-          }
-        ]
-      }
-    },
-    "PromptBinding": {
-      "type": "object",
-      "properties": {
-        "command": {
-          "type": "string"
-        },
-        "freeze": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "command"
-      ],
-      "additionalProperties": false
-    },
     "SyncMessage": {
       "type": "object",
       "properties": {
@@ -1041,44 +813,6 @@
       "required": [
         "from",
         "nonce",
-        "to",
-        "type"
-      ],
-      "additionalProperties": false
-    },
-    "TextMessage": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "text",
-          "description": "Type of the message."
-        },
-        "from": {
-          "$ref": "#/definitions/Address",
-          "description": "Address of the issuing process."
-        },
-        "to": {
-          "$ref": "#/definitions/To",
-          "description": "Target of the message."
-        },
-        "stream": {
-          "type": "string",
-          "enum": [
-            "stdout",
-            "stderr"
-          ],
-          "description": "Stream on which the message was sent."
-        },
-        "text": {
-          "type": "string",
-          "description": "Text that was sent."
-        }
-      },
-      "required": [
-        "from",
-        "stream",
-        "text",
         "to",
         "type"
       ],

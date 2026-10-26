@@ -22,7 +22,7 @@ export function handle$user_command(buche: Buche, obj: UserCommandMessage): void
     buche.sendDriver({
         type: "command",
         from: ["$term"],
-        to: obj.entry.echo.address,
+        to: obj.entry.address(),
         text: obj.text,
         selection: obj.selection,
         command: obj.command,

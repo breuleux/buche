@@ -31,11 +31,11 @@ import { View } from "carreau/src/view";
 import { Workspace } from "carreau/src/workspace";
 import { defaultTheme } from "./color.ts";
 import "./components/echo-box.tsx"; // (registers <echo-box>)
+import type { StatusString } from "./cell.ts";
 import type { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection } from "./components/prompt-collection.tsx";
 import { SlotChooser } from "./components/slot-chooser.ts";
 import { buildIcon, buildStyledText } from "./components/utils.tsx";
-import type { StatusString } from "./echo.ts";
 import { type Entry, statusOf } from "./entry.ts";
 import type { Address, StyledText, Target } from "./types.ts";
 
@@ -163,19 +163,19 @@ function chooserTab(): Tab {
 function tabMeta(
     entry: Entry,
 ): Pick<Tab, "title" | "icon" | "short" | "long" | "accent" | "status"> {
-    const echo = entry.echo;
-    const { content, context } = echo.submission ?? {};
+    const cell = entry.cell;
+    const { content, context } = cell.submission ?? {};
     const line = (cls: string, text: StyledText | undefined) =>
         text?.text
             ? `<div class="${cls}">${buildStyledText(text, defaultTheme).outerHTML}</div>`
             : "";
     const long = line("buche-long-context", context) + line("buche-long-command", content);
     return {
-        title: echo.label.text,
-        icon: echo.icon ? buildIcon(echo.icon).outerHTML : undefined,
-        short: buildStyledText(echo.label, defaultTheme).outerHTML,
+        title: cell.label.text,
+        icon: cell.icon ? buildIcon(cell.icon).outerHTML : undefined,
+        short: buildStyledText(cell.label, defaultTheme).outerHTML,
         long: long || undefined,
-        accent: echo.color ? resolveColor(echo.color) : undefined,
+        accent: cell.color ? resolveColor(cell.color) : undefined,
         status: tabStatus(entry),
     };
 }
@@ -484,7 +484,7 @@ export class Layout {
             panes(col).some((p) =>
                 p.tabs.some((t) => {
                     const e = this.entries.get(t.id);
-                    return !!e && !e.prompt && this.alive(e);
+                    return !!e && e.cell?.kind !== "prompt" && this.alive(e);
                 }),
             )
         );
@@ -492,7 +492,9 @@ export class Layout {
 
     /** A live prompt shown, if any. */
     anyPrompt(): Entry | null {
-        return [...this.tabs.keys()].find((e) => e.prompt && this.alive(e)) ?? null;
+        return (
+            [...this.tabs.keys()].find((e) => e.cell?.kind === "prompt" && this.alive(e)) ?? null
+        );
     }
 
     /** The prompt node of a prompt entry's column, if shown. */
@@ -696,10 +698,11 @@ export class Layout {
                 this.link(tab.id, stream);
             }
             // What was shown stays shown for a background cell, and beside a
-            // process's first view (its later outputs), unless it is its GUI.
+            // process's first view (its later outputs) — but a view of the
+            // process (`$stdout`, `$frame`) is shown: the last one comes first.
             const later =
-                !isPrompt && !!at && !this.columnOf(anchorTab!) && entry.field !== "$gui";
-            const keep = (entry.echo.background || later) && before;
+                !isPrompt && !!at && !this.columnOf(anchorTab!) && !entry.field?.startsWith("$");
+            const keep = (entry.cell.background || later) && before;
             const show = ok && this.findTab(keep ? before : tab.id);
             if (show) {
                 this.ws.activateTab(show.pane.id, show.index);
@@ -836,7 +839,7 @@ export class Layout {
             },
             update: ({ speaker }: { speaker: Tab | null }) => {
                 const entry = speaker && this.entries.get(speaker.id);
-                if (entry?.prompt && collection.activePrompt !== entry) {
+                if (entry?.cell?.kind === "prompt" && collection.activePrompt !== entry) {
                     collection.addPrompt(entry);
                     collection.showPrompt(entry, false);
                 }
@@ -1056,7 +1059,7 @@ export class Layout {
             return { x: 40, y: 40, w: 480, h: 280 };
         }
         const margin = 8;
-        const q = anchor?.prompt ? this.promptNodeOf(anchor) : null;
+        const q = anchor?.cell?.kind === "prompt" ? this.promptNodeOf(anchor) : null;
         const p = q ? this.view.pxRect(q) : null;
         const bottom = p ? p.y - 4 : r.y + r.h - margin;
         const h = Math.max(60, bottom - (r.y + margin));
@@ -1067,7 +1070,7 @@ export class Layout {
     private popUp(entry: Entry, anchor: Entry | null, node: PaneNode, rect: Rect): void {
         this.dismissPop();
         // (Its end must not send the focus away: that would close it unread.)
-        entry.echo.sticky = true;
+        entry.cell.sticky = true;
         if (this.ws.hostFloat(node, rect, { bare: true, fit: true })) {
             this.pop = { paneId: node.id, anchor, focused: false };
         } else {
@@ -1148,7 +1151,10 @@ export class Layout {
         e.preventDefault();
         e.stopPropagation();
         const anchor = this.pop!.anchor;
-        const prompt = anchor?.prompt && this.alive(anchor) ? anchor : this.host.lastPrompt();
+        const prompt =
+            anchor?.cell?.kind === "prompt" && this.alive(anchor)
+                ? anchor
+                : this.host.lastPrompt();
         const target = prompt && this.revealPrompt(prompt);
         if (target) {
             this.host.focus(target);

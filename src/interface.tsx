@@ -1,6 +1,7 @@
 import { KeyboardNav, type NavConfig } from "carreau/src/keyboard";
 import { panes } from "carreau/src/model";
 import type { LayoutNode, WorkspaceData } from "carreau/src/types";
+import { echoElementId, killable } from "./cell.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
 import type { EmbeddedTerm } from "./components/embedded-term.tsx";
@@ -13,7 +14,6 @@ import {
 import { refocusTitleEditor, showTitleEditor } from "./components/title-editor.ts";
 import { showToast } from "./components/toast.ts";
 import type { Buche } from "./core";
-import { echoElementId, killable } from "./echo.ts";
 import { type Entry, statusOf } from "./entry.ts";
 import { type FocusChangeDetail, FocusManager } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
@@ -23,11 +23,10 @@ import type {
     ProblemMessage,
     UpdateCellMessage,
     UpdateEntryMessage,
-    UpdatePromptMessage,
 } from "./interface-exchange/outgoing";
 import { GlobalKeys } from "./keybindings.ts";
 import { Layout, type LayoutOptions } from "./layout.ts";
-import type { Json } from "./types.ts";
+import type { Json, Target } from "./types.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 
@@ -252,7 +251,6 @@ export class BucheInterface implements Interface {
         eb.addEventListener("resize", () => reportResize(this, eb, entry));
         // Keyboard input bubbles up from the embedded terminal (see EmbeddedTerm).
         eb.addEventListener("term-data", (e) => {
-            entry.cell?.settle();
             this.interactions.push({
                 type: "user_text",
                 text: (e as CustomEvent<string>).detail,
@@ -262,8 +260,8 @@ export class BucheInterface implements Interface {
         // The embedded terminal appearing is the first moment a pty grid
         // exists to report: announce the size then.
         eb.addEventListener("term-appear", () => reportResize(this, eb, entry));
-        if (entry.echo.id !== undefined) {
-            eb.id = echoElementId(entry.echo.id);
+        if (entry.cell.id !== undefined) {
+            eb.id = echoElementId(entry.cell.id);
         }
         return eb;
     }
@@ -341,7 +339,7 @@ export class BucheInterface implements Interface {
                 return;
             }
             const entry = this.guiEntry(el);
-            if (entry?.echo.background) {
+            if (entry?.cell.background) {
                 return;
             }
             this.focus.focus(el, "auto");
@@ -541,7 +539,7 @@ export class BucheInterface implements Interface {
     private isLivePrompt(el: HTMLElement): boolean {
         const pc = el.closest("prompt-collection") as PromptCollection | null;
         const entry = pc?.prompts?.find((e) => pc.promptElement(e) === el);
-        if (!entry?.prompt) {
+        if (entry?.cell?.kind !== "prompt") {
             return true;
         }
         const status = statusOf(entry).status;
@@ -551,7 +549,7 @@ export class BucheInterface implements Interface {
     /** The live prompt focused last (else any live one). */
     private lastPromptEntry(): Entry | null {
         const live = (e: Entry | undefined | null): e is Entry => {
-            const status = e?.prompt ? statusOf(e).status : "done";
+            const status = e?.cell?.kind === "prompt" ? statusOf(e).status : "done";
             return status !== "done" && status !== "error";
         };
         for (const { element, tags } of [...this.focus.history].reverse()) {
@@ -665,14 +663,14 @@ export class BucheInterface implements Interface {
 
     // A background cell doesn't take the focus: drop the expectation of it.
     private settleExpectation(entry: Entry): void {
-        const { id, background } = entry.echo;
+        const { id, background } = entry.cell;
         if (background && id !== undefined && this.focus.expecting === echoElementId(id)) {
             this.focus.expect(null);
         }
     }
 
     private focusNewPrompt(entry: Entry): void {
-        if (entry.echo.background) {
+        if (entry.cell.background) {
             return;
         }
         const element = this.layout.revealPrompt(entry);
@@ -687,7 +685,7 @@ export class BucheInterface implements Interface {
     // The focused cell's process ended: give the focus back, if it is in a
     // prompt's stream and not sticky.
     private releaseEndedCell(entry: Entry): void {
-        const { status } = entry.echo.status;
+        const { status } = entry.cell.status;
         if (status !== "done" && status !== "error") {
             return;
         }
@@ -713,7 +711,7 @@ export class BucheInterface implements Interface {
             }
             // Only in a prompt's stream, where the prompt is right below:
             // elsewhere (its own tab or pane), the cell keeps the focus.
-            if (!ent.echo.sticky && !entry.echo.sticky && this.layout.inPromptColumn(ent)) {
+            if (!ent.cell.sticky && !entry.cell.sticky && this.layout.inPromptColumn(ent)) {
                 this.focus.back();
             }
         }
@@ -744,28 +742,51 @@ export class BucheInterface implements Interface {
 
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         const { entry, target } = message;
+        if (entry.cell.kind === "prompt") {
+            this.updatePrompt(entry, target ?? null);
+            return;
+        }
         this.settleExpectation(entry);
         if (!this.layout.has(entry) && target) {
             const box = this.layout.installCell(entry, target);
-            // A placeholder takes input before any output: a terminal is
-            // there for it, provisionally (a GUI coming first replaces it).
-            if (entry.placeholder && entry.cell) {
-                entry.cell.provideTerminal(entry, box);
-            }
-            if (box.id && this.focus.expecting === box.id) {
+            entry.cell.initialize(entry, box);
+            if (
+                (box.id && this.focus.expecting === box.id) ||
+                this.takesOverFocus(buche, entry, target)
+            ) {
                 this.focus.focus(box, "auto");
                 this.commitSelection();
+            }
+        } else {
+            // A claimed placeholder, say, given a kind: it gets its view.
+            const box = this.layout.boxOf(entry);
+            if (box) {
+                entry.cell.initialize(entry, box);
             }
         }
         // Re-apply on every box showing the entry.
         entry.fire();
     }
 
-    handle$update_prompt(buche: Buche, message: UpdatePromptMessage) {
-        const { entry, target } = message;
+    /**
+     * Whether a process's view (`$stdout`, `$frame`) opening in a tab beside
+     * another of its views takes the focus from it: the last one to come gets
+     * it (a frame's GUI takes it as it appears, see GUI_APPEAR_EVENT).
+     */
+    private takesOverFocus(buche: Buche, entry: Entry, target: Target): boolean {
+        if (!entry.field?.startsWith("$") || entry.cell.background || target.zone !== "tab") {
+            return false;
+        }
+        const sibling = target.anchor ? buche.hierarchy.getAt(target.anchor) : null;
+        const box = sibling ? this.layout.boxOf(sibling) : null;
+        const current = this.focus.current;
+        return !!box && !!current && (box === current || box.contains(current));
+    }
+
+    private updatePrompt(entry: Entry, target: Target | null): void {
         if (this.layout.has(entry)) {
             // A placeholder that this prompt claimed: it becomes the prompt.
-            if (this.layout.boxOf(entry) && entry.prompt) {
+            if (this.layout.boxOf(entry)) {
                 this.layout.convertToPrompt(entry);
                 this.focusNewPrompt(entry);
             }
@@ -783,14 +804,14 @@ export class BucheInterface implements Interface {
         // What ends with its process (the entry, or the views standing for
         // it): ephemeral cells, and prompts (see Layout.promptEnded). Not what
         // runs below it: a sub-shell, its commands, outlive their shell.
-        if (!killable(entry.echo)) {
+        if (!killable(entry.cell)) {
             for (const e of entry.walk()) {
                 if (e !== entry && e.representative() !== entry) {
                     continue;
                 }
-                if (e.prompt) {
+                if (e.cell?.kind === "prompt") {
                     this.layout.promptEnded(e);
-                } else if (e.echo.ephemeral && this.layout.has(e)) {
+                } else if (e.cell.ephemeral && this.layout.has(e)) {
                     this.layout.remove(e);
                 }
             }

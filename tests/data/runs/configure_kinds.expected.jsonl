@@ -1,0 +1,11 @@
+{"$role":"driverIn","type":"configure","from":["$proc","g"],"to":["$term"],"kind":"frame","label":"g"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#102"}}
+{"$role":"driverIn","type":"configure","from":["$proc","g"],"to":["$term"],"kind":"frame","label":"g2"}
+{"$role":"interfaceOut","type":"update_cell","target":null,"entry":{"cell":"#102"}}
+{"$role":"driverIn","type":"configure","from":["$proc","t"],"to":["$term"],"kind":"terminal","label":"t"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#103"}}
+{"$role":"driverIn","type":"configure","from":["$proc","p"],"to":["$term"],"label":"p"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#105","represents":["$proc","p"]}}
+{"$role":"driverIn","type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","label":"sub","bindings":{"C-c":"interrupt"}}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":["$proc","p","?"],"link":true},"entry":{"cell":"#106"}}
+{"$role":"driverIn","type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","request_id":"1","input":{"content":{"text":"ec","ranges":[]}}}

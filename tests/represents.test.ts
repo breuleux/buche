@@ -26,13 +26,15 @@ function machine(): Fixture {
 function booted(): Fixture {
     const f = machine();
     f.buche.handle({
-        type: "prompt_configure",
+        type: "configure",
+        kind: "prompt",
         from: ["$proc", "cq"],
         to: ["$term"],
     } as never);
     f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"] } as never);
     f.buche.handle({
-        type: "cell_configure",
+        type: "configure",
+        kind: "frame",
         from: CELL,
         to: ["$term"],
         represents: PROCESS,
@@ -48,7 +50,8 @@ describe("represents", () => {
         resetId(100);
         const f = machine();
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq"],
             to: ["$term"],
         } as never);
@@ -65,10 +68,10 @@ describe("represents", () => {
         ]);
         expect(f.driverOut).toEqual([]);
         expect(entry.primary).toBe(ph);
-        expect(ph.placeholder).toBe(true);
+        expect(ph.cell?.kind).toBe("pending");
         // It stands for the process, and shows what it was configured with.
         expect(ph.represents).toEqual(PROCESS);
-        expect(ph.echo.label.text).toBe("ls");
+        expect(ph.cell.label.text).toBe("ls");
         expect(statusOf(entry).status).toBe("running");
     });
 
@@ -78,9 +81,11 @@ describe("represents", () => {
         const cell = f.buche.get(CELL);
         expect(f.buche.hierarchy.getAt([...PROCESS, "?"])).toBe(null);
         expect(f.buche.get(PROCESS).primary).toBe(cell);
-        expect(cell.placeholder).toBe(false);
-        expect(cell.echo.address).toEqual(CELL);
-        const updates = f.interfaceOut.filter((m: any) => m.type === "update_cell") as any[];
+        expect(cell.cell?.kind).not.toBe("pending");
+        expect(cell.address()).toEqual(CELL);
+        const updates = f.interfaceOut.filter(
+            (m: any) => m.type === "update_cell" && m.entry.cell.kind !== "prompt",
+        ) as any[];
         // Installed once (as the placeholder), then only refreshed.
         expect(updates.map((m) => m.target)).toEqual([
             { zone: "inline", anchor: ["$proc", "cq"] },
@@ -93,37 +98,40 @@ describe("represents", () => {
         resetId(100);
         const f = machine();
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq"],
             to: ["$term"],
         } as never);
         f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"], zone: "@r" } as never);
         f.buche.handle({
-            type: "data",
-            from: [...PROCESS, "$gui"],
+            type: "send",
+            from: [...PROCESS, "$frame"],
             to: ["$term"],
-            data: 1,
+            message: { type: "data", data: 1 },
         } as never);
         f.buche.handle({
-            type: "text",
+            type: "send",
             from: [...PROCESS, "$stdout"],
             to: ["$term"],
-            stream: "stdout",
-            text: "x",
+            message: { type: "text", stream: "stdout", text: "x" },
         } as never);
         f.buche.handle({
-            type: "cell_configure",
+            type: "configure",
+            kind: "frame",
             from: [...PROCESS, "plot"],
             to: ["$term"],
             zone: "@left",
         } as never);
-        const targets = (f.interfaceOut.filter((m: any) => m.type === "update_cell") as any[]).map(
-            (m) => m.target,
-        );
+        const targets = (
+            f.interfaceOut.filter(
+                (m: any) => m.type === "update_cell" && m.entry.cell.kind !== "prompt",
+            ) as any[]
+        ).map((m) => m.target);
         expect(targets).toEqual([
             { zone: "right", anchor: ["$proc", "cq"] },
-            { zone: "tab", anchor: [...PROCESS, "$gui"] },
-            { zone: "left", anchor: [...PROCESS, "$gui"] },
+            { zone: "tab", anchor: [...PROCESS, "$frame"] },
+            { zone: "left", anchor: [...PROCESS, "$frame"] },
         ]);
         // `$` views stand for their process; other cells don't unless told.
         expect(f.buche.get([...PROCESS, "$stdout"]).represents).toEqual(PROCESS);
@@ -134,7 +142,8 @@ describe("represents", () => {
         resetId(100);
         const f = machine();
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq"],
             to: ["$term"],
         } as never);
@@ -146,20 +155,22 @@ describe("represents", () => {
         } as never);
         f.buche.handle({ type: "configure", from: ["$proc", "cq", "2"], to: ["$term"] } as never);
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq", "1", "cq"],
             to: ["$term"],
         } as never);
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq", "2", "cq"],
             to: ["$term"],
         } as never);
         expect(f.buche.get(["$proc", "cq", "1", "cq"])).toBe(
             f.buche.get(["$proc", "cq", "1"]).primary,
         );
-        expect(f.buche.get(["$proc", "cq", "1", "cq"]).cell).toBe(null);
-        expect(f.buche.get(["$proc", "cq", "2", "?"]).placeholder).toBe(true);
+        expect(f.buche.get(["$proc", "cq", "1", "cq"]).cell?.kind).toBe("prompt");
+        expect(f.buche.get(["$proc", "cq", "2", "?"]).cell?.kind).toBe("pending");
         const last = f.interfaceOut.at(-1) as any;
         expect(last.target).toEqual({
             zone: "tab",
@@ -234,7 +245,7 @@ describe("represents", () => {
         f.buche.handle({ type: "user_signal", code: 15, entry: cell } as never);
         expect(statusOf(cell).status).toBe("unresponsive");
         // The marking lands on the process, not on the cell itself.
-        expect(f.buche.get(CELL).echo.status.status).not.toBe("unresponsive");
+        expect(f.buche.get(CELL).cell.status.status).not.toBe("unresponsive");
 
         f.buche.handle({
             type: "close",
@@ -250,7 +261,8 @@ describe("represents", () => {
         const f = machine();
         f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"], zone: null } as never);
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: [...PROCESS, "cq"],
             to: ["$term"],
             represents: PROCESS,
@@ -272,7 +284,7 @@ describe("represents", () => {
             outcome: { type: "success", code: 0 },
         } as never);
         expect(statusOf(prompt).status).toBe("done");
-        expect(prompt.echo.status.status).toBe("done");
+        expect(prompt.cell.status.status).toBe("done");
     });
 
     test("representing a never-configured entry falls back to the entry's own status", () => {
@@ -281,14 +293,15 @@ describe("represents", () => {
         // Top-level shape: coquille's prompt stands for ["$proc"], which
         // nothing ever configured — there is no process to mirror.
         f.buche.handle({
-            type: "prompt_configure",
+            type: "configure",
+            kind: "prompt",
             from: ["$proc", "cq"],
             to: ["$term"],
             represents: ["$proc"],
         } as never);
         const prompt = f.buche.get(["$proc", "cq"]);
         expect(prompt.representative()).not.toBeNull();
-        expect(prompt.representative()!.echo.status.status).toBe("absent");
+        expect(prompt.representative()!.cell.status.status).toBe("absent");
         expect(statusOf(prompt).status).toBe("running");
     });
 
@@ -311,8 +324,8 @@ describe("represents", () => {
         expect(f.driverOut).toEqual([]);
         // The entry itself is retuned instead.
         expect(cell.represents).toBe(null);
-        expect(cell.echo.ephemeral).toBe(true);
-        expect(cell.echo.label.text).toBe("retuned");
+        expect(cell.cell.ephemeral).toBe(true);
+        expect(cell.cell.label.text).toBe("retuned");
         // A reconfigure of a started entry leaves the status alone.
         expect(statusOf(cell).status).toBe("running");
         // And interactions now use the entry's own address again.
@@ -332,14 +345,15 @@ describe("represents", () => {
             outcome: { type: "success", code: 0 },
         } as never);
         f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"] } as never);
-        expect(f.buche.get(PROCESS).echo.status.status).toBe("done");
+        expect(f.buche.get(PROCESS).cell.status.status).toBe("done");
     });
 
     test("represents: null disables the mirroring", () => {
         resetId(100);
         const f = booted();
         f.buche.handle({
-            type: "cell_configure",
+            type: "configure",
+            kind: "frame",
             from: CELL,
             to: ["$term"],
             represents: null,

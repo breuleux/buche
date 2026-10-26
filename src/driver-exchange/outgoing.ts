@@ -40,7 +40,7 @@ export interface ParseRequest extends BaseRequest {
 
     /**
      * Reference number for this parse. Whatever answers it — the highlight
-     * echo (a `prompt_configure` carrying `request_id`) — repeats it, so the
+     * echo (a prompt `configure` carrying `request_id`) — repeats it, so the
      * machine can drop answers to superseded inputs (the user typed on in
      * the meantime).
      */

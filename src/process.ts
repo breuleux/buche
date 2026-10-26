@@ -1,8 +1,7 @@
 import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import * as readline from "node:readline";
 import type { Readable, Writable } from "node:stream";
-import type { DataMessage } from "./driver-exchange/_data.ts";
-import type { TextMessage } from "./driver-exchange/_text.ts";
+import type { SendMessage } from "./driver-exchange/_send.ts";
 import type { Address, Json, To } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage } from "./driver-exchange/outgoing.ts";
@@ -57,12 +56,12 @@ function stdioEntry(mode: StreamMode): "pipe" | "inherit" {
  * File descriptors (from the child's point of view):
  *   - fd0 (stdin)   — opened, otherwise untouched
  *   - fd1 (stdout)  — configurable ({@link StreamMode}); when included, every chunk
- *                     becomes a {@link TextMessage} (stdout)
+ *                     becomes a `text` {@link SendMessage} (stdout)
  *   - fd2 (stderr)  — configurable ({@link StreamMode}); when included, every chunk
- *                     becomes a {@link TextMessage} (stderr)
+ *                     becomes a `text` {@link SendMessage} (stderr)
  *   - fd3 (datain)  — opened, otherwise untouched
  *   - fd4 (dataout) — configurable ({@link StreamMode}); when included, read as a JSONL
- *                     stream and each line becomes a {@link DataMessage}
+ *                     stream and each line becomes a `data` {@link SendMessage}
  *   - fd5 (control) — bidirectional; read as a stream of {@link IncomingDriverMessage},
  *                     and written to by {@link ProcessCommunicator.send}
  */
@@ -147,11 +146,11 @@ export class ProcessCommunicator {
         const fds = child.stdio as unknown as ((Readable & Writable) | null)[];
         this.control = fds[5] ?? null;
 
-        // fd1 (stdout) and fd2 (stderr): when included, every chunk becomes a TextMessage.
+        // fd1 (stdout) and fd2 (stderr): when included, every chunk is sent as text.
         this.pipeText(fds[1], "stdout", this.options.stdout ?? "include");
         this.pipeText(fds[2], "stderr", this.options.stderr ?? "include");
 
-        // fd4 (dataout): when included, a JSONL stream of DataMessages.
+        // fd4 (dataout): when included, a JSONL stream, each line sent as data.
         this.pipeData(fds[4], this.options.data ?? "include");
 
         // fd5 (control): stream of IncomingDriverMessages.
@@ -196,12 +195,11 @@ export class ProcessCommunicator {
         } else {
             stream.setEncoding("utf8");
             stream.on("data", (text: string) => {
-                const message: TextMessage = {
-                    type: "text",
+                const message: SendMessage = {
+                    type: "send",
                     from: this.from,
                     to: this.to,
-                    stream: name,
-                    text,
+                    message: { type: "text", stream: name, text },
                 };
                 this.queue.push(message);
             });
@@ -242,11 +240,11 @@ export class ProcessCommunicator {
                 });
                 return;
             }
-            const message: DataMessage = {
-                type: "data",
+            const message: SendMessage = {
+                type: "send",
                 from: this.from,
                 to: this.to,
-                data,
+                message: { type: "data", data },
             };
             this.queue.push(message);
         });

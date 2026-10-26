@@ -1,0 +1,4 @@
+{"type":"configure","kind":"frame","from":["$proc","app"],"to":["$term"],"label":"app"}
+{"type":"configure","kind":"terminal","from":["$proc","app"],"to":["$term"]}
+{"type":"configure","kind":"prompt","from":["$proc","cq"],"to":["$term"],"label":"cq"}
+{"type":"configure","kind":"frame","from":["$proc","cq"],"to":["$term"]}

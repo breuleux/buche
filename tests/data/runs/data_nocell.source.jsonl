@@ -1,1 +1,1 @@
-{"type":"data","from":["$proc","cq","51"],"to":["$term"],"data":{"key":"value"}}
+{"type":"send","from":["$proc","cq","51"],"to":["$term"],"message":{"type":"data","data":{"key":"value"}}}

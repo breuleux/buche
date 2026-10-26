@@ -19,7 +19,7 @@ export function handle$cell_gui_feedback(buche: Buche, obj: CellGuiFeedbackMessa
     buche.sendDriver({
         type: "data",
         from: ["$term"],
-        to: obj.entry.echo.address,
+        to: obj.entry.address(),
         data: obj.data,
     });
 }

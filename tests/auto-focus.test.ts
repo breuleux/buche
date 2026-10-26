@@ -50,7 +50,7 @@ function setup() {
 
 function prompt(container: HTMLElement, label = "cq"): HTMLElement {
     for (const pc of container.querySelectorAll<PromptCollection>("prompt-collection")) {
-        const entry = pc.prompts.find((e) => e.echo.label.text === label);
+        const entry = pc.prompts.find((e) => e.cell.label.text === label);
         if (entry) {
             return pc.promptElement(entry)!;
         }
@@ -78,14 +78,20 @@ function run(
     expect(request.type).toBe("command");
     const id = request.id as string;
     const from = [...SHELL, "2"];
-    driver({ type: "cell_configure", from, zone: null, id, ...echo, ...cell });
+    driver({ type: "configure", kind: "terminal", from, zone: null, id, ...echo, ...cell });
     return { id, box: () => container.querySelector(`#echo-${id}`) };
+}
+
+/** Interactions, but the size reports (a terminal's, whenever the layout
+ *  moves it). */
+function withoutResizes<T extends { type: string }>(interactions: Iterable<T>): T[] {
+    return [...interactions].filter((i) => i.type !== "user_resize");
 }
 
 describe("automatic focus", () => {
     test("a new prompt takes the focus", async () => {
         const { container, iface, driver } = setup();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         expect(iface.focus.current).toBe(prompt(container));
         expect(iface.focus.currentTags).toEqual(["prompt", "auto"]);
@@ -93,14 +99,14 @@ describe("automatic focus", () => {
 
     test("a background prompt doesn't", async () => {
         const { iface, driver } = setup();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq", background: true });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq", background: true });
         await settle();
         expect(iface.focus.current).toBeNull();
     });
 
     test("the command's id goes to the driver, and its echo's cell takes the focus", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const { id, box } = run(ctx);
         expect(id).toMatch(/.+/);
         await settle();
@@ -111,7 +117,7 @@ describe("automatic focus", () => {
 
     test("a background echo leaves the focus alone", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { background: true });
         await settle();
@@ -122,7 +128,7 @@ describe("automatic focus", () => {
 
     test("when the focused cell's process ends, the focus goes back", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx);
         await settle();
@@ -135,7 +141,7 @@ describe("automatic focus", () => {
 
     test("but not out of a prompt's stream (in a tab of its own)", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
@@ -150,18 +156,24 @@ describe("automatic focus", () => {
         const focus = vi.spyOn(EmbeddedTerm.prototype, "focus").mockImplementation(() => {});
         try {
             const ctx = setup();
-            ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+            ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
             await settle();
+            // A terminal cell has its terminal from the start.
             const { box } = run(ctx);
             await settle();
             expect(ctx.iface.focus.current).toBe(box());
-            expect(focus).not.toHaveBeenCalled();
-
-            // The driver's initial empty text creates the terminal.
-            ctx.driver({ type: "text", from: [...SHELL, "2"], stream: "stdout", text: "" });
-            await settle();
             expect(box()?.querySelector("embedded-term")).not.toBeNull();
-            expect(focus).toHaveBeenCalledTimes(1);
+            expect(focus).toHaveBeenCalled();
+            const calls = focus.mock.calls.length;
+
+            // Output goes to it, and does not focus it again.
+            ctx.driver({
+                type: "send",
+                from: [...SHELL, "2"],
+                message: { type: "text", stream: "stdout", text: "" },
+            });
+            await settle();
+            expect(focus).toHaveBeenCalledTimes(calls);
         } finally {
             focus.mockRestore();
         }
@@ -169,7 +181,7 @@ describe("automatic focus", () => {
 
     test("unless the echo is sticky", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { sticky: true });
         await settle();
@@ -181,7 +193,7 @@ describe("automatic focus", () => {
 
     test("moving the focus before the echo arrives cancels its focus", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const entry = (prompt(ctx.container).closest("prompt-collection") as PromptCollection)
             .prompts[0];
@@ -201,7 +213,7 @@ describe("automatic focus", () => {
         ctx.container.append(other);
         ctx.iface.focus.focus(other, "click");
         const from = [...SHELL, "2"];
-        ctx.driver({ type: "cell_configure", from, zone: null, id });
+        ctx.driver({ type: "configure", kind: "terminal", from, zone: null, id });
         await settle();
         expect(ctx.container.querySelector(`#echo-${id}`)).not.toBeNull();
         expect(ctx.iface.focus.current).toBe(other);
@@ -209,7 +221,7 @@ describe("automatic focus", () => {
 
     test("a cell in a new tab takes the focus there", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
@@ -222,7 +234,7 @@ describe("automatic focus", () => {
 
     test("focusPrompt brings the prompt's tab back after a cell took the focus in a new tab", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
@@ -235,7 +247,7 @@ describe("automatic focus", () => {
 
     test("switching back to the prompt's tab focuses the prompt", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
@@ -249,12 +261,71 @@ describe("automatic focus", () => {
 
     test("a background cell's new tab stays in the background", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep", background: true }, { zone: "tab" });
         await settle();
         expect(shown(box())).toBe(false);
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+    });
+});
+
+describe("views of a process", () => {
+    const proc = [...SHELL, "2"];
+
+    function started() {
+        const ctx = setup();
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", from: proc, zone: "tab", label: "app" });
+        const boxOf = (view: string) => ctx.iface.layout.boxOf(ctx.buche.get([...proc, view]));
+        const stdout = () =>
+            ctx.driver({
+                type: "send",
+                from: [...proc, "$stdout"],
+                message: { type: "text", stream: "stdout", text: "x" },
+            });
+        const frame = () =>
+            ctx.driver({
+                type: "send",
+                from: [...proc, "$frame"],
+                message: { type: "data", data: 1 },
+            });
+        return { ...ctx, boxOf, stdout, frame };
+    }
+
+    test("a terminal coming after the frame is shown, and takes the focus", async () => {
+        const ctx = started();
+        ctx.frame();
+        await settle();
+        expect(ctx.iface.focus.current?.closest("echo-box")).toBe(ctx.boxOf("$frame"));
+        ctx.stdout();
+        await settle();
+        const term = ctx.boxOf("$stdout");
+        expect(shown(term)).toBe(true);
+        expect(ctx.iface.focus.current).toBe(term);
+    });
+
+    test("a frame coming after the terminal is shown, and takes the focus", async () => {
+        const ctx = started();
+        ctx.stdout();
+        await settle();
+        ctx.iface.focus.focus(ctx.boxOf("$stdout")!, "api");
+        ctx.frame();
+        await settle();
+        expect(shown(ctx.boxOf("$frame"))).toBe(true);
+        expect(ctx.iface.focus.current?.closest("echo-box")).toBe(ctx.boxOf("$frame"));
+    });
+
+    test("the focus elsewhere stays there", async () => {
+        const ctx = started();
+        ctx.frame();
+        await settle();
+        const promptEl = prompt(ctx.container);
+        ctx.iface.focus.focus(promptEl, "api");
+        ctx.stdout();
+        await settle();
+        expect(shown(ctx.boxOf("$stdout"))).toBe(true);
+        expect(ctx.iface.focus.current).toBe(promptEl);
     });
 });
 
@@ -270,7 +341,7 @@ describe("tab ✕", () => {
 
     test("ends the cell's process; the tab goes when it has ended", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
@@ -278,7 +349,7 @@ describe("tab ✕", () => {
         ctx.iface.interactions.purge();
 
         tabClose(ctx.container, "sleep")?.click();
-        expect([...ctx.iface.interactions.purge()]).toEqual([
+        expect(withoutResizes(ctx.iface.interactions.purge())).toEqual([
             // Running (cell_configure says so): SIGTERM.
             { type: "user_signal", code: 15, entry },
         ]);
@@ -298,9 +369,21 @@ describe("tab ✕", () => {
     test("the focus stays in the tab group, even if it was elsewhere before", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "far" });
-        driver({ type: "cell_configure", from: [...SHELL, "3"], zone: "tab", label: "near" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "2"],
+            zone: "logs",
+            label: "far",
+        });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "3"],
+            zone: "tab",
+            label: "near",
+        });
         await settle();
         const boxOf = (i: string) => iface.layout.boxOf(ctx.buche.get([...SHELL, i]))!;
         // Last in the other pane, then in the tab beside the prompt.
@@ -318,7 +401,7 @@ describe("tab ✕", () => {
 
     test("a process saying it runs again refuses the close: the tab stays", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "edit" }, { zone: "tab" });
         await settle();
@@ -332,7 +415,11 @@ describe("tab ✕", () => {
 
         // Before the SIGTERM lands, it was already running: nothing cancelled.
         tabClose(ctx.container, "edit")?.click();
-        ctx.driver({ type: "text", from: [...SHELL, "2"], stream: "stdout", text: "x" });
+        ctx.driver({
+            type: "send",
+            from: [...SHELL, "2"],
+            message: { type: "text", stream: "stdout", text: "x" },
+        });
         await settle();
         expect(ws.isClosing(tabId()!)).toBe(true);
         ctx.flush(); // the SIGTERM: unresponsive
@@ -357,7 +444,7 @@ describe("tab ✕", () => {
 
     test("Alt+Q Shift+W force closes a cell that refuses", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "edit" }, { zone: "tab" });
         await settle();
@@ -388,7 +475,7 @@ describe("tab ✕", () => {
 
     test("on an ended cell's tab, removes it right away", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         run(ctx, { label: "sleep", background: true }, { zone: "tab" });
         ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
@@ -402,11 +489,19 @@ describe("tab ✕", () => {
 
     test("a process with two tabs ends with the last one", async () => {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const proc = [...SHELL, "2"];
         ctx.driver({ type: "configure", from: proc, zone: "tab", label: "app" });
-        ctx.driver({ type: "text", from: [...proc, "$stdout"], stream: "stdout", text: "x" });
-        ctx.driver({ type: "data", from: [...proc, "$gui"], data: 1 });
+        ctx.driver({
+            type: "send",
+            from: [...proc, "$stdout"],
+            message: { type: "text", stream: "stdout", text: "x" },
+        });
+        ctx.driver({
+            type: "send",
+            from: [...proc, "$frame"],
+            message: { type: "data", data: 1 },
+        });
         await settle();
         const tabs = () =>
             [...ctx.container.querySelectorAll(".carreau-tab")].filter(
@@ -440,7 +535,7 @@ describe("placement", () => {
             }
             return null;
         };
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const main = paneOf("cq");
         expect(main?.name).toBe("main");
 
@@ -448,33 +543,52 @@ describe("placement", () => {
         // the left, and its prompt takes its place there.
         const sub = [...SHELL, "1"];
         driver({ type: "configure", from: sub, zone: "@left", label: "coquille" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
         const left = paneOf("sub");
         expect(left).not.toBeNull();
         expect(left).not.toBe(paneOf("cq"));
         expect(paneOf("coquille")).toBeNull();
 
         // From the sub-shell, `@r ls` goes back right, into the main pane.
-        driver({ type: "cell_configure", from: [...sub, "cq", "2"], zone: "@r", label: "right" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...sub, "cq", "2"],
+            zone: "@r",
+            label: "right",
+        });
         expect(paneOf("right")).toBe(paneOf("cq"));
         // `@tab` beside its prompt, in its pane.
         driver({
-            type: "cell_configure",
+            type: "configure",
+            kind: "terminal",
             from: [...sub, "cq", "3"],
             zone: "tab",
             label: "tabbed",
         });
         expect(paneOf("tabbed")).toBe(paneOf("sub"));
         // Inline: in the sub-shell's stream.
-        driver({ type: "cell_configure", from: [...sub, "cq", "4"], label: "plain" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...sub, "cq", "4"],
+            label: "plain",
+        });
         expect(
             iface.layout.boxOf(ctx.buche.get([...sub, "cq", "4"]))?.closest(".carreau-scroll"),
         ).not.toBeNull();
         // Names: an existing pane, or a new one.
-        driver({ type: "cell_configure", from: [...sub, "cq", "5"], zone: "main", label: "far" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...sub, "cq", "5"],
+            zone: "main",
+            label: "far",
+        });
         expect(paneOf("far")).toBe(paneOf("cq"));
         driver({
-            type: "cell_configure",
+            type: "configure",
+            kind: "terminal",
             from: [...sub, "cq", "6"],
             zone: "logs",
             label: "logged",
@@ -485,11 +599,17 @@ describe("placement", () => {
     test("a merged shell ending: the focus stays in its linked group", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const sub = [...SHELL, "1"];
         driver({ type: "configure", from: sub, label: "coquille" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
-        driver({ type: "cell_configure", from: [...sub, "cq", "2"], zone: "tab", label: "ls" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...sub, "cq", "2"],
+            zone: "tab",
+            label: "ls",
+        });
         await settle();
         const labels = () =>
             [...container.querySelectorAll(".carreau-tab")]
@@ -515,17 +635,22 @@ describe("placement", () => {
     test("a nested shell started inline gets a tab linked to its parent's", async () => {
         const ctx = setup();
         const { driver, iface } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const sub = [...SHELL, "1"];
         driver({ type: "configure", from: sub, label: "coquille" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
         await settle();
         const tabs = [...ctx.container.querySelectorAll(".carreau-tab")].filter(shown);
         const labels = tabs.map((t) => t.querySelector(".carreau-tab-short")?.textContent);
         expect(labels).toEqual(["cq", "sub"]);
         expect(tabs.every((t) => t.classList.contains("linked"))).toBe(true);
         // The sub-shell's commands go in the merged stream.
-        driver({ type: "cell_configure", from: [...sub, "cq", "2"], label: "ls" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...sub, "cq", "2"],
+            label: "ls",
+        });
         await settle();
         expect(shown(iface.layout.boxOf(ctx.buche.get([...sub, "cq", "2"])))).toBe(true);
     });
@@ -540,11 +665,16 @@ describe("a shell ending", () => {
     test("leaves its sub-shell and its running commands alone", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "cell_configure", from: [...SHELL, "2"], label: "sleep" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "2"],
+            label: "sleep",
+        });
         const sub = [...SHELL, "3"];
         driver({ type: "configure", from: sub, label: "coquille" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
         await settle();
         expect(labels(container)).toEqual(["cq", "sub"]);
         iface.interactions.purge();
@@ -564,9 +694,14 @@ describe("a shell ending", () => {
     test("alone, its tab stays while a command still runs in it", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "prompt_configure", from: ["$proc", "other"], label: "other" });
-        driver({ type: "cell_configure", from: [...SHELL, "2"], label: "sleep" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: ["$proc", "other"], label: "other" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "2"],
+            label: "sleep",
+        });
         await settle();
         iface.interactions.purge();
 
@@ -591,8 +726,14 @@ describe("slots", () => {
     test("an empty named pane offers a shell, which goes there", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "x" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "2"],
+            zone: "logs",
+            label: "x",
+        });
         driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
         const ws = iface.layout.ws;
         await ws.closeTab(ws.paneByName("logs")!.tabs[0].id);
@@ -603,21 +744,27 @@ describe("slots", () => {
         iface.interactions.purge();
 
         pick(chooser, "4");
-        const [command] = [...iface.interactions.purge()] as any[];
+        const [command] = withoutResizes(iface.interactions.purge()) as any[];
         const zone = `~${ws.paneByName("logs")!.id}`;
         expect(command).toMatchObject({ type: "user_command", text: "cq", command: "run", zone });
         // The shell's placeholder, then its prompt, go into the pane.
         const sub = [...SHELL, "3"];
         driver({ type: "configure", from: sub, zone, label: "cq" });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
         expect(ws.paneByName("logs")!.tabs.map((t) => t.title)).toEqual(["sub"]);
     });
 
     test("Alt+Q W closes an empty named pane", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "x" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({
+            type: "configure",
+            kind: "terminal",
+            from: [...SHELL, "2"],
+            zone: "logs",
+            label: "x",
+        });
         driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
         const ws = iface.layout.ws;
         await ws.closeTab(ws.paneByName("logs")!.tabs[0].id);
@@ -640,7 +787,7 @@ describe("slots", () => {
     test("insert offers a new scroll column, named at random, empty, which stays", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const ws = iface.layout.ws;
         ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
         iface.layout.insert();
@@ -660,7 +807,7 @@ describe("slots", () => {
     test("insert offers a new pane: a kept empty pane in a group, offering a slot", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const ws = iface.layout.ws;
         ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
         iface.layout.insert();
@@ -682,7 +829,7 @@ describe("slots", () => {
     test("Alt+Q I F offers a slot in a new floating window", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const ws = iface.layout.ws;
         ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
         const press = (type: string, key: string, code: string, altKey = true) =>
@@ -704,7 +851,7 @@ describe("slots", () => {
     test("typing in a slot runs a command there, from the last prompt", async () => {
         const ctx = setup();
         const { driver, iface, container } = ctx;
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         iface.focus.focus(prompt(container));
         iface.layout.insert("right", true);
         await settle();
@@ -716,7 +863,7 @@ describe("slots", () => {
         const field = chooser.querySelector("input")!;
         expect(field.value).toBe("ls");
         field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-        const [command] = [...iface.interactions.purge()] as any[];
+        const [command] = withoutResizes(iface.interactions.purge()) as any[];
         expect(command).toMatchObject({ type: "user_command", text: "ls", command: "run" });
         expect(command.zone).toMatch(/^~/);
     });
@@ -734,7 +881,12 @@ describe("slots", () => {
         ctx.buche.sendDriver = (m) => sent.push(m);
         ctx.buche.handle(spawn);
         expect(sent).toEqual([{ type: "spawn", from: ["$term"], to: ["$d1"], command: "cq" }]);
-        ctx.driver({ type: "prompt_configure", from: ["$d1", "$proc", "cq"], label: "cq" });
+        ctx.driver({
+            type: "configure",
+            kind: "prompt",
+            from: ["$d1", "$proc", "cq"],
+            label: "cq",
+        });
         expect(iface.layout.ws.paneByName("main")!.tabs.map((t) => t.title)).toEqual(["cq"]);
     });
 });
@@ -754,14 +906,22 @@ describe("@pop", () => {
         ctx.flush();
         const id = (ctx.sent.at(-1) as { id: string }).id;
         const from = [...SHELL, n];
-        ctx.driver({ type: "cell_configure", from, zone: "@pop", id, label: `pop${n}`, ...echo });
+        ctx.driver({
+            type: "configure",
+            kind: "terminal",
+            from,
+            zone: "@pop",
+            id,
+            label: `pop${n}`,
+            ...echo,
+        });
         const box = () => ctx.container.querySelector<EchoBox>(`#echo-${id}`);
         return { from, box, entry: () => box()?.boundEntry };
     }
 
     async function started() {
         const ctx = setup();
-        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         await settle();
         return ctx;
     }
@@ -795,7 +955,7 @@ describe("@pop", () => {
         ctx.iface.interactions.purge();
 
         ctx.iface.focus.focus(prompt(ctx.container), "click");
-        expect([...ctx.iface.interactions.purge()]).toEqual([
+        expect(withoutResizes(ctx.iface.interactions.purge())).toEqual([
             { type: "user_signal", code: 15, entry: e },
         ]);
         expect(ctx.iface.layout.ws.floating).toHaveLength(0);

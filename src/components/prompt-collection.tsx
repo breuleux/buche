@@ -2,19 +2,19 @@
 //
 //   const pc = document.createElement("prompt-collection") as PromptCollection;
 //   const entry = new Entry({});
-//   entry.echo.label = { text: "sh", ranges: [] };
-//   entry.echo.color = "green";
-//   entry.setPrompt(new Prompt({ prompt: { text: "$", ranges: [] } }));
+//   entry.cell.label = { text: "sh", ranges: [] };
+//   entry.cell.color = "green";
+//   entry.cell.kind = "prompt";
 //   pc.addPrompt(entry);
 //   container.appendChild(pc);
 //
 // Each prompt is configured from an {@link Entry} (src/entry.ts) and keyed by that
 // Entry object — `showPrompt`, `removePrompt`, etc. all take the Entry you added.
-// The tab's label and accent colour come from the Entry's {@link Echo}; the
+// The tab's label and accent colour come from the Entry's {@link Cell}; the
 // leading marker and the editor's initial content come from the Entry's
-// {@link Prompt} (`prompt` and `content`, both StyledText). Edits to the editor
-// flow back into `entry.prompt.input.content` (its text and selection). The
-// Prompt's `filigrane` (a history suggestion, echoed by the "prompt_configure"
+// prompt cell (its `input`: `context` and `content`, both StyledText). Edits to the editor
+// flow back into the prompt's `input.content` (its text and selection). The
+// cell's `filigrane` (a history suggestion, echoed by the prompt `configure`
 // answer to a parse) shows as faded ghost text extending the content;
 // ArrowRight at the end of the text accepts it.
 //
@@ -26,23 +26,23 @@
 //   └─────────────────────────────────────────────┘
 //
 // Only the active prompt is shown. Under the prompt is a tab zone: one tab per
-// prompt (its label, coloured by the Echo accent while active, grey otherwise).
+// prompt (its label, coloured by the cell's accent while active, grey otherwise).
 // Click a label to switch prompts; drag labels to reorder them. The editor is
 // created through a swappable `editorFactory` (default: CodeMirror).
 //
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
 // mutate the Entry and call `entry.fire()` to re-read the label, accent and
 // marker, and to reset the editor's text and cursor from the prompt's input.
-// A reconfiguration that finds the Echo's status `done` or `error` (the process
+// A reconfiguration that finds the cell's status `done` or `error` (the process
 // closed) instead removes the prompt — its tab and editor are spent.
 //
-// A prompt heeds its Entry's Prompt `bindings` map (e.g. { "Ctrl+L": "clear" }):
+// A prompt heeds its cell's `bindings` map (e.g. { "Ctrl+L": "clear" }):
 // pressing a bound chord in the editor fires a bubbling "command" event and
 // swallows the key so the editor doesn't also act on it. A binding may also be
 // an object ({ command, freeze }): when a binding with `freeze` fires, the
 // prompt's content turns "frozen" — read-only, but styled to show the
 // condition is temporary — commands keep firing but typing is dead — until the
-// next prompt_configure (the Entry's reconfiguration) resets the editability.
+// next prompt `configure` (the Entry's reconfiguration) resets the editability.
 // (An InteractiveStyledText carries this `editability`; a prompt defaults to
 // "editable", echos are "readonly" — all they support for now.)
 //
@@ -68,11 +68,17 @@ import {
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
+import type { Cell } from "../cell.ts";
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
 import type { HighlightRange, InteractiveStyledText, Selection, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
+
+/** The cell of an entry of the collection, if it is a prompt. */
+function promptOf(entry: Entry): Cell | null {
+    return entry.cell.kind === "prompt" ? entry.cell : null;
+}
 
 // ── Key bindings ────────────────────────────────────────────────────────────
 // A prompt's Entry carries a `bindings` map like { "Ctrl+L": "clear" }. When a
@@ -364,7 +370,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
     // An inline style beats the theme's class rules, and applies to typed text.
     const baseStyle = new Compartment();
     // Reconfigurable read-only mode (bindings that `freeze` the prompt). Only
-    // user input is blocked; programmatic resets (prompt_configure) go through.
+    // user input is blocked; programmatic resets (a prompt `configure`) go through.
     const readOnly = new Compartment();
     const view = new EditorView({
         state: EditorState.create({
@@ -614,7 +620,7 @@ export class PromptCollection extends HTMLElement {
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
 
-        const content: InteractiveStyledText = entry.prompt?.input.content ?? {
+        const content: InteractiveStyledText = promptOf(entry)?.input.content ?? {
             text: "",
             ranges: [],
         };
@@ -623,7 +629,7 @@ export class PromptCollection extends HTMLElement {
         editorHost.className = "prompt-collection-editor";
         const editor = this.editorFactory({
             doc: content.text,
-            // Keep the Entry's Prompt content (text and selection) in sync with the
+            // Keep the Entry's prompt content (text and selection) in sync with the
             // editor as the user edits. Suppressed while we push content into the
             // editor ourselves (see `applyingContent`), so a reset can't feed back.
             onChange: (value) => {
@@ -631,8 +637,9 @@ export class PromptCollection extends HTMLElement {
                     return;
                 }
                 const sel = this.rows.get(entry)?.editor.getSelection?.();
-                if (entry.prompt) {
-                    const promptContent = entry.prompt.input.content;
+                const prompt = promptOf(entry);
+                if (prompt) {
+                    const promptContent = prompt.input.content;
                     promptContent.text = value;
                     if (sel != null) {
                         promptContent.selection = sel;
@@ -686,7 +693,7 @@ export class PromptCollection extends HTMLElement {
         const tab = document.createElement("span");
         tab.className = "prompt-collection-tab";
         tab.setAttribute("data-prompt", id);
-        tab.replaceChildren(buildStyledText(entry.echo.label));
+        tab.replaceChildren(buildStyledText(entry.cell.label));
         tab.draggable = true;
         tab.addEventListener("click", () => this.showPrompt(entry));
         tab.addEventListener("dragstart", (e) => {
@@ -815,7 +822,7 @@ export class PromptCollection extends HTMLElement {
     // ("previous"/"next", see virtualChord) is tried as a fallback, so an
     // explicit ArrowUp/ArrowDown binding still wins everywhere.
     private handleBindings(entry: Entry, e: KeyboardEvent): void {
-        const bindings = entry.prompt?.bindings;
+        const bindings = promptOf(entry)?.bindings;
         if (!bindings) {
             return;
         }
@@ -837,7 +844,7 @@ export class PromptCollection extends HTMLElement {
                     // submit reset replaces the content whole, editability
                     // (and filigrane) included.
                     if (typeof binding === "object" && binding.freeze) {
-                        const content = entry.prompt?.input.content;
+                        const content = promptOf(entry)?.input.content;
                         if (content) {
                             content.editability = "frozen";
                         }
@@ -911,8 +918,8 @@ export class PromptCollection extends HTMLElement {
     // ── Reconfiguration ─────────────────────────────────────────────────────
 
     // Re-read an Entry's label, accent and marker after it was reconfigured
-    // (a prompt_configure), reset the editor's text and cursor from the
-    // Prompt's `content` (if any), and unblock a frozen editor.
+    // (a prompt `configure`), reset the editor's text and cursor from the
+    // prompt's `content` (if any), and unblock a frozen editor.
     private reconfigure(entry: Entry): void {
         const row = this.rows.get(entry);
         if (!row) {
@@ -926,13 +933,13 @@ export class PromptCollection extends HTMLElement {
             this.removePrompt(entry);
             return;
         }
-        row.tab.replaceChildren(buildStyledText(entry.echo.label));
+        row.tab.replaceChildren(buildStyledText(entry.cell.label));
         this.renderMarker(row, entry);
         this.applyTabStyle(row);
 
         // Reset the editor from `content`: its text, colorization and
         // selection. Guarded so the resulting change doesn't sync back into it.
-        const content = entry.prompt?.input.content;
+        const content = promptOf(entry)?.input.content;
         if (content) {
             this.applyingContent = true;
             try {
@@ -952,14 +959,14 @@ export class PromptCollection extends HTMLElement {
     // Push the Entry's ghost text (`content.filigrane`) into its editor;
     // cleared when the Entry has none. No-op on editors that don't support it.
     private applyFiligrane(row: Row): void {
-        row.editor.setFiligrane?.(row.entry.prompt?.input.content.filigrane ?? null);
+        row.editor.setFiligrane?.(promptOf(row.entry)?.input.content.filigrane ?? null);
     }
 
-    /** Paint a tab from its Echo accent while active, or grey while inactive. The
+    /** Paint a tab from its cell's accent while active, or grey while inactive. The
      *  accent is resolved through the color grammar; an unparseable one is
      *  ignored (the tab falls back to inherited styling). */
     private applyTabStyle(row: Row): void {
-        const accent = row.entry === this.active ? row.entry.echo.color : "grey";
+        const accent = row.entry === this.active ? row.entry.cell.color : "grey";
         let css = "";
         if (accent) {
             try {
@@ -1064,16 +1071,16 @@ export class PromptCollection extends HTMLElement {
     // itself (custom properties inherit downward, and the rectangle styles read
     // it on the row) so the stylesheet can tint the rectangle and top line.
     private renderMarker(row: Row, entry: Entry): void {
-        const styled = entry.prompt?.input.context;
+        const styled = promptOf(entry)?.input.context;
         if (styled?.text) {
             row.marker.replaceChildren(buildStyledText(styled, this.theme));
         } else {
             row.marker.replaceChildren();
         }
         let accent = "";
-        if (entry.echo.color) {
+        if (entry.cell.color) {
             try {
-                accent = this.theme.calculateColor(entry.echo.color);
+                accent = this.theme.calculateColor(entry.cell.color);
             } catch {
                 accent = "";
             }

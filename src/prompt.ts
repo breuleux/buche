@@ -1,5 +1,4 @@
-import type { Submission, SubmissionConfiguration } from "./types.ts";
-import { applySubmission, WithId } from "./utils.ts";
+import type { SubmissionConfiguration } from "./types.ts";
 
 export interface PromptBinding {
     command: string;
@@ -16,32 +15,7 @@ export interface PromptConfiguration {
      * The prompt's input: its content (what the user is typing, with the
      * `selection`, the ghost-text `filigrane` and its `editability`) and its
      * context (the marker text above the editor). Not to be confused with the
-     * echo's `submission` (EchoConfiguration), what a cell shows was submitted.
+     * cell's `submission` (CellConfiguration), what a cell shows was submitted.
      */
     input?: SubmissionConfiguration;
-}
-
-export class Prompt extends WithId() implements PromptConfiguration {
-    bindings: PromptBindings = {};
-    input: Submission = {
-        content: { text: "", ranges: [], selection: { start: 0, end: 0 } },
-        context: { text: "", ranges: [] },
-    };
-    /**
-     * Machine bookkeeping (not configuration): the `request_id` of the last
-     * parse sent for this prompt's content. A highlight echo (prompt_configure
-     * with a `request_id`) only applies while it matches. Null once an
-     * authoritative configure took over (no parse is awaiting its answer).
-     */
-    request_id: string | null = null;
-
-    constructor(config: PromptConfiguration) {
-        super();
-        this.configure(config);
-    }
-
-    configure(config: PromptConfiguration): void {
-        this.bindings = config.bindings ?? this.bindings;
-        applySubmission(this.input, config.input);
-    }
 }

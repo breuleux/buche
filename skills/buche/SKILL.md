@@ -1,6 +1,6 @@
 ---
 name: buche
-description: Build GUI apps for the buche terminal — drive an interactive HTML view from your program over the fd-5 control channel (cell_configure, cell_send with html/exec/data/register/resolve/response commands), talk back from JavaScript with the in-iframe `buche` API, serve proc:// resources, and handle focus and sizing. Use when writing any program (Python, Node, anything) that renders an interactive UI in buche, with buchelib or over the raw JSON protocol.
+description: Build GUI apps for the buche terminal — drive an interactive HTML view from your program over the fd-5 control channel (configure with kind "frame", send with html/exec/data/register/resolve/response commands), talk back from JavaScript with the in-iframe `buche` API, serve proc:// resources, and handle focus and sizing. Use when writing any program (Python, Node, anything) that renders an interactive UI in buche, with buchelib or over the raw JSON protocol.
 ---
 
 # Programming buche GUI cells
@@ -75,7 +75,7 @@ address plus `"?"`): an empty terminal, standing in for the first thing you
 show, and taking keyboard input meanwhile. Then:
 
 - What you print goes to `<process>.$stdout`: your **terminal** cell.
-- What you write on fd 4 (and GUI commands, §3) goes to `<process>.$gui`:
+- What you write on fd 4 (and GUI commands, §3) goes to `<process>.$frame`:
   your **GUI** cell.
 
 Whichever comes first takes the placeholder's place; the other one, if it
@@ -92,16 +92,20 @@ there; closing the last one terminates it.
 
 (`"mode": "text"` switches back.)
 
-**Any address is a cell.** Output sent from an address that shows nothing yet
-creates a cell there. `cell_configure` configures it (or creates it first —
-send it again with changed fields to reconfigure):
+**Any address is a cell.** `configure` with a `kind` creates a cell there (or
+reconfigures it — send it again with changed fields). A cell is a `"terminal"`,
+a `"frame"` (an HTML page you drive: a GUI) or a `"prompt"`, and stays that
+kind: a GUI app declares a `"frame"`:
 
 ```json
-{"type": "cell_configure", "from": ["myapp"], "to": ["$term"], "label": "myapp"}
+{"type": "configure", "kind": "frame", "from": ["myapp"], "to": ["$term"], "label": "myapp"}
 ```
 
+(Output sent from an address that shows nothing yet also creates a cell there,
+of the kind the output is for: `text` makes a terminal, the rest a GUI.)
+
 Fields that matter for GUI apps (full set in `references/incoming.schema.json`
-under `CellConfigureMessage`):
+under `ConfigureMessage`):
 
 - `label`: tab/cell title: a string, or styled text
   (`{"text": "myapp", "ranges": [{"start": null, "end": null, "style": "sans"}]}`;
@@ -164,10 +168,10 @@ spinner) kills your process and closes the tab right away.
 
 ## 3. Commands — you → GUI
 
-GUI commands ride inside a `cell_send` envelope:
+GUI commands ride inside a `send` envelope:
 
 ```json
-{"type": "cell_send", "from": ["myapp"], "to": ["$term"],
+{"type": "send", "from": ["myapp"], "to": ["$term"],
  "message": {"type": "html", "content": "<h1>hi</h1>"}}
 ```
 
@@ -223,7 +227,7 @@ The iframe dispatches on `data.$schema`:
 ```
 
 Handlers are JavaScript **function source strings** `(msg) => ...`. After
-registering, any `cell_send` whose inner `message.type` matches is dispatched
+registering, any `send` whose inner `message.type` matches is dispatched
 to that function with the whole message as argument. This is the extensibility
 hatch: build your own command vocabulary instead of composing `exec` calls.
 
@@ -260,8 +264,9 @@ of `"value"`).
 ### `text` — the terminal view
 
 `{"type": "text", "stream": "stdout", "text": "..."}` (this is also what
-stdout becomes, at `$stdout`). Sent to a cell, it goes to a terminal view in
-that cell (switchable with its GUI view, if it has one).
+stdout becomes, at `$stdout`). It is for a `"terminal"` cell only: the other
+commands are for a `"frame"` cell, and a cell refuses commands of the other kind
+(a `kindmismatch` problem). For both, use two cells (`$stdout` and `$frame`).
 
 ---
 
@@ -379,16 +384,16 @@ The control-channel conversation of a tiny counter app (process address
 `["counter"]`; `→` = you write to fd 5, `←` = you read):
 
 ```jsonl
-→ {"type":"cell_configure","from":["counter"],"to":["$term"],"label":"counter"}
-→ {"type":"cell_send","from":["counter"],"to":["$term"],"message":{"type":"html","content":
+→ {"type":"configure","kind":"frame","from":["counter"],"to":["$term"],"label":"counter"}
+→ {"type":"send","from":["counter"],"to":["$term"],"message":{"type":"html","content":
   "<p>Count: <b id=\"n\">0</b></p>
    <button autofocus onclick=\"buche({action:'inc'})\">+1</button>
    <script>
      buche.proc('state.json').then(r => r.json()).then(s => { document.getElementById('n').textContent = s.n; });
    </script>"}}
-→ {"type":"cell_send","from":["counter"],"to":["$term"],"message":{"type":"resolve","path":"state.json","content":"{\"n\": 41}","mimetype":"application/json"}}
+→ {"type":"send","from":["counter"],"to":["$term"],"message":{"type":"resolve","path":"state.json","content":"{\"n\": 41}","mimetype":"application/json"}}
 ← {"type":"data","from":["$term"],"to":["counter"],"data":{"action":"inc"}}
-→ {"type":"cell_send","from":["counter"],"to":["$term"],"message":{"type":"exec","code":"++document.getElementById('n').textContent|0"}}
+→ {"type":"send","from":["counter"],"to":["$term"],"message":{"type":"exec","code":"++document.getElementById('n').textContent|0"}}
 ```
 
 (Order the `resolve` push before the `html` if you want the `fetch` to hit the

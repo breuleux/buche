@@ -3,15 +3,11 @@
 
 /** Message `type` names for driver incoming messages. */
 export const incomingDriverMessageTypes = new Set<string>([
-    "cell_configure",
-    "cell_send",
     "close",
     "configure",
-    "data",
     "error",
-    "prompt_configure",
+    "send",
     "sync",
-    "text",
 ]);
 
 /** Message `type` names for driver outgoing messages. */
@@ -44,5 +40,4 @@ export const outgoingInterfaceMessageTypes = new Set<string>([
     "problem",
     "update_cell",
     "update_entry",
-    "update_prompt",
 ]);

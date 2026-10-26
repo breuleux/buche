@@ -1,5 +1,5 @@
+import { killable } from "../cell.ts";
 import type { Buche } from "../core.ts";
-import { killable } from "../echo.ts";
 import type { BaseMessage } from "./common.ts";
 
 /** Outcome of a process that has terminated. */
@@ -26,9 +26,9 @@ export function handle$close(buche: Buche, obj: CloseMessage): void {
     const h = buche.hierarchy.getAt(obj.from);
     const entries = h ? (obj.propagate === false ? [h] : h.walk()) : [];
     for (const entry of entries) {
-        const echo = entry.echo;
-        if (killable(echo)) {
-            echo.status = { status, code: obj.outcome.code };
+        const cell = entry.cell;
+        if (killable(cell)) {
+            cell.status = { status, code: obj.outcome.code };
             buche.sendInterface({
                 type: "update_entry",
                 entry: entry,

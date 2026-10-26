@@ -53,7 +53,7 @@
         },
         "request_id": {
           "type": "string",
-          "description": "Reference number for this parse. Whatever answers it — the highlight echo (a `prompt_configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
+          "description": "Reference number for this parse. Whatever answers it — the highlight echo (a prompt `configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
         }
       },
       "required": ["from", "request_id", "selection", "text", "to", "type"],

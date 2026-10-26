@@ -1,0 +1,8 @@
+{"$role":"driverIn","type":"configure","kind":"frame","from":["$proc","app"],"to":["$term"],"label":"app"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#102"}}
+{"$role":"driverIn","type":"configure","kind":"terminal","from":["$proc","app"],"to":["$term"]}
+{"$role":"interfaceOut","type":"problem","code":"kindmismatch","reason":"The frame at [\"$proc\",\"app\"] is no terminal","input":{"type":"configure","kind":"terminal","from":["$proc","app"],"to":["$term"]}}
+{"$role":"driverIn","type":"configure","kind":"prompt","from":["$proc","cq"],"to":["$term"],"label":"cq"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":null,"link":true},"entry":{"cell":"#103"}}
+{"$role":"driverIn","type":"configure","kind":"frame","from":["$proc","cq"],"to":["$term"]}
+{"$role":"interfaceOut","type":"problem","code":"kindmismatch","reason":"The prompt at [\"$proc\",\"cq\"] is no frame","input":{"type":"configure","kind":"frame","from":["$proc","cq"],"to":["$term"]}}

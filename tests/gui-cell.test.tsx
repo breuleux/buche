@@ -41,7 +41,7 @@ describe("cell_gui_feedback", () => {
     test("is relayed to the entry's address as a data request", () => {
         resetId(100);
         const f = machine();
-        f.buche.handle({ type: "cell_configure", from: CELL, to: ["$term"] } as never);
+        f.buche.handle({ type: "configure", kind: "frame", from: CELL, to: ["$term"] } as never);
         f.driverOut.length = 0;
         f.buche.handle({
             type: "cell_gui_feedback",
@@ -69,7 +69,7 @@ function box(): EchoBox {
 
 function run(cell: Cell, boxEl: EchoBox, ...commands: CellCommand[]): void {
     const entry = new Entry({});
-    entry.setCell(cell);
+    entry.cell = cell;
     boxEl.bindEntry(entry);
     for (const command of commands) {
         cell.handle(command, entry, boxEl);
@@ -79,7 +79,7 @@ function run(cell: Cell, boxEl: EchoBox, ...commands: CellCommand[]): void {
 describe("cell gui views", () => {
     test("a data command creates the gui view and makes it active", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "data", data: { hello: "world" } });
         expect(b.views).toContain("gui");
         expect(b.activeView).toBe("gui");
@@ -93,7 +93,7 @@ describe("cell gui views", () => {
 
     test("html, exec, register and register_schemas share the one gui view", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(
             cell,
             b,
@@ -108,32 +108,27 @@ describe("cell gui views", () => {
 
     test("text goes to the terminal view", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("terminal");
         run(cell, b, { type: "text", stream: "stdout", text: "hello\n" });
         expect(b.views).toContain("pty");
         expect(b.views).not.toContain("gui");
     });
 
-    test("a provisional terminal goes when a gui comes first", () => {
+    test("a placeholder's terminal goes when it becomes a frame", () => {
         const b = box();
-        const cell = new Cell({});
-        cell.provideTerminal(new Entry({}), b);
+        const cell = new Cell("pending");
+        const entry = new Entry({});
+        entry.cell = cell;
+        cell.initialize(entry, b);
         expect(b.views).toEqual(["pty"]);
+        cell.kind = "frame";
         run(cell, b, { type: "data", data: {} });
         expect(b.views).toEqual(["gui"]);
     });
 
-    test("a terminal that was written to stays", () => {
-        const b = box();
-        const cell = new Cell({});
-        cell.provideTerminal(new Entry({}), b);
-        run(cell, b, { type: "text", stream: "stdout", text: "hi" }, { type: "data", data: {} });
-        expect(b.views).toEqual(["pty", "gui"]);
-    });
-
     test("a response does not bring the gui into existence", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "response", response_id: "r1", value: 1 });
         expect(b.views).not.toContain("gui");
     });
@@ -149,7 +144,7 @@ describe("gui size information", () => {
 
     test("a box resize refreshes the sizing information in the queue, in place", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "html", content: "<p>hi</p>" });
         const gui = b.getView("gui")!.firstElementChild as BucheGui;
 
@@ -166,7 +161,7 @@ describe("gui size information", () => {
 
     test("a dragged (pinned) box announces dynamicHeight false", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "data", data: {} });
         const gui = b.getView("gui")!.firstElementChild as BucheGui;
         (b.querySelector(".echo-box-cell") as HTMLElement).style.height = "300px";
@@ -177,7 +172,7 @@ describe("gui size information", () => {
 
     test("a pinned cell hands the height from the content to the fill, and back", () => {
         const b = box();
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "html", content: "<p>hi</p>" });
         const gui = b.getView("gui")!.firstElementChild as BucheGui;
         // Dynamic sizing drives the height from the content reports (inline).
@@ -203,7 +198,7 @@ describe("gui size information", () => {
         const b = document.createElement("echo-box") as EchoBox;
         b.setAttribute("fills", "");
         document.body.append(b);
-        const cell = new Cell({});
+        const cell = new Cell("frame");
         run(cell, b, { type: "data", data: {} });
         const gui = b.getView("gui")!.firstElementChild as BucheGui;
 
@@ -231,8 +226,8 @@ describe("gui kill from the interface", () => {
 
     test("every gui hands the navigation-mode chord to the page", () => {
         const { driver } = setup();
-        driver({ type: "cell_configure", from: ["p"] });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        driver({ type: "configure", kind: "frame", from: ["p"] });
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui");
         expect(gui).not.toBeNull();
         // Alt+Q (the layout's navigation mode) escapes the iframe.
@@ -241,31 +236,31 @@ describe("gui kill from the interface", () => {
 
     test("the focus moves to the gui when it appears", () => {
         const { iface, driver } = setup();
-        driver({ type: "cell_configure", from: ["p"] });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        driver({ type: "configure", kind: "frame", from: ["p"] });
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui")!;
         expect(iface.focus.current).toBe(gui);
     });
 
     test("a background cell's gui does not take the focus", () => {
         const { iface, driver } = setup();
-        driver({ type: "cell_configure", from: ["p"], background: true });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        driver({ type: "configure", kind: "frame", from: ["p"], background: true });
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui")!;
         expect(iface.focus.current).not.toBe(gui);
     });
 
-    test("text and gui are two views of the one box", () => {
-        const { iface, driver } = setup();
-        driver({ type: "cell_configure", from: ["p"] });
-        driver({ type: "text", from: ["p"], stream: "stdout", text: "hi\n" });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
-        // The gui took the focus, and the box now shows both views.
-        const gui = document.querySelector<BucheGui>("buche-gui")!;
-        const box = gui.closest("echo-box")!;
-        expect(box.querySelectorAll("embedded-term").length).toBe(1);
-        expect(box.querySelectorAll("buche-gui").length).toBe(1);
-        expect(iface.focus.current).toBe(gui);
+    test("text for a frame cell is refused", () => {
+        const { driver } = setup();
+        driver({ type: "configure", from: ["p"], kind: "frame" });
+        driver({
+            type: "send",
+            from: ["p"],
+            message: { type: "text", stream: "stdout", text: "hi\n" },
+        });
+        const box = document.querySelector<EchoBox>("echo-box")!;
+        expect(box.views).toEqual(["gui"]);
+        expect(box.querySelector("embedded-term")).toBeNull();
     });
 
     // A focusable outside the cell, to have somewhere for the focus to go
@@ -281,8 +276,8 @@ describe("gui kill from the interface", () => {
     function stickyGuiCell(iface: BucheInterface, driver: (m: Record<string, unknown>) => void) {
         const other = standIn(iface);
         iface.focus.focus(other, "api");
-        driver({ type: "cell_configure", from: ["p"], sticky: true });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        driver({ type: "configure", kind: "frame", from: ["p"], sticky: true });
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui")!;
         return { other, gui, box: gui.closest("echo-box")! };
     }
@@ -305,13 +300,14 @@ describe("gui kill from the interface", () => {
         iface.focus.focus(other, "api");
         driver({ type: "configure", from: ["$proc", "1"] });
         driver({
-            type: "cell_configure",
+            type: "configure",
+            kind: "frame",
             from: ["$proc", "1", "$main"],
             represents: ["$proc", "1"],
             sticky: true,
         });
         driver({
-            type: "cell_send",
+            type: "send",
             from: ["$proc", "1", "$main"],
             message: { type: "data", data: {} },
         });
@@ -347,21 +343,22 @@ describe("gui kill from the interface", () => {
         // was expected on), then the gui inside that box. Stepping back from
         // the gui onto the box would resolve right back onto the gui.
         const { iface, driver } = setup();
-        driver({ type: "prompt_configure", from: ["$proc", "cq"], label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: ["$proc", "cq"], label: "cq" });
         await new Promise((resolve) => setTimeout(resolve, 0));
         const pc = document.querySelector<PromptCollection>("prompt-collection")!;
         const promptEl = pc.promptElement(pc.prompts[0])!;
         expect(iface.focus.current).toBe(promptEl);
 
+        // The process's placeholder, taken over by its gui.
         iface.focus.expect("echo-c1");
-        driver({ type: "cell_configure", from: ["$proc", "cq", "2"], sticky: true, id: "c1" });
+        driver({ type: "configure", from: ["$proc", "cq", "2"], sticky: true, id: "c1" });
         await new Promise((resolve) => setTimeout(resolve, 0));
         const box = document.querySelector("#echo-c1")!;
         expect(iface.focus.current).toBe(box);
 
         driver({
-            type: "cell_send",
-            from: ["$proc", "cq", "2"],
+            type: "send",
+            from: ["$proc", "cq", "2", "$frame"],
             message: { type: "data", data: {} },
         });
         const gui = box.querySelector<BucheGui>("buche-gui")!;
@@ -382,13 +379,13 @@ describe("gui kill from the interface", () => {
         // then the gui: stepping back would land on the terminal, i.e. nowhere
         // near the exit, so the prompt gets the focus instead.
         const { iface, driver } = setup();
-        driver({ type: "prompt_configure", from: ["$proc", "cq"], label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: ["$proc", "cq"], label: "cq" });
         await new Promise((resolve) => setTimeout(resolve, 0));
         const pc = document.querySelector<PromptCollection>("prompt-collection")!;
         const promptEl = pc.promptElement(pc.prompts[0])!;
 
-        driver({ type: "cell_configure", from: ["$proc", "cq", "2"], sticky: true });
-        const box = document.querySelector("#echo-c2") ?? document.querySelector("echo-box")!;
+        driver({ type: "configure", from: ["$proc", "cq", "2"], sticky: true });
+        const box = document.querySelector<EchoBox>("echo-box")!;
         const inner = document.createElement("div");
         inner.setAttribute("focusable", "cell");
         inner.tabIndex = -1;
@@ -396,8 +393,8 @@ describe("gui kill from the interface", () => {
         iface.focus.focus(promptEl, "api");
         iface.focus.focus(inner, "api");
         driver({
-            type: "cell_send",
-            from: ["$proc", "cq", "2"],
+            type: "send",
+            from: ["$proc", "cq", "2", "$frame"],
             message: { type: "data", data: {} },
         });
         const gui = box.querySelector<BucheGui>("buche-gui")!;
@@ -415,8 +412,8 @@ describe("gui kill from the interface", () => {
 
     test("killCell targets the box when the focus is on the gui itself", () => {
         const { iface, driver } = setup();
-        driver({ type: "cell_configure", from: ["p"] });
-        driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
+        driver({ type: "configure", kind: "frame", from: ["p"] });
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
         const gui = document.querySelector<BucheGui>("buche-gui")!;
         // What Alt+Q does to the focus: it lands on the <buche-gui> host.
         iface.focus.focus(gui, "nav");
@@ -427,5 +424,76 @@ describe("gui kill from the interface", () => {
         const queued = [...iface.interactions.purge()];
         expect(queued).toHaveLength(1);
         expect(queued[0]?.type).toBe("user_signal");
+    });
+});
+
+// ── interface: cell kinds ────────────────────────────────────────────────────
+
+describe("cell kinds", () => {
+    function setup() {
+        const container = document.createElement("div");
+        document.body.append(container);
+        const iface = new BucheInterface({ container });
+        const buche: Buche = new Buche({
+            sendDriver: () => {},
+            sendInterface: (m) => iface.processMessage(buche, m),
+        });
+        const driver = (m: Record<string, unknown>) =>
+            buche.handle({ to: ["$term"], ...m } as InM);
+        return { iface, buche, driver };
+    }
+
+    test("a frame cell shows its gui right away, with no terminal", () => {
+        const { iface, driver } = setup();
+        driver({ type: "configure", from: ["p"], kind: "frame" });
+        const gui = document.querySelector<BucheGui>("buche-gui");
+        expect(gui).not.toBeNull();
+        expect(document.querySelector("embedded-term")).toBeNull();
+        expect(iface.focus.current).toBe(gui);
+    });
+
+    test("a terminal cell shows its terminal right away, and takes no frame content", () => {
+        const { driver } = setup();
+        driver({ type: "configure", from: ["p"], kind: "terminal" });
+        expect(document.querySelectorAll("embedded-term").length).toBe(1);
+        driver({ type: "send", from: ["p"], message: { type: "data", data: {} } });
+        const box = document.querySelector<EchoBox>("echo-box")!;
+        expect(box.views).toEqual(["pty"]);
+    });
+
+    test("a frame cell claiming a placeholder replaces its terminal", () => {
+        const { driver } = setup();
+        driver({ type: "configure", from: ["p"], label: "p" });
+        expect(document.querySelectorAll("embedded-term").length).toBe(1);
+        driver({ type: "configure", from: ["p", "$frame"], kind: "frame" });
+        const box = document.querySelector<EchoBox>("echo-box")!;
+        expect(box.views).toEqual(["gui"]);
+        expect(document.querySelectorAll("echo-box").length).toBe(1);
+    });
+
+    test("a terminal cell claiming a placeholder keeps its terminal", () => {
+        const { buche, driver } = setup();
+        driver({ type: "configure", from: ["p"], label: "p" });
+        const term = document.querySelector("embedded-term");
+        driver({ type: "configure", from: ["p", "$stdout"], kind: "terminal" });
+        expect(buche.get(["p", "$stdout"]).cell?.kind).toBe("terminal");
+        expect(document.querySelector("embedded-term")).toBe(term);
+    });
+
+    test("output takes a placeholder over, with the kind it is for", () => {
+        const { buche, driver } = setup();
+        driver({ type: "configure", from: ["p"], label: "p" });
+        driver({ type: "send", from: ["p", "$frame"], message: { type: "data", data: {} } });
+        expect(buche.get(["p", "$frame"]).cell?.kind).toBe("frame");
+        const box = document.querySelector<EchoBox>("echo-box")!;
+        expect(box.views).toEqual(["gui"]);
+        expect(document.querySelectorAll("echo-box").length).toBe(1);
+    });
+
+    test("a prompt cell is a prompt", () => {
+        const { buche, driver } = setup();
+        driver({ type: "configure", from: ["cq"], kind: "prompt", label: "cq" });
+        expect(buche.get(["cq"]).cell.kind).toBe("prompt");
+        expect(buche.get(["cq"]).cell?.kind).toBe("prompt");
     });
 });

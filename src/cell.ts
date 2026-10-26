@@ -2,8 +2,17 @@ import { BucheGui, GUI_APPEAR_EVENT } from "./components/buche-gui.tsx";
 import type { EchoBox } from "./components/echo-box.tsx";
 import { EmbeddedTerm } from "./components/embedded-term.tsx";
 import type { Entry } from "./entry.ts";
-import type { Json } from "./types.ts";
-import { WithId } from "./utils.ts";
+import type { PromptBindings, PromptConfiguration } from "./prompt.ts";
+import type {
+    Accent,
+    Address,
+    Icon,
+    Json,
+    StyledText,
+    Submission,
+    SubmissionConfiguration,
+} from "./types.ts";
+import { applySubmission, emptySubmission, WithId } from "./utils.ts";
 
 export interface TextCommand {
     type: "text";
@@ -108,36 +117,229 @@ export type CellCommand =
     | ResolveCommand
     | ResponseCommand;
 
-/** Cell configuration (nothing yet: what a cell shows is up to what it is sent). */
-// biome-ignore lint/suspicious/noEmptyInterface: extended by cell_configure
-export interface CellConfiguration {}
+export type StatusString = "absent" | "running" | "done" | "error" | "unresponsive" | "standby";
+
+export interface Status {
+    status: StatusString;
+    code?: number | string | null;
+}
+
+/**
+ * A cell's configuration: how it looks, and how it behaves (the same for any
+ * kind of cell). See `configure`.
+ */
+export interface CellConfiguration {
+    /**
+     * What was submitted: the command text, and the context it was submitted
+     * in (e.g. the prompt it was typed at: host, path, branch). The context,
+     * when present, is shown above the echo box in the accent color. A
+     * configuration may give either subfield alone; the other keeps its
+     * current value. Echos are read-only, always: the content's `editability`
+     * (see InteractiveStyledText) defaults to "readonly" here and any value
+     * has no effect (only "readonly" is supported for echos for now).
+     */
+    submission?: SubmissionConfiguration;
+
+    /**
+     * The cell/tab label: styled text (its ranges' styles can set the font,
+     * e.g. "mono" or "sans"), or a plain string.
+     */
+    label?: StyledText | string;
+
+    /** Accent color for the component. */
+    color?: Accent;
+
+    /** The cell/tab icon, shown before the label. Explicit null removes it. */
+    icon?: Icon | null;
+
+    /**
+     * The id of the user command this echo answers (repeated from the
+     * "command" request's `id`). The interface uses it to give the focus to
+     * the echo's element when it appears.
+     */
+    id?: string;
+
+    /** If true, keep the focus on the cell when its process ends. */
+    sticky?: boolean;
+
+    /** If true, do not automatically focus the cell or prompt. */
+    background?: boolean;
+
+    /**
+     * If true, the element showing this entry (the cell's box, and with it
+     * its tab) is removed when the entry is marked done or error. Prompts
+     * already go away when their process ends.
+     */
+    ephemeral?: boolean;
+
+    /**
+     * Address of the entry this one stands for (typically the process that
+     * owns it). While set, the entry's status mirrors that entry's, and user
+     * signals, input and resizes are routed to its address. Explicit null
+     * disables the mirroring.
+     */
+    represents?: Address | null;
+
+    /**
+     * Switch the (represented) entry between running and standby. A standby
+     * entry is a temporary interface the user may be done with: it is killed
+     * by a clear, like spent cells are removed, or once it has stayed scrolled
+     * out of view for a while. Ignored once the entry is done or errored.
+     */
+    status?: "running" | "standby";
+}
+
+/**
+ * What a cell shows, as a driver declares it: a terminal, a frame (an HTML
+ * page the driver drives: a GUI), or a prompt.
+ */
+export type ViewKind = "terminal" | "frame" | "prompt";
+
+/**
+ * What a cell is: a {@link ViewKind}; `pending` — a placeholder, standing in
+ * (with a terminal to take input meanwhile) for whatever its process shows
+ * first, which takes it over (see `Buche.claim`) and gives it its kind; or
+ * `group` — an entry that shows nothing itself (a process, or any parent of
+ * cells), whose look and status its views take on. Every entry has a cell,
+ * of kind `group` until it shows something.
+ */
+export type CellKind = ViewKind | "pending" | "group";
+
+/** The views a box can have. */
+export type ViewLabel = "pty" | "gui";
+
+/** The DOM id of the element showing the cell answering command `id`. */
+export function echoElementId(id: string): string {
+    return `echo-${id}`;
+}
+
+/** Whether the cell's process can still receive signals (kill, resize, ...). */
+export function killable(cell: Cell): boolean {
+    const { status } = cell.status;
+    return status === "running" || status === "unresponsive" || status === "standby";
+}
+
+/** A label as styled text (a plain string has no styling). */
+export function toStyledText(label: StyledText | string | undefined): StyledText | undefined {
+    return typeof label === "string" ? { text: label, ranges: [] } : label;
+}
+
+/** A cell's configuration, to pass on (e.g. to the views of a process). */
+export function cellConfiguration(cell: Cell): CellConfiguration {
+    return {
+        submission: cell.submission ?? undefined,
+        label: cell.label,
+        color: cell.color,
+        icon: cell.icon,
+        id: cell.id,
+        sticky: cell.sticky,
+        background: cell.background,
+        ephemeral: cell.ephemeral,
+    };
+}
+
+/** The kind of cell a command is for. */
+export function commandKind(command: CellCommand): "terminal" | "frame" {
+    return command.type === "text" ? "terminal" : "frame";
+}
 
 /** Counter behind the per-cell ids under which GUI iframes serve `proc://`. */
 let guiSeq = 0;
 
-export class Cell extends WithId() implements CellConfiguration {
-    /**
-     * The terminal view is only there in case it's needed (a placeholder's,
-     * to take input before any output): it goes away if a GUI comes first.
-     */
-    provisional = false;
+export class Cell extends WithId() {
+    /** What the cell is (see {@link CellKind}); it changes as the entry comes
+     *  to show something. */
+    kind: CellKind;
 
-    constructor(config: CellConfiguration) {
+    /** What was submitted (command text + context), or null until a
+     *  configuration provides it. See {@link CellConfiguration.submission}. */
+    submission: Submission | null = null;
+
+    /** The cell/tab label. */
+    label!: StyledText;
+
+    /** Accent color for the component. */
+    color!: Accent;
+
+    /** The cell/tab icon, if any. */
+    icon: Icon | null = null;
+
+    /** The id of the user command this cell answers, if any. */
+    id?: string;
+
+    /** If true, keep the focus on the cell when its process ends. */
+    sticky = false;
+
+    /** If true, do not automatically focus the cell or prompt. */
+    background = false;
+
+    /** If true, the showing element is removed once the entry is spent. */
+    ephemeral = false;
+
+    /** Status of the component. */
+    status: Status = { status: "absent" };
+
+    /** For a prompt: key-chord → action-name map. */
+    bindings: PromptBindings = {};
+
+    /** For a prompt: what the user is typing, and the marker above it. */
+    input: Submission = {
+        content: { text: "", ranges: [], selection: { start: 0, end: 0 } },
+        context: { text: "", ranges: [] },
+    };
+
+    /**
+     * For a prompt, machine bookkeeping (not configuration): the `request_id`
+     * of the last parse sent for its content. A highlight echo (a configure
+     * with a `request_id`) only applies while it matches. Null once an
+     * authoritative configure took over (no parse is awaiting its answer).
+     */
+    request_id: string | null = null;
+
+    constructor(kind: CellKind, config: CellConfiguration = {}) {
         super();
+        this.kind = kind;
         this.configure(config);
     }
 
-    configure(config: CellConfiguration) {}
-
-    /** Give the box a terminal right away, provisionally (see `provisional`). */
-    provideTerminal(entry: Entry, box: EchoBox): void {
-        this.handle$text({ type: "text", stream: "stdout", text: "" }, entry, box);
-        this.provisional = true;
+    /** Apply a configuration: the fields it gives replace the current ones. */
+    configure(config: CellConfiguration) {
+        this.label =
+            toStyledText(config.label) ?? this.label ?? toStyledText(`%${this.serialId}`)!;
+        this.color = config.color ?? this.color ?? "purple";
+        if (config.icon !== undefined) {
+            this.icon = config.icon;
+        }
+        if (config.submission) {
+            this.submission ??= emptySubmission();
+            applySubmission(this.submission, config.submission);
+        }
+        this.id = config.id ?? this.id;
+        this.sticky = config.sticky ?? this.sticky;
+        this.background = config.background ?? this.background;
+        this.ephemeral = config.ephemeral ?? this.ephemeral;
     }
 
-    /** The terminal is in use: it stays, whatever comes next. */
-    settle(): void {
-        this.provisional = false;
+    /** Apply a prompt's configuration (its bindings and input). */
+    configurePrompt(config: PromptConfiguration): void {
+        this.bindings = config.bindings ?? this.bindings;
+        applySubmission(this.input, config.input);
+    }
+
+    /**
+     * Give the box the view the cell's kind needs (idempotent: run on every
+     * update): a terminal for a terminal, or a placeholder (to take input
+     * before any output); a GUI for a frame — which replaces the terminal of
+     * the placeholder it took over, if any.
+     */
+    initialize(entry: Entry, box: EchoBox): void {
+        if (this.kind === "terminal" || this.kind === "pending") {
+            if (!box.getView("pty")) {
+                this.handle$text({ type: "text", stream: "stdout", text: "" }, entry, box);
+            }
+        } else if (this.kind === "frame") {
+            this.ensureGui(box);
+        }
     }
 
     /** The cell's GUI view, creating it (and the <buche-gui> iframe) on first
@@ -152,10 +354,8 @@ export class Cell extends WithId() implements CellConfiguration {
         if (!gui.hasAttribute("sandbox")) {
             gui.setAttribute("sandbox", "allow-scripts");
         }
-        if (this.provisional) {
-            box.removeView("pty");
-            this.provisional = false;
-        }
+        // The terminal of the placeholder this cell took over goes.
+        box.removeView("pty");
         box.setView("gui", gui);
         box.showView("gui");
         // Announce the arrival: the interface moves the focus to the GUI
@@ -179,9 +379,6 @@ export class Cell extends WithId() implements CellConfiguration {
     }
 
     handle$text(message: TextCommand, entry: Entry, box: EchoBox) {
-        if (message.text !== "") {
-            this.settle();
-        }
         let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
         if (!view) {
             view = new EmbeddedTerm();
@@ -190,7 +387,7 @@ export class Cell extends WithId() implements CellConfiguration {
             view.setAttribute("ed2-clears-scrollback", "");
             const cursorTerm = view;
             entry.listeners.push((entry: Entry) => {
-                const st = entry.echo.status.status;
+                const st = entry.cell.status.status;
                 if (st === "done" || st === "error") {
                     cursorTerm.setCursorEnabled(false);
                 } else {

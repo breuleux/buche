@@ -19,10 +19,10 @@ export function handle$user_signal(buche: Buche, obj: UserSignalMessage): void {
         type: "signal",
         code: obj.code,
         from: ["$term"],
-        to: target.echo.address,
+        to: target.address(),
     });
     // We expect a response from the shell; hold the echo until it closes.
-    target.echo.status = { status: "unresponsive" };
+    target.cell.status = { status: "unresponsive" };
     buche.sendInterface({
         type: "update_entry",
         entry: target,

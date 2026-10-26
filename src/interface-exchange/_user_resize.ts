@@ -1,5 +1,5 @@
+import { killable } from "../cell.ts";
 import type { Buche } from "../core.ts";
-import { killable } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 
 export interface UserResizeMessage {
@@ -23,7 +23,7 @@ export interface UserResizeMessage {
 export function handle$user_resize(buche: Buche, obj: UserResizeMessage): void {
     // The resize reaches the represented entry (the process) that owns the pty.
     const target = obj.entry.representative() ?? obj.entry;
-    if (!killable(target.echo)) {
+    if (!killable(target.cell)) {
         return;
     }
     buche.sendDriver({
@@ -31,6 +31,6 @@ export function handle$user_resize(buche: Buche, obj: UserResizeMessage): void {
         pixel: obj.pixel,
         ...(obj.pty ? { pty: obj.pty } : {}),
         from: ["$term"],
-        to: target.echo.address,
+        to: target.address(),
     });
 }

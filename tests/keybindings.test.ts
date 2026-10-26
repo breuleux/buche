@@ -8,7 +8,6 @@ import { Entry } from "../src/entry.ts";
 import { BucheInterface } from "../src/interface.tsx";
 import { GlobalKeys } from "../src/keybindings.ts";
 import { isMac } from "../src/keychord.ts";
-import { Prompt } from "../src/prompt.ts";
 import "../src/components/echo-box.tsx";
 import "../src/components/prompt-collection.tsx";
 
@@ -130,7 +129,8 @@ function makePromptCollection(): [PromptCollection, Entry] {
         };
     }) as EditorFactory;
     const entry = new Entry({});
-    entry.setPrompt(new Prompt({ input: { context: { text: "$", ranges: [] } } }));
+    entry.cell.kind = "prompt";
+    entry.cell.configurePrompt({ input: { context: { text: "$", ranges: [] } } });
     pc.addPrompt(entry);
     return [pc, entry];
 }
@@ -237,7 +237,7 @@ function machineInterface() {
     const cells = (shell: string[], ...statuses: string[]) =>
         statuses.map((status, i) => {
             const from = [...shell, String(++seq)];
-            driver({ type: "cell_configure", from, label: `c${seq}` });
+            driver({ type: "configure", kind: "frame", from, label: `c${seq}` });
             if (status !== "running") {
                 driver({
                     type: "close",
@@ -255,14 +255,14 @@ function machineInterface() {
 describe("cell actions", () => {
     test("'k' signals the focused cell's entry", () => {
         const { iface, container, driver, cells } = machineInterface();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const [{ entry, box }] = cells(SHELL, "running");
         iface.focus.focus(box);
         iface.interactions.purge();
 
         nav(container, "KeyK");
         // An unresponsive cell gets SIGKILL instead.
-        entry.echo.status = { status: "unresponsive" };
+        entry.cell.status = { status: "unresponsive" };
         entry.fire();
         nav(container, "KeyK");
         const signals = [...iface.interactions.purge()].filter(
@@ -277,7 +277,7 @@ describe("cell actions", () => {
 
     test("'p' focuses the prompt and leaves navigation, like Mod+p", () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const [{ box }] = cells(SHELL, "running");
         iface.focus.focus(promptOf(SHELL));
         iface.focus.focus(box);
@@ -296,7 +296,7 @@ describe("cell actions", () => {
 
     test("'w' closes the cell, like its tab's ✕", async () => {
         const { iface, container, driver, cells } = machineInterface();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const [{ box }] = cells(SHELL, "done");
         iface.focus.focus(box);
 
@@ -308,7 +308,7 @@ describe("cell actions", () => {
 
     test("from a prompt, 'k' and 'w' apply to the cell right above it", async () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const [, { entry, box }] = cells(SHELL, "done", "running");
         iface.focus.focus(promptOf(SHELL));
         iface.interactions.purge();
@@ -329,7 +329,7 @@ describe("cell actions", () => {
 
     test("'l' clears spent cells — Alt+Q L, or plain Ctrl+L in a prompt", async () => {
         const { iface, container, driver, cells, promptOf } = machineInterface();
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const [done, err, run] = cells(SHELL, "done", "error", "running");
 
         // (From the prompt: its stream.)
@@ -358,8 +358,8 @@ describe("cell actions", () => {
     test("Ctrl+L clears only the prompt's own stream", async () => {
         const { iface, buche, driver, cells, promptOf } = machineInterface();
         const other = ["$proc", "other"];
-        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        driver({ type: "prompt_configure", from: other, label: "other" });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        driver({ type: "configure", kind: "prompt", from: other, label: "other" });
         const [a] = cells(SHELL, "done");
         const [b] = cells(other, "done");
 

@@ -12,8 +12,8 @@ export interface UserTextMessage {
 
 export function handle$user_text(buche: Buche, obj: UserTextMessage): void {
     // Typing into a placeholder makes it the process's terminal.
-    if (obj.entry.placeholder) {
-        buche.claim([...obj.entry.parent!.address(), "$stdout"], "cell");
+    if (obj.entry.cell?.kind === "pending") {
+        buche.claim([...obj.entry.parent!.address(), "$stdout"], "terminal");
     }
     // Input reaches the represented entry (the process), not the cell itself.
     const target = obj.entry.representative() ?? obj.entry;
@@ -22,6 +22,6 @@ export function handle$user_text(buche: Buche, obj: UserTextMessage): void {
         stream: "stdin",
         text: obj.text,
         from: ["$term"],
-        to: target.echo.address,
+        to: target.address(),
     });
 }

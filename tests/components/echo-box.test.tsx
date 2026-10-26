@@ -7,7 +7,6 @@ import "../../src/components/echo-box.tsx";
 import type { PromptCollection } from "../../src/components/prompt-collection.tsx";
 import "../../src/components/prompt-collection.tsx";
 import { Entry } from "../../src/entry.ts";
-import { Prompt } from "../../src/prompt.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -580,13 +579,13 @@ describe("echo-box — authored views", () => {
 describe("echo-box — ephemeral entries", () => {
     test("an ephemeral entry's box removes itself when the entry is spent", () => {
         const entry = new Entry({});
-        entry.echo.ephemeral = true;
-        entry.echo.status = { status: "running" };
+        entry.cell.ephemeral = true;
+        entry.cell.status = { status: "running" };
         const box = make();
         box.bindEntry(entry);
         expect(box.isConnected).toBe(true);
 
-        entry.echo.status = { status: "done" };
+        entry.cell.status = { status: "done" };
         entry.fire();
         expect(box.isConnected).toBe(false);
         // Detached: later changes no longer touch it.
@@ -595,25 +594,25 @@ describe("echo-box — ephemeral entries", () => {
 
     test("an ephemeral entry's box goes on an error too; a normal one stays", () => {
         const entry = new Entry({});
-        entry.echo.ephemeral = true;
+        entry.cell.ephemeral = true;
         const box = make();
         box.bindEntry(entry);
-        entry.echo.status = { status: "error" };
+        entry.cell.status = { status: "error" };
         entry.fire();
         expect(box.isConnected).toBe(false);
 
         const kept = new Entry({});
         const box2 = make();
         box2.bindEntry(kept);
-        kept.echo.status = { status: "done" };
+        kept.cell.status = { status: "done" };
         kept.fire();
         expect(box2.isConnected).toBe(true);
     });
 
     test("binding an already-spent ephemeral entry removes the box right away", () => {
         const entry = new Entry({});
-        entry.echo.ephemeral = true;
-        entry.echo.status = { status: "done" };
+        entry.cell.ephemeral = true;
+        entry.cell.status = { status: "done" };
         const box = make();
         box.bindEntry(entry);
         expect(box.isConnected).toBe(false);
@@ -636,8 +635,9 @@ describe("echo-box — prompt activity", () => {
 
     function promptEntry(label: string): Entry {
         const entry = new Entry({});
-        entry.echo.label = { text: label, ranges: [] };
-        entry.setPrompt(new Prompt({}));
+        entry.cell.label = { text: label, ranges: [] };
+        entry.cell.kind = "prompt";
+        entry.cell.configurePrompt({});
         return entry;
     }
 

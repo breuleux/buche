@@ -1,1 +1,1 @@
-{"type":"text","from":["$proc","cq","50"],"to":["$term"],"stream":"stdout","text":"orphan output"}
+{"type":"send","from":["$proc","cq","50"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"orphan output"}}

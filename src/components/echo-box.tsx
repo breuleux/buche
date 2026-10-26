@@ -6,7 +6,7 @@
 //   </echo-box>
 //
 //   const box = document.createElement("echo-box") as EchoBox;
-//   box.echo = "make build";
+//   box.cell = "make build";
 //   box.color = "#8ae234";
 //   box.setView("pty", term);         // fill a view with content (icon from the map)
 //   box.bump("gui");                  // flag the gui view as holding unseen content
@@ -82,8 +82,8 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
+import type { Cell, Status, StatusString, ViewLabel } from "../cell.ts";
 import { defaultTheme } from "../color.ts";
-import type { Status, StatusString, ViewLabel } from "../echo.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import type { FocusCommittable } from "../focus.ts";
 import type { StyledText } from "../types.ts";
@@ -94,7 +94,7 @@ import { buildStyledText, syncStatusPhases } from "./utils.tsx";
  *  nearest ancestor (or the entry itself) carrying a Prompt. Null if none. */
 function promptSource(entry: Entry | null): Entry | null {
     for (let e = entry; e; e = e.parent ?? null) {
-        if (e.prompt) {
+        if (e.cell?.kind === "prompt") {
             return e;
         }
     }
@@ -104,7 +104,7 @@ function promptSource(entry: Entry | null): Entry | null {
 /** The box's visual status. Alias of the shared {@link StatusString}. */
 export type EchoStatus = StatusString;
 
-/** Map an {@link Echo}'s status onto the box's visual status. `absent` (an echo
+/** Map a {@link Cell}'s status onto the box's visual status. `absent` (a cell
  *  that hasn't started) is shown as `unresponsive`. */
 function echoStatus(status: Status): StatusString {
     return status.status === "absent" ? "unresponsive" : status.status;
@@ -878,7 +878,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     /**
-     * Configure the box from an {@link Entry}: apply its Echo's command text,
+     * Configure the box from an {@link Entry}: apply its cell's command text,
      * colour, status and views now, and re-apply on every subsequent
      * `entry.fire()`. Any previously bound entry is detached first.
      */
@@ -933,27 +933,21 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     private applyEntry(entry: Entry): void {
-        const echo = entry.echo;
-        const submission = echo?.submission;
+        const cell = entry.cell;
+        const submission = cell.submission;
         if (submission?.content) {
             this.setEcho(submission.content);
         }
         if (submission?.context) {
             this.setEchoContext(submission.context);
         }
-        this.color = echo.color ?? "";
+        this.color = cell.color ?? "";
         // An ephemeral entry's box follows its process: spent means gone.
-        if (echo.ephemeral) {
+        if (cell.ephemeral) {
             this._destroyWhenDone = true;
         }
         // Status comes from the represented entry when there is one.
         this.status = echoStatus(statusOf(entry));
-        // The echo's `views` set drives which view icons exist.
-        if (echo.views) {
-            for (const lbl of echo.views) {
-                this.ensureView(lbl);
-            }
-        }
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────

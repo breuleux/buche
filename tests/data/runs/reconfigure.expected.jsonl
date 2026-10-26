@@ -1,4 +1,4 @@
-{"$role":"driverIn","type":"cell_configure","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"first","background":false}
-{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"echo":"#103","cell":"#104","prompt":null}}
-{"$role":"driverIn","type":"cell_configure","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"second","background":true}
-{"$role":"interfaceOut","type":"update_cell","target":null,"entry":{"echo":"#103","cell":"#104","prompt":null}}
+{"$role":"driverIn","type":"configure","kind":"frame","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"first","background":false}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#103"}}
+{"$role":"driverIn","type":"configure","kind":"frame","from":["$proc","cq","7"],"to":["$term"],"zone":null,"label":"second","background":true}
+{"$role":"interfaceOut","type":"update_cell","target":null,"entry":{"cell":"#103"}}

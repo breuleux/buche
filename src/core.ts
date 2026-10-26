@@ -1,10 +1,9 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
-import { Cell } from "./cell.ts";
+import { type CellConfiguration, type CellKind, cellConfiguration } from "./cell.ts";
 import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import { type EchoConfiguration, echoConfiguration } from "./echo.ts";
 import { Entry, PLACEHOLDER } from "./entry.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
@@ -24,9 +23,6 @@ export interface BucheArguments {
 
 /** Short names of the reserved zones. */
 const ZONE_ALIASES: Record<string, string> = { l: "left", r: "right", u: "up", d: "down" };
-
-/** What is being placed: cells default inline, prompts in a new tab. */
-export type Kind = "cell" | "prompt";
 
 export class Buche {
     handlers: HandlerT = Object.assign(
@@ -121,7 +117,7 @@ export class Buche {
      * first one), else inline; a prompt goes in a new tab, linked to the
      * prompt it lands next to.
      */
-    targetFor(entry: Entry, zone: ZoneDescriptor | null | undefined, kind: Kind): Target {
+    targetFor(entry: Entry, zone: ZoneDescriptor | null | undefined, kind: CellKind): Target {
         let name = (zone ?? "").replace(/^@/, "");
         name = ZONE_ALIASES[name] ?? name;
         const anchor = this.anchorOf(entry);
@@ -140,17 +136,19 @@ export class Buche {
     }
 
     /**
-     * A new cell or prompt at `addr` takes over its parent's placeholder, if
+     * A new cell of `kind` at `addr` takes over its parent's placeholder, if
      * it is still unclaimed and can: the placeholder entry moves to `addr`
-     * (so whatever shows it now shows the claimant), and keeps its place. A
-     * prompt can't go inline, so it doesn't take an inline placeholder.
-     * Returns the claimant, or null if there was nothing to claim.
+     * (so whatever shows it now shows the claimant), and keeps its place. Its
+     * cell takes the claimant's kind — a prompt's is left for the claimant to
+     * make (it is no cell of the placeholder's). A prompt can't go inline, so
+     * it doesn't take an inline placeholder. Returns the claimant, or null if
+     * there was nothing to claim.
      */
-    claim(addr: Address, kind: Kind): Entry | null {
+    claim(addr: Address, kind: CellKind): Entry | null {
         const parent = addr.length ? this.hierarchy.getAt(addr.slice(0, -1)) : null;
         const ph = parent?.primary;
         const field = addr[addr.length - 1];
-        if (!ph?.placeholder || field === PLACEHOLDER) {
+        if (ph?.cell.kind !== "pending" || field === PLACEHOLDER) {
             return null;
         }
         if (kind === "prompt" && ph.target?.zone === "inline") {
@@ -160,14 +158,14 @@ export class Buche {
         if (existing && (existing.visual || Object.keys(existing.children).length)) {
             return null;
         }
-        ph.placeholder = false;
-        // A view (`$stdout`, `$gui`...) claiming it brings its own look: the
+        ph.cell.kind = kind;
+        // A view (`$stdout`, `$frame`...) claiming it brings its own look: the
         // one it was configured with, else its parent's.
         if (field.startsWith("$")) {
-            const look = (existing ?? parent!).echo;
-            const before = JSON.stringify([ph.echo.label, ph.echo.color, ph.echo.icon]);
-            ph.echo.configure({ label: look.label, color: look.color, icon: look.icon });
-            if (JSON.stringify([ph.echo.label, ph.echo.color, ph.echo.icon]) !== before) {
+            const look = (existing ?? parent!).cell;
+            const before = JSON.stringify([ph.cell.label, ph.cell.color, ph.cell.icon]);
+            ph.cell.configure({ label: look.label, color: look.color, icon: look.icon });
+            if (JSON.stringify([ph.cell.label, ph.cell.color, ph.cell.icon]) !== before) {
                 this.sendInterface({ type: "update_entry", entry: ph });
             }
         }
@@ -196,48 +194,47 @@ export class Buche {
             return;
         }
         const ph = entry.getAt([PLACEHOLDER], true)!;
-        ph.placeholder = true;
         ph.represents = entry.address();
-        ph.echo.configure(echoConfiguration(entry.echo));
-        ph.setCell(new Cell({}));
-        ph.echo.status = { status: "running" };
-        ph.target = this.targetFor(entry, zone, "cell");
+        ph.cell.configure(cellConfiguration(entry.cell));
+        ph.cell.kind = "pending";
+        ph.cell.status = { status: "running" };
+        ph.target = this.targetFor(entry, zone, "pending");
         entry.primary = ph;
         this.sendInterface({ type: "update_cell", target: ph.target, entry: ph });
     }
 
     /**
-     * Give `entry` a cell if it shows nothing yet (output arriving with no
-     * `cell_configure`), placed by default. The top entry (the driver's own
+     * Give `entry` a cell of `kind` if it shows nothing yet (output arriving
+     * with no `configure`), placed by default. The top entry (the driver's own
      * output) shows nothing.
      */
-    ensureCell(entry: Entry): void {
+    ensureCell(entry: Entry, kind: CellKind): void {
         if (entry.visual || entry === this.hierarchy) {
             return;
         }
-        entry.setCell(new Cell({}));
-        entry.target ??= this.targetFor(entry, null, "cell");
-        if (entry.echo.status.status === "absent") {
-            entry.echo.status = { status: "running" };
+        entry.cell.kind = kind;
+        entry.target ??= this.targetFor(entry, null, kind);
+        if (entry.cell.status.status === "absent") {
+            entry.cell.status = { status: "running" };
         }
         this.sendInterface({ type: "update_cell", target: entry.target, entry });
     }
 
     /**
-     * Get (creating it if needed) the entry at `message.from` and apply an
-     * echo configuration to it: the shared {@link EchoConfiguration} fields
-     * merge into its echo, and a provided `represents` onto the entry itself.
+     * Get (creating it if needed) the entry at `message.from` and apply a
+     * cell configuration to it: the {@link CellConfiguration} fields merge
+     * into its cell, and a provided `represents` onto the entry itself.
      */
-    ensure(message: EchoConfiguration & CreationInfo) {
+    ensure(message: CellConfiguration & CreationInfo) {
         const fresh = this.hierarchy.getAt(message.from, false) === null;
         const post = this.hierarchy.getAt(message.from, true)!;
-        // A `$` entry (`$stdout`, `$gui`...) is a view of its parent: it
-        // stands for it unless told otherwise. It shows the parent's echo too.
+        // A `$` entry (`$stdout`, `$frame`...) is a view of its parent: it
+        // stands for it unless told otherwise. It shows the parent's look too.
         if (fresh && post.field?.startsWith("$") && post.parent !== this.hierarchy) {
             post.represents = post.parent!.address();
-            post.echo.configure({ ...echoConfiguration(post.parent!.echo), id: undefined });
+            post.cell.configure({ ...cellConfiguration(post.parent!.cell), id: undefined });
         }
-        post.echo.configure(message);
+        post.cell.configure(message);
         if (message.represents !== undefined) {
             post.represents = message.represents;
         }
@@ -246,7 +243,7 @@ export class Buche {
         }
         // What a configured entry says about itself, its views show too.
         for (const child of this.views(post)) {
-            child.echo.configure({ ...message, id: undefined, represents: undefined });
+            child.cell.configure({ ...message, id: undefined, represents: undefined });
         }
         return post;
     }
@@ -263,7 +260,7 @@ export class Buche {
      * icon, submission): bring what already shows it, or its views, up to
      * date (nothing is installed).
      */
-    relook(entry: Entry, message: EchoConfiguration): void {
+    relook(entry: Entry, message: CellConfiguration): void {
         if (!LOOK.some((k) => message[k] !== undefined)) {
             return;
         }
@@ -275,23 +272,41 @@ export class Buche {
     }
 
     /**
-     * The entry that output sent from `message.from` goes to: it claims its
-     * parent's placeholder, or gets a cell of its own, if it shows nothing yet.
+     * The entry that output for a cell of `kind` sent from `message.from` goes
+     * to: it claims its parent's placeholder, or gets a cell of its own, if it
+     * shows nothing yet. Output for a cell of another kind is an error.
      */
-    output(message: CreationInfo): Entry {
-        this.claim(message.from, "cell");
+    output(message: CreationInfo, kind: CellKind): Entry {
+        const existing = this.hierarchy.getAt(message.from, false);
+        if (existing) {
+            this.checkKind(existing, kind);
+        }
+        this.claim(message.from, kind);
         const entry = this.ensure(message);
-        this.ensureCell(entry);
+        this.ensureCell(entry, kind);
         return entry;
+    }
+
+    /** Throw unless `entry` shows nothing yet or a cell of `kind`: an entry
+     *  does not change kind. */
+    checkKind(entry: Entry, kind: CellKind): void {
+        const current = entry.cell.kind;
+        if (current !== "group" && current !== kind) {
+            throw new BucheError({
+                type: "buche_error",
+                code: "kindmismatch",
+                reason: `The ${current} at ${JSON.stringify(entry.address())} is no ${kind}`,
+            });
+        }
     }
 
     /** Switch a live entry between running and standby (a spent one stays). */
     private setLiveStatus(entry: Entry, status: "running" | "standby"): void {
-        const current = entry.echo.status.status;
+        const current = entry.cell.status.status;
         if (current === "done" || current === "error" || current === status) {
             return;
         }
-        entry.echo.status = { status };
+        entry.cell.status = { status };
         this.sendInterface({ type: "update_entry", entry });
     }
 }
