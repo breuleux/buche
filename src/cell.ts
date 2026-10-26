@@ -4,11 +4,11 @@ import type {
     Accent,
     Icon,
     Json,
-    StyledText,
+    StructuredText,
     Submission,
     SubmissionConfiguration,
 } from "./types.ts";
-import { applySubmission, emptySubmission, WithId } from "./utils.ts";
+import { applySubmission, emptySubmission, plainStructuredText, WithId } from "./utils.ts";
 
 export interface TextCommand {
     type: "text";
@@ -131,16 +131,16 @@ export interface CellConfiguration {
      * when present, is shown above the echo box in the accent color. A
      * configuration may give either subfield alone; the other keeps its
      * current value. Echos are read-only, always: the content's `editability`
-     * (see InteractiveStyledText) defaults to "readonly" here and any value
+     * (see InteractiveStructuredText) defaults to "readonly" here and any value
      * has no effect (only "readonly" is supported for echos for now).
      */
     submission?: SubmissionConfiguration;
 
     /**
-     * The cell/tab label: styled text (its ranges' styles can set the font,
+     * The cell/tab label: styled text (its parts' styles can set the font,
      * e.g. "mono" or "sans"), or a plain string.
      */
-    label?: StyledText | string;
+    label?: StructuredText | string;
 
     /** Accent color for the component. */
     color?: Accent;
@@ -211,9 +211,11 @@ export function killable(cell: Cell): boolean {
     return status === "running" || status === "unresponsive" || status === "standby";
 }
 
-/** A label as styled text (a plain string has no styling). */
-export function toStyledText(label: StyledText | string | undefined): StyledText | undefined {
-    return typeof label === "string" ? { text: label, ranges: [] } : label;
+/** A label as structured text (a plain string has no styling). */
+export function toStructuredText(
+    label: StructuredText | string | undefined,
+): StructuredText | undefined {
+    return typeof label === "string" ? plainStructuredText(label) : label;
 }
 
 /** A cell's configuration, to pass on (e.g. to the views of a process). */
@@ -246,7 +248,7 @@ export abstract class Cell extends WithId() {
     submission: Submission | null = null;
 
     /** The cell/tab label. */
-    label!: StyledText;
+    label!: StructuredText;
 
     /** Accent color for the component. */
     color!: Accent;
@@ -277,7 +279,7 @@ export abstract class Cell extends WithId() {
     /** Apply a configuration: the fields it gives replace the current ones. */
     configure(config: CellConfiguration) {
         this.label =
-            toStyledText(config.label) ?? this.label ?? toStyledText(`%${this.serialId}`)!;
+            toStructuredText(config.label) ?? this.label ?? toStructuredText(`%${this.serialId}`)!;
         this.color = config.color ?? this.color ?? "purple";
         if (config.icon !== undefined) {
             this.icon = config.icon;

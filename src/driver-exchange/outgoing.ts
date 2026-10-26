@@ -1,5 +1,5 @@
 import type { SyncMessage } from "./_sync.ts";
-import type { Address, Json, Selection } from "./common.ts";
+import type { Action, Address, Json, Selection } from "./common.ts";
 
 export interface BaseRequest {
     type: string;
@@ -14,7 +14,8 @@ export interface CommandRequest extends BaseRequest {
     /** The prompt's selection when the command fired. */
     selection: Selection;
 
-    command: string;
+    /** The action that fired: a key binding's, or a clicked part's. */
+    action: Action;
 
     /**
      * Identifies this command. A driver that produces an echo in response

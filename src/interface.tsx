@@ -197,7 +197,8 @@ export class BucheInterface implements Interface {
                         entry: prompt,
                         text,
                         selection: { start: text.length, end: text.length },
-                        command: "run",
+                        // The typed text, as a command line to run.
+                        action: text,
                         zone,
                     });
                 },
@@ -632,7 +633,7 @@ export class BucheInterface implements Interface {
             entry: detail.entry,
             text: detail.text,
             selection: detail.selection,
-            command: detail.command,
+            action: detail.action,
         });
     }
 
@@ -644,8 +645,8 @@ export class BucheInterface implements Interface {
         }
     }
 
-    private focusNewPrompt(entry: Entry): void {
-        if (entry.cell.background) {
+    private focusNewPrompt(entry: Entry, force = false): void {
+        if (entry.cell.background && !force) {
             return;
         }
         const element = this.layout.revealPrompt(entry);
@@ -711,7 +712,7 @@ export class BucheInterface implements Interface {
     handle$update_cell(buche: Buche, message: UpdateCellMessage) {
         const { entry, target } = message;
         if (entry.cell.kind === "prompt") {
-            this.updatePrompt(entry, target ?? null);
+            this.updatePrompt(entry, target ?? null, message.focus === true);
             return;
         }
         this.settleExpectation(entry);
@@ -751,17 +752,42 @@ export class BucheInterface implements Interface {
         return !!box && !!current && (box === current || box.contains(current));
     }
 
-    private updatePrompt(entry: Entry, target: Target | null): void {
+    /** Show a prompt's update; `focus`: it was configured to take the focus
+     *  (see PromptConfiguration.focus). */
+    private updatePrompt(entry: Entry, target: Target | null, focus: boolean): void {
         if (this.layout.has(entry)) {
             // A placeholder that this prompt claimed: it becomes the prompt.
             if (this.layout.boxOf(entry)) {
                 this.layout.convertToPrompt(entry);
-                this.focusNewPrompt(entry);
+                this.focusNewPrompt(entry, focus);
+                entry.fire();
+            } else {
+                // (Its new content first: the focus lands on it.)
+                entry.fire();
+                if (focus) {
+                    this.focusPromptOf(entry);
+                }
             }
-            entry.fire();
         } else if (target) {
             this.layout.installPrompt(entry, target);
-            this.focusNewPrompt(entry);
+            this.focusNewPrompt(entry, focus);
+        }
+    }
+
+    /** Give a live prompt the focus, showing it (its tab) if hidden; out of
+     *  navigation mode, like Mod+p. */
+    private focusPromptOf(entry: Entry): void {
+        const element = this.layout.revealPrompt(entry);
+        if (!element) {
+            return;
+        }
+        // (Anything still expected to take the focus would steal it back.)
+        this.focus.expect(null);
+        this.focus.focus(element, "nav");
+        if (this.nav.mode !== "off") {
+            this.nav.leave();
+        } else if (!this.focus.holdCommits) {
+            this.focus.commitFocus();
         }
     }
 

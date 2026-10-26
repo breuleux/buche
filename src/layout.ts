@@ -35,9 +35,10 @@ import { isSpent, type StatusString } from "./cell.ts";
 import type { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection } from "./components/prompt-collection.tsx";
 import { SlotChooser } from "./components/slot-chooser.ts";
-import { buildIcon, buildStyledText } from "./components/utils.tsx";
+import { buildIcon, buildStructuredText } from "./components/utils.tsx";
 import { bubblesTo, type Entry } from "./entry.ts";
-import type { Address, StyledText, Target } from "./types.ts";
+import type { Address, StructuredText, Target } from "./types.ts";
+import { plainText } from "./utils.ts";
 
 /** What the layout needs from the interface. */
 export interface LayoutHost {
@@ -157,15 +158,15 @@ function tabMeta(
 ): Pick<Tab, "title" | "icon" | "short" | "long" | "accent" | "status"> {
     const cell = entry.cell;
     const { content, context } = cell.submission ?? {};
-    const line = (cls: string, text: StyledText | undefined) =>
-        text?.text
-            ? `<div class="${cls}">${buildStyledText(text, defaultTheme).outerHTML}</div>`
+    const line = (cls: string, text: StructuredText | undefined) =>
+        text && plainText(text)
+            ? `<div class="${cls}">${buildStructuredText(text, defaultTheme).outerHTML}</div>`
             : "";
     const long = line("buche-long-context", context) + line("buche-long-command", content);
     return {
-        title: cell.label.text,
+        title: plainText(cell.label),
         icon: cell.icon ? buildIcon(cell.icon).outerHTML : undefined,
-        short: buildStyledText(cell.label, defaultTheme).outerHTML,
+        short: buildStructuredText(cell.label, defaultTheme).outerHTML,
         long: long || undefined,
         accent: cell.color ? resolveColor(cell.color) : undefined,
         status: tabStatus(entry),

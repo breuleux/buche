@@ -50,7 +50,7 @@ export function handle$configure(buche: Buche, obj: ConfigureMessage): void {
         // A keystroke echo: pure content refresh — no installation, no zone
         // and no status changes. Valid only while it answers the latest parse
         // of this prompt; anything older is dropped (it would clobber text
-        // typed since, with ranges computed for text that is gone).
+        // typed since, with parts computed for text that is gone).
         const entry = buche.hierarchy.getAt(obj.from, false);
         const prompt = entry?.cell;
         if (!entry || !(prompt instanceof PromptCell) || prompt.request_id !== obj.request_id) {
@@ -108,5 +108,10 @@ function configureView(buche: Buche, obj: ConfigureMessage, kind: ViewKind): voi
         entry.cell.request_id = null;
         entry.cell.configurePrompt(obj);
     }
-    buche.sendInterface({ type: "update_cell", target, entry });
+    buche.sendInterface({
+        type: "update_cell",
+        target,
+        entry,
+        ...(kind === "prompt" && obj.focus ? { focus: true } : {}),
+    });
 }

@@ -60,7 +60,8 @@ pipes).
 buche's companion shell `coquille` exports `CQ_CURRENT_COMMAND` while it
 handles a prompt command (Enter/submit, Tab/complete, …): the **JSON
 serialization of the `command` message** it is dispatching — `text`,
-`selection` (`start === end` is the plain cursor), `command`, `id`, `from`,
+`selection` (`start === end` is the plain cursor), `action` (the action
+that fired: a command line string, `{"command": ...}` or `{"builtin": ...}`), `id`, `from`,
 `to` (see `references/outgoing.schema.json`). Processes spawned by the
 submitted command inherit it, so a GUI program can read the submission that
 launched it (`JSON.parse(os.environ["CQ_CURRENT_COMMAND"])`). Absent when the
@@ -107,10 +108,16 @@ address that shows nothing is refused (an `undeclared` problem).
 Fields that matter for GUI apps (full set in `references/incoming.schema.json`
 under `ConfigureMessage`):
 
-- `label`: tab/cell title: a string, or styled text
-  (`{"text": "myapp", "ranges": [{"start": null, "end": null, "style": "sans"}]}`;
-  range styles are accents, which can also set the font: `mono`, `sans`,
-  `serif`, `cursive`).
+- `label`: tab/cell title: a string, or structured text
+  (`{"parts": [{"text": "myapp", "style": "sans"}]}`;
+  part styles are accents, which can also set the font: `mono`, `sans`,
+  `serif`, `cursive`). Besides text parts, structured text can hold
+  `{"spacer": "grow"}`, which takes the space left over on the line (to
+  right-align what follows it), and groups, `{"group": [parts], "style": …,
+  "action": …}`: the group's style applies to its parts under their own
+  (`"bold"` over `"red"`: bold red), and its action (only in a prompt's
+  context) makes the whole group one click target. Spacers in a group are
+  ignored.
 - `icon`: shown before the label in its tab (`null` removes it). Either an
   image, `{"type": "image", "mimetype": "image/png", "data": "<base64>",
   "encoding": "base64"}` (or SVG text with no `encoding`; `"mask": true` paints

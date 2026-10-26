@@ -4,7 +4,7 @@
 import { describe, expect, test } from "vitest";
 import { Buche, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
-import { resetId } from "../src/utils.ts";
+import { plainText, resetId } from "../src/utils.ts";
 
 interface Fixture {
     buche: Buche;
@@ -61,7 +61,7 @@ describe("placement", () => {
         expect(entry.primary).toBe(ph);
         expect(ph.cell.kind).toBe("pending");
         // It shows what its process was configured with, and runs.
-        expect(ph.cell.label.text).toBe("ls");
+        expect(plainText(ph.cell.label)).toBe("ls");
         expect(entry.cell.status.status).toBe("running");
         expect(ph.cell.status.status).toBe("running");
     });
@@ -75,7 +75,7 @@ describe("placement", () => {
         expect(f.buche.get(PROCESS).primary).toBe(view);
         expect(view.cell.kind).toBe("frame");
         // It looks like its process.
-        expect(view.cell.label.text).toBe("app");
+        expect(plainText(view.cell.label)).toBe("app");
         const updates = f.interfaceOut.filter(
             (m: any) => m.type === "update_cell" && m.entry.cell.kind !== "prompt",
         ) as any[];
@@ -148,7 +148,7 @@ describe("configuration", () => {
         expect(f.interfaceOut).toEqual([{ type: "update_entry", entry: view }]);
         expect(f.driverOut).toEqual([]);
         expect(view.cell.ephemeral).toBe(true);
-        expect(view.cell.label.text).toBe("retuned");
+        expect(plainText(view.cell.label)).toBe("retuned");
         expect(view.cell.status.status).toBe("running");
     });
 
@@ -157,10 +157,10 @@ describe("configuration", () => {
         const f = started();
         handle(f, { type: "configure", kind: "terminal", from: STDOUT });
         handle(f, { type: "configure", from: PROCESS, label: "renamed" });
-        expect(f.buche.get(STDOUT).cell.label.text).toBe("renamed");
+        expect(plainText(f.buche.get(STDOUT).cell.label)).toBe("renamed");
         // The prompt's label is its own: its commands keep theirs.
         handle(f, { type: "configure", kind: "prompt", from: SHELL, label: "elsewhere" });
-        expect(f.buche.get(PROCESS).cell.label.text).toBe("renamed");
+        expect(plainText(f.buche.get(PROCESS).cell.label)).toBe("renamed");
     });
 
     test("a configure never resurrects a spent entry", () => {

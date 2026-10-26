@@ -1,0 +1,31 @@
+/* Styles for structured text (buildStructuredText in utils.tsx). */
+
+/* With spacers: a full-width row, the spacers sharing what the segments
+ * leave over (e.g. one spacer pushes what follows it to the right edge). */
+.styled-text-spaced {
+	display: flex;
+	width: 100%;
+}
+
+.styled-text-segment {
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.styled-text-spacer {
+	flex: 1 1 0;
+}
+
+/* A part with an action (in a prompt's context): clicking it fires it. On
+ * hover it sits on a pill lighter than the background (the pill is drawn
+ * past the text with a shadow, so the text doesn't move). */
+.styled-text-action {
+	cursor: pointer;
+	border-radius: 999px;
+}
+
+.styled-text-action:hover {
+	--action-pill: color-mix(in srgb, #ffffff 14%, transparent);
+	background: var(--action-pill);
+	box-shadow: 0 0 0 0.3em var(--action-pill);
+}

@@ -1,8 +1,135 @@
-import type { Address, Submission, SubmissionConfiguration } from "./types.ts";
+import type {
+    Address,
+    Part,
+    StructuredText,
+    Submission,
+    SubmissionConfiguration,
+    TextPart,
+} from "./types.ts";
+
+/** Structured text with a single unstyled part (or no part, for ""). */
+export function plainStructuredText(text: string): StructuredText {
+    return { parts: text ? [{ text }] : [] };
+}
+
+/** Two styles (accents) combined: `inner`'s tokens come after `outer`'s, so
+ *  they win where both set the same thing. */
+export function combineStyles(
+    outer: string | null | undefined,
+    inner: string | null | undefined,
+): string | null {
+    return [outer, inner].filter(Boolean).join(" ") || null;
+}
+
+/**
+ * Structured text's parts with its groups dissolved: their parts in their
+ * place, styled with the group's style under their own. The groups' actions
+ * are dropped (the parts' own are kept).
+ */
+export function flattenParts(parts: readonly Part[], style: string | null = null): Part[] {
+    const out: Part[] = [];
+    for (const part of parts) {
+        if ("group" in part) {
+            out.push(...flattenParts(part.group, combineStyles(style, part.style)));
+        } else if ("text" in part && style) {
+            out.push({ ...part, style: combineStyles(style, part.style) });
+        } else {
+            out.push(part);
+        }
+    }
+    return out;
+}
+
+/** The text parts of structured text (its groups dissolved, see flattenParts;
+ *  its spacers left out). */
+export function textParts(parts: readonly Part[]): TextPart[] {
+    return flattenParts(parts).filter((part): part is TextPart => "text" in part);
+}
+
+/** The text of structured text: its text parts' text, joined. */
+export function plainText(structured: StructuredText | undefined | null): string {
+    return textParts(structured?.parts ?? [])
+        .map((part) => part.text)
+        .join("");
+}
+
+/**
+ * The parts of structured text, edited to read `text`: the span that changed
+ * (between the longest common prefix and suffix) is replaced, in the text part
+ * it starts in. Text inserted at the very beginning goes to the first text
+ * part; at a boundary between parts, to the part before; at the end, to the
+ * last text part. Text parts emptied by a deletion are dropped; spacers stay.
+ * Groups are dissolved (see flattenParts).
+ *
+ *   spliceText([{ text: "ls", style: "a" }, { text: " x" }], "ls -l x")
+ *   // → [{ text: "ls -l", style: "a" }, { text: " x" }]
+ */
+export function spliceText(original: Part[], text: string): Part[] {
+    // (Groups are dissolved first: an edited text is a flat run of parts.)
+    const parts = original.some((part) => "group" in part) ? flattenParts(original) : original;
+    const texts = textParts(parts);
+    const old = texts.map((part) => part.text).join("");
+    if (old === text) {
+        return original;
+    }
+    if (texts.length === 0) {
+        return text ? [...parts, { text }] : parts;
+    }
+    let prefix = 0;
+    const max = Math.min(old.length, text.length);
+    while (prefix < max && old[prefix] === text[prefix]) {
+        prefix++;
+    }
+    let suffix = 0;
+    while (
+        suffix < max - prefix &&
+        old[old.length - 1 - suffix] === text[text.length - 1 - suffix]
+    ) {
+        suffix++;
+    }
+    const from = prefix;
+    const to = old.length - suffix;
+    const insert = text.slice(prefix, text.length - suffix);
+
+    // The text part that takes the insertion: the one `from` falls in (at a
+    // boundary, the one before it, but the first at 0); the last one, failing that.
+    let owner = texts[texts.length - 1];
+    let offset = 0;
+    for (const part of texts) {
+        const end = offset + part.text.length;
+        if (from < end || (from === end && end > offset) || from === 0) {
+            owner = part;
+            break;
+        }
+        offset = end;
+    }
+
+    const result: Part[] = [];
+    offset = 0;
+    for (const part of parts) {
+        if (!("text" in part)) {
+            result.push(part);
+            continue;
+        }
+        const start = offset;
+        const end = offset + part.text.length;
+        offset = end;
+        // Keep what lies outside [from, to), and the insertion in the owner.
+        let kept = part.text.slice(0, Math.max(0, Math.min(end, from) - start));
+        if (part === owner) {
+            kept += insert;
+        }
+        kept += part.text.slice(Math.max(0, Math.min(part.text.length, to - start)));
+        if (kept) {
+            result.push({ ...part, text: kept });
+        }
+    }
+    return result;
+}
 
 /** A submission with nothing in it: empty content and empty context. */
 export function emptySubmission(): Submission {
-    return { content: { text: "", ranges: [] }, context: { text: "", ranges: [] } };
+    return { content: { parts: [] }, context: { parts: [] } };
 }
 
 /**

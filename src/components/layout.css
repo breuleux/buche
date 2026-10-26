@@ -25,6 +25,17 @@
 	padding-bottom: 2px;
 }
 
+/* A stream cell's ×: on the header's first line (2px down, 14px tall, like
+ * the context row above), and only while the cell is hovered. */
+.carreau-scrollcell > .carreau-cell-close {
+	top: 2px;
+	height: 14px;
+}
+
+.carreau-scrollcell:not(:hover) > .carreau-cell-close {
+	visibility: hidden;
+}
+
 .buche-long-context + .buche-long-command {
 	padding-top: 2px;
 }

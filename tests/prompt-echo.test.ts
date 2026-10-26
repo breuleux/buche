@@ -6,7 +6,7 @@ import type { PromptCell } from "../src/cells/prompt.ts";
 import { Buche, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import type { Entry } from "../src/entry.ts";
-import { resetId } from "../src/utils.ts";
+import { plainText, resetId } from "../src/utils.ts";
 
 const PROMPT = ["$proc", "cq"];
 
@@ -62,7 +62,7 @@ function echo(f: Fixture, requestId: string, text: string, filigrane?: string): 
         to: ["$term"],
         request_id: requestId,
         input: {
-            content: { text, ranges: [], ...(filigrane === undefined ? {} : { filigrane }) },
+            content: { parts: [{ text }], ...(filigrane === undefined ? {} : { filigrane }) },
         },
     } as never);
 }
@@ -85,7 +85,7 @@ describe("prompt configure echo", () => {
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "ls -l");
         const p = promptCell(f);
-        expect(p.input.content.text).toBe("ls");
+        expect(plainText(p.input.content)).toBe("ls");
         expect(p.input.content.filigrane).toBe("ls -l");
         expect(prompt(f).cell.status.status).toBe("unresponsive"); // untouched
         expect(f.interfaceOut).toEqual([{ type: "update_cell", target: null, entry: prompt(f) }]);
@@ -125,10 +125,10 @@ describe("prompt configure echo", () => {
             kind: "prompt", // the submit reset
             from: PROMPT,
             to: ["$term"],
-            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { parts: [], selection: { start: 0, end: 0 } } },
         } as never);
         const p = promptCell(f);
-        expect(p.input.content.text).toBe("");
+        expect(plainText(p.input.content)).toBe("");
         expect(p.input.content.filigrane).toBeUndefined(); // replaced whole
         f.interfaceOut.length = 0;
         echo(f, "r1", "ls", "ls -l"); // the pre-submit echo: now void
@@ -196,6 +196,6 @@ describe("prompt configure echo", () => {
         expect(entry.target).toBe(target);
         expect((f.interfaceOut[0] as any).target).toBe(null); // (it doesn't move)
         expect(entry.cell.status.status).toBe("done"); // not re-stamped running
-        expect(entry.cell.label.text).toBe("new"); // the configuration did apply
+        expect(plainText(entry.cell.label)).toBe("new"); // the configuration did apply
     });
 });

@@ -8,4 +8,4 @@
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#108"}}
 {"$role":"driverIn","type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","label":"sub","bindings":{"C-c":"interrupt"}}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":["$proc","p","?"],"link":true},"entry":{"cell":"#110"}}
-{"$role":"driverIn","type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","request_id":"1","input":{"content":{"text":"ec","ranges":[]}}}
+{"$role":"driverIn","type":"configure","from":["$proc","p","cq"],"to":["$term"],"kind":"prompt","request_id":"1","input":{"content":{"parts":[{"text":"ec"}]}}}

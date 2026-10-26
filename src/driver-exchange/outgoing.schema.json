@@ -100,8 +100,9 @@
           "$ref": "#/definitions/Selection",
           "description": "The prompt's selection when the command fired."
         },
-        "command": {
-          "type": "string"
+        "action": {
+          "$ref": "#/definitions/Action",
+          "description": "The action that fired: a key binding's, or a clicked part's."
         },
         "id": {
           "type": "string",
@@ -112,8 +113,54 @@
           "description": "Where what the command shows goes (a zone, as in `@zone cmd`), when the terminal decided it (e.g. a slot the user picked it for)."
         }
       },
-      "required": ["command", "from", "selection", "text", "to", "type"],
+      "required": ["action", "from", "selection", "text", "to", "type"],
       "additionalProperties": false
+    },
+    "Action": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/CommandAction"
+        },
+        {
+          "$ref": "#/definitions/BuiltinAction"
+        }
+      ],
+      "description": "What a key binding, or a clicked part, does. The terminal only reads `freeze`, and sends the action to the driver (see CommandRequest), which carries it out. A string is a command line: short for `{command: <it>}`."
+    },
+    "CommandAction": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The command line."
+        },
+        "freeze": {
+          "type": "boolean",
+          "description": "If true, the prompt's content is frozen as the action fires."
+        }
+      },
+      "required": ["command"],
+      "additionalProperties": false,
+      "description": "A command line for the driver to run (as if submitted, but leaving the prompt and its history alone)."
+    },
+    "BuiltinAction": {
+      "type": "object",
+      "properties": {
+        "builtin": {
+          "type": "string",
+          "description": "The built-in action's name."
+        },
+        "freeze": {
+          "type": "boolean",
+          "description": "If true, the prompt's content is frozen as the action fires."
+        }
+      },
+      "required": ["builtin"],
+      "additionalProperties": false,
+      "description": "One of the driver's built-in actions (e.g. coquille's submit, next...)."
     },
     "SignalRequest": {
       "type": "object",

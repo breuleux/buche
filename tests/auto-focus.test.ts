@@ -13,6 +13,7 @@ import type { PromptCollection } from "../src/components/prompt-collection.tsx";
 import { Buche, type InM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { BucheInterface } from "../src/interface.tsx";
+import { plainText } from "../src/utils.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -50,7 +51,7 @@ function setup() {
 
 function prompt(container: HTMLElement, label = "cq"): HTMLElement {
     for (const pc of container.querySelectorAll<PromptCollection>("prompt-collection")) {
-        const entry = pc.prompts.find((e) => e.cell.label.text === label);
+        const entry = pc.prompts.find((e) => plainText(e.cell.label) === label);
         if (entry) {
             return pc.promptElement(entry)!;
         }
@@ -67,7 +68,7 @@ function run(
     const { iface, sent, flush, driver, container } = ctx;
     const entry = (prompt(container).closest("prompt-collection") as PromptCollection).prompts[0];
     iface.pushCommand({
-        command: "submit",
+        action: { builtin: "submit" },
         entry,
         text: "ls",
         selection: { start: 2, end: 2 },
@@ -113,6 +114,71 @@ describe("automatic focus", () => {
         expect(box()).not.toBeNull();
         expect(ctx.iface.focus.current).toBe(box());
         expect(ctx.iface.focus.currentTags).toEqual(["cell", "auto"]);
+    });
+
+    test("a prompt configured with focus takes it from a running cell", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        await settle();
+        const { box } = run(ctx);
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+
+        // Without focus: the cell keeps it.
+        const content = (text: string) => ({
+            content: { parts: [{ text }], selection: { start: 1, end: 1 } },
+        });
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, input: content("a") });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+
+        ctx.driver({
+            type: "configure",
+            kind: "prompt",
+            from: SHELL,
+            input: content("b"),
+            focus: true,
+        });
+        await settle();
+        const el = prompt(ctx.container);
+        expect(ctx.iface.focus.current).toBe(el);
+        expect(el.textContent).toContain("b");
+        // (Not kept: the cell's end later gives the focus back to the prompt anyway.)
+        expect(Object.hasOwn(ctx.buche.hierarchy.getAt(SHELL)!.cell, "focus")).toBe(false);
+    });
+
+    test("a focus alone leaves the prompt's content as it was", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        ctx.driver({
+            type: "configure",
+            kind: "prompt",
+            from: SHELL,
+            input: { content: { parts: [{ text: "keep" }], selection: { start: 2, end: 2 } } },
+        });
+        await settle();
+        const { box } = run(ctx);
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, focus: true });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+        expect(prompt(ctx.container).textContent).toContain("keep");
+    });
+
+    test("focus overrides background for a new prompt", async () => {
+        const { container, iface, driver } = setup();
+        driver({
+            type: "configure",
+            kind: "prompt",
+            from: SHELL,
+            label: "cq",
+            background: true,
+            focus: true,
+        });
+        await settle();
+        expect(iface.focus.current).toBe(prompt(container));
     });
 
     test("a background echo leaves the focus alone", async () => {
@@ -198,7 +264,7 @@ describe("automatic focus", () => {
         const entry = (prompt(ctx.container).closest("prompt-collection") as PromptCollection)
             .prompts[0];
         ctx.iface.pushCommand({
-            command: "submit",
+            action: { builtin: "submit" },
             entry,
             text: "ls",
             selection: { start: 2, end: 2 },
@@ -758,7 +824,7 @@ describe("slots", () => {
         pick(chooser, "4");
         const [command] = withoutResizes(iface.interactions.purge()) as any[];
         const zone = `~${ws.paneByName("logs")!.id}`;
-        expect(command).toMatchObject({ type: "user_command", text: "cq", command: "run", zone });
+        expect(command).toMatchObject({ type: "user_command", text: "cq", action: "cq", zone });
         // The shell's placeholder, then its prompt, go into the pane.
         const sub = [...SHELL, "3"];
         driver({ type: "configure", from: sub, zone, label: "cq" });
@@ -876,7 +942,7 @@ describe("slots", () => {
         expect(field.value).toBe("ls");
         field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
         const [command] = withoutResizes(iface.interactions.purge()) as any[];
-        expect(command).toMatchObject({ type: "user_command", text: "ls", command: "run" });
+        expect(command).toMatchObject({ type: "user_command", text: "ls", action: "ls" });
         expect(command.zone).toMatch(/^~/);
     });
 
@@ -909,7 +975,7 @@ describe("@pop", () => {
         const entry = (prompt(ctx.container).closest("prompt-collection") as PromptCollection)
             .prompts[0];
         ctx.iface.pushCommand({
-            command: "submit",
+            action: { builtin: "submit" },
             entry,
             text: "ls",
             selection: { start: 2, end: 2 },

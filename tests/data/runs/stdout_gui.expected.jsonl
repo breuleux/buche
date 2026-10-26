@@ -1,6 +1,6 @@
 {"$role":"driverIn","type":"configure","kind":"prompt","from":["$proc","cq"],"to":["$term"],"label":"cq"}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":null,"link":true},"entry":{"cell":"#103"}}
-{"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"zone":null,"id":"c1","label":"plot","submission":{"content":{"text":"plot","ranges":[]}}}
+{"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"zone":null,"id":"c1","label":"plot","submission":{"content":{"parts":[{"text":"plot"}]}}}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":["$proc","cq"]},"entry":{"cell":"#106"}}
 {"$role":"driverIn","type":"configure","from":["$proc","cq","2","$stdout"],"to":["$term"],"kind":"terminal"}
 {"$role":"interfaceOut","type":"update_cell","target":null,"entry":{"cell":"#107"}}

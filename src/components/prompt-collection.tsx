@@ -2,7 +2,7 @@
 //
 //   const pc = document.createElement("prompt-collection") as PromptCollection;
 //   const entry = new Entry({});
-//   entry.cell.label = { text: "sh", ranges: [] };
+//   entry.cell.label = { parts: [{ text: "sh" }] };
 //   entry.cell.color = "green";
 //   entry.replaceCell("prompt");
 //   pc.addPrompt(entry);
@@ -12,8 +12,8 @@
 // Entry object — `showPrompt`, `removePrompt`, etc. all take the Entry you added.
 // The accent colour comes from the Entry's cell; the leading marker and the
 // editor's initial content come from its prompt cell (its `input`: `context`
-// and `content`, both StyledText). Edits to the editor flow back into the
-// prompt's `input.content` (its text and selection). The
+// and `content`, both StructuredText). Edits to the editor flow back into the
+// prompt's `input.content` (its parts and selection). The
 // cell's `filigrane` (a history suggestion, echoed by the prompt `configure`
 // answer to a parse) shows as faded ghost text extending the content;
 // ArrowRight at the end of the text accepts it.
@@ -33,20 +33,23 @@
 // reconfiguration that finds the cell's status `done` or `error` (the process
 // closed) instead removes the prompt — its editor is spent.
 //
-// A prompt heeds its cell's `bindings` map (e.g. { "Ctrl+L": "clear" }):
-// pressing a bound chord in the editor fires a bubbling "command" event and
-// swallows the key so the editor doesn't also act on it. A binding may also be
-// an object ({ command, freeze }): when a binding with `freeze` fires, the
+// A prompt heeds its cell's `bindings` map of actions (e.g. { "Ctrl+L": "clear",
+// "Enter": { builtin: "submit", freeze: true } }): pressing a bound chord in
+// the editor fires a bubbling "command" event and swallows the key so the
+// editor doesn't also act on it. When an action with `freeze` fires, the
 // prompt's content turns "frozen" — read-only, but styled to show the
 // condition is temporary — commands keep firing but typing is dead — until the
 // next prompt `configure` (the Entry's reconfiguration) resets the editability.
-// (An InteractiveStyledText carries this `editability`; a prompt defaults to
+// (An InteractiveStructuredText carries this `editability`; a prompt defaults to
 // "editable", echos are "readonly" — all they support for now.)
+//
+// A part of the prompt's context (the marker) may have an `action`, which works
+// like a binding: clicking the part fires it.
 //
 // Events (all bubble):
 //   "textchange"    detail: { entry, text, selection }              — a prompt's editor text changed
-//   "command"       detail: { command, event, entry, text, selection }
-//                                                                  — a bound chord was pressed
+//   "command"       detail: { action, event, entry, text, selection }
+//                                                                  — a bound chord was pressed, or an action part clicked
 //
 // Appearance lives in the companion stylesheet `prompt-collection.css` (or the
 // consolidated components.css).
@@ -67,8 +70,9 @@ import { PromptCell } from "../cells/prompt.ts";
 import { defaultTheme, resolveColor, styleToCss } from "../color.ts";
 import type { Entry } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
-import type { HighlightRange, InteractiveStyledText, Selection, StyledText } from "../types.ts";
-import { buildStyledText } from "./utils.tsx";
+import type { Action, InteractiveStructuredText, Selection, TextPart } from "../types.ts";
+import { plainText, spliceText, textParts } from "../utils.ts";
+import { buildStructuredText } from "./utils.tsx";
 
 /** The cell of an entry of the collection, if it is a prompt. */
 function promptOf(entry: Entry): PromptCell | null {
@@ -111,7 +115,7 @@ export interface PromptEditor {
     setHighlights?(spans: StyleSpan[]): void;
     /**
      * Apply a style to the whole editor, including text the user will type
-     * (`""` clears it). Used for fully-open ranges, which have no text to anchor
+     * (`""` clears it). Used for a content of a single part, which styles text
      * a span to. Optional; no-op if unsupported.
      */
     setBaseStyle?(css: string): void;
@@ -135,7 +139,7 @@ export interface PromptEditor {
     setEditability?(editability: Editability): void;
 }
 
-/** How an InteractiveStyledText (a prompt's content) can be edited. */
+/** How an InteractiveStructuredText (a prompt's content) can be edited. */
 export type Editability = "readonly" | "editable" | "frozen";
 
 export type EditorFactory = (options: {
@@ -166,12 +170,13 @@ export interface PromptTextChangeDetail {
      *  end of `text` if the editor can't report it. */
     selection: Selection;
 }
-/** `detail` of the "command" event: a bound key chord was pressed in a prompt. */
+/** `detail` of the "command" event: a bound key chord was pressed in a
+ *  prompt, or a part of its context with an action was clicked. */
 export interface PromptCommandDetail {
-    /** The command name the chord is bound to (the binding map's value). */
-    command: string;
-    /** The originating keyboard event. */
-    event: KeyboardEvent;
+    /** The action that fired (a binding map's value, or a part's). */
+    action: Action;
+    /** The originating event: the key press, or the click. */
+    event: KeyboardEvent | MouseEvent;
     /** The Entry of the prompt the chord was pressed in. */
     entry: Entry;
     /** The prompt's current editor text. */
@@ -247,6 +252,31 @@ const spansField = StateField.define<DecorationSet>({
         return deco;
     },
     provide: (f) => EditorView.decorations.from(f),
+});
+
+// The editor-wide base style (`""`: none), set by `setBaseEffect`: a mark
+// over the whole text, re-made on every change so it covers typed text. Not
+// a style on the content element: the ghost text (filigrane) would inherit it.
+const setBaseEffect = StateEffect.define<string>();
+
+const baseField = StateField.define<string>({
+    create: () => "",
+    update(base, tr) {
+        for (const effect of tr.effects) {
+            if (effect.is(setBaseEffect)) {
+                base = effect.value;
+            }
+        }
+        return base;
+    },
+});
+
+const baseDecorations = EditorView.decorations.compute([baseField, "doc"], (state) => {
+    const base = state.field(baseField);
+    const len = state.doc.length;
+    return base && len > 0
+        ? Decoration.set([Decoration.mark({ attributes: { style: base } }).range(0, len)])
+        : Decoration.none;
 });
 
 // Ghost text (filigrane): a state field holding the suggestion, providing a
@@ -341,9 +371,6 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
         },
         { dark: true },
     );
-    // A reconfigurable inline style on `.cm-content` (the editor-wide base style).
-    // An inline style beats the theme's class rules, and applies to typed text.
-    const baseStyle = new Compartment();
     // Reconfigurable read-only mode (bindings that `freeze` the prompt). Only
     // user input is blocked; programmatic resets (a prompt `configure`) go through.
     const readOnly = new Compartment();
@@ -390,9 +417,12 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
                     ...historyKeymap,
                 ]),
                 EditorView.lineWrapping,
+                // The spans first: higher precedence, so they nest inside
+                // the base style's mark (their styles win over it).
                 spansField,
+                baseField,
+                baseDecorations,
                 filigraneField,
-                baseStyle.of([]),
                 readOnly.of([]),
                 darkTheme,
                 EditorView.updateListener.of((u) => {
@@ -456,11 +486,7 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
                 return;
             }
             css = value;
-            view.dispatch({
-                effects: baseStyle.reconfigure(
-                    value ? EditorView.contentAttributes.of({ style: value }) : [],
-                ),
-            });
+            view.dispatch({ effects: setBaseEffect.of(value) });
         },
         setSelection: (selection) => {
             const len = view.state.doc.length;
@@ -485,7 +511,7 @@ export class PromptCollection extends HTMLElement {
     /** How each prompt's editor is created. Swap before adding prompts. */
     editorFactory: EditorFactory = codeMirrorEditor;
 
-    /** Theme used to resolve a {@link StyledText} range's accent into
+    /** Theme used to resolve a {@link StructuredText} part's accent into
      *  concrete colors. */
     private readonly theme = defaultTheme;
 
@@ -581,15 +607,14 @@ export class PromptCollection extends HTMLElement {
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
 
-        const content: InteractiveStyledText = promptOf(entry)?.input.content ?? {
-            text: "",
-            ranges: [],
+        const content: InteractiveStructuredText = promptOf(entry)?.input.content ?? {
+            parts: [],
         };
 
         const editorHost = document.createElement("div");
         editorHost.className = "prompt-collection-editor";
         const editor = this.editorFactory({
-            doc: content.text,
+            doc: plainText(content),
             // Keep the Entry's prompt content (text and selection) in sync with the
             // editor as the user edits. Suppressed while we push content into the
             // editor ourselves (see `applyingContent`), so a reset can't feed back.
@@ -601,7 +626,7 @@ export class PromptCollection extends HTMLElement {
                 const prompt = promptOf(entry);
                 if (prompt) {
                     const promptContent = prompt.input.content;
-                    promptContent.text = value;
+                    promptContent.parts = spliceText(promptContent.parts, value);
                     if (sel != null) {
                         promptContent.selection = sel;
                     }
@@ -742,35 +767,39 @@ export class PromptCollection extends HTMLElement {
                 if (normalizeChord(key) === chord) {
                     e.preventDefault();
                     e.stopPropagation();
-                    const command = typeof binding === "string" ? binding : binding.command;
-                    const editor = this.rows.get(entry)?.editor;
-                    // A freezing binding marks the prompt's content "frozen"
-                    // (read-only, styled as temporary) as the command fires;
-                    // the next reconfiguration resets it — the driver's
-                    // submit reset replaces the content whole, editability
-                    // (and filigrane) included.
-                    if (typeof binding === "object" && binding.freeze) {
-                        const content = promptOf(entry)?.input.content;
-                        if (content) {
-                            content.editability = "frozen";
-                        }
-                        editor?.setEditability?.("frozen");
-                    }
-                    const text = editor?.getValue() ?? "";
-                    const selection = editor?.getSelection?.() ?? {
-                        start: text.length,
-                        end: text.length,
-                    };
-                    this.dispatchEvent(
-                        new CustomEvent<PromptCommandDetail>("command", {
-                            detail: { command, event: e, entry, text, selection },
-                            bubbles: true,
-                        }),
-                    );
+                    this.fireAction(entry, binding, e);
                     return;
                 }
             }
         }
+    }
+
+    // Fire an action (a key binding's, or a clicked context part's): a
+    // bubbling "command" event with its command name and the editor's text
+    // and selection. A freezing action marks the prompt's content "frozen"
+    // (read-only, styled as temporary) as the command fires; the next
+    // reconfiguration resets it — the driver's submit reset replaces the
+    // content whole, editability (and filigrane) included.
+    private fireAction(entry: Entry, action: Action, event: KeyboardEvent | MouseEvent): void {
+        const editor = this.rows.get(entry)?.editor;
+        if (typeof action === "object" && action.freeze) {
+            const content = promptOf(entry)?.input.content;
+            if (content) {
+                content.editability = "frozen";
+            }
+            editor?.setEditability?.("frozen");
+        }
+        const text = editor?.getValue() ?? "";
+        const selection = editor?.getSelection?.() ?? {
+            start: text.length,
+            end: text.length,
+        };
+        this.dispatchEvent(
+            new CustomEvent<PromptCommandDetail>("command", {
+                detail: { action, event, entry, text, selection },
+                bubbles: true,
+            }),
+        );
     }
 
     // Virtual chord for a bare ArrowUp/ArrowDown pressed at a line boundary:
@@ -849,11 +878,11 @@ export class PromptCollection extends HTMLElement {
 
     /**
      * Set a prompt's editor value. A plain string sets just the text. A
-     * {@link StyledText} additionally colorizes the text (resolving each range's
-     * accent through {@link calculateStyle}) and, when a `selection` is given,
+     * {@link InteractiveStructuredText} additionally colorizes the text (resolving
+     * each part's accent through {@link calculateStyle}) and, when a `selection` is given,
      * moves the selection there.
      */
-    setValue(entry: Entry, value: string | InteractiveStyledText): void {
+    setValue(entry: Entry, value: string | InteractiveStructuredText): void {
         this.ensureSetup();
         const row = this.rows.get(entry);
         if (!row) {
@@ -863,13 +892,13 @@ export class PromptCollection extends HTMLElement {
             row.editor.setValue(value);
             return;
         }
-        row.editor.setValue(value.text);
+        row.editor.setValue(plainText(value));
         this.applyContent(row.editor, value);
     }
 
-    // Apply an InteractiveStyledText's colorization and selection to an editor.
-    private applyContent(editor: PromptEditor, content: InteractiveStyledText): void {
-        const { base, spans } = this.resolveContent(content.ranges ?? [], content.text);
+    // Apply an InteractiveStructuredText's colorization and selection to an editor.
+    private applyContent(editor: PromptEditor, content: InteractiveStructuredText): void {
+        const { base, spans } = this.resolveContent(textParts(content.parts ?? []));
         editor.setBaseStyle?.(base);
         editor.setHighlights?.(spans);
         if (content.selection != null) {
@@ -878,59 +907,66 @@ export class PromptCollection extends HTMLElement {
     }
 
     /**
-     * Resolve styled-text ranges into a whole-editor base style plus concrete
-     * colorization spans.
+     * Resolve structured-text parts (its text parts: an editor has no use for
+     * spacers) into a whole-editor base style plus concrete colorization
+     * spans, one per styled part.
      *
-     *   - A *fully* open range (`start` and `end` both `null`) styles the entire
-     *     editor, including text the user will type, so it becomes the base style
-     *     rather than a span (which would need text to anchor to).
-     *   - A partially open boundary resolves to the text edge (0 / length) and is
-     *     marked *open*, so its span grows to cover text typed at that edge.
+     *   - A single part styles the entire editor, including text the user will
+     *     type, so it becomes the base style rather than a span (which would
+     *     need text to anchor to).
+     *   - Otherwise, the first part's start and the last part's end are *open*:
+     *     their spans grow to cover text typed at that edge.
      *
-     * Ranges whose accent cannot be parsed are skipped rather than aborting the
+     * Parts whose accent cannot be parsed are skipped rather than aborting the
      * whole set.
      */
-    private resolveContent(
-        ranges: HighlightRange[],
-        text: string,
-    ): { base: string; spans: StyleSpan[] } {
-        const baseParts: string[] = [];
-        const spans: StyleSpan[] = [];
-        for (const range of ranges) {
-            let css: string;
+    private resolveContent(parts: TextPart[]): { base: string; spans: StyleSpan[] } {
+        const cssOf = (part: TextPart): string => {
+            if (!part.style) {
+                return "";
+            }
             try {
-                css = styleToCss(this.theme.calculateStyle(range.style));
+                return styleToCss(this.theme.calculateStyle(part.style));
             } catch {
-                continue;
+                return "";
             }
-            if (!css) {
-                continue;
-            }
-            if (range.start == null && range.end == null) {
-                baseParts.push(css);
-            } else {
+        };
+        if (parts.length === 1) {
+            return { base: cssOf(parts[0]), spans: [] };
+        }
+        const spans: StyleSpan[] = [];
+        let offset = 0;
+        for (const [i, part] of parts.entries()) {
+            const start = offset;
+            offset += part.text.length;
+            const css = cssOf(part);
+            if (css) {
                 spans.push({
-                    start: range.start ?? 0,
-                    end: range.end ?? text.length,
+                    start,
+                    end: offset,
                     css,
-                    inclusiveStart: range.start == null,
-                    inclusiveEnd: range.end == null,
+                    inclusiveStart: i === 0,
+                    inclusiveEnd: i === parts.length - 1,
                 });
             }
         }
-        return { base: baseParts.join("; "), spans };
+        return { base: "", spans };
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────
 
-    // Render a StyledText leading marker into the row's marker (empty when
+    // Render a StructuredText leading marker into the row's marker (empty when
     // absent), and expose the Entry's accent as `--prompt-accent` on the row
     // itself (custom properties inherit downward, and the rectangle styles read
     // it on the row) so the stylesheet can tint the rectangle and top line.
     private renderMarker(row: Row, entry: Entry): void {
         const styled = promptOf(entry)?.input.context;
-        if (styled?.text) {
-            row.marker.replaceChildren(buildStyledText(styled, this.theme));
+        if (styled && plainText(styled)) {
+            row.marker.replaceChildren(
+                buildStructuredText(styled, this.theme, (action, event) =>
+                    this.fireAction(entry, action, event),
+                ),
+            );
         } else {
             row.marker.replaceChildren();
         }

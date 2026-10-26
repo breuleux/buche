@@ -42,6 +42,37 @@ function normalizeKeyName(key: string): string {
     return k === " " ? "space" : k.toLowerCase();
 }
 
+/** Keys named by their physical key (`KeyboardEvent.code`), for Alt chords. */
+const CODE_KEYS: Record<string, string> = {
+    Minus: "-",
+    Equal: "=",
+    BracketLeft: "[",
+    BracketRight: "]",
+    Backslash: "\\",
+    Semicolon: ";",
+    Quote: "'",
+    Backquote: "`",
+    Comma: ",",
+    Period: ".",
+    Slash: "/",
+};
+
+/**
+ * The key an event names. With Alt, a Mac types a special character instead
+ * (Alt+a is "å") or starts a dead key (Alt+e): the physical key (its `code`)
+ * names it then, so that any Alt+<key> chord can be bound. Otherwise the key
+ * as typed (so other keyboard layouts keep their own keys).
+ */
+function eventKey(e: KeyboardEvent): string {
+    const { key } = e;
+    const typed = key === "Dead" || (key.length === 1 && !/[\x20-\x7e]/.test(key));
+    if (!e.altKey || !typed || !e.code) {
+        return key;
+    }
+    const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code);
+    return m ? (m[1] ?? m[2]).toLowerCase() : (CODE_KEYS[e.code] ?? key);
+}
+
 /** A canonical chord for a keyboard event, e.g. "ctrl+shift+l". */
 export function chordFromEvent(e: KeyboardEvent): string {
     const parts: string[] = [];
@@ -57,7 +88,7 @@ export function chordFromEvent(e: KeyboardEvent): string {
     if (e.metaKey) {
         parts.push("meta");
     }
-    parts.push(normalizeKeyName(e.key));
+    parts.push(normalizeKeyName(eventKey(e)));
     return parts.join("+");
 }
 

@@ -38,31 +38,87 @@ export interface Selection {
     end: number;
 }
 
-/** A syntax-highlight span over the prompt text */
-export interface HighlightRange {
-    /**
-     * Inclusive start offset. `null` means the start of the text (offset 0); in
-     * an editable prompt it is an *open* boundary that also absorbs text the user
-     * inserts at the very beginning.
-     */
-    start: number | null;
+/** A command line for the driver to run (as if submitted, but leaving the
+ *  prompt and its history alone). */
+export interface CommandAction {
+    /** The command line. */
+    command: string;
 
-    /**
-     * Exclusive end offset. `null` means the end of the text; in an editable
-     * prompt it is an *open* boundary that also absorbs text the user appends.
-     */
-    end: number | null;
-
-    /** Style. */
-    style: Accent;
+    /** If true, the prompt's content is frozen as the action fires. */
+    freeze?: boolean;
 }
 
-export interface StyledText {
-    /** Text to style. */
+/** One of the driver's built-in actions (e.g. coquille's submit, next...). */
+export interface BuiltinAction {
+    /** The built-in action's name. */
+    builtin: string;
+
+    /** If true, the prompt's content is frozen as the action fires. */
+    freeze?: boolean;
+}
+
+/**
+ * What a key binding, or a clicked part, does. The terminal only reads
+ * `freeze`, and sends the action to the driver (see CommandRequest), which
+ * carries it out. A string is a command line: short for `{command: <it>}`.
+ */
+export type Action = string | CommandAction | BuiltinAction;
+
+/** What every part of structured text can have. */
+export interface BasePart {
+    /**
+     * Fired when the part is clicked, as a key binding would be (the driver
+     * gets the same command request). Only in a prompt's context; elsewhere
+     * the part is shown as if it had none.
+     */
+    action?: Action;
+}
+
+/** A run of text in a single style. */
+export interface TextPart extends BasePart {
+    /** The text. */
     text: string;
 
-    /** Spans to colorize. */
-    ranges: HighlightRange[];
+    /** Style (an accent: colour, bold, italic, font...). Absent or null: unstyled. */
+    style?: Accent | null;
+}
+
+/**
+ * Blank space between parts. A "grow" spacer takes all the space left over
+ * on the line, shared with the other grow spacers: e.g. one spacer pushes
+ * what follows it to the right edge. Ignored in an editable prompt.
+ */
+export interface SpacerPart extends BasePart {
+    /** How the spacer is sized: "grow" takes the remaining space. */
+    spacer: "grow";
+}
+
+/**
+ * Parts taken together: the group's style applies to each of them (under
+ * their own styles: e.g. a group in "bold" with a part in "red" shows it in
+ * bold red), and its action covers them all (one click target over the whole
+ * run). Spacers only take effect at the top level: in a group, they are
+ * ignored.
+ */
+export interface GroupPart extends BasePart {
+    /** The parts in the group. */
+    group: Part[];
+
+    /** Style applied to every part in the group (an accent). Absent or null: none. */
+    style?: Accent | null;
+}
+
+/** A part of structured text. */
+export type Part = TextPart | SpacerPart | GroupPart;
+
+/**
+ * Text made of parts, shown one after the other. In an editable prompt, the
+ * first part absorbs text the user inserts at the very beginning, and the last
+ * part text the user appends (so a single part styles everything typed).
+ */
+export interface StructuredText {
+    /** The parts, in order. */
+    parts: Part[];
 }
 
 /**
@@ -114,7 +170,7 @@ export interface GlyphIcon {
     shape?: "circle" | "square";
 }
 
-export interface InteractiveStyledText extends StyledText {
+export interface InteractiveStructuredText extends StructuredText {
     /**
      * Editability status of the text. Defaults to "editable" in a prompt,
      * "readonly" in an echo (only "readonly" is supported in echos for now).
@@ -132,16 +188,16 @@ export interface InteractiveStyledText extends StyledText {
 
 export interface SubmissionConfiguration {
     /** Content text of the submission */
-    content?: InteractiveStyledText;
+    content?: InteractiveStructuredText;
 
     /** Context of the submission (prompt text) */
-    context?: StyledText;
+    context?: StructuredText;
 }
 
 export interface Submission {
     /** Content text of the submission */
-    content: InteractiveStyledText;
+    content: InteractiveStructuredText;
 
     /** Context of the submission (prompt text) */
-    context: StyledText;
+    context: StructuredText;
 }

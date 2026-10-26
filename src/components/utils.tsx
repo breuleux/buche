@@ -1,64 +1,132 @@
 import { defaultTheme, styleToCss, type Theme } from "../color.ts";
-import type { Icon, StyledText } from "../types.ts";
+import type { Action, Icon, Part, StructuredText } from "../types.ts";
+import { combineStyles } from "../utils.ts";
 
 /**
- * Build a simple DOM node rendering a {@link StyledText}: its `text` split into
- * plain segments and colorized `<span>`s, one per highlight range. Each range's
- * accent is resolved through {@link calculateStyle} against `anchors` and applied
- * as an inline style.
+ * Build a simple DOM node rendering a {@link StructuredText}: its parts, one
+ * after the other, a styled text part as a `<span>` with its accent resolved
+ * through the theme and applied as an inline style, an unstyled one as a bare
+ * text node. A part whose accent cannot be parsed still renders its text (in a
+ * `<span>`), just unstyled. The `selection` field is a cursor concept and is
+ * ignored here.
  *
- * Ranges are clamped to the text, sorted by start, and rendered non-overlapping
- * (a range overlapping already-emitted text is trimmed to what remains). A range
- * whose accent cannot be parsed still renders its text, just unstyled. The
- * `selection` field is a cursor concept and is ignored here.
+ * With spacers, the node is a full-width flex row (`.styled-text-spaced`, see
+ * styled-text.css): the text parts between spacers are grouped into segments
+ * (`.styled-text-segment`), and each "grow" spacer (`.styled-text-spacer`)
+ * takes a share of the space left over.
  *
- *   buildStyledText(
- *     { text: "git commit", ranges: [{ start: 0, end: 3, style: "green bold" }] },
- *     { bg: 0.18, fg: 0.9 },
+ * Given `onAction`, a part with an `action` is clickable (`.styled-text-action`):
+ * a click calls `onAction` with it. Without, actions are ignored (the part is
+ * shown as if it had none).
+ *
+ *   buildStructuredText(
+ *     { parts: [{ text: "git", style: "green bold" }, { text: " commit" }] },
  *   )
  *   // → <span class="styled-text"><span style="…">git</span> commit</span>
  */
-export function buildStyledText(styled: StyledText, theme: Theme = defaultTheme): HTMLElement {
-    const { text } = styled;
+export function buildStructuredText(
+    structured: StructuredText,
+    theme: Theme = defaultTheme,
+    onAction?: ActionHandler,
+): HTMLElement {
+    const parts = structured.parts ?? [];
+    if (!parts.some((part) => "spacer" in part)) {
+        return (
+            <span className="styled-text">{renderText(parts, theme, onAction)}</span>
+        ) as HTMLElement;
+    }
+    const children: Node[] = [];
+    let segment: Part[] = [];
+    const flush = () => {
+        if (segment.length) {
+            children.push(
+                <span className="styled-text-segment">
+                    {renderText(segment, theme, onAction)}
+                </span>,
+            );
+            segment = [];
+        }
+    };
+    for (const part of parts) {
+        if ("spacer" in part) {
+            flush();
+            children.push(actionable(<span className="styled-text-spacer" />, part, onAction));
+        } else {
+            segment.push(part);
+        }
+    }
+    flush();
+    return (<span className="styled-text styled-text-spaced">{children}</span>) as HTMLElement;
+}
 
-    // Resolve open boundaries (null → 0 / end of text), clamp to the text, drop
-    // empty/inverted ones, and order them.
-    const ranges = (styled.ranges ?? [])
-        .map((r) => ({
-            start: Math.max(0, Math.min(text.length, r.start ?? 0)),
-            end: Math.max(0, Math.min(text.length, r.end ?? text.length)),
-            style: r.style,
-        }))
-        .filter((r) => r.start < r.end)
-        .sort((a, b) => a.start - b.start || a.end - b.end);
+/** What a click on a part with an action calls. */
+export type ActionHandler = (action: Action, event: MouseEvent) => void;
 
-    const parts: (string | Node)[] = [];
-    let cursor = 0;
-    for (const range of ranges) {
-        // Trim ranges that overlap text already emitted.
-        const start = Math.max(range.start, cursor);
-        if (start >= range.end) {
+/** Make `el` fire `part`'s action when clicked, if it has one and there is
+ *  an `onAction` to fire it. */
+function actionable(el: Node, part: Part, onAction: ActionHandler | undefined): Node {
+    const { action } = part;
+    if (action === undefined || !onAction || !(el instanceof HTMLElement)) {
+        return el;
+    }
+    el.classList.add("styled-text-action");
+    // No focus change (it stays in the prompt's editor) and no text selection.
+    el.addEventListener("mousedown", (e) => e.preventDefault());
+    el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onAction(action, e);
+    });
+    return el;
+}
+
+/** The text parts of `parts`, rendered (spacers are left out): each in the
+ *  style `outer` (a group's) combined with its own. A group's parts are
+ *  wrapped together when the group is clickable. */
+function renderText(
+    parts: Part[],
+    theme: Theme,
+    onAction?: ActionHandler,
+    outer: string | null = null,
+): (string | Node)[] {
+    const out: (string | Node)[] = [];
+    for (const part of parts) {
+        if ("group" in part) {
+            const inner = renderText(
+                part.group,
+                theme,
+                onAction,
+                combineStyles(outer, part.style),
+            );
+            if (part.action !== undefined && onAction !== undefined) {
+                out.push(
+                    actionable(<span className="styled-text-group">{inner}</span>, part, onAction),
+                );
+            } else {
+                out.push(...inner);
+            }
             continue;
         }
-        if (cursor < start) {
-            parts.push(text.slice(cursor, start));
+        if (!("text" in part) || !part.text) {
+            continue;
         }
-
-        // Unparseable accent → render the text without styling.
+        const style = combineStyles(outer, part.style);
         let css: string | undefined;
-        try {
-            css = styleToCss(theme.calculateStyle(range.style)) || undefined;
-        } catch {
-            css = undefined;
+        if (style) {
+            try {
+                css = styleToCss(theme.calculateStyle(style)) || undefined;
+            } catch {
+                css = undefined;
+            }
         }
-        parts.push(<span style={css}>{text.slice(start, range.end)}</span>);
-        cursor = range.end;
+        const clickable = part.action !== undefined && onAction !== undefined;
+        out.push(
+            style || clickable
+                ? actionable(<span style={css}>{part.text}</span>, part, onAction)
+                : part.text,
+        );
     }
-    if (cursor < text.length) {
-        parts.push(text.slice(cursor));
-    }
-
-    return (<span className="styled-text">{parts}</span>) as HTMLElement;
+    return out;
 }
 
 /** The data URI of an image icon, or null if its data can't be trusted. */

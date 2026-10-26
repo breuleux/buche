@@ -13,7 +13,13 @@ import type {
 import "../../src/components/prompt-collection.tsx";
 import type { PromptBindings, PromptCell } from "../../src/cells/prompt.ts";
 import { Entry } from "../../src/entry.ts";
-import type { InteractiveStyledText, Selection, StyledText } from "../../src/types.ts";
+import type {
+    Action,
+    InteractiveStructuredText,
+    Selection,
+    StructuredText,
+} from "../../src/types.ts";
+import { plainText } from "../../src/utils.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -103,7 +109,11 @@ function make(): PromptCollection {
     return pc;
 }
 
-const plain = (text: string): StyledText => ({ text, ranges: [] });
+const plain = (text: string): StructuredText => ({ parts: [{ text }] });
+
+/** An action's name: its command line, or its built-in's name. */
+const actionName = (action: Action): string =>
+    typeof action === "string" ? action : "builtin" in action ? action.builtin : action.command;
 
 // Move the cursor (an empty selection) to an offset.
 const setCursor = (editor: PromptEditor, offset: number) =>
@@ -117,14 +127,14 @@ function makeEntry(
     opts: {
         label?: string;
         color?: string;
-        marker?: StyledText;
-        content?: InteractiveStyledText;
+        marker?: StructuredText;
+        content?: InteractiveStructuredText;
         bindings?: PromptBindings;
     } = {},
 ): Entry {
     const entry = new Entry({});
     if (opts.label != null) {
-        entry.cell.label = { text: opts.label, ranges: [] };
+        entry.cell.label = { parts: [{ text: opts.label }] };
     }
     if (opts.color != null) {
         entry.cell.color = opts.color;
@@ -132,8 +142,8 @@ function makeEntry(
     entry.replaceCell("prompt");
     promptCell(entry).configurePrompt({
         input: {
-            context: opts.marker ?? { text: "", ranges: [] },
-            content: opts.content ?? { text: "", ranges: [] },
+            context: opts.marker ?? { parts: [] },
+            content: opts.content ?? { parts: [] },
         },
         bindings: opts.bindings,
     });
@@ -156,12 +166,12 @@ describe("prompt-collection — adding prompts", () => {
             makeEntry({
                 label: "sh",
                 color: "green",
-                marker: { text: "$", ranges: [{ start: 0, end: 1, style: "green bold" }] },
+                marker: { parts: [{ text: "$", style: "green bold" }] },
                 content: plain("ls"),
             }),
         );
 
-        // Marker renders the Prompt's `prompt` StyledText, to the left; the editor
+        // Marker renders the Prompt's `prompt` StructuredText, to the left; the editor
         // holds the Prompt's `content` text.
         const r = rowOf(pc, entry)!;
         const marker = r.querySelector(".prompt-collection-marker")!;
@@ -214,7 +224,7 @@ describe("prompt-collection — reconfiguration", () => {
         const entry = pc.addPrompt(makeEntry({ label: "a", color: "blue", marker: plain("$") }));
 
         entry.cell.color = "red";
-        promptCell(entry).input.context = { text: ">", ranges: [] };
+        promptCell(entry).input.context = { parts: [{ text: ">" }] };
         entry.fire();
 
         expect(rowOf(pc, entry)?.style.getPropertyValue("--prompt-accent")).toBe(
@@ -232,7 +242,7 @@ describe("prompt-collection — reconfiguration", () => {
         expect(editorOf(pc, entry)?.getValue()).toBe("first");
 
         // Mutate the Prompt's content and fire: the editor resets to it.
-        promptCell(entry).input.content.text = "reset";
+        promptCell(entry).input.content.parts = [{ text: "reset" }];
         promptCell(entry).input.content.selection = { start: 2, end: 2 };
         entry.fire();
 
@@ -243,11 +253,11 @@ describe("prompt-collection — reconfiguration", () => {
     test("resetting from content does not feed back into content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("hi") }));
-        promptCell(entry).input.content.text = "reset";
+        promptCell(entry).input.content.parts = [{ text: "reset" }];
         promptCell(entry).input.content.selection = { start: 1, end: 1 };
         entry.fire();
         // The reset is applied to the editor but the stored content is preserved.
-        expect(promptCell(entry).input.content.text).toBe("reset");
+        expect(plainText(promptCell(entry).input.content)).toBe("reset");
         expect(promptCell(entry).input.content.selection).toEqual({
             start: 1,
             end: 1,
@@ -291,7 +301,7 @@ describe("prompt-collection — editor values", () => {
         pc.setValue(entry, "two");
         expect(editorOf(pc, entry)?.getValue()).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
-        expect(promptCell(entry).input.content.text).toBe("two");
+        expect(plainText(promptCell(entry).input.content)).toBe("two");
     });
 
     test("editing updates the Entry's content text and selection", () => {
@@ -302,7 +312,7 @@ describe("prompt-collection — editor values", () => {
         setCursor(editor, 3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
 
-        expect(promptCell(entry).input.content.text).toBe("hello");
+        expect(plainText(promptCell(entry).input.content)).toBe("hello");
         expect(promptCell(entry).input.content.selection).toEqual({
             start: 3,
             end: 3,
@@ -417,7 +427,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const entry = makeEntry({
             label: "a",
             content: plain("ls"),
-            bindings: { "Ctrl+L": { command: "lock", freeze: true } },
+            bindings: { "Ctrl+L": { builtin: "lock", freeze: true } },
         });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
@@ -451,8 +461,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         promptCell(entry).configurePrompt({
             input: {
                 content: {
-                    text: "ls",
-                    ranges: [],
+                    parts: [{ text: "ls" }],
                     selection: { start: 2, end: 2 },
                     filigrane: "ls -l",
                 },
@@ -471,12 +480,11 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         const entry = makeEntry({
             label: "a",
             content: {
-                text: "ls",
-                ranges: [],
+                parts: [{ text: "ls" }],
                 selection: { start: 2, end: 2 },
                 editability: "readonly",
             },
-            bindings: { "Ctrl+L": { command: "lock", freeze: true } },
+            bindings: { "Ctrl+L": { builtin: "lock", freeze: true } },
         });
         pc.addPrompt(entry);
         const editor = editorOf(pc, entry)!;
@@ -497,7 +505,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         // A content reset without an editability restores the prompt default.
         promptCell(entry).configurePrompt({
-            input: { content: { text: "ls", ranges: [], selection: { start: 2, end: 2 } } },
+            input: { content: { parts: [{ text: "ls" }], selection: { start: 2, end: 2 } } },
         });
         entry.fire();
         expect(promptCell(entry).input.content.editability).toBeUndefined();
@@ -519,7 +527,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         press("Escape");
         expect(editorOf(pc, entry)?.getValue()).toBe("");
-        expect(promptCell(entry).input.content.text).toBe(""); // synced back to the Entry
+        expect(plainText(promptCell(entry).input.content)).toBe(""); // synced back to the Entry
         expect(promptCell(entry).input.content.filigrane).toBeUndefined(); // dropped as stale
         expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
@@ -542,7 +550,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // the content is replaced whole, so the ghost it doesn't carry goes
         // away — and stays away through later updates.
         promptCell(entry).configurePrompt({
-            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { parts: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
@@ -564,31 +572,32 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 });
 
 describe("prompt-collection — styled values", () => {
-    test("setValue with StyledText sets text, colorizes ranges and moves the cursor", () => {
+    test("setValue with StructuredText sets text, colorizes parts and moves the cursor", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
-            text: "git commit",
-            ranges: [
-                { start: 0, end: 3, style: "green bold" },
-                { start: 4, end: 10, style: "blue" },
+            parts: [
+                { text: "git", style: "green bold" },
+                { text: " " },
+                { text: "commit", style: "blue" },
+                { text: "!" },
             ],
             selection: { start: 4, end: 4 },
         });
 
         // Text goes through the editor.
-        expect(editorOf(pc, entry)?.getValue()).toBe("git commit");
+        expect(editorOf(pc, entry)?.getValue()).toBe("git commit!");
 
-        // Ranges are resolved into concrete CSS spans via the color grammar.
-        // Explicit numeric boundaries are closed (not inclusive).
+        // Styled parts are resolved into concrete CSS spans via the color
+        // grammar. Inner boundaries are closed (not inclusive).
         expect(editor.spans).toEqual([
             {
                 start: 0,
                 end: 3,
                 css: styleToCss(th.calculateStyle("green bold")),
-                inclusiveStart: false,
+                inclusiveStart: true,
                 inclusiveEnd: false,
             },
             {
@@ -607,16 +616,15 @@ describe("prompt-collection — styled values", () => {
         expect(editor.selection).toEqual({ start: 4, end: 4 });
     });
 
-    test("a partially-open boundary resolves to the text edge and marks the span open", () => {
+    test("the first part's start and the last part's end are open", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
-            text: "abcdef",
-            ranges: [
-                { start: null, end: 3, style: "blue" }, // open start only
-                { start: 3, end: null, style: "green" }, // open end only
+            parts: [
+                { text: "abc", style: "blue" },
+                { text: "def", style: "green" },
             ],
         });
 
@@ -636,41 +644,27 @@ describe("prompt-collection — styled values", () => {
                 inclusiveEnd: true,
             },
         ]);
-        // No fully-open range → no base style.
+        // More than one part → no base style.
         expect(editor.baseStyle).toBe("");
     });
 
-    test("a fully-open range becomes a whole-editor base style, not a span", () => {
+    test("a single part becomes a whole-editor base style, not a span", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
 
-        pc.setValue(entry, {
-            text: "abcdef",
-            ranges: [
-                { start: null, end: null, style: "red bold" }, // whole editor + future text
-                { start: 0, end: 3, style: "blue" }, // a normal span on top
-            ],
-        });
+        pc.setValue(entry, { parts: [{ text: "abcdef", style: "red bold" }] });
 
         expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("red bold")));
-        expect(editor.spans).toEqual([
-            {
-                start: 0,
-                end: 3,
-                css: styleToCss(th.calculateStyle("blue")),
-                inclusiveStart: false,
-                inclusiveEnd: false,
-            },
-        ]);
+        expect(editor.spans).toEqual([]);
     });
 
-    test("a fully-open range styles even an empty prompt (nothing to anchor a span to)", () => {
+    test("a single part styles even an empty prompt (nothing to anchor a span to)", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
 
-        pc.setValue(entry, { text: "", ranges: [{ start: null, end: null, style: "green" }] });
+        pc.setValue(entry, { parts: [{ text: "", style: "green" }] });
 
         expect(editorOf(pc, entry)?.getValue()).toBe("");
         expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("green")));
@@ -698,23 +692,37 @@ describe("prompt-collection — styled values", () => {
         const editor = editorOf(pc, entry) as StubEditor;
         editor.selection = undefined; // clear the seeded selection
 
-        pc.setValue(entry, { text: "hello", ranges: [], selection: null });
+        pc.setValue(entry, { parts: [{ text: "hello" }], selection: null });
 
         expect(editorOf(pc, entry)?.getValue()).toBe("hello");
         expect(editor.spans).toEqual([]);
         expect(editor.selection).toBeUndefined();
     });
 
-    test("ranges with an unparseable accent are skipped, not fatal", () => {
+    test("spacers are ignored in the editor", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a" }));
+        const editor = editorOf(pc, entry) as StubEditor;
+
+        // One text part, between spacers: still the whole-editor base style.
+        pc.setValue(entry, {
+            parts: [{ spacer: "grow" }, { text: "ls", style: "red" }, { spacer: "grow" }],
+        });
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls");
+        expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("red")));
+        expect(editor.spans).toEqual([]);
+    });
+
+    test("parts with an unparseable accent are skipped, not fatal", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
-            text: "abcdef",
-            ranges: [
-                { start: 0, end: 2, style: "chartreuse" }, // unknown color → skipped
-                { start: 2, end: 4, style: "red" },
+            parts: [
+                { text: "ab", style: "chartreuse" }, // unknown color → skipped
+                { text: "cd", style: "red" },
+                { text: "ef" },
             ],
         });
 
@@ -735,8 +743,7 @@ describe("prompt-collection — styled values", () => {
             makeEntry({
                 label: "a",
                 content: {
-                    text: "git commit",
-                    ranges: [{ start: 0, end: 3, style: "green bold" }],
+                    parts: [{ text: "git", style: "green bold" }, { text: " commit" }],
                     selection: { start: 3, end: 3 },
                 },
             }),
@@ -748,7 +755,7 @@ describe("prompt-collection — styled values", () => {
                 start: 0,
                 end: 3,
                 css: styleToCss(th.calculateStyle("green bold")),
-                inclusiveStart: false,
+                inclusiveStart: true,
                 inclusiveEnd: false,
             },
         ]);
@@ -806,6 +813,62 @@ describe("prompt-collection — removing", () => {
     });
 });
 
+describe("prompt-collection — context actions", () => {
+    test("clicking a context part with an action fires a command event, like a binding", () => {
+        const pc = make();
+        const entry = pc.addPrompt(
+            makeEntry({
+                label: "a",
+                content: plain("hello"),
+                marker: {
+                    parts: [
+                        { text: "host " },
+                        { text: "~/src", action: "ls" },
+                        { spacer: "grow" },
+                        { text: "12:00", action: { builtin: "lock", freeze: true } },
+                    ],
+                },
+            }),
+        );
+        const editor = editorOf(pc, entry) as StubEditor;
+        setCursor(editor, 3);
+        const events: PromptCommandDetail[] = [];
+        pc.addEventListener("command", (e) => {
+            events.push(e.detail);
+        });
+
+        const marker = rowOf(pc, entry)!.querySelector(".prompt-collection-marker")!;
+        const [path, time] = marker.querySelectorAll<HTMLElement>(".styled-text-action");
+        expect(path.textContent).toBe("~/src");
+        path.click();
+        expect(events.length).toBe(1);
+        expect(events[0]).toMatchObject({
+            action: "ls",
+            entry,
+            text: "hello",
+            selection: { start: 3, end: 3 },
+        });
+        expect(events[0].event).toBeInstanceOf(MouseEvent);
+        expect(editor.readOnly ?? false).toBe(false);
+
+        // A freezing action freezes the prompt, as its binding would.
+        time.click();
+        expect(events[1].action).toEqual({ builtin: "lock", freeze: true });
+        expect(promptCell(entry).input.content.editability).toBe("frozen");
+    });
+
+    test("an action survives a reconfiguration of the context", () => {
+        const pc = make();
+        const entry = pc.addPrompt(makeEntry({ label: "a", marker: plain("$") }));
+        const commands: string[] = [];
+        pc.addEventListener("command", (e) => commands.push(actionName(e.detail.action)));
+        promptCell(entry).input.context = { parts: [{ text: "~", action: "home" }] };
+        entry.fire();
+        rowOf(pc, entry)!.querySelector<HTMLElement>(".styled-text-action")!.click();
+        expect(commands).toEqual(["home"]);
+    });
+});
+
 describe("prompt-collection — key bindings", () => {
     const press = (el: Element, init: KeyboardEventInit) =>
         el.dispatchEvent(
@@ -835,7 +898,7 @@ describe("prompt-collection — key bindings", () => {
         editor.dom.dispatchEvent(ev);
 
         expect(events.length).toBe(1);
-        expect(events[0].command).toBe("clear");
+        expect(events[0].action).toBe("clear");
         expect(events[0].entry).toBe(entry);
         expect(events[0].event).toBe(ev);
         expect(events[0].text).toBe("hello");
@@ -851,7 +914,9 @@ describe("prompt-collection — key bindings", () => {
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         press(editor.dom, { key: "K", ctrlKey: true, shiftKey: true });
         expect(commands).toEqual(["kill"]);
@@ -876,7 +941,9 @@ describe("prompt-collection — key bindings", () => {
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         // No binding yet.
         press(editor.dom, { key: "l", ctrlKey: true });
@@ -891,11 +958,13 @@ describe("prompt-collection — key bindings", () => {
     test("an object binding fires its command and freezes the editor; reconfiguring unblocks it", () => {
         const pc = make();
         const entry = pc.addPrompt(
-            makeEntry({ label: "a", bindings: { "Ctrl+L": { command: "lock", freeze: true } } }),
+            makeEntry({ label: "a", bindings: { "Ctrl+L": { builtin: "lock", freeze: true } } }),
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         press(editor.dom, { key: "l", ctrlKey: true });
         expect(commands).toEqual(["lock"]);
@@ -905,7 +974,7 @@ describe("prompt-collection — key bindings", () => {
         // unblocks the editor when it brings fresh content: the whole-content
         // replacement carries no editability, and editable is the default.
         promptCell(entry).configurePrompt({
-            input: { content: { text: "", ranges: [], selection: { start: 0, end: 0 } } },
+            input: { content: { parts: [], selection: { start: 0, end: 0 } } },
         });
         entry.fire();
         expect(editor.readOnly).toBe(false);
@@ -936,7 +1005,9 @@ describe("prompt-collection — previous/next virtual chords", () => {
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         // Cursor on the first line: Up fires "previous" and is swallowed.
         setCursor(editor, 1);
@@ -963,7 +1034,9 @@ describe("prompt-collection — previous/next virtual chords", () => {
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         // Cursor on the last line: Down fires "next".
         setCursor(editor, 10);
@@ -990,7 +1063,9 @@ describe("prompt-collection — previous/next virtual chords", () => {
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         press(editor.dom, { key: "ArrowUp" });
         press(editor.dom, { key: "ArrowDown" });
@@ -1038,7 +1113,9 @@ describe("prompt-collection — previous/next virtual chords", () => {
         );
         const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
 
         setCursor(editor, 0);
         press(editor.dom, { key: "ArrowUp" });
@@ -1056,7 +1133,9 @@ describe("prompt-collection — previous/next virtual chords", () => {
         pc.addPrompt(entry);
         const editor = editorOf(pc, entry)!;
         const commands: string[] = [];
-        pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
+        pc.addEventListener("command", (e) =>
+            commands.push(actionName((e as CustomEvent).detail.action)),
+        );
         const press = (key: string) =>
             editor.dom
                 .querySelector(".cm-content")!
@@ -1106,15 +1185,14 @@ describe("prompt-collection — composition (real CodeMirror)", () => {
         const { pc, entry, editor, transactions } = await setup();
         setCursor(editor, 3);
         transactions.length = 0;
-        pc.setValue(entry, { text: "ls ", ranges: [], selection: { start: 3, end: 3 } });
+        pc.setValue(entry, { parts: [{ text: "ls " }], selection: { start: 3, end: 3 } });
         expect(transactions).toEqual([]);
     });
 
     test("the same highlights over new text are applied anew", async () => {
         const { pc, entry, editor } = await setup();
         const styled = (text: string) => ({
-            text,
-            ranges: [{ start: 0, end: 2, style: "blue" }],
+            parts: [{ text, style: "blue" }, { text: " x" }],
         });
         pc.setValue(entry, styled("ls"));
         // (Replacing the whole text collapses the old marks: they must be set again.)
@@ -1128,12 +1206,110 @@ describe("prompt-collection — composition (real CodeMirror)", () => {
         view.dispatch({ changes: { from: 3, insert: "^" }, selection: { anchor: 4 } });
         compose(true);
         // (A stale answer, say: it would replace the composed text.)
-        pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
+        pc.setValue(entry, { parts: [{ text: "ls x" }], selection: { start: 1, end: 1 } });
         expect(editorOf(pc, entry)?.getValue()).toBe("ls ^");
         expect(editor.getSelection?.()).toEqual({ start: 4, end: 4 });
         compose(false);
-        pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
+        pc.setValue(entry, { parts: [{ text: "ls x" }], selection: { start: 1, end: 1 } });
         expect(editorOf(pc, entry)?.getValue()).toBe("ls x");
         expect(editor.getSelection?.()).toEqual({ start: 1, end: 1 });
+    });
+});
+
+describe("prompt-collection — edge styles (real CodeMirror)", () => {
+    // (Bold and italic: happy-dom keeps those in a style attribute, unlike
+    // the oklch() colours.)
+    async function setup(content: InteractiveStructuredText) {
+        const { EditorView } = await import("@codemirror/view");
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
+        document.body.append(pc);
+        const entry = makeEntry({ label: "a", content });
+        pc.addPrompt(entry);
+        const editor = editorOf(pc, entry)!;
+        const view = EditorView.findFromDOM(editor.dom)!;
+        // The styled elements in the line, outermost first, with their text.
+        const styled = () =>
+            [...editor.dom.querySelectorAll<HTMLElement>(".cm-line [style]")].map((el) => [
+                el.getAttribute("style")?.replace(/;$/, ""),
+                el.textContent,
+            ]);
+        // The styles the ghost text would inherit, up to the editor's root.
+        const ghostStyles = () => {
+            const ghost = editor.dom.querySelector(".cm-filigrane");
+            expect(ghost).not.toBeNull();
+            const styles: string[] = [];
+            for (let el = ghost!.parentElement; el && el !== editor.dom; el = el.parentElement) {
+                const style = el.getAttribute("style");
+                if (style && style !== "tab-size: 4;") {
+                    styles.push(style);
+                }
+            }
+            return styles;
+        };
+        return { pc, entry, editor, view, styled, ghostStyles };
+    }
+
+    const bold = styleToCss(th.calculateStyle("bold"));
+    const italic = styleToCss(th.calculateStyle("italic"));
+
+    test("the edge parts absorb typed text, but the ghost text is unstyled", async () => {
+        const { entry, view, styled, ghostStyles } = await setup({
+            parts: [{ text: "ls", style: "bold" }, { text: " " }, { text: "-l", style: "italic" }],
+        });
+        promptCell(entry).input.content.filigrane = "ls -la";
+        entry.fire();
+        expect(ghostStyles()).toEqual([]);
+
+        // Typed at the end: in the last part's style; the ghost still unstyled.
+        view.dispatch({ changes: { from: 5, insert: "a" } });
+        expect(styled()).toEqual([
+            [bold, "ls"],
+            [italic, "-la"],
+        ]);
+        // Typed at the start: in the first part's style.
+        view.dispatch({ changes: { from: 0, insert: "x" } });
+        expect(styled()).toEqual([
+            [bold, "xls"],
+            [italic, "-la"],
+        ]);
+        // Typed at an inner boundary: in neither.
+        view.dispatch({ changes: { from: 3, insert: "y" } });
+        expect(styled()).toEqual([
+            [bold, "xls"],
+            [italic, "-la"],
+        ]);
+    });
+
+    test("a single part styles all the text, but not the ghost text", async () => {
+        const { entry, view, styled, ghostStyles } = await setup({
+            parts: [{ text: "ls", style: "bold" }],
+        });
+        promptCell(entry).input.content.filigrane = "ls -l";
+        entry.fire();
+        expect(styled()).toEqual([[bold, "ls"]]);
+        expect(ghostStyles()).toEqual([]);
+
+        view.dispatch({ changes: { from: 2, insert: " -" } });
+        view.dispatch({ changes: { from: 0, insert: "x" } });
+        expect(styled()).toEqual([[bold, "xls -"]]);
+    });
+
+    test("a single part styles text typed into an empty prompt", async () => {
+        const { view, styled } = await setup({ parts: [{ text: "", style: "italic" }] });
+        expect(styled()).toEqual([]);
+        view.dispatch({ changes: { from: 0, insert: "hi" } });
+        expect(styled()).toEqual([[italic, "hi"]]);
+    });
+
+    test("the parts' styles win over the base style", async () => {
+        const { pc, entry, styled } = await setup({ parts: [] });
+        const editor = editorOf(pc, entry)!;
+        editor.setValue("abc");
+        editor.setBaseStyle?.(bold);
+        editor.setHighlights?.([{ start: 1, end: 2, css: italic }]);
+        expect(styled()).toEqual([
+            [bold, "abc"],
+            [italic, "b"],
+        ]);
     });
 });

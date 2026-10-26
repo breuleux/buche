@@ -1,10 +1,11 @@
 import type { Address, To, ZoneDescriptor } from "../types.ts";
 
 export type {
+    Action,
     Address,
-    HighlightRange,
     Json,
     Selection,
+    TextPart,
     To,
     ZoneDescriptor,
 } from "../types.ts";
