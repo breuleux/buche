@@ -52,6 +52,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import type { ServerWebSocket } from "bun";
+import { guiCsp, OUTER_PAGE_CSP } from "../src/csp.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
 import { LibraryRegistry } from "../src/library.ts";
@@ -303,8 +304,9 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 const contentType = (ext: string): string => CONTENT_TYPES[ext] ?? "application/octet-stream";
 
-/** Answer a request for /lib/<rest>, `rest` being `<id>/<path>`. */
-async function serveLibrary(rest: string, method: string): Promise<Response> {
+/** Answer a request for /lib/<rest>, `rest` being `<id>/<path>`, served from
+ *  `libBase` (this server's /lib/). */
+async function serveLibrary(rest: string, method: string, libBase: string): Promise<Response> {
     const slash = rest.indexOf("/");
     if (slash < 0 || (method !== "GET" && method !== "HEAD")) {
         return new Response("not found", { status: 404 });
@@ -315,6 +317,9 @@ async function serveLibrary(rest: string, method: string): Promise<Response> {
         headers: {
             "content-type": answer.mimetype,
             "access-control-allow-origin": "*",
+            // A document or worker loaded from here gets this policy, not its
+            // loader's (see src/csp.ts).
+            "content-security-policy": guiCsp(libBase),
             ...(answer.status === 200 && { "cache-control": "max-age=31536000, immutable" }),
         },
     });
@@ -332,12 +337,19 @@ const server = Bun.serve({
                 : new Response("expected a websocket", { status: 426 });
         }
         if (path === "/") {
-            return new Response(page, { headers: { "content-type": contentType(".html") } });
+            // Keeps the GUI frames from navigating off to the internet (see
+            // src/csp.ts; their own documents carry the rest of the policy).
+            return new Response(page, {
+                headers: {
+                    "content-type": contentType(".html"),
+                    "content-security-policy": OUTER_PAGE_CSP,
+                },
+            });
         }
         // Library files (see `libraries` above). Loaded from the GUIs'
         // opaque-origin srcdoc frames, hence the CORS header.
         if (path.startsWith("/lib/")) {
-            return serveLibrary(path.slice("/lib/".length), req.method);
+            return serveLibrary(path.slice("/lib/".length), req.method, `${url.origin}/lib/`);
         }
         if (path === "/client.js") {
             return new Response(clientJs, { headers: { "content-type": contentType(".js") } });

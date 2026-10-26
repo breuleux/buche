@@ -102,6 +102,7 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
+import { guiCspMeta } from "../csp.ts";
 import type { FocusCommittable } from "../focus.ts";
 import { expandMod, normalizeChord } from "../keychord.ts";
 import type { Json } from "../types.ts";
@@ -131,10 +132,13 @@ export interface ProcResponse {
 }
 
 // Put the runtime first in the document (after the doctype, if any, so the
-// document doesn't drop to quirks mode), preceded by where `lib:` URLs go.
-function inject(html: string): string {
+// document doesn't drop to quirks mode), preceded by where `lib:` URLs go, and
+// before all, the no-network policy (see src/csp.ts): it only applies to what
+// comes after it.
+export function inject(html: string): string {
     const base = BucheGui.libBase;
     const runtime =
+        guiCspMeta(base) +
         (base === null
             ? ""
             : `<script>window.__bucheLibBase=${JSON.stringify(base).replace(/</g, "\\u003c")}</script>`) +

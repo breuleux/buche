@@ -356,9 +356,23 @@ for `"resize"` / `"buche-info"` and reflow.
 Each GUI cell can serve resources under a private URL space. Inside the
 iframe, **relative URLs are your cell's resources**: `fetch("logo.png")`,
 `<img src="chart.svg">`, `<link href="style.css">`, `<script src="app.js">`,
-`<iframe src="page.html">`, XHR — all of it is transparently routed to you;
-absolute `http(s)://` URLs still hit the real network. (`buche.proc(url)`
-does the same thing explicitly and gives you a `Response`.)
+`<iframe src="page.html">`, XHR — all of it is transparently routed to you.
+(`buche.proc(url)` does the same thing explicitly and gives you a
+`Response`.) Absolute `http(s)://` URLs are refused: see "No network" below.
+
+### No network
+
+A GUI cannot reach the network. Its page, and every library it loads, gets
+`proc:` resources, `lib:` libraries, and what it makes itself (`blob:`,
+`data:`); anything over `http(s)://` or `ws(s)://` is refused: `fetch`, XHR,
+WebSockets, `<script src>`, stylesheets and `@import`, images, fonts,
+`sendBeacon`, workers, and the page navigating itself away. (Enforced by a
+Content Security Policy on every GUI document, which the page cannot lift,
+and, in Electron, by blocking the requests themselves.)
+
+So ship what your page needs: a library such as d3 goes in a `lib://` library
+(below) or a `proc://` resource, not a CDN link; fonts too. A library that
+phones home (analytics, remote fonts, tile servers) fails where it does.
 
 A request you have not pre-served arrives as
 `{"type": "resolve", "request_id", "path", "params", "method"}` — answer with
@@ -479,7 +493,7 @@ cache.)
 ## 9. Gotchas
 
 - The iframe is sandboxed to scripts only: no same-origin access, no forms,
-  no popups. Everything goes through `buche`.
+  no popups, and no network (§6). Everything goes through `buche`.
 - `html` with `mode:"set"` on the body wipes your page's state (globals, DOM,
   listeners) — prefer targeted `append`/`set` on containers, or `exec`.
 - `exec`, `register` and `register_schemas` `eval` code in the page by

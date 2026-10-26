@@ -11,7 +11,15 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, systemPreferences } from "electron";
+import {
+    app,
+    BrowserWindow,
+    ipcMain,
+    Menu,
+    nativeImage,
+    type OnBeforeRequestListenerDetails,
+    systemPreferences,
+} from "electron";
 import { formatMessage } from "../scripts/format.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
@@ -135,6 +143,7 @@ async function start(): Promise<void> {
         },
     });
 
+    lockDownGuiFrames(win);
     initProcProtocol();
     setWebContents(win.webContents);
     // The libraries the drivers declare (src/library.ts), served at lib://.
@@ -216,6 +225,41 @@ async function start(): Promise<void> {
         }, 500);
         watch.unref();
     }
+}
+
+/**
+ * No network for GUI frames (see src/csp.ts), at the network layer: the
+ * backstop behind the CSP their documents carry, which also stops what CSP
+ * can't, a frame navigating itself to an http(s) URL. Of the window's
+ * requests, only its top-level page's (the shell, loaded from file:) may go
+ * to http(s) or ws(s); a request from any other frame, or one that can't be
+ * traced to a frame (a worker's, a frame already gone), is cancelled. Other
+ * web contents (the devtools) are left alone.
+ *
+ * WebRTC escapes both layers. Short of disabling it, UDP is limited to what
+ * goes through a proxy (none, normally): no STUN, so no direct peer traffic
+ * (a TURN server over TCP would still be reachable).
+ */
+function lockDownGuiFrames(win: BrowserWindow): void {
+    const wc = win.webContents;
+    const outside = (details: OnBeforeRequestListenerDetails): boolean => {
+        if (details.webContentsId !== wc.id) {
+            return false;
+        }
+        const frame = details.frame;
+        return details.resourceType === "subFrame" || frame == null || frame.parent !== null;
+    };
+    wc.session.webRequest.onBeforeRequest(
+        { urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"] },
+        (details, callback) => {
+            const cancel = outside(details);
+            if (cancel) {
+                console.error(`[buche] blocked a GUI request: ${details.url}`);
+            }
+            callback({ cancel });
+        },
+    );
+    wc.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
 }
 
 /** How long Cmd+Q must be held to quit, in ms. */

@@ -24,6 +24,7 @@
 // src/interface.tsx) and answers through the preload (`proc:response`).
 
 import { ipcMain, protocol, type WebContents } from "electron";
+import { guiCsp } from "../src/csp.ts";
 import type { LibraryRegistry } from "../src/library.ts";
 
 interface CachedResource {
@@ -48,6 +49,11 @@ interface ProcAnswer {
 }
 
 let runtimeHtml = "<!doctype html><html><body></body></html>";
+
+// No network (see src/csp.ts), on every proc: and lib: response, not just the
+// runtime document: a document or worker loaded from either scheme gets the
+// policy of its own response, not its loader's.
+const CSP = { "content-security-policy": guiCsp() };
 let contents: WebContents | null = null;
 
 /** The runtime document served at `proc://<cell-id>/` (the `html`-less GUI
@@ -92,6 +98,7 @@ export function initLibProtocol(libraries: LibraryRegistry): void {
             headers: {
                 "content-type": answer.mimetype,
                 "access-control-allow-origin": "*",
+                ...CSP,
                 // A library's files never change under its id.
                 ...(answer.status === 200 && { "cache-control": "max-age=31536000, immutable" }),
             },
@@ -140,14 +147,14 @@ export function initProcProtocol(): void {
         // The runtime document itself.
         if (resourcePath === "/" || resourcePath === "/index.html") {
             return new Response(runtimeHtml, {
-                headers: { "content-type": "text/html; charset=utf-8" },
+                headers: { "content-type": "text/html; charset=utf-8", ...CSP },
             });
         }
 
         const cached = procCache.get(cellId)?.get(resourcePath);
         if (cached) {
             return new Response(bodyOf(cached), {
-                headers: { "content-type": cached.mimetype },
+                headers: { "content-type": cached.mimetype, ...CSP },
             });
         }
 
@@ -185,7 +192,7 @@ export function initProcProtocol(): void {
             const answer = await answered;
             return new Response(bodyOf(answer), {
                 status: answer.status ?? 200,
-                headers: { "content-type": answer.mimetype ?? "application/octet-stream" },
+                headers: { "content-type": answer.mimetype ?? "application/octet-stream", ...CSP },
             });
         } catch {
             return new Response("Failed to resolve resource", { status: 502 });
