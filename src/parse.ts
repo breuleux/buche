@@ -4,6 +4,8 @@ import driverSchema from "./driver-exchange/incoming.schema.json" with { type: "
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { BucheErrorMessage } from "./utils.ts";
 
+// UNUSED (as a class of its own): only Parser extends it, and there is one
+// Parser. Kept for planned use.
 class BasicParser<T> {
     validate(input: unknown): T | BucheErrorMessage {
         return input as T;

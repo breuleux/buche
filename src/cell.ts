@@ -208,6 +208,11 @@ export function echoElementId(id: string): string {
     return `echo-${id}`;
 }
 
+/** Whether a status is final: the process is done, or failed. */
+export function isSpent(status: StatusString): boolean {
+    return status === "done" || status === "error";
+}
+
 /** Whether the cell's process can still receive signals (kill, resize, ...). */
 export function killable(cell: Cell): boolean {
     const { status } = cell.status;
@@ -233,7 +238,7 @@ export function cellConfiguration(cell: Cell): CellConfiguration {
     };
 }
 
-/** The kind of cell a command is for. */
+/** The kind of cell a command is for (a cell takes no other). */
 export function commandKind(command: CellCommand): "terminal" | "frame" {
     return command.type === "text" ? "terminal" : "frame";
 }
@@ -310,15 +315,11 @@ export abstract class Cell extends WithId() {
         return this;
     }
 
-    /** Whether the cell takes `command` (by default, it takes none). */
-    accepts(command: CellCommand): boolean {
-        return false;
-    }
-
     /** Give the box the content the cell needs (idempotent: run on every
      *  update). By default, there is none. */
     initialize(entry: Entry, box: EchoBox): void {}
 
-    /** Act on `command`, one the cell {@link accepts}. */
+    /** Act on `command`, one for the cell's kind (see `commandKind`; the
+     *  engine refuses the others). */
     handle(command: CellCommand, entry: Entry, box: EchoBox): void {}
 }

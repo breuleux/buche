@@ -1,5 +1,6 @@
 {"type": "configure", "kind": "prompt", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": null, "label": "ps"}
+{"type": "configure", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "kind": "frame"}
 {"type": "send", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "message": {"type": "data", "data": {"x": 1}}}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "standby"}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "running"}

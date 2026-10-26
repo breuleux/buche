@@ -1,4 +1,6 @@
 {"type": "configure", "kind": "prompt", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": "@r", "label": "app"}
+{"type": "configure", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "kind": "frame"}
 {"type": "send", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "message": {"type": "data", "data": {"x": 1}}}
+{"type": "configure", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "kind": "terminal"}
 {"type": "send", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "message": {"type": "text", "stream": "stdout", "text": "late output\r\n"}}

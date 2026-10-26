@@ -10,10 +10,10 @@
 //
 // Each prompt is configured from an {@link Entry} (src/entry.ts) and keyed by that
 // Entry object — `showPrompt`, `removePrompt`, etc. all take the Entry you added.
-// The tab's label and accent colour come from the Entry's {@link Cell}; the
-// leading marker and the editor's initial content come from the Entry's
-// prompt cell (its `input`: `context` and `content`, both StyledText). Edits to the editor
-// flow back into the prompt's `input.content` (its text and selection). The
+// The accent colour comes from the Entry's cell; the leading marker and the
+// editor's initial content come from its prompt cell (its `input`: `context`
+// and `content`, both StyledText). Edits to the editor flow back into the
+// prompt's `input.content` (its text and selection). The
 // cell's `filigrane` (a history suggestion, echoed by the prompt `configure`
 // answer to a parse) shows as faded ghost text extending the content;
 // ArrowRight at the end of the text accepts it.
@@ -21,20 +21,17 @@
 //   ┌─────────────────────────────────────────────┐
 //   │ $  ← prompt text (small, above the editor)  │
 //   │ the active prompt's CodeMirror editor       │
-//   ├─────────────────────────────────────────────┤
-//   │ sh   py   notes            ← tab zone       │
 //   └─────────────────────────────────────────────┘
 //
-// Only the active prompt is shown. Under the prompt is a tab zone: one tab per
-// prompt (its label, coloured by the cell's accent while active, grey otherwise).
-// Click a label to switch prompts; drag labels to reorder them. The editor is
-// created through a swappable `editorFactory` (default: CodeMirror).
+// Only the active prompt is shown (the layout's tabs say whose it is, and pick
+// it: see Layout). The editor is created through a swappable `editorFactory`
+// (default: CodeMirror).
 //
 // Adding a prompt registers a reconfiguration listener on `entry.listeners`;
-// mutate the Entry and call `entry.fire()` to re-read the label, accent and
-// marker, and to reset the editor's text and cursor from the prompt's input.
-// A reconfiguration that finds the cell's status `done` or `error` (the process
-// closed) instead removes the prompt — its tab and editor are spent.
+// mutate the Entry and call `entry.fire()` to re-read the accent and marker,
+// and to reset the editor's text and cursor from the prompt's input. A
+// reconfiguration that finds the cell's status `done` or `error` (the process
+// closed) instead removes the prompt — its editor is spent.
 //
 // A prompt heeds its cell's `bindings` map (e.g. { "Ctrl+L": "clear" }):
 // pressing a bound chord in the editor fires a bubbling "command" event and
@@ -47,10 +44,7 @@
 // "editable", echos are "readonly" — all they support for now.)
 //
 // Events (all bubble):
-//   "promptchange"  detail: { entry: Entry }                      — active prompt changed
-//   "promptremoved" detail: { entry: Entry }                      — a prompt was dropped (closed)
 //   "textchange"    detail: { entry, text, selection }              — a prompt's editor text changed
-//   "reorder"       detail: { order: Entry[] }                     — tabs were reordered
 //   "command"       detail: { command, event, entry, text, selection }
 //                                                                  — a bound chord was pressed
 //
@@ -68,8 +62,9 @@ import {
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { DomProps } from "myjsx/jsx-runtime";
+import { isSpent } from "../cell.ts";
 import { PromptCell } from "../cells/prompt.ts";
-import { defaultTheme, styleToCss, type Theme } from "../color.ts";
+import { defaultTheme, resolveColor, styleToCss } from "../color.ts";
 import { type Entry, statusOf } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
 import type { HighlightRange, InteractiveStyledText, Selection, StyledText } from "../types.ts";
@@ -150,14 +145,8 @@ export type EditorFactory = (options: {
 
 interface Row {
     entry: Entry;
-    /** Stable DOM id (for the `data-prompt` attribute and drag reordering). */
-    id: string;
     row: HTMLElement; // [marker; editor]
-    /** The prompt's floating slot (the PopZone's element): a child of the
-     *  collection, shown while this prompt is active. */
-    pop: HTMLElement;
     marker: HTMLElement;
-    tab: HTMLElement;
     editor: PromptEditor;
     /** The reconfiguration callback registered on `entry.listeners`. */
     listener: (entry: Entry) => void;
@@ -167,10 +156,6 @@ interface Row {
 // `detail` shapes and typed `CustomEvent` aliases for the events dispatched by
 // {@link PromptCollection}. All events bubble.
 
-/** `detail` of the "promptchange" event: the active prompt changed. */
-export interface PromptChangeDetail {
-    entry: Entry;
-}
 /** `detail` of the "textchange" event: a prompt's editor text changed. */
 export interface PromptTextChangeDetail {
     /** The Entry of the prompt whose text changed (not necessarily the active one). */
@@ -180,10 +165,6 @@ export interface PromptTextChangeDetail {
     /** The current selection (`start === end` is the cursor); a point at the
      *  end of `text` if the editor can't report it. */
     selection: Selection;
-}
-/** `detail` of the "reorder" event: the tabs were reordered. */
-export interface PromptReorderDetail {
-    order: Entry[];
 }
 /** `detail` of the "command" event: a bound key chord was pressed in a prompt. */
 export interface PromptCommandDetail {
@@ -199,18 +180,12 @@ export interface PromptCommandDetail {
     selection: Selection;
 }
 
-export type PromptChangeEvent = CustomEvent<PromptChangeDetail>;
-export type PromptRemovedEvent = CustomEvent<PromptChangeDetail>;
 export type PromptTextChangeEvent = CustomEvent<PromptTextChangeDetail>;
-export type PromptReorderEvent = CustomEvent<PromptReorderDetail>;
 export type PromptCommandEvent = CustomEvent<PromptCommandDetail>;
 
 /** Typed event map for {@link PromptCollection} (drives `addEventListener`). */
 export interface PromptCollectionEventMap {
-    promptchange: PromptChangeEvent;
-    promptremoved: PromptRemovedEvent;
     textchange: PromptTextChangeEvent;
-    reorder: PromptReorderEvent;
     command: PromptCommandEvent;
 }
 
@@ -510,26 +485,19 @@ export class PromptCollection extends HTMLElement {
     /** How each prompt's editor is created. Swap before adding prompts. */
     editorFactory: EditorFactory = codeMirrorEditor;
 
-    /**
-     * Theme used to resolve a {@link StyledText} range's accent (and tab accents)
-     * into concrete colors. Defaults to the dark editor theme.
-     */
-    theme: Theme = defaultTheme;
+    /** Theme used to resolve a {@link StyledText} range's accent into
+     *  concrete colors. */
+    private readonly theme = defaultTheme;
 
     private initialized = false;
     private promptsEl!: HTMLElement;
-    private tabsEl!: HTMLElement;
     // Prompts are keyed by their Entry object — the Entry is the prompt's identity.
     private rows = new Map<Entry, Row>();
-    // Reverse lookup from a row's DOM id back to its Entry (for drag reordering).
-    private byId = new Map<string, Entry>();
     private order: Entry[] = [];
     private active: Entry | null = null;
     // Activation history, most recent last: removing the active prompt falls
     // back to the one active before it.
     private history: Entry[] = [];
-    private seq = 0;
-    private dragEntry: Entry | null = null;
     // True while pushing an Entry's content into an editor, to suppress the
     // editor's change→content sync (which would otherwise feed back on a reset).
     private applyingContent = false;
@@ -585,18 +553,12 @@ export class PromptCollection extends HTMLElement {
 
         this.promptsEl = document.createElement("div");
         this.promptsEl.className = "prompt-collection-prompts";
-        this.tabsEl = document.createElement("div");
-        this.tabsEl.className = "prompt-collection-tabs";
-        this.append(this.promptsEl, this.tabsEl);
-
-        // Live reordering while dragging a tab across the tab zone.
-        this.tabsEl.addEventListener("dragover", (e) => this.onDragOver(e));
-        this.tabsEl.addEventListener("drop", (e) => e.preventDefault());
+        this.append(this.promptsEl);
     }
 
     // ── Prompts ───────────────────────────────────────────────────────────────
 
-    /** The prompt entries, in tab order. */
+    /** The prompt entries, in the order they were added. */
     get prompts(): Entry[] {
         this.ensureSetup();
         return [...this.order];
@@ -608,14 +570,13 @@ export class PromptCollection extends HTMLElement {
         return this.active;
     }
 
-    /** Add a prompt (and its tab) for `entry`. The first prompt added becomes
-     *  active. Returns the same Entry (the prompt's handle). */
+    /** Add a prompt for `entry`. The first prompt added becomes active.
+     *  Returns the same Entry (the prompt's handle). */
     addPrompt(entry: Entry): Entry {
         this.ensureSetup();
         if (this.rows.has(entry)) {
             return entry;
         }
-        const id = `p${++this.seq}`;
 
         const marker = document.createElement("div");
         marker.className = "prompt-collection-marker";
@@ -668,18 +629,8 @@ export class PromptCollection extends HTMLElement {
         });
         editorHost.appendChild(editor.dom);
 
-        // The pop float: a child of the collection, *not* of the row — the row
-        // is a focusable leaf (focus.ts), and a focusable box inside it would
-        // make the prompt resolve to the pop instead of the editor. It floats
-        // above the collection and shows only while its prompt is active.
-        const pop = document.createElement("div");
-        pop.className = "prompt-collection-pop";
-        pop.hidden = true;
-        this.appendChild(pop);
-
         const row = document.createElement("div");
         row.className = "prompt-collection-prompt";
-        row.setAttribute("data-prompt", id);
         row.hidden = true;
         // Only the active row is visible, so only it takes part in focus
         // navigation (see focus.ts); "prompt" is its kind in the focus history.
@@ -690,34 +641,12 @@ export class PromptCollection extends HTMLElement {
         row.addEventListener("keydown", (e) => this.handleBindings(entry, e), true);
         this.promptsEl.appendChild(row);
 
-        const tab = document.createElement("span");
-        tab.className = "prompt-collection-tab";
-        tab.setAttribute("data-prompt", id);
-        tab.replaceChildren(buildStyledText(entry.cell.label));
-        tab.draggable = true;
-        tab.addEventListener("click", () => this.showPrompt(entry));
-        tab.addEventListener("dragstart", (e) => {
-            this.dragEntry = entry;
-            tab.classList.add("dragging");
-            e.dataTransfer?.setData("text/plain", id);
-            if (e.dataTransfer) {
-                e.dataTransfer.effectAllowed = "move";
-            }
-        });
-        tab.addEventListener("dragend", () => {
-            tab.classList.remove("dragging");
-            this.dragEntry = null;
-            this.syncOrderFromDom();
-        });
-        this.tabsEl.appendChild(tab);
-
         // Re-read the prompt whenever the Entry is reconfigured (entry.fire()).
         const listener = (): void => this.reconfigure(entry);
         entry.listeners.push(listener);
 
-        const rowEntry: Row = { entry, id, row, pop, marker, tab, editor, listener };
+        const rowEntry: Row = { entry, row, marker, editor, listener };
         this.rows.set(entry, rowEntry);
-        this.byId.set(id, entry);
         this.order.push(entry);
 
         // Render the leading marker and apply the initial styled content.
@@ -725,9 +654,6 @@ export class PromptCollection extends HTMLElement {
         this.applyContent(editor, content);
         editor.setEditability?.(content.editability ?? "editable");
         this.applyFiligrane(rowEntry);
-
-        // Paint the tab (grey while inactive); activation restyles the active one.
-        this.applyTabStyle(rowEntry);
         if (this.active === null) {
             this.activate(entry, false);
         }
@@ -745,10 +671,7 @@ export class PromptCollection extends HTMLElement {
         entry.listeners = entry.listeners.filter((l) => l !== row.listener);
         row.editor.destroy();
         row.row.remove();
-        row.pop.remove();
-        row.tab.remove();
         this.rows.delete(entry);
-        this.byId.delete(row.id);
         this.order = this.order.filter((x) => x !== entry);
         this.history = this.history.filter((x) => x !== entry);
         if (this.active === entry) {
@@ -758,14 +681,6 @@ export class PromptCollection extends HTMLElement {
                 this.activate(next, false);
             }
         }
-        // Viewers of the collection (a hosting tab, say) need to react to a
-        // prompt's departure even when it is not the entry they track.
-        this.dispatchEvent(
-            new CustomEvent<PromptChangeDetail>("promptremoved", {
-                detail: { entry },
-                bubbles: true,
-            }),
-        );
     }
 
     /** Switch to a prompt and (unless `focus` is false) focus its editor.
@@ -774,17 +689,20 @@ export class PromptCollection extends HTMLElement {
         this.activate(entry, focus);
     }
 
+    /** The entry whose prompt `el` (a prompt's element) is, if any. */
+    entryOf(el: Element): Entry | null {
+        for (const [entry, row] of this.rows) {
+            if (row.row === el) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     /** The element of a prompt (its row: marker + editor), or null. */
     promptElement(entry: Entry): HTMLElement | null {
         this.ensureSetup();
         return this.rows.get(entry)?.row ?? null;
-    }
-
-    /** The floating slot above a prompt's row (where its PopZone installs),
-     *  or null. */
-    popElement(entry: Entry): HTMLElement | null {
-        this.ensureSetup();
-        return this.rows.get(entry)?.pop ?? null;
     }
 
     private activate(entry: Entry, focus: boolean): void {
@@ -796,23 +714,11 @@ export class PromptCollection extends HTMLElement {
         this.history = this.history.filter((x) => x !== entry);
         this.history.push(entry);
         for (const [e, row] of this.rows) {
-            const on = e === entry;
-            row.row.hidden = !on;
-            row.pop.hidden = !on;
-            row.tab.classList.toggle("active", on);
-            row.tab.setAttribute("aria-selected", String(on));
-            // Active tab wears its accent; inactive tabs go grey.
-            this.applyTabStyle(row);
+            row.row.hidden = e !== entry;
         }
         if (focus) {
             this.rows.get(entry)?.editor.focus();
         }
-        this.dispatchEvent(
-            new CustomEvent<PromptChangeDetail>("promptchange", {
-                detail: { entry },
-                bubbles: true,
-            }),
-        );
     }
 
     // Match a keydown against the Entry's `bindings` map. On a match, swallow the
@@ -896,28 +802,9 @@ export class PromptCollection extends HTMLElement {
         return virtual;
     }
 
-    /** Move a prompt to a new index in the tab order. */
-    movePrompt(entry: Entry, toIndex: number): void {
-        this.ensureSetup();
-        const from = this.order.indexOf(entry);
-        if (from < 0) {
-            return;
-        }
-        this.order.splice(from, 1);
-        const idx = Math.max(0, Math.min(this.order.length, toIndex));
-        this.order.splice(idx, 0, entry);
-        this.applyOrder();
-        this.dispatchEvent(
-            new CustomEvent<PromptReorderDetail>("reorder", {
-                detail: { order: [...this.order] },
-                bubbles: true,
-            }),
-        );
-    }
-
     // ── Reconfiguration ─────────────────────────────────────────────────────
 
-    // Re-read an Entry's label, accent and marker after it was reconfigured
+    // Re-read an Entry's accent and marker after it was reconfigured
     // (a prompt `configure`), reset the editor's text and cursor from the
     // prompt's `content` (if any), and unblock a frozen editor.
     private reconfigure(entry: Entry): void {
@@ -927,15 +814,12 @@ export class PromptCollection extends HTMLElement {
         }
         // A prompt whose process has terminated (close → status done or error,
         // through `represents` when it stands for a process) has no further
-        // use: drop its tab and editor.
-        const status = statusOf(entry).status;
-        if (status === "done" || status === "error") {
+        // use: drop its editor.
+        if (isSpent(statusOf(entry).status)) {
             this.removePrompt(entry);
             return;
         }
-        row.tab.replaceChildren(buildStyledText(entry.cell.label));
         this.renderMarker(row, entry);
-        this.applyTabStyle(row);
 
         // Reset the editor from `content`: its text, colorization and
         // selection. Guarded so the resulting change doesn't sync back into it.
@@ -962,33 +846,7 @@ export class PromptCollection extends HTMLElement {
         row.editor.setFiligrane?.(promptOf(row.entry)?.input.content.filigrane ?? null);
     }
 
-    /** Paint a tab from its cell's accent while active, or grey while inactive. The
-     *  accent is resolved through the color grammar; an unparseable one is
-     *  ignored (the tab falls back to inherited styling). */
-    private applyTabStyle(row: Row): void {
-        const accent = row.entry === this.active ? row.entry.cell.color : "grey";
-        let css = "";
-        if (accent) {
-            try {
-                css = styleToCss(this.theme.calculateStyle(accent));
-            } catch {
-                css = "";
-            }
-        }
-        row.tab.setAttribute("style", css);
-    }
-
     // ── Editor access ─────────────────────────────────────────────────────────
-
-    getEditor(entry: Entry): PromptEditor | null {
-        this.ensureSetup();
-        return this.rows.get(entry)?.editor ?? null;
-    }
-
-    getValue(entry: Entry): string {
-        this.ensureSetup();
-        return this.rows.get(entry)?.editor.getValue() ?? "";
-    }
 
     /**
      * Set a prompt's editor value. A plain string sets just the text. A
@@ -1077,80 +935,11 @@ export class PromptCollection extends HTMLElement {
         } else {
             row.marker.replaceChildren();
         }
-        let accent = "";
-        if (entry.cell.color) {
-            try {
-                accent = this.theme.calculateColor(entry.cell.color);
-            } catch {
-                accent = "";
-            }
-        }
+        const accent = entry.cell.color ? resolveColor(entry.cell.color) : "";
         if (accent) {
             row.row.style.setProperty("--prompt-accent", accent);
         } else {
             row.row.style.removeProperty("--prompt-accent");
-        }
-    }
-
-    // Re-append tabs and rows to match `this.order`.
-    private applyOrder(): void {
-        for (const entry of this.order) {
-            const row = this.rows.get(entry);
-            if (row) {
-                this.tabsEl.appendChild(row.tab);
-                this.promptsEl.appendChild(row.row);
-            }
-        }
-    }
-
-    // While dragging, move the dragged tab to the pointer's position.
-    private onDragOver(e: DragEvent): void {
-        if (!this.dragEntry) {
-            return;
-        }
-        e.preventDefault();
-        const dragging = this.rows.get(this.dragEntry)?.tab;
-        if (!dragging) {
-            return;
-        }
-        const others = Array.from(
-            this.tabsEl.querySelectorAll<HTMLElement>(".prompt-collection-tab:not(.dragging)"),
-        );
-        const after = others.find((t) => {
-            const r = t.getBoundingClientRect();
-            return e.clientX < r.left + r.width / 2;
-        });
-        if (after) {
-            this.tabsEl.insertBefore(dragging, after);
-        } else {
-            this.tabsEl.appendChild(dragging);
-        }
-    }
-
-    // After a drag ends, adopt the DOM tab order as the canonical order.
-    private syncOrderFromDom(): void {
-        const domIds = Array.from(this.tabsEl.children)
-            .map((c) => c.getAttribute("data-prompt"))
-            .filter((x): x is string => x != null);
-        const domOrder = domIds
-            .map((id) => this.byId.get(id))
-            .filter((e): e is Entry => e != null);
-        const prevIds = this.order.map((e) => this.rows.get(e)?.id ?? "");
-        const changed = domIds.join(" ") !== prevIds.join(" ");
-        this.order = domOrder;
-        for (const entry of this.order) {
-            const row = this.rows.get(entry);
-            if (row) {
-                this.promptsEl.appendChild(row.row);
-            }
-        }
-        if (changed) {
-            this.dispatchEvent(
-                new CustomEvent<PromptReorderDetail>("reorder", {
-                    detail: { order: [...this.order] },
-                    bubbles: true,
-                }),
-            );
         }
     }
 }

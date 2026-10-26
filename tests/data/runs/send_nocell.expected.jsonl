@@ -1,3 +1,0 @@
-{"$role":"driverIn","type":"send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
-{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#104"}}
-{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"hi"},"entry":{"cell":"#104"}}

@@ -1,6 +1,7 @@
 import type { Buche } from "../core.ts";
 import type { BaseMessage } from "./common.ts";
 
+// UNUSED: no driver sends `sync` for now (kept for planned use).
 export interface SyncMessage extends BaseMessage {
     type: "sync";
 

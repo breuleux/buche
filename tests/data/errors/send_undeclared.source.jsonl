@@ -1,0 +1,4 @@
+{"type":"send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
+{"type":"configure","from":["$proc","cq","53"],"to":["$term"],"label":"group"}
+{"type":"send","from":["$proc","cq","53"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"to the group"}}
+{"type":"send","from":["$proc","cq","53","$stdout"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"to an undeclared view"}}

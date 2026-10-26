@@ -284,3 +284,14 @@ export class Theme {
 }
 
 export const defaultTheme = new Theme();
+
+/** Resolve a colour accent (see {@link Theme.calculateColor}) to a CSS
+ *  colour, falling back to the raw value when it cannot be parsed (already a
+ *  CSS colour like `#8ae234`). */
+export function resolveColor(value: string): string {
+    try {
+        return defaultTheme.calculateColor(value);
+    } catch {
+        return value;
+    }
+}

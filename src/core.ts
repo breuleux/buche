@@ -6,6 +6,7 @@ import {
     type CellKind,
     cellConfiguration,
     commandKind,
+    isSpent,
 } from "./cell.ts";
 import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
@@ -210,23 +211,6 @@ export class Buche {
     }
 
     /**
-     * Give `entry` a cell of `kind` if it shows nothing yet (output arriving
-     * with no `configure`), placed by default. The top entry (the driver's own
-     * output) shows nothing.
-     */
-    ensureCell(entry: Entry, kind: CellKind): void {
-        if (entry.visual || entry === this.hierarchy) {
-            return;
-        }
-        entry.replaceCell(kind);
-        entry.target ??= this.targetFor(entry, null, kind);
-        if (entry.cell.status.status === "absent") {
-            entry.cell.status = { status: "running" };
-        }
-        this.sendInterface({ type: "update_cell", target: entry.target, entry });
-    }
-
-    /**
      * Get (creating it if needed) the entry at `message.from` and apply a
      * cell configuration to it: the {@link CellConfiguration} fields merge
      * into its cell, and a provided `represents` onto the entry itself.
@@ -278,24 +262,21 @@ export class Buche {
     }
 
     /**
-     * The entry that `command`, sent from `message.from`, goes to: it claims
-     * its parent's placeholder, or gets a cell of its own (of the kind the
-     * command is for), if it shows nothing yet. A cell that does not take the
-     * command is an error.
+     * The entry that `command`, sent from `from`, goes to: one declared (by a
+     * `configure` with a kind) as a cell of the kind the command is for.
+     * Anything else is an error: cells are never made by what is sent to
+     * them.
      */
-    output(message: CreationInfo, command: CellCommand): Entry {
-        const existing = this.hierarchy.getAt(message.from, false);
-        if (existing?.visual && !existing.cell.accepts(command)) {
+    output(from: Address, command: CellCommand): Entry {
+        const entry = this.hierarchy.getAt(from, false);
+        if (!entry?.visual) {
             throw new BucheError({
                 type: "buche_error",
-                code: "kindmismatch",
-                reason: `The ${existing.cell.kind} at ${JSON.stringify(message.from)} does not take ${command.type}`,
+                code: "undeclared",
+                reason: `Nothing at ${JSON.stringify(from)} to send ${command.type} to (declare it with a configure first)`,
             });
         }
-        const kind = commandKind(command);
-        this.claim(message.from, kind);
-        const entry = this.ensure(message);
-        this.ensureCell(entry, kind);
+        this.checkKind(entry, commandKind(command));
         return entry;
     }
 
@@ -315,7 +296,7 @@ export class Buche {
     /** Switch a live entry between running and standby (a spent one stays). */
     private setLiveStatus(entry: Entry, status: "running" | "standby"): void {
         const current = entry.cell.status.status;
-        if (current === "done" || current === "error" || current === status) {
+        if (isSpent(current) || current === status) {
             return;
         }
         entry.cell.status = { status };
@@ -328,6 +309,9 @@ const LOOK = ["label", "color", "icon", "submission"] as const;
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {
+        // UNUSED: the interface reads only a problem's code and reason, so the
+        // entry found here goes nowhere for now (and is passed as `component`
+        // where ProblemMessage expects `entry`).
         let entry: Entry | undefined;
         if (Array.isArray(obj.input?.from)) {
             // If the original input had an address, find the closest

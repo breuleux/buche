@@ -73,9 +73,32 @@ function stubFactory(): EditorFactory {
     };
 }
 
+// The editors the collections made, by their element (see editorOf).
+const editors = new WeakMap<Element, PromptEditor>();
+
+/** Record the editors `pc` makes, so tests can reach them (see editorOf). */
+function track(pc: PromptCollection): PromptCollection {
+    const factory = pc.editorFactory;
+    pc.editorFactory = (options) => {
+        const editor = factory(options);
+        editors.set(editor.dom, editor);
+        return editor;
+    };
+    return pc;
+}
+
+/** The editor of `entry`'s prompt in `pc` (made while `pc` was tracked). */
+function editorOf(pc: PromptCollection, entry: Entry): PromptEditor | null {
+    const dom = pc
+        .promptElement(entry)
+        ?.querySelector(".prompt-collection-editor")?.firstElementChild;
+    return (dom && editors.get(dom)) ?? null;
+}
+
 function make(): PromptCollection {
     const pc = document.createElement("prompt-collection") as PromptCollection;
     pc.editorFactory = stubFactory();
+    track(pc);
     document.body.append(pc);
     return pc;
 }
@@ -117,25 +140,17 @@ function makeEntry(
     return entry;
 }
 
-const tabs = (pc: PromptCollection) =>
-    Array.from(pc.querySelectorAll<HTMLElement>(".prompt-collection-tab"));
-const rows = (pc: PromptCollection) =>
-    Array.from(pc.querySelectorAll<HTMLElement>(".prompt-collection-prompt"));
-// Tabs and rows are kept in DOM order matching `pc.prompts`, so an entry's index
-// in `pc.prompts` locates its tab / row.
-const tabOf = (pc: PromptCollection, entry: Entry) => tabs(pc)[pc.prompts.indexOf(entry)] ?? null;
-const rowOf = (pc: PromptCollection, entry: Entry) => rows(pc)[pc.prompts.indexOf(entry)] ?? null;
+const rowOf = (pc: PromptCollection, entry: Entry) => pc.promptElement(entry);
 
 describe("prompt-collection — structure", () => {
-    test("builds a prompts container and a tab zone", () => {
+    test("builds a prompts container", () => {
         const pc = make();
         expect(pc.querySelector(".prompt-collection-prompts")).not.toBeNull();
-        expect(pc.querySelector(".prompt-collection-tabs")).not.toBeNull();
     });
 });
 
 describe("prompt-collection — adding prompts", () => {
-    test("creates an editor, a leading marker and a coloured tab; first is active", () => {
+    test("creates an editor and a leading marker; first is active", () => {
         const pc = make();
         const entry = pc.addPrompt(
             makeEntry({
@@ -154,17 +169,12 @@ describe("prompt-collection — adding prompts", () => {
         expect(marker.querySelector(".styled-text")).not.toBeNull();
         expect(r.querySelector(".prompt-collection-editor .stub-editor")?.textContent).toBe("ls");
 
-        // The active tab wears its cell's accent, resolved through the color grammar.
-        const t = tabOf(pc, entry)!;
-        expect(t.textContent).toBe("sh");
-        expect(t.getAttribute("style")).toBe(styleToCss(th.calculateStyle("green")));
-        expect(t.draggable).toBe(true);
+        // The row wears its cell's accent, resolved through the color grammar.
+        expect(r.style.getPropertyValue("--prompt-accent")).toBe(th.calculateColor("green"));
 
         // First prompt is active and shown.
         expect(pc.activePrompt).toBe(entry);
         expect(r.hidden).toBe(false);
-        expect(t.classList.contains("active")).toBe(true);
-        expect(t.getAttribute("aria-selected")).toBe("true");
     });
 
     test("additional prompts start hidden", () => {
@@ -185,39 +195,31 @@ describe("prompt-collection — adding prompts", () => {
 });
 
 describe("prompt-collection — switching", () => {
-    test("clicking a tab activates its prompt and fires promptchange", () => {
+    test("showPrompt shows its prompt and hides the others", () => {
         const pc = make();
         const a = pc.addPrompt(makeEntry({ label: "a" }));
         const b = pc.addPrompt(makeEntry({ label: "b" }));
-        const events: Entry[] = [];
-        pc.addEventListener("promptchange", (e) => {
-            events.push((e as CustomEvent<{ entry: Entry }>).detail.entry);
-        });
 
-        tabOf(pc, b)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        pc.showPrompt(b);
 
         expect(pc.activePrompt).toBe(b);
         expect(rowOf(pc, a)?.hidden).toBe(true);
         expect(rowOf(pc, b)?.hidden).toBe(false);
-        expect(tabOf(pc, b)?.classList.contains("active")).toBe(true);
-        expect(tabOf(pc, a)?.classList.contains("active")).toBe(false);
-        expect(events).toEqual([b]);
     });
 });
 
 describe("prompt-collection — reconfiguration", () => {
-    test("firing the Entry re-reads the label, accent and marker", () => {
+    test("firing the Entry re-reads the accent and marker", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", color: "blue", marker: plain("$") }));
 
-        entry.cell.label = { text: "renamed", ranges: [] };
         entry.cell.color = "red";
         promptCell(entry).input.context = { text: ">", ranges: [] };
         entry.fire();
 
-        expect(tabOf(pc, entry)?.textContent).toBe("renamed");
-        // Active tab: accent resolved via the color grammar.
-        expect(tabOf(pc, entry)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("red")));
+        expect(rowOf(pc, entry)?.style.getPropertyValue("--prompt-accent")).toBe(
+            th.calculateColor("red"),
+        );
         expect(rowOf(pc, entry)?.querySelector(".prompt-collection-marker")?.textContent).toBe(
             ">",
         );
@@ -226,15 +228,15 @@ describe("prompt-collection — reconfiguration", () => {
     test("firing the Entry resets the editor text and selection from content", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("first") }));
-        const editor = pc.getEditor(entry) as StubEditor;
-        expect(pc.getValue(entry)).toBe("first");
+        const editor = editorOf(pc, entry) as StubEditor;
+        expect(editorOf(pc, entry)?.getValue()).toBe("first");
 
         // Mutate the Prompt's content and fire: the editor resets to it.
         promptCell(entry).input.content.text = "reset";
         promptCell(entry).input.content.selection = { start: 2, end: 2 };
         entry.fire();
 
-        expect(pc.getValue(entry)).toBe("reset");
+        expect(editorOf(pc, entry)?.getValue()).toBe("reset");
         expect(editor.selection).toEqual({ start: 2, end: 2 });
     });
 
@@ -261,7 +263,7 @@ describe("prompt-collection — reconfiguration", () => {
         a.cell.status = { status: "done" };
         a.fire();
         expect(pc.prompts).toEqual([b]);
-        expect(tabOf(pc, a)).toBeNull();
+        expect(rowOf(pc, a)).toBeNull();
         expect(destroyed).toEqual([""]);
         expect(pc.activePrompt).toBe(b); // 'a' was active; activation moved on
 
@@ -275,35 +277,8 @@ describe("prompt-collection — reconfiguration", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("keep") }));
         entry.cell.status = { status: "running" };
-        entry.cell.label = { text: "still-here", ranges: [] };
         entry.fire();
         expect(pc.prompts).toEqual([entry]);
-        expect(tabOf(pc, entry)?.textContent).toBe("still-here");
-    });
-
-    test("active tab wears its accent; inactive tabs are grey", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a", color: "green" }));
-        const b = pc.addPrompt(makeEntry({ label: "b", color: "blue" }));
-
-        const grey = styleToCss(th.calculateStyle("grey"));
-
-        // 'a' is active (its accent), 'b' is inactive (grey) — even though it has one.
-        expect(tabOf(pc, a)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("green")));
-        expect(tabOf(pc, b)?.getAttribute("style")).toBe(grey);
-
-        // Switch: the accents follow the active tab.
-        pc.showPrompt(b);
-        expect(tabOf(pc, a)?.getAttribute("style")).toBe(grey);
-        expect(tabOf(pc, b)?.getAttribute("style")).toBe(styleToCss(th.calculateStyle("blue")));
-    });
-
-    test("an accent may carry style beyond color (e.g. bold)", () => {
-        const pc = make();
-        const entry = pc.addPrompt(makeEntry({ label: "a", color: "red bold" }));
-        const css = tabOf(pc, entry)?.getAttribute("style") ?? "";
-        expect(css).toContain("font-weight: bold");
-        expect(css).toContain("color: oklch(");
     });
 });
 
@@ -311,10 +286,10 @@ describe("prompt-collection — editor values", () => {
     test("the editor is seeded from the Prompt content; edits flow back to it", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("one") }));
-        expect(pc.getValue(entry)).toBe("one");
+        expect(editorOf(pc, entry)?.getValue()).toBe("one");
 
         pc.setValue(entry, "two");
-        expect(pc.getValue(entry)).toBe("two");
+        expect(editorOf(pc, entry)?.getValue()).toBe("two");
         // Edits are synced back into the Entry's Prompt content.
         expect(promptCell(entry).input.content.text).toBe("two");
     });
@@ -322,7 +297,7 @@ describe("prompt-collection — editor values", () => {
     test("editing updates the Entry's content text and selection", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         setCursor(editor, 3); // move the cursor
         editor.setValue("hello"); // simulate a user edit
@@ -337,7 +312,7 @@ describe("prompt-collection — editor values", () => {
     test("editing fires textchange with entry, text and selection", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         const events: PromptTextChangeDetail[] = [];
         pc.addEventListener("textchange", (e) => {
@@ -369,7 +344,7 @@ describe("prompt-collection — editor values", () => {
         // not feed back as a user edit.
         entry.fire();
         expect(events).toHaveLength(1);
-        expect(pc.getValue(entry)).toBe("pushed");
+        expect(editorOf(pc, entry)?.getValue()).toBe("pushed");
     });
 
     test("filigrane is handed to the editor on add and refreshed on reconfigure", () => {
@@ -377,7 +352,7 @@ describe("prompt-collection — editor values", () => {
         const entry = makeEntry({ label: "a", content: plain("ls") });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         expect(editor.filigrane).toBe("ls -l");
 
         promptCell(entry).input.content.filigrane = undefined;
@@ -388,12 +363,12 @@ describe("prompt-collection — editor values", () => {
 
 describe("prompt-collection — ghost text (real CodeMirror)", () => {
     test("the filigrane suffix past the text renders as ghost text", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const dom = pc.getEditor(entry)?.dom;
+        const dom = editorOf(pc, entry)?.dom;
         expect(dom?.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
 
         // Typing to extend the text shrinks the ghost accordingly.
@@ -406,12 +381,12 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
     });
 
     test("ArrowRight at the end of the text accepts the ghost text", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         const press = (key: string) =>
             editor.dom
                 .querySelector(".cm-content")!
@@ -420,24 +395,24 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // Cursor not at the end: plain cursor move, no acceptance.
         setCursor(editor, 1);
         press("ArrowRight");
-        expect(pc.getValue(entry)).toBe("ls");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls");
 
         // Cursor at the end: the suffix is accepted.
         setCursor(editor, 2);
         press("ArrowRight");
-        expect(pc.getValue(entry)).toBe("ls -l");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls -l");
         expect(editor.getSelection?.()).toEqual({ start: 5, end: 5 });
         expect(editor.dom.querySelector(".cm-filigrane")).toBeNull();
 
         // Ghost gone (fully typed): ArrowRight is an ordinary cursor move.
         setCursor(editor, 2);
         press("ArrowRight");
-        expect(pc.getValue(entry)).toBe("ls -l");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls -l");
         expect(editor.getSelection?.()).toEqual({ start: 3, end: 3 });
     });
 
     test("a frozen editor ignores ArrowRight ghost acceptance", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({
             label: "a",
@@ -446,7 +421,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         const press = (init: KeyboardEventInit) =>
             editor.dom
                 .querySelector(".cm-content")!
@@ -469,7 +444,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         // Cursor at the end: ArrowRight no longer accepts the ghost.
         setCursor(editor, 2);
         press({ key: "ArrowRight" });
-        expect(pc.getValue(entry)).toBe("ls");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls");
 
         // Reconfiguration (prompt_configure) unblocks it: dim gone once fresh
         // content arrives (no editability on it: editable is the default).
@@ -487,11 +462,11 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
         expect(editor.dom.classList.contains("cm-frozen")).toBe(false);
         setCursor(editor, 2);
         press({ key: "ArrowRight" });
-        expect(pc.getValue(entry)).toBe("ls -l");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls -l");
     });
 
     test("editability follows the content: readonly renders, freeze overrides, reset clears", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({
             label: "a",
@@ -504,7 +479,7 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
             bindings: { "Ctrl+L": { command: "lock", freeze: true } },
         });
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         expect(editor.dom.classList.contains("cm-readonly")).toBe(true);
 
         // The freezing binding overrides the configured state (temporary look).
@@ -531,19 +506,19 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
     });
 
     test("Escape clears the field and the ghost text", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls -l") });
         promptCell(entry).input.content.filigrane = "ls -la";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         const press = (key: string) =>
             editor.dom
                 .querySelector(".cm-content")!
                 .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 
         press("Escape");
-        expect(pc.getValue(entry)).toBe("");
+        expect(editorOf(pc, entry)?.getValue()).toBe("");
         expect(promptCell(entry).input.content.text).toBe(""); // synced back to the Entry
         expect(promptCell(entry).input.content.filigrane).toBeUndefined(); // dropped as stale
         expect(editor.getSelection?.()).toEqual({ start: 0, end: 0 });
@@ -551,16 +526,16 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
 
         // Already empty: a no-op that does not throw.
         press("Escape");
-        expect(pc.getValue(entry)).toBe("");
+        expect(editorOf(pc, entry)?.getValue()).toBe("");
     });
 
     test("a configure replacing the content drops the ghost (the submit reset)", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         expect(editor.dom.querySelector(".cm-filigrane")).not.toBeNull();
 
         // What the driver sends on submit (see coquille's command$submit):
@@ -576,12 +551,12 @@ describe("prompt-collection — ghost text (real CodeMirror)", () => {
     });
 
     test("a configure without filigrane leaves the ghost alone", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls") });
         promptCell(entry).input.content.filigrane = "ls -l";
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         promptCell(entry).configurePrompt({ bindings: {} });
         entry.fire();
         expect(editor.dom.querySelector(".cm-filigrane")?.textContent).toBe(" -l");
@@ -592,7 +567,7 @@ describe("prompt-collection — styled values", () => {
     test("setValue with StyledText sets text, colorizes ranges and moves the cursor", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
             text: "git commit",
@@ -604,7 +579,7 @@ describe("prompt-collection — styled values", () => {
         });
 
         // Text goes through the editor.
-        expect(pc.getValue(entry)).toBe("git commit");
+        expect(editorOf(pc, entry)?.getValue()).toBe("git commit");
 
         // Ranges are resolved into concrete CSS spans via the color grammar.
         // Explicit numeric boundaries are closed (not inclusive).
@@ -635,7 +610,7 @@ describe("prompt-collection — styled values", () => {
     test("a partially-open boundary resolves to the text edge and marks the span open", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
             text: "abcdef",
@@ -668,7 +643,7 @@ describe("prompt-collection — styled values", () => {
     test("a fully-open range becomes a whole-editor base style, not a span", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
             text: "abcdef",
@@ -693,11 +668,11 @@ describe("prompt-collection — styled values", () => {
     test("a fully-open range styles even an empty prompt (nothing to anchor a span to)", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, { text: "", ranges: [{ start: null, end: null, style: "green" }] });
 
-        expect(pc.getValue(entry)).toBe("");
+        expect(editorOf(pc, entry)?.getValue()).toBe("");
         expect(editor.baseStyle).toBe(styleToCss(th.calculateStyle("green")));
         expect(editor.spans).toEqual([]);
     });
@@ -705,14 +680,14 @@ describe("prompt-collection — styled values", () => {
     test("a plain string leaves highlights and selection untouched", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         // Clear whatever the initial content seeded, to isolate setValue's effect.
         editor.spans = undefined;
         editor.selection = undefined;
 
         pc.setValue(entry, "plain");
 
-        expect(pc.getValue(entry)).toBe("plain");
+        expect(editorOf(pc, entry)?.getValue()).toBe("plain");
         expect(editor.spans).toBeUndefined();
         expect(editor.selection).toBeUndefined();
     });
@@ -720,12 +695,12 @@ describe("prompt-collection — styled values", () => {
     test("omitting the selection does not move the cursor", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         editor.selection = undefined; // clear the seeded selection
 
         pc.setValue(entry, { text: "hello", ranges: [], selection: null });
 
-        expect(pc.getValue(entry)).toBe("hello");
+        expect(editorOf(pc, entry)?.getValue()).toBe("hello");
         expect(editor.spans).toEqual([]);
         expect(editor.selection).toBeUndefined();
     });
@@ -733,7 +708,7 @@ describe("prompt-collection — styled values", () => {
     test("ranges with an unparseable accent are skipped, not fatal", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
 
         pc.setValue(entry, {
             text: "abcdef",
@@ -766,8 +741,8 @@ describe("prompt-collection — styled values", () => {
                 },
             }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
-        expect(pc.getValue(entry)).toBe("git commit");
+        const editor = editorOf(pc, entry) as StubEditor;
+        expect(editorOf(pc, entry)?.getValue()).toBe("git commit");
         expect(editor.spans).toEqual([
             {
                 start: 0,
@@ -781,25 +756,6 @@ describe("prompt-collection — styled values", () => {
     });
 });
 
-describe("prompt-collection — reordering", () => {
-    test("movePrompt reorders the tabs and fires reorder", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a" }));
-        const b = pc.addPrompt(makeEntry({ label: "b" }));
-        const c = pc.addPrompt(makeEntry({ label: "c" }));
-        const events: Entry[][] = [];
-        pc.addEventListener("reorder", (e) => {
-            events.push((e as CustomEvent<{ order: Entry[] }>).detail.order);
-        });
-
-        pc.movePrompt(c, 0); // c to the front
-
-        expect(pc.prompts).toEqual([c, a, b]);
-        expect(tabs(pc).map((t) => t.textContent)).toEqual(["c", "a", "b"]);
-        expect(events).toEqual([[c, a, b]]);
-    });
-});
-
 describe("prompt-collection — removing", () => {
     test("removePrompt drops it, destroys its editor and activates the next", () => {
         const pc = make();
@@ -810,7 +766,7 @@ describe("prompt-collection — removing", () => {
         pc.removePrompt(a); // 'a' was active
 
         expect(pc.prompts).toEqual([b]);
-        expect(tabOf(pc, a)).toBeNull();
+        expect(rowOf(pc, a)).toBeNull();
         expect(destroyed).toEqual(["aa"]); // editor.destroy() was called
         expect(pc.activePrompt).toBe(b);
         expect(rowOf(pc, b)?.hidden).toBe(false);
@@ -861,7 +817,7 @@ describe("prompt-collection — key bindings", () => {
         const entry = pc.addPrompt(
             makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" }, content: plain("hello") }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         setCursor(editor, 2);
 
         // The listener param is typed as PromptCommandEvent via the event map.
@@ -893,7 +849,7 @@ describe("prompt-collection — key bindings", () => {
         const entry = pc.addPrompt(
             makeEntry({ label: "a", bindings: { "ctrl+shift+K": "kill" } }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -904,7 +860,7 @@ describe("prompt-collection — key bindings", () => {
     test("an unbound chord does not fire a command event", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", bindings: { "Ctrl+L": "clear" } }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         let fired = 0;
         pc.addEventListener("command", () => {
             fired++;
@@ -918,7 +874,7 @@ describe("prompt-collection — key bindings", () => {
     test("bindings are read live, so reconfiguring the Entry is heeded", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a" }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -937,7 +893,7 @@ describe("prompt-collection — key bindings", () => {
         const entry = pc.addPrompt(
             makeEntry({ label: "a", bindings: { "Ctrl+L": { command: "lock", freeze: true } } }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -978,7 +934,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
                 bindings: { Previous: "prev-history", Next: "next-history" },
             }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -1005,7 +961,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
                 bindings: { Previous: "prev-history", Next: "next-history" },
             }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -1032,7 +988,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
                 bindings: { Previous: "prev", Next: "next" },
             }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -1044,7 +1000,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
     test("without a previous/next binding the arrows keep their default behavior", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("one\ntwo") }));
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         let fired = 0;
         pc.addEventListener("command", () => fired++);
 
@@ -1061,7 +1017,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
         const entry = pc.addPrompt(
             makeEntry({ label: "a", content: plain("ls"), bindings: { Previous: "prev" } }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         let fired = 0;
         pc.addEventListener("command", () => fired++);
 
@@ -1080,7 +1036,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
                 bindings: { ArrowUp: "top", Previous: "prev" },
             }),
         );
-        const editor = pc.getEditor(entry) as StubEditor;
+        const editor = editorOf(pc, entry) as StubEditor;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
 
@@ -1090,7 +1046,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
     });
 
     test("with the real editor, ArrowUp on the first line fires previous instead of moving the cursor", () => {
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({
             label: "a",
@@ -1098,7 +1054,7 @@ describe("prompt-collection — previous/next virtual chords", () => {
             bindings: { Previous: "prev-history" },
         });
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         const commands: string[] = [];
         pc.addEventListener("command", (e) => commands.push((e as CustomEvent).detail.command));
         const press = (key: string) =>
@@ -1121,40 +1077,17 @@ describe("prompt-collection — previous/next virtual chords", () => {
     });
 });
 
-describe("prompt-collection — pop slot", () => {
-    test("the slot is a child of the collection, not of the prompt row", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a" }));
-        const pop = pc.popElement(a)!;
-        expect(pop.parentElement).toBe(pc);
-        expect(pc.promptElement(a)?.contains(pop)).toBe(false);
-    });
-
-    test("the slot shows only while its prompt is active", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a" }));
-        const b = pc.addPrompt(makeEntry({ label: "b" }));
-        expect(pc.popElement(a)?.hidden).toBe(false);
-        expect(pc.popElement(b)?.hidden).toBe(true);
-        pc.showPrompt(b, false);
-        expect(pc.popElement(a)?.hidden).toBe(true);
-        expect(pc.popElement(b)?.hidden).toBe(false);
-        pc.removePrompt(b);
-        expect(pc.popElement(b)).toBeNull();
-    });
-});
-
 describe("prompt-collection — composition (real CodeMirror)", () => {
     // A dead key ("^" then "u" for "û") composes: "^" sits in the text,
     // provisionally, until the "u". The driver answers every change, "^"
     // included: an update then would end the composition, "^" left behind.
     async function setup() {
         const { EditorView } = await import("@codemirror/view");
-        const pc = document.createElement("prompt-collection") as PromptCollection;
+        const pc = track(document.createElement("prompt-collection") as PromptCollection);
         document.body.append(pc);
         const entry = makeEntry({ label: "a", content: plain("ls ") });
         pc.addPrompt(entry);
-        const editor = pc.getEditor(entry)!;
+        const editor = editorOf(pc, entry)!;
         const view = EditorView.findFromDOM(editor.dom)!;
         const transactions: unknown[] = [];
         const dispatch = view.dispatch.bind(view);
@@ -1196,11 +1129,11 @@ describe("prompt-collection — composition (real CodeMirror)", () => {
         compose(true);
         // (A stale answer, say: it would replace the composed text.)
         pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
-        expect(pc.getValue(entry)).toBe("ls ^");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls ^");
         expect(editor.getSelection?.()).toEqual({ start: 4, end: 4 });
         compose(false);
         pc.setValue(entry, { text: "ls x", ranges: [], selection: { start: 1, end: 1 } });
-        expect(pc.getValue(entry)).toBe("ls x");
+        expect(editorOf(pc, entry)?.getValue()).toBe("ls x");
         expect(editor.getSelection?.()).toEqual({ start: 1, end: 1 });
     });
 });

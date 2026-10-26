@@ -21,19 +21,24 @@ export type ProcessMessage = IncomingDriverMessage | BucheErrorMessage;
 export type StreamMode = "include" | "suppress" | "ignore";
 
 export interface ProcessCommunicatorOptions {
-    /** Address stamped on synthesized messages (fd1/fd2/fd4 and the close message). */
+    /** Address stamped on synthesized messages (fd1/fd2/fd4 and the close message).
+     *  UNUSED: no caller sets it for now. */
     from?: Address;
-    /** Target stamped on synthesized messages. Defaults to the terminal. */
+    /** Target stamped on synthesized messages. Defaults to the terminal.
+     *  UNUSED: no caller sets it for now. */
     to?: To;
     /** Working directory for the process. */
     cwd?: string;
-    /** Extra environment variables (merged on top of the parent environment). */
+    /** Extra environment variables (merged on top of the parent environment).
+     *  UNUSED: no caller sets it for now. */
     env?: Record<string, string>;
-    /** How to handle fd1 (stdout). Defaults to `"include"`. */
+    /** How to handle fd1 (stdout). Defaults to `"ignore"`: a driver talks to
+     *  buche on fd5, and its own output is for buche's console. */
     stdout?: StreamMode;
-    /** How to handle fd2 (stderr). Defaults to `"include"`. */
+    /** How to handle fd2 (stderr). Defaults to `"ignore"` (see `stdout`). */
     stderr?: StreamMode;
-    /** How to handle fd4 (dataout). Defaults to `"include"`. */
+    /** How to handle fd4 (dataout). Defaults to `"suppress"` (it can't be
+     *  inherited: buche's own fd4 is anything). */
     data?: StreamMode;
 }
 
@@ -122,10 +127,10 @@ export class ProcessCommunicator {
         const spawnOptions: SpawnOptions = {
             stdio: [
                 "pipe", // fd0 stdin  — opened, untouched
-                stdioEntry(this.options.stdout ?? "include"), // fd1 stdout
-                stdioEntry(this.options.stderr ?? "include"), // fd2 stderr
+                stdioEntry(this.options.stdout ?? "ignore"), // fd1 stdout
+                stdioEntry(this.options.stderr ?? "ignore"), // fd2 stderr
                 "pipe", // fd3 datain — opened, untouched
-                stdioEntry(this.options.data ?? "include"), // fd4 dataout
+                stdioEntry(this.options.data ?? "suppress"), // fd4 dataout
                 "pipe", // fd5 control
             ],
             cwd: this.options.cwd,
@@ -147,11 +152,11 @@ export class ProcessCommunicator {
         this.control = fds[5] ?? null;
 
         // fd1 (stdout) and fd2 (stderr): when included, every chunk is sent as text.
-        this.pipeText(fds[1], "stdout", this.options.stdout ?? "include");
-        this.pipeText(fds[2], "stderr", this.options.stderr ?? "include");
+        this.pipeText(fds[1], "stdout", this.options.stdout ?? "ignore");
+        this.pipeText(fds[2], "stderr", this.options.stderr ?? "ignore");
 
         // fd4 (dataout): when included, a JSONL stream, each line sent as data.
-        this.pipeData(fds[4], this.options.data ?? "include");
+        this.pipeData(fds[4], this.options.data ?? "suppress");
 
         // fd5 (control): stream of IncomingDriverMessages.
         this.pipeControl(fds[5]);
@@ -184,6 +189,8 @@ export class ProcessCommunicator {
         // fd0 (stdin) and fd3 (datain): opened for the child, nothing to do here.
     }
 
+    // UNUSED in "include" mode: no caller asks for a driver's fd1/fd2 as
+    // messages for now (they go to buche's own; see the stream defaults).
     private pipeText(stream: Readable | null, name: "stdout" | "stderr", mode: StreamMode): void {
         // `null` means the fd was inherited ("ignore"): nothing to read here.
         if (!stream) {
@@ -208,6 +215,8 @@ export class ProcessCommunicator {
         stream.on("end", () => this.done());
     }
 
+    // UNUSED in "include" mode: no caller asks for a driver's fd4 as messages
+    // for now (it is drained; see the stream defaults).
     private pipeData(stream: Readable | null, mode: StreamMode): void {
         // `null` means the fd was inherited ("ignore"): nothing to read here.
         if (!stream) {

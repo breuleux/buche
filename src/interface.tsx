@@ -1,7 +1,6 @@
 import { KeyboardNav, type NavConfig } from "carreau/src/keyboard";
-import { panes } from "carreau/src/model";
-import type { LayoutNode, WorkspaceData } from "carreau/src/types";
-import { echoElementId, killable } from "./cell.ts";
+import type { WorkspaceData } from "carreau/src/types";
+import { echoElementId, isSpent, killable } from "./cell.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
 import { EmbeddedTerm } from "./components/embedded-term.tsx";
@@ -177,10 +176,7 @@ export class BucheInterface implements Interface {
                 makeBox: (entry) => this.makeBox(entry),
                 makeEditor: () => this.makeEditor(),
                 focus: (el) => {
-                    this.focus.focus(el, "nav");
-                    if (!this.focus.holdCommits) {
-                        this.focus.commitFocus();
-                    }
+                    this.focus.focusAndCommit(el, "nav");
                 },
                 signal: (entry, code) =>
                     this.interactions.push({ type: "user_signal", code, entry }),
@@ -243,11 +239,7 @@ export class BucheInterface implements Interface {
     /** The box showing a cell, wired to the machine. */
     private makeBox(entry: Entry): EchoBox {
         const eb = new EchoBox();
-        eb.setCompact(true);
-        eb.setAttribute("bare", "");
         eb.bindEntry(entry);
-        // Its ✕ is its tab's: closing goes through the layout.
-        eb.addEventListener("close", () => this.closeEntry(entry));
         eb.addEventListener("resize", () => reportResize(this, eb, entry));
         // Keyboard input bubbles up from the embedded terminal (see EmbeddedTerm).
         eb.addEventListener("term-data", (e) => {
@@ -269,7 +261,6 @@ export class BucheInterface implements Interface {
     /** A prompt-column's editor: a prompt collection, wired to the machine. */
     private makeEditor(): PromptCollection {
         const pc = new PromptCollection();
-        pc.setAttribute("single", "");
         pc.addEventListener("command", (event: PromptCommandEvent) => {
             this.pushCommand(event.detail);
         });
@@ -282,19 +273,6 @@ export class BucheInterface implements Interface {
             });
         });
         return pc;
-    }
-
-    /** Close an entry's tab (see Layout: it ends its process). */
-    private closeEntry(entry: Entry): void {
-        const ws = this.layout.ws;
-        for (const t of ws.trees()) {
-            for (const tabId of tabIds(t)) {
-                if (this.layout.entryOf(tabId) === entry) {
-                    void ws.closeTab(tabId);
-                    return;
-                }
-            }
-        }
     }
 
     // ── GUI relay ─────────────────────────────────────────────────────────────
@@ -331,7 +309,7 @@ export class BucheInterface implements Interface {
                 });
             }
         });
-        // A GUI view that just came into existence takes the focus (unless
+        // A frame's GUI that just came into existence takes the focus (unless
         // its cell is background, or a navigation is mid-capture).
         this.container.addEventListener(GUI_APPEAR_EVENT, (e: Event) => {
             const el = e.target;
@@ -342,10 +320,7 @@ export class BucheInterface implements Interface {
             if (entry?.cell.background) {
                 return;
             }
-            this.focus.focus(el, "auto");
-            if (!this.focus.holdCommits) {
-                this.focus.commitFocus();
-            }
+            this.focus.focusAndCommit(el, "auto");
         });
         // In Electron, `proc://` requests answered by the natively registered
         // scheme are relayed from the main process by the preload bridge (see
@@ -538,25 +513,22 @@ export class BucheInterface implements Interface {
      *  can't tell about counts as live). */
     private isLivePrompt(el: HTMLElement): boolean {
         const pc = el.closest("prompt-collection") as PromptCollection | null;
-        const entry = pc?.prompts?.find((e) => pc.promptElement(e) === el);
+        const entry = pc?.entryOf(el);
         if (entry?.cell?.kind !== "prompt") {
             return true;
         }
-        const status = statusOf(entry).status;
-        return status !== "done" && status !== "error";
+        return !isSpent(statusOf(entry).status);
     }
 
     /** The live prompt focused last (else any live one). */
     private lastPromptEntry(): Entry | null {
-        const live = (e: Entry | undefined | null): e is Entry => {
-            const status = e?.cell?.kind === "prompt" ? statusOf(e).status : "done";
-            return status !== "done" && status !== "error";
-        };
+        const live = (e: Entry | undefined | null): e is Entry =>
+            e?.cell?.kind === "prompt" && !isSpent(statusOf(e).status);
         for (const { element, tags } of [...this.focus.history].reverse()) {
             const pc = tags.includes("prompt")
                 ? (element.closest("prompt-collection") as PromptCollection | null)
                 : null;
-            const entry = pc?.prompts.find((e) => pc.promptElement(e) === element);
+            const entry = pc?.entryOf(element);
             if (live(entry)) {
                 return entry;
             }
@@ -575,7 +547,7 @@ export class BucheInterface implements Interface {
             // Still there, but e.g. in a tab that was switched away from:
             // bring it back into view.
             const pc = element.closest("prompt-collection") as PromptCollection | null;
-            const entry = pc?.prompts.find((e) => pc.promptElement(e) === element);
+            const entry = pc?.entryOf(element);
             const revealed = entry ? this.layout.revealPrompt(entry) : null;
             if (revealed && isVisible(revealed)) {
                 return revealed;
@@ -600,21 +572,24 @@ export class BucheInterface implements Interface {
             return;
         }
         // Nothing to kill once the process is spent — and signaling would
-        // mark the entry (and its other views) unresponsive for nothing.
-        if (box.status === "done" || box.status === "error") {
+        // mark the entry (and what represents it) unresponsive for nothing.
+        const { status } = statusOf(entry);
+        if (isSpent(status)) {
             return;
         }
-        const code = box.status === "unresponsive" ? 9 : 15;
+        const code = status === "unresponsive" ? 9 : 15;
         this.interactions.push({ type: "user_signal", code, entry });
     }
 
-    /** Behave exactly like clicking the target cell's ✕. */
+    /** Behave exactly like clicking the target cell's ✕. UNUSED: nothing calls
+     *  it for now (kept for planned use). */
     closeCell(): void {
         this.closeCurrentTab();
     }
 
     /** Clear the spent (and standby) cells everywhere: the standby ones are
-     *  killed (see Layout). */
+     *  killed (see Layout). UNUSED: nothing calls it for now (kept for planned
+     *  use). */
     clearSpentCells(): void {
         const ws = this.layout.ws;
         void ws.clear({ id: ws.root.id });
@@ -675,18 +650,14 @@ export class BucheInterface implements Interface {
         }
         const element = this.layout.revealPrompt(entry);
         if (element && isVisible(element)) {
-            this.focus.focus(element, "auto");
-            if (!this.focus.holdCommits) {
-                this.focus.commitFocus();
-            }
+            this.focus.focusAndCommit(element, "auto");
         }
     }
 
     // The focused cell's process ended: give the focus back, if it is in a
     // prompt's stream and not sticky.
     private releaseEndedCell(entry: Entry): void {
-        const { status } = entry.cell.status;
-        if (status !== "done" && status !== "error") {
+        if (!isSpent(entry.cell.status.status)) {
             return;
         }
         // The focus may sit on the box itself, or anywhere inside it — the
@@ -830,15 +801,6 @@ export class BucheInterface implements Interface {
     handle$problem(buche: Buche, message: ProblemMessage) {
         const code = message.subcode ? `${message.code}/${message.subcode}` : message.code;
         showToast(`${code}: ${message.reason}`);
-    }
-}
-
-/** Every tab id of a tree. */
-function* tabIds(root: LayoutNode): Generator<string> {
-    for (const p of panes(root)) {
-        for (const t of p.tabs) {
-            yield t.id;
-        }
     }
 }
 

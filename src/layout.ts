@@ -29,9 +29,9 @@ import {
 import type { LayoutNode, PaneNode, Rect, SplitNode, Tab, WorkspaceData } from "carreau/src/types";
 import { View } from "carreau/src/view";
 import { Workspace } from "carreau/src/workspace";
-import { defaultTheme } from "./color.ts";
+import { defaultTheme, resolveColor } from "./color.ts";
 import "./components/echo-box.tsx"; // (registers <echo-box>)
-import type { StatusString } from "./cell.ts";
+import { isSpent, type StatusString } from "./cell.ts";
 import type { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection } from "./components/prompt-collection.tsx";
 import { SlotChooser } from "./components/slot-chooser.ts";
@@ -83,14 +83,6 @@ export function defaultLayout(): WorkspaceData {
         root: { type: "pane", id: genId("p"), weight: 1, tabs: [], active: 0, name: "main" },
         floating: [],
     };
-}
-
-function resolveColor(value: string): string {
-    try {
-        return defaultTheme.calculateColor(value);
-    } catch {
-        return value;
-    }
 }
 
 function tabStatus(entry: Entry): StatusString {
@@ -1192,8 +1184,7 @@ export class Layout {
     }
 
     private alive(entry: Entry): boolean {
-        const status = statusOf(entry).status;
-        return status !== "done" && status !== "error";
+        return !isSpent(statusOf(entry).status);
     }
 
     /**

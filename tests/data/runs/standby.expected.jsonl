@@ -2,6 +2,8 @@
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":null,"link":true},"entry":{"cell":"#103"}}
 {"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"zone":null,"label":"ps"}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":["$proc","cq"]},"entry":{"cell":"#106","represents":["$proc","cq","2"]}}
+{"$role":"driverIn","type":"configure","from":["$proc","cq","2","$frame"],"to":["$term"],"kind":"frame"}
+{"$role":"interfaceOut","type":"update_cell","target":null,"entry":{"cell":"#107","represents":["$proc","cq","2"]}}
 {"$role":"driverIn","type":"send","from":["$proc","cq","2","$frame"],"to":["$term"],"message":{"type":"data","data":{"x":1}}}
 {"$role":"interfaceOut","type":"cell_command","command":{"type":"data","data":{"x":1}},"entry":{"cell":"#107","represents":["$proc","cq","2"]}}
 {"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"status":"standby"}

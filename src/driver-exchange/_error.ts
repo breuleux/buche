@@ -17,6 +17,8 @@ export interface ErrorMessage extends BaseMessage {
 
 export function handle$error(buche: Buche, obj: ErrorMessage): void {
     console.error("[buche] process reported an error:", obj, obj.traceback);
+    // UNUSED: the interface reads only a problem's code and reason, so the
+    // entry goes nowhere for now.
     const entry = buche.hierarchy.getAt(obj.from, false);
 
     buche.sendInterface({

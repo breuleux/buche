@@ -1,4 +1,5 @@
-// Generic spatial focus navigation over elements tagged `focusable`.
+// Focus tracking over elements tagged `focusable`. (Moving the focus around is
+// the layout's: see carreau's keyboard navigation.)
 //
 //   const fm = new FocusManager(root);
 //   <div focusable>…</div>
@@ -22,31 +23,6 @@
 //     automatically when the focus moves because the focused element was
 //     removed — unless `holdCommits` is set (e.g. during a navigation, which
 //     will commit when it ends).
-//   * `move(direction, mode)` moves the focus, in one of three modes (binding
-//     keys to it is up to the caller); `find(from, direction, mode)` tells
-//     where that would go from any focusable, without moving anything:
-//       - "neighbour": the flex step below only.
-//       - "jump": the layout jump below only, restricted to elements outside
-//         the focused element's closest focusable container, so that it always
-//         leaves that container (e.g. a quadrant).
-//       - "mix": the flex step, else the layout jump — i.e. "neighbour", and
-//         "jump" if that did nothing.
-//
-//     Flex step:
-//       - If an ancestor of the focused element is a flex container laid out
-//         along the arrow's axis, the focus steps to the previous/next flex item
-//         (direct child) of that container that holds focusables: the item
-//         itself if it is focusable, otherwise the focusable inside it (with no
-//         focusable in between) closest to the current one. Flex containers
-//         with fewer than two such items are skipped.
-//       - At the first/last item, the same is tried with the next such flex
-//         ancestor up; nothing happens when there is none.
-//
-//     Layout jump:
-//       - The focus goes to the closest focusable element in that direction
-//         (straight ahead: overlapping the current one on the cross axis) — or
-//         rather to its highest focusable ancestor that does not contain the
-//         current focus.
 //   * Focusing a container (a focusable with focusable descendants) focuses its
 //     last focused leaf instead (or its first leaf, if it has no valid memory).
 //   * When the focused element is removed, focus returns to the most recent
@@ -64,7 +40,7 @@
 //     `focusable="cell"` → "cell");
 //   * its source, i.e. how it was focused:
 //       "click"    a click (pointer press) inside it
-//       "nav"      navigation with `move`
+//       "nav"      keyboard navigation (the layout's)
 //       "dom"      the DOM focus landed in it (Tab, or a component's .focus())
 //       "restore"  the previous focus was destroyed or hidden
 //       "api"      a `focus()` call (the caller may pass another source)
@@ -80,11 +56,6 @@
 //
 // A bubbling "focus-change" event (detail: { previous, current, tags }) is
 // dispatched on the root whenever the focus changes.
-
-export type Direction = "up" | "down" | "left" | "right";
-
-/** How to move: flex neighbour only, layout jump only, or neighbour else jump. */
-export type NavigationMode = "neighbour" | "jump" | "mix";
 
 /** How a focus came about (see the header comment). */
 export type FocusSource = "click" | "nav" | "dom" | "restore" | "api" | "auto";
@@ -130,16 +101,6 @@ const EDITABLE = 'input, textarea, select, [contenteditable=""], [contenteditabl
 
 // Elements whose clicks don't change the focus.
 const NOFOCUS = "[nofocus]";
-
-// Tolerance (px) for edge comparisons in the geometric search.
-const TOLERANCE = 2;
-
-interface Rect {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-}
 
 export class FocusManager {
     readonly root: HTMLElement;
@@ -240,6 +201,15 @@ export class FocusManager {
         this.setCurrent(this.resolve(el), true, source);
     }
 
+    /** Focus `el`, then commit it — unless commits are held (a navigation
+     *  is going on, which commits when it ends). */
+    focusAndCommit(el: HTMLElement, source: FocusSource = "api"): void {
+        this.focus(el, source);
+        if (!this.holdCommits) {
+            this.commitFocus();
+        }
+    }
+
     /**
      * Focus the element with this id as soon as it is available, unless the
      * focus moves first (see the header comment). `null` cancels. Replaces any
@@ -276,50 +246,6 @@ export class FocusManager {
     /** Let the focused element finish taking the focus (see {@link FocusCommittable}). */
     commitFocus(): void {
         (this.current as (HTMLElement & Partial<FocusCommittable>) | null)?.commitFocus?.();
-    }
-
-    /** Move the focus in a direction. Returns whether the focus moved. With
-     *  nothing focused, the focus lands on the most recent still-valid element
-     *  of the history (what was focused before it vanished), else on the first
-     *  focusable — the direction then applies from there on the next press. */
-    move(direction: Direction, mode: NavigationMode = "mix"): boolean {
-        const current = this.current;
-        if (!current) {
-            const target = this.previousValid() ?? this.topLevel(this.root)[0];
-            if (target) {
-                this.focus(target, "nav");
-                return true;
-            }
-            return false;
-        }
-        const target = this.find(current, direction, mode);
-        if (!target) {
-            return false;
-        }
-        this.focus(target, "nav");
-        return true;
-    }
-
-    /**
-     * The focusable that `move(direction, mode)` would go to from `from` (a
-     * visible focusable within the root), without moving the focus; null if
-     * there is none. It is returned as is: a container is not resolved to the
-     * leaf that focusing it would pick.
-     */
-    find(
-        from: HTMLElement,
-        direction: Direction,
-        mode: NavigationMode = "mix",
-    ): HTMLElement | null {
-        if (!this.isFocusable(from) || !this.valid(from)) {
-            return null;
-        }
-        return (
-            (mode !== "jump" ? this.flexStep(from, direction) : null) ??
-            (mode !== "neighbour"
-                ? this.spatialStep(from, direction, this.focusableParent(from))
-                : null)
-        );
     }
 
     // ── Structure ───────────────────────────────────────────────────────────
@@ -603,149 +529,6 @@ export class FocusManager {
         }
     }
 
-    // ── Navigation ──────────────────────────────────────────────────────────
-
-    // Step within the nearest flex ancestor laid out along the direction's axis
-    // and holding focusables in at least two of its items (direct children).
-    // The focus goes to the neighbouring item — to the item itself if it is
-    // focusable, else to its top-level focusable closest to the current one.
-    // At its edge, the next such ancestor up is tried; null when none is left.
-    private flexStep(current: HTMLElement, direction: Direction): HTMLElement | null {
-        const vertical = direction === "up" || direction === "down";
-        const forward = direction === "down" || direction === "right";
-        for (let node = current.parentElement; node && this.root.contains(node); ) {
-            const style = getComputedStyle(node);
-            const isFlex = style.display === "flex" || style.display === "inline-flex";
-            const column = style.flexDirection.startsWith("column");
-            if (isFlex && column === vertical) {
-                const items = [...node.children].filter(
-                    (c): c is HTMLElement =>
-                        c instanceof HTMLElement && this.candidatesIn(c).length > 0,
-                );
-                const own = items.find((item) => item.contains(current));
-                if (own && items.length > 1) {
-                    // Order by on-screen position, which accounts for *-reverse.
-                    const key = (el: HTMLElement) => {
-                        const r = el.getBoundingClientRect();
-                        return vertical ? r.top + r.bottom : r.left + r.right;
-                    };
-                    items.sort((a, b) => key(a) - key(b));
-                    const next = items[items.indexOf(own) + (forward ? 1 : -1)];
-                    if (next) {
-                        return this.closest(current, this.candidatesIn(next));
-                    }
-                }
-            }
-            node = node.parentElement;
-        }
-        return null;
-    }
-
-    /** `el` itself if focusable, else its top-level focusables (visible only). */
-    private candidatesIn(el: HTMLElement): HTMLElement[] {
-        if (this.isFocusable(el)) {
-            return this.visible(el) ? [el] : [];
-        }
-        return this.topLevel(el);
-    }
-
-    private closest(current: HTMLElement, candidates: HTMLElement[]): HTMLElement | null {
-        const from = current.getBoundingClientRect();
-        let best: HTMLElement | null = null;
-        let bestDistance = Number.POSITIVE_INFINITY;
-        for (const cand of candidates) {
-            const to = cand.getBoundingClientRect();
-            const dx = Math.max(0, to.left - from.right, from.left - to.right);
-            const dy = Math.max(0, to.top - from.bottom, from.top - to.bottom);
-            if (dx + dy < bestDistance) {
-                bestDistance = dx + dy;
-                best = cand;
-            }
-        }
-        return best;
-    }
-
-    // The closest focusable in the direction, lifted to its highest focusable
-    // ancestor that doesn't contain the current element.
-    // When `outside` is given, only candidates outside of it are considered.
-    private spatialStep(
-        current: HTMLElement,
-        direction: Direction,
-        outside: HTMLElement | null,
-    ): HTMLElement | null {
-        const from = current.getBoundingClientRect();
-        let best: HTMLElement | null = null;
-        let bestScore = Number.POSITIVE_INFINITY;
-        for (const cand of this.root.querySelectorAll<HTMLElement>(this.selector)) {
-            if (cand.contains(current) || current.contains(cand) || !this.visible(cand)) {
-                continue;
-            }
-            if (outside?.contains(cand)) {
-                continue;
-            }
-            const rect = this.clippedRect(cand);
-            if (!rect) {
-                continue;
-            }
-            const score = this.score(from, rect, direction);
-            if (score < bestScore) {
-                bestScore = score;
-                best = cand;
-            }
-        }
-        if (!best) {
-            return null;
-        }
-        for (let p = this.focusableParent(best); p && !p.contains(current); ) {
-            best = p;
-            p = this.focusableParent(p);
-        }
-        return best;
-    }
-
-    // Distance from `from` to `to` in `direction`; Infinity unless `to` lies in
-    // the beam that `from` projects in that direction (i.e. beyond its edge and
-    // overlapping it on the cross axis), so the focus never moves diagonally.
-    // Ties on distance go to the candidate best centred on the beam.
-    private score(from: Rect, to: Rect, direction: Direction): number {
-        const vertical = direction === "up" || direction === "down";
-        let gap: number;
-        if (vertical) {
-            gap = direction === "up" ? from.top - to.bottom : to.top - from.bottom;
-        } else {
-            gap = direction === "left" ? from.left - to.right : to.left - from.right;
-        }
-        const [lo, hi, toLo, toHi] = vertical
-            ? [from.left, from.right, to.left, to.right]
-            : [from.top, from.bottom, to.top, to.bottom];
-        const overlap = Math.min(hi, toHi) - Math.max(lo, toLo);
-        if (gap < -TOLERANCE || overlap <= 0) {
-            return Number.POSITIVE_INFINITY;
-        }
-        const offCentre = Math.abs((lo + hi) / 2 - (toLo + toHi) / 2);
-        return Math.max(0, gap) + offCentre / 1000;
-    }
-
-    // The part of `el` not clipped away by scrolling/overflow ancestors, or null.
-    private clippedRect(el: HTMLElement): Rect | null {
-        const r = el.getBoundingClientRect();
-        let { top, bottom, left, right } = r;
-        for (let node = el.parentElement; node; node = node.parentElement) {
-            const style = getComputedStyle(node);
-            if (style.overflowX !== "visible" || style.overflowY !== "visible") {
-                const c = node.getBoundingClientRect();
-                top = Math.max(top, c.top);
-                bottom = Math.min(bottom, c.bottom);
-                left = Math.max(left, c.left);
-                right = Math.min(right, c.right);
-            }
-        }
-        if (bottom - top <= 0 || right - left <= 0) {
-            return null;
-        }
-        return { top, bottom, left, right };
-    }
-
     // ── Event handlers ──────────────────────────────────────────────────────
 
     private closestFocusable(target: EventTarget | null): HTMLElement | null {
@@ -790,8 +573,7 @@ export class FocusManager {
 
     // Deferred to a microtask, so the requester can finish setting up the new
     // content (e.g. size a terminal) before the focus moves into it. Requests
-    // arriving in the same task coalesce into a single commit (setting a view
-    // both switches and fills it).
+    // arriving in the same task coalesce into a single commit.
     private commitRequests = new Set<Node>();
     private commitPending = false;
     private onCommitRequest = (e: Event): void => {

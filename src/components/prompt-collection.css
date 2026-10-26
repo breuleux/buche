@@ -1,8 +1,7 @@
 /* Styles for the <prompt-collection> custom element (prompt-collection.tsx).
- * Prompts (marker above a CodeMirror editor) with a tab zone of labels below. */
+ * The active prompt: a marker above a CodeMirror editor. */
 
 prompt-collection {
-	position: relative; /* anchor for the pop float (see .prompt-collection-pop) */
 	display: block;
 	color: #d4d4d4;
 	font-family: "Menlo", "Consolas", monospace;
@@ -32,34 +31,6 @@ prompt-collection {
 
 /* ── Pop float: the prompt's PopZone slot, floating just above the prompts ── */
 
-/* One slot per prompt, a child of the collection (not of the focusable prompt
- * row, which would otherwise resolve to the pop's cell — see focus.ts's
- * resolve). Hidden unless it is the active prompt's slot ([hidden] toggled by
- * activate) and holds a cell (:empty while the pop is closed). Taken out of
- * the flow, it overlays the cells above without displacing them. */
-.prompt-collection-pop {
-	display: none;
-	position: absolute;
-	bottom: 100%;
-	left: 0;
-	right: 0;
-	z-index: 20;
-	margin-bottom: 4px;
-	/* No height ceiling of its own: the echo-box's own max-height sizes the
-	 * cell, and the terminal fits to that — a second, smaller cap here would
-	 * clip the rows the terminal believes are on screen. */
-	overflow: hidden; /* only to clip the corners of the box */
-	background: #242424;
-	border: 1px solid #3c3c3c;
-	border-radius: 4px;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
-	padding: 2px 0;
-}
-
-.prompt-collection-pop:not(:empty):not([hidden]) {
-	display: block;
-}
-
 /* The marker: the prompt text, in small type above the editor. Its extra 4px
  * puts it where the echo-box context text sits (22px from the left edge). */
 .prompt-collection-marker {
@@ -73,33 +44,6 @@ prompt-collection {
 .prompt-collection-editor {
 	flex: 1 1 auto;
 	min-width: 0;
-}
-
-/* ── Tab zone: just labels, styled only by (configurable) colour ── */
-
-.prompt-collection-tabs {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 12px;
-	margin-top: 4px;
-	/* Same alignment as the prompt rows (see above). */
-	margin-left: 16px;
-}
-
-.prompt-collection-tab {
-	cursor: pointer;
-	user-select: none;
-	/* Colour is set inline per prompt: the active tab wears its accent, inactive
-	 * tabs are greyed (and further dimmed here via opacity). */
-	opacity: 0.5;
-}
-
-.prompt-collection-tab.active {
-	opacity: 1;
-}
-
-.prompt-collection-tab.dragging {
-	opacity: 0.3;
 }
 
 /* Ghost text (filigrane): faded suggestion rendered inline after the text.
@@ -142,10 +86,4 @@ prompt-collection {
 	.cm-editor.cm-frozen {
 		animation: none;
 	}
-}
-
-/* One prompt at a time (a prompt-column's editor, in the layout): the layout's
- * tabs say whose it is, so the collection's own tab strip goes. */
-prompt-collection[single] .prompt-collection-tabs {
-	display: none;
 }

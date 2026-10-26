@@ -118,15 +118,11 @@ slot-chooser[delayed] {
 /* A cell in the layout has the background of where it sits (its pane, its
  * stream): its box paints none, and its terminal takes that colour, focused or
  * not (`--cell-bg`, which the layout keeps: see Layout.matchBackground). */
-echo-box[bare],
-echo-box[bare][focused],
-echo-box[bare][focus-path] {
+echo-box {
 	background: transparent;
 }
 
-echo-box[bare] embedded-term,
-echo-box[bare][focused] embedded-term,
-echo-box[bare][focus-path] embedded-term {
+echo-box embedded-term {
 	--embedded-term-bg: var(--cell-bg, #1c1c1c);
 }
 

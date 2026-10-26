@@ -157,18 +157,7 @@ describe("gui size information", () => {
         expect(infos(gui)).toHaveLength(1);
     });
 
-    test("a dragged (pinned) box announces dynamicHeight false", () => {
-        const b = box();
-        const cell = new FrameCell();
-        run(cell, b, { type: "data", data: {} });
-        const gui = b.content as BucheGui;
-        (b.querySelector(".echo-box-cell") as HTMLElement).style.height = "300px";
-
-        b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
-        expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
-    });
-
-    test("a pinned cell hands the height from the content to the fill, and back", () => {
+    test("a box filling its pane takes the height from the content, and gives it back", () => {
         const b = box();
         const cell = new FrameCell();
         run(cell, b, { type: "html", content: "<p>hi</p>" });
@@ -176,18 +165,15 @@ describe("gui size information", () => {
         // Dynamic sizing drives the height from the content reports (inline).
         gui.style.height = "300px";
 
-        // Pinning (as a gutter drag does): the inline height is dropped so the
-        // stylesheet's fill height takes over.
-        const cellEl = b.querySelector(".echo-box-cell") as HTMLElement;
-        cellEl.style.height = "200px";
-        b.setAttribute("pinned", "");
+        // Filling its pane: the inline height is dropped so the stylesheet's
+        // fill height takes over.
+        b.setAttribute("fills", "");
         b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
         expect(infos(gui)[0]).toMatchObject({ dynamicHeight: false });
         expect(gui.style.height).toBe("");
 
-        // The double-click reset: content sizing takes the height back.
-        cellEl.style.height = "";
-        b.removeAttribute("pinned");
+        // Back in a stream: content sizing takes the height back.
+        b.removeAttribute("fills");
         b.dispatchEvent(new CustomEvent("resize", { bubbles: true }));
         expect(infos(gui)[0]).toMatchObject({ dynamicHeight: true });
     });
@@ -354,6 +340,7 @@ describe("gui kill from the interface", () => {
         const box = document.querySelector("#echo-c1")!;
         expect(iface.focus.current).toBe(box);
 
+        driver({ type: "configure", from: ["$proc", "cq", "2", "$frame"], kind: "frame" });
         driver({
             type: "send",
             from: ["$proc", "cq", "2", "$frame"],
@@ -390,6 +377,7 @@ describe("gui kill from the interface", () => {
         box.append(inner);
         iface.focus.focus(promptEl, "api");
         iface.focus.focus(inner, "api");
+        driver({ type: "configure", from: ["$proc", "cq", "2", "$frame"], kind: "frame" });
         driver({
             type: "send",
             from: ["$proc", "cq", "2", "$frame"],
@@ -476,16 +464,6 @@ describe("cell kinds", () => {
         driver({ type: "configure", from: ["p", "$stdout"], kind: "terminal" });
         expect(buche.get(["p", "$stdout"]).cell?.kind).toBe("terminal");
         expect(document.querySelector("embedded-term")).toBe(term);
-    });
-
-    test("output takes a placeholder over, with the kind it is for", () => {
-        const { buche, driver } = setup();
-        driver({ type: "configure", from: ["p"], label: "p" });
-        driver({ type: "send", from: ["p", "$frame"], message: { type: "data", data: {} } });
-        expect(buche.get(["p", "$frame"]).cell?.kind).toBe("frame");
-        const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.content).toBeInstanceOf(BucheGui);
-        expect(document.querySelectorAll("echo-box").length).toBe(1);
     });
 
     test("a prompt cell is a prompt", () => {

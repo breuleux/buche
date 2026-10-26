@@ -8,14 +8,10 @@ let guiSeq = 0;
 
 /**
  * A frame: an HTML page the driver drives (a GUI, in a <buche-gui> iframe).
- * It takes every command but `text`.
+ * It takes every command but `text` (see `commandKind`).
  */
 export class FrameCell extends Cell {
     readonly kind = "frame";
-
-    accepts(command: CellCommand): boolean {
-        return command.type !== "text";
-    }
 
     initialize(entry: Entry, box: EchoBox): void {
         this.ensureGui(box);
@@ -23,8 +19,6 @@ export class FrameCell extends Cell {
 
     handle(command: CellCommand, entry: Entry, box: EchoBox): void {
         switch (command.type) {
-            case "text":
-                return;
             case "resolve": {
                 const gui = this.ensureGui(box);
                 if (command.request_id !== undefined) {

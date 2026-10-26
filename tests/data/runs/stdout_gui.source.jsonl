@@ -1,5 +1,7 @@
 {"type": "configure", "kind": "prompt", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
 {"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": null, "id": "c1", "label": "plot", "submission": {"content": {"text": "plot", "ranges": []}}}
+{"type": "configure", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "kind": "terminal"}
 {"type": "send", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "message": {"type": "text", "stream": "stdout", "text": "loading\r\n"}}
+{"type": "configure", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "kind": "frame"}
 {"type": "send", "from": ["$proc", "cq", "2", "$frame"], "to": ["$term"], "message": {"type": "data", "data": {"x": 1}}}
 {"type": "close", "from": ["$proc", "cq", "2"], "to": ["$term"], "outcome": {"type": "success", "code": 0}}

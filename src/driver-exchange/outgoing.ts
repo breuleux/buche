@@ -97,6 +97,7 @@ export interface ResizeRequest extends BaseRequest {
     };
 }
 
+// UNUSED: see `sync` (driver-exchange/_sync.ts).
 export type SyncRequest = SyncMessage;
 
 /** Union of every message type. */

@@ -105,10 +105,22 @@ describe("represents", () => {
         } as never);
         f.buche.handle({ type: "configure", from: PROCESS, to: ["$term"], zone: "@r" } as never);
         f.buche.handle({
+            type: "configure",
+            from: [...PROCESS, "$frame"],
+            to: ["$term"],
+            kind: "frame",
+        } as never);
+        f.buche.handle({
             type: "send",
             from: [...PROCESS, "$frame"],
             to: ["$term"],
             message: { type: "data", data: 1 },
+        } as never);
+        f.buche.handle({
+            type: "configure",
+            from: [...PROCESS, "$stdout"],
+            to: ["$term"],
+            kind: "terminal",
         } as never);
         f.buche.handle({
             type: "send",
@@ -130,6 +142,7 @@ describe("represents", () => {
         ).map((m) => m.target);
         expect(targets).toEqual([
             { zone: "right", anchor: ["$proc", "cq"] },
+            null, // `$frame` takes the placeholder over: it stays where it is
             { zone: "tab", anchor: [...PROCESS, "$frame"] },
             { zone: "left", anchor: [...PROCESS, "$frame"] },
         ]);

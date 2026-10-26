@@ -101,8 +101,8 @@ kind: a GUI app declares a `"frame"`:
 {"type": "configure", "kind": "frame", "from": ["myapp"], "to": ["$term"], "label": "myapp"}
 ```
 
-(Output sent from an address that shows nothing yet also creates a cell there,
-of the kind the output is for: `text` makes a terminal, the rest a GUI.)
+A cell must be declared before anything is sent to it: a `send` to an
+address that shows nothing is refused (an `undeclared` problem).
 
 Fields that matter for GUI apps (full set in `references/incoming.schema.json`
 under `ConfigureMessage`):

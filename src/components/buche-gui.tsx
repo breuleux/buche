@@ -33,12 +33,11 @@
 //     iframe (e.g. releasing Control right away) are forwarded the same way.
 //   * on `commitFocus()`, restores the focus to the element that last had it
 //     inside the iframe, or else to its `[autofocus]` / `#prime-focus` element.
-//   * reports its content height; the element sizes itself to it — unless the
-//     cell has a height of its own (pinned by a gutter drag, or filling a
-//     tab-pane pane), when the element instead fills the cell and the reports
-//     are ignored.
+//   * reports its content height; the element sizes itself to it — unless its
+//     box fills its pane, when the element instead fills the cell and the
+//     reports are ignored.
 //   * receives the cell's sizing information (sent before the queued commands
-//     on ready, and again whenever the cell resizes, e.g. from a gutter drag):
+//     on ready, and again whenever the cell resizes, e.g. a divider moving):
 //     it is stored as `window.bucheInfo` ({width, height, maxHeight,
 //     dynamicHeight}, the contract page programs like `bed` rely on) and
 //     re-broadcast inside the page as a bubbling "buche-info" event, so
@@ -103,9 +102,9 @@ const TAG = "buche-gui";
  *  enclosing `<echo-box>`. */
 export const GUI_SEND_EVENT = "gui-send";
 
-/** Event bubbled by `<buche-gui>` when the element is first created (the GUI
- *  view of a cell has just come into existence); the interface uses it to move
- *  the focus to the new GUI. */
+/** Event bubbled by `<buche-gui>` when the element is first created (a frame's
+ *  GUI has just come into existence); the interface uses it to move the focus
+ *  to the new GUI. */
 export const GUI_APPEAR_EVENT = "gui-appear";
 
 /** An answer to a pending `proc://` request (see {@link BucheGui.respond}). */
@@ -208,16 +207,12 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
     };
 
     /** Whether the GUI sizes itself to its content (the iframe reports a
-     *  height, and the element grows to it). False when the cell has a height
-     *  of its own — pinned by a gutter drag (the `pinned` attribute), or a box
-     *  filling its pane (`fills`) — in which case the GUI just fills it (CSS, see
-     *  the echo-box stylesheet; compare the fitting logic in cell.ts). */
+     *  height, and the element grows to it). False when its box fills its pane
+     *  (`fills`), in which case the GUI just fills it (CSS, see the echo-box
+     *  stylesheet; compare the terminal's fitting in cells/terminal.ts). */
     private dynamicSizing(): boolean {
         this.ensureBox();
-        const box = this.box;
-        const pinned = (box?.cellContentHeight ?? null) !== null;
-        const fillsPane = box?.hasAttribute("fills") ?? false;
-        return !pinned && !fillsPane;
+        return !(this.box?.hasAttribute("fills") ?? false);
     }
 
     /** The sizing mode the element was last set up for (see
@@ -252,7 +247,7 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
      *  `window.bucheInfo`, see the runtime): the rendered size of the cell,
      *  the height its dynamic sizing can grow to before the box clamps it
      *  (0 = no ceiling), and whether the GUI sizes itself to its content at
-     *  all (a box pinned by a drag, or filling a pane, does not). Also brings
+     *  all (a box filling a pane does not). Also brings
      *  the element's own sizing in line with the mode. */
     private sendInfo(): void {
         const dynamic = this.dynamicSizing();

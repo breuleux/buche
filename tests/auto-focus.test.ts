@@ -278,18 +278,23 @@ describe("views of a process", () => {
         ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         ctx.driver({ type: "configure", from: proc, zone: "tab", label: "app" });
         const boxOf = (view: string) => ctx.iface.layout.boxOf(ctx.buche.get([...proc, view]));
-        const stdout = () =>
+        // A view is declared, then sent to (as coquille does).
+        const stdout = () => {
+            ctx.driver({ type: "configure", from: [...proc, "$stdout"], kind: "terminal" });
             ctx.driver({
                 type: "send",
                 from: [...proc, "$stdout"],
                 message: { type: "text", stream: "stdout", text: "x" },
             });
-        const frame = () =>
+        };
+        const frame = () => {
+            ctx.driver({ type: "configure", from: [...proc, "$frame"], kind: "frame" });
             ctx.driver({
                 type: "send",
                 from: [...proc, "$frame"],
                 message: { type: "data", data: 1 },
             });
+        };
         return { ...ctx, boxOf, stdout, frame };
     }
 
@@ -492,11 +497,13 @@ describe("tab ✕", () => {
         ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
         const proc = [...SHELL, "2"];
         ctx.driver({ type: "configure", from: proc, zone: "tab", label: "app" });
+        ctx.driver({ type: "configure", from: [...proc, "$stdout"], kind: "terminal" });
         ctx.driver({
             type: "send",
             from: [...proc, "$stdout"],
             message: { type: "text", stream: "stdout", text: "x" },
         });
+        ctx.driver({ type: "configure", from: [...proc, "$frame"], kind: "frame" });
         ctx.driver({
             type: "send",
             from: [...proc, "$frame"],
