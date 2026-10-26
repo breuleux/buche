@@ -497,23 +497,6 @@ describe("echo-box — closing", () => {
 });
 
 describe("echo-box — compact mode", () => {
-    function drag(el: HTMLElement, fromY: number, toY: number): void {
-        el.dispatchEvent(
-            new PointerEvent("pointerdown", {
-                clientY: fromY,
-                button: 0,
-                pointerId: 1,
-                bubbles: true,
-            }),
-        );
-        el.dispatchEvent(
-            new PointerEvent("pointermove", { clientY: toY, pointerId: 1, bubbles: true }),
-        );
-        el.dispatchEvent(
-            new PointerEvent("pointerup", { clientY: toY, pointerId: 1, bubbles: true }),
-        );
-    }
-
     test("setCompact toggles the compact attribute and property", () => {
         const box = make();
         expect(box.compact).toBe(false);
@@ -532,7 +515,7 @@ describe("echo-box — compact mode", () => {
         expect(box.compact).toBe(false);
     });
 
-    test("puts an inline status dot to the left of the echo, plus resize handles", () => {
+    test("puts an inline status dot to the left of the echo", () => {
         const box = make();
         const header = q(box, ".echo-box-header") as HTMLElement;
         const status = q(box, ".echo-box-status-inline") as HTMLElement;
@@ -542,8 +525,6 @@ describe("echo-box — compact mode", () => {
         expect(kids.indexOf(status)).toBeLessThan(
             kids.indexOf(q(box, ".echo-box-echo") as Element),
         );
-        expect(q(box, ".echo-box-handle-top")).not.toBeNull();
-        expect(q(box, ".echo-box-handle-bottom")).not.toBeNull();
     });
 
     test("Alt reveals the overlay only while hovering the box (not global)", () => {
@@ -566,18 +547,6 @@ describe("echo-box — compact mode", () => {
         expect(box.hasAttribute("data-alt")).toBe(false);
         window.dispatchEvent(new KeyboardEvent("keydown", { altKey: true }));
         expect(box.hasAttribute("data-alt")).toBe(false);
-    });
-
-    test("top handle grows on drag up; bottom handle grows on drag down", () => {
-        const box = make();
-        box.setCompact(true);
-        const cell = q(box, ".echo-box-cell") as HTMLElement;
-        cell.style.height = "100px";
-        drag(q(box, ".echo-box-handle-top") as HTMLElement, 50, 30); // up 20 → grow
-        expect(cell.style.height).toBe("120px");
-        cell.style.height = "100px";
-        drag(q(box, ".echo-box-handle-bottom") as HTMLElement, 50, 70); // down 20 → grow
-        expect(cell.style.height).toBe("120px");
     });
 });
 

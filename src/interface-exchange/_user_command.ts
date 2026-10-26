@@ -13,6 +13,9 @@ export interface UserCommandMessage {
 
     /** Identifies the command; forwarded to the driver (see CommandRequest). */
     id?: string;
+
+    /** Where what it shows goes; forwarded to the driver (see CommandRequest). */
+    zone?: string;
 }
 
 export function handle$user_command(buche: Buche, obj: UserCommandMessage): void {
@@ -24,5 +27,6 @@ export function handle$user_command(buche: Buche, obj: UserCommandMessage): void
         selection: obj.selection,
         command: obj.command,
         ...(obj.id !== undefined ? { id: obj.id } : {}),
+        ...(obj.zone !== undefined ? { zone: obj.zone } : {}),
     });
 }

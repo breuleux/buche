@@ -1,2 +1,3 @@
 {"$role":"driverIn","type":"data","from":["$proc","cq","51"],"to":["$term"],"data":{"key":"value"}}
-{"$role":"interfaceOut","type":"cell_command","command":{"type":"data","data":{"key":"value"}},"entry":{"echo":"#104","cell":null,"prompt":null,"zones":{}}}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"echo":"#103","cell":"#104","prompt":null}}
+{"$role":"interfaceOut","type":"cell_command","command":{"type":"data","data":{"key":"value"}},"entry":{"echo":"#103","cell":"#104","prompt":null}}

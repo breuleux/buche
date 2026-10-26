@@ -1,0 +1,3 @@
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "?"], "to": ["$term"], "represents": null, "ephemeral": true}
+{"type": "close", "from": ["$proc", "?"], "to": ["$term"], "outcome": {"type": "success", "code": 0}}

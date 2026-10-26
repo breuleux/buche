@@ -1,0 +1,8 @@
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": null, "label": "ps"}
+{"type": "data", "from": ["$proc", "cq", "2", "$gui"], "to": ["$term"], "data": {"x": 1}}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "standby"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "running"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "standby"}
+{"type": "close", "from": ["$proc", "cq", "2"], "to": ["$term"], "outcome": {"type": "error", "code": 143}}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "status": "standby"}

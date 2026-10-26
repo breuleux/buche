@@ -47,8 +47,7 @@
 // coloured gutter bar and shows only the cell. The status, echo and controls
 // reappear as a right-aligned top overlay — status · echo · buttons, an empty
 // echo omitted — but only while the Alt/Option key is held with the pointer over
-// that box (it is per-box, not global). The same gesture reveals short resize
-// handles centred at the top and bottom edges.
+// that box (it is per-box, not global).
 //
 // The `destroy-when-done` attribute (or `box.destroyWhenDone = true`) makes the
 // box remove itself from the DOM once its status reaches `done` or `error`.
@@ -180,8 +179,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     private cellEl!: HTMLElement;
     private closeEl!: HTMLButtonElement;
     private inlineStatusEl!: HTMLElement;
-    private handleTop!: HTMLElement;
-    private handleBottom!: HTMLElement;
     private viewMap = new Map<ViewLabel, ViewEntry>();
     private _activeView: ViewLabel | null = null;
     private _status: EchoStatus = "running";
@@ -205,8 +202,8 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     // observePromptActivity), and the listener registered on it.
     private promptCollection: PromptCollection | null = null;
     private onPromptChange = (): void => this.syncPromptActivity();
-    // Whether the pointer is currently over this box. The compact overlay and
-    // handles are shown only while Alt is held *and* the pointer is over the box,
+    // Whether the pointer is currently over this box. The compact overlay is
+    // shown only while Alt is held *and* the pointer is over the box,
     // so Alt-tracking is per-box (not global) and scoped to the hover.
     private hovering = false;
     private onAltKey = (e: KeyboardEvent) => this.syncAlt(e.altKey);
@@ -226,6 +223,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         // A box that goes away mid-drag should not announce a resize.
         this.stopSizePolling();
     }
+
+    // Moved (moveBefore: the layout re-renders around it), it stays as it is:
+    // its size polling goes on, so that what the move changed is announced.
+    connectedMoveCallback(): void {}
 
     // The cell size is polled once per frame (while connected), so the
     // "resize" event has exactly one source: any cause — a gutter drag, the
@@ -408,18 +409,6 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
         this.append(this.contextEl, this.gutter, this.bodyEl);
 
-        // Compact-mode resize handles at the very top and bottom edges. They are
-        // hidden unless compact + Alt-hover (see the stylesheet) and drive the
-        // same resize as the gutter, anchored to the top or bottom edge.
-        this.handleTop = div("echo-box-handle echo-box-handle-top");
-        this.handleBottom = div("echo-box-handle echo-box-handle-bottom");
-        this.handleTop.addEventListener("pointerdown", (e) => this.startResize(e, true));
-        this.handleBottom.addEventListener("pointerdown", (e) => this.startResize(e, false));
-        this.handleTop.addEventListener("dblclick", () => this.resetHeight());
-        this.handleBottom.addEventListener("dblclick", () => this.resetHeight());
-
-        this.append(this.handleTop, this.handleBottom);
-
         // A child terminal's pty-grid change may matter even when the box's
         // pixels did not move (a fresh terminal settling its first real fit).
         this.addEventListener("term-resize", () => {
@@ -493,18 +482,15 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
 
     // ── Resize (drag the gutter handle) ───────────────────────────────────────
 
-    /** Drag the gutter (or a compact-mode handle) to grow/shrink the cell:
-     *  outward grows, inward shrinks. `forcedTopHalf` pins the anchored edge for
-     *  the top/bottom handles; when omitted the grabbed half of the gutter
-     *  decides. */
-    private startResize(event: PointerEvent, forcedTopHalf?: boolean): void {
+    /** Drag the gutter to grow/shrink the cell: outward grows, inward
+     *  shrinks; the grabbed half of the gutter decides which way is out. */
+    private startResize(event: PointerEvent): void {
         // Ignore anything but a primary-button / touch / pen press.
         if (event.button !== 0) {
             return;
         }
         event.preventDefault();
-        // The element the drag started on (the gutter or one of the handles);
-        // pointer capture and the move/up listeners all live on it.
+        // The element the drag started on (the gutter); pointer capture and the move/up listeners all live on it.
         const source = event.currentTarget as HTMLElement;
         source.setPointerCapture(event.pointerId);
         source.classList.add("resizing");
@@ -522,15 +508,10 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         // Dragging outward grows the cell, inward shrinks it; `reverse` swaps them.
         // The bar alongside the top line (the header/echo row, above the cell)
         // always counts as the top half, even on a short bar where the geometric
-        // middle would fall within it. A handle passes its edge in explicitly.
-        let topHalf: boolean;
-        if (forcedTopHalf !== undefined) {
-            topHalf = forcedTopHalf;
-        } else {
-            const rect = source.getBoundingClientRect();
-            const cellTop = this.cellEl.getBoundingClientRect().top;
-            topHalf = startY < Math.max(rect.top + rect.height / 2, cellTop);
-        }
+        // middle would fall within it.
+        const rect = source.getBoundingClientRect();
+        const cellTop = this.cellEl.getBoundingClientRect().top;
+        const topHalf = startY < Math.max(rect.top + rect.height / 2, cellTop);
         const outward = topHalf ? 1 : -1;
         const sign = (this.hasAttribute("reverse") ? -1 : 1) * outward;
 
@@ -769,8 +750,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     /** Switch compact mode on or off. In compact mode the coloured bar is gone;
      *  the status, echo and controls appear only as a right-aligned overlay while
      *  Alt/Option is held over the box (an empty echo is omitted, and the status
-     *  sits to the left of the echo), and the same gesture reveals short
-     *  top/bottom resize handles in the middle. */
+     *  sits to the left of the echo). */
     setCompact(on: boolean): void {
         this.ensureSetup();
         on = Boolean(on);
@@ -794,7 +774,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
         this.syncAlt(event.altKey);
     }
 
-    // Stop tracking Alt and hide the overlay/handles.
+    // Stop tracking Alt and hide the overlay.
     private stopHover(): void {
         this.hovering = false;
         window.removeEventListener("keydown", this.onAltKey);
@@ -804,7 +784,7 @@ export class EchoBox extends HTMLElement implements FocusCommittable {
     }
 
     // Reflect "compact + hovering + Alt down" to the `data-alt` attribute the
-    // stylesheet keys the overlay and handles on. On the way in, the overlay is
+    // stylesheet keys the overlay on. On the way in, the overlay is
     // pinned to its current viewport spot (see pinOverlay) so it stays put.
     private syncAlt(down: boolean): void {
         const active = this._compact && this.hovering && down;

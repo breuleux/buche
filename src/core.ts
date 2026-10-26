@@ -1,33 +1,32 @@
 import { handlers as driverHandlers } from "../src/driver-exchange/incoming.ts";
 import { handlers as interfaceHandlers } from "../src/interface-exchange/incoming.ts";
+import { Cell } from "./cell.ts";
 import type { CreationInfo } from "./driver-exchange/common.ts";
 import type { IncomingDriverMessage } from "./driver-exchange/incoming.ts";
 import type { OutgoingDriverMessage, SignalRequest } from "./driver-exchange/outgoing.ts";
-import type { EchoConfiguration } from "./echo.ts";
-import { Entry } from "./entry.ts";
+import { type EchoConfiguration, echoConfiguration } from "./echo.ts";
+import { Entry, PLACEHOLDER } from "./entry.ts";
 import type { Interface } from "./interface.tsx";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming.ts";
 import type { OutgoingInterfaceMessage, ProblemMessage } from "./interface-exchange/outgoing.ts";
 import type { ProcessCommunicator } from "./process.ts";
-import type { Prompt } from "./prompt.ts";
-import type { Address } from "./types.ts";
+import type { Address, Target, ZoneDescriptor } from "./types.ts";
 import { awrap, BucheError, type BucheErrorMessage, mergeIterables } from "./utils.ts";
-import { type Zone, zoneMap } from "./zone.ts";
 
 export type InM = IncomingDriverMessage | IncomingInterfaceMessage | BucheErrorMessage;
 export type OutM = OutgoingDriverMessage | OutgoingInterfaceMessage;
 export type HandlerT = Record<string, (buche: Buche, message: InM) => void>;
 
 export interface BucheArguments {
-    initialZones: Record<string, Zone>;
     sendDriver: (message: OutgoingDriverMessage) => void;
     sendInterface: (message: OutgoingInterfaceMessage) => void;
 }
 
-export interface LocationResult {
-    prompt: Prompt | null;
-    zone: Zone;
-}
+/** Short names of the reserved zones. */
+const ZONE_ALIASES: Record<string, string> = { l: "left", r: "right", u: "up", d: "down" };
+
+/** What is being placed: cells default inline, prompts in a new tab. */
+export type Kind = "cell" | "prompt";
 
 export class Buche {
     handlers: HandlerT = Object.assign(
@@ -43,8 +42,11 @@ export class Buche {
     /** Counter behind the `request_id` of outgoing parses (see user_input). */
     requestSeq = 0;
 
+    /** Counter behind the addresses of the drivers started (see user_spawn). */
+    driverSeq = 0;
+
     constructor(args: BucheArguments) {
-        this.hierarchy = new Entry({ zones: args.initialZones });
+        this.hierarchy = new Entry({});
         this.sendDriver = args.sendDriver;
         this.sendInterface = args.sendInterface;
     }
@@ -95,37 +97,117 @@ export class Buche {
     }
 
     /**
-     * The zone named by `info.zone` for `entry`, looked up by bubbling up its
-     * ancestors: at each one, the zones it defines (a configured entry answers
-     * here both by name and — for a nameless request — through `""`, its
-     * placement). A nameless request (null, absent or "") tries "@" first at
-     * each ancestor, then that ancestor's `""`. The root defines every zone of
-     * the layout, as a last resort.
+     * What `entry` is placed relative to: the closest ancestor that shows
+     * something (or the entry showing it: its primary, unless that is `entry`
+     * itself). Null at the top.
      */
-    findPlace(entry: Entry, info: CreationInfo): Zone {
-        const zoneName = info.zone === "" ? null : (info.zone ?? null);
-        let e: Entry | undefined = entry.parent;
-        while (e) {
-            if (zoneName !== null) {
-                if (zoneName in e.zones) {
-                    return e.zones[zoneName];
-                }
-            } else {
-                if ("@" in e.zones) {
-                    return e.zones["@"];
-                }
-                if ("" in e.zones) {
-                    return e.zones[""];
-                }
+    anchorOf(entry: Entry): Entry | null {
+        for (let e = entry.parent; e; e = e.parent) {
+            if (e.visual) {
+                return e;
             }
-            e = e.parent;
+            if (e.primary && e.primary !== entry) {
+                return e.primary;
+            }
         }
-        throw new BucheError({
-            type: "buche_error",
-            code: "nozone",
-            reason: `No zone named ${zoneName ?? "@"} could be found`,
-            input: info,
-        });
+        return null;
+    }
+
+    /**
+     * Where a new cell or prompt for `entry` goes, given the zone it asks for
+     * (null or "": the default). Leading "@" are ignored, and l/r/u/d are
+     * short for left/right/up/down. By default, a cell goes in a tab beside
+     * the entry showing its parent (a process's later outputs: beside the
+     * first one), else inline; a prompt goes in a new tab, linked to the
+     * prompt it lands next to.
+     */
+    targetFor(entry: Entry, zone: ZoneDescriptor | null | undefined, kind: Kind): Target {
+        let name = (zone ?? "").replace(/^@/, "");
+        name = ZONE_ALIASES[name] ?? name;
+        const anchor = this.anchorOf(entry);
+        const at = anchor?.address() ?? null;
+        if (name !== "") {
+            return { zone: name, anchor: at };
+        }
+        if (kind === "prompt") {
+            return { zone: "tab", anchor: at, link: true };
+        }
+        const sibling = entry.parent?.primary;
+        if (sibling && sibling !== entry && sibling.visual) {
+            return { zone: "tab", anchor: sibling.address() };
+        }
+        return { zone: "inline", anchor: at };
+    }
+
+    /**
+     * A new cell or prompt at `addr` takes over its parent's placeholder, if
+     * it is still unclaimed and can: the placeholder entry moves to `addr`
+     * (so whatever shows it now shows the claimant), and keeps its place. A
+     * prompt can't go inline, so it doesn't take an inline placeholder.
+     * Returns the claimant, or null if there was nothing to claim.
+     */
+    claim(addr: Address, kind: Kind): Entry | null {
+        const parent = addr.length ? this.hierarchy.getAt(addr.slice(0, -1)) : null;
+        const ph = parent?.primary;
+        const field = addr[addr.length - 1];
+        if (!ph?.placeholder || field === PLACEHOLDER) {
+            return null;
+        }
+        if (kind === "prompt" && ph.target?.zone === "inline") {
+            return null;
+        }
+        const existing = parent!.children[field];
+        if (existing && (existing.visual || Object.keys(existing.children).length)) {
+            return null;
+        }
+        ph.placeholder = false;
+        ph.rename(field);
+        return ph;
+    }
+
+    /**
+     * Declare (the first time) the placeholder of a configured entry: an
+     * empty cell standing in for whatever it shows first, placed where the
+     * entry was configured to go. It represents the entry, so it can take
+     * input (and signals) before anything else exists.
+     */
+    ensurePlaceholder(entry: Entry, zone: ZoneDescriptor | null | undefined): void {
+        // (Nor for what shows itself already, nor for a placeholder's address:
+        // a retune of one, maybe of one that doesn't exist.)
+        if (
+            entry.primary ||
+            entry.visual ||
+            entry.field === PLACEHOLDER ||
+            entry === this.hierarchy
+        ) {
+            return;
+        }
+        const ph = entry.getAt([PLACEHOLDER], true)!;
+        ph.placeholder = true;
+        ph.represents = entry.address();
+        ph.echo.configure(echoConfiguration(entry.echo));
+        ph.setCell(new Cell({}));
+        ph.echo.status = { status: "running" };
+        ph.target = this.targetFor(entry, zone, "cell");
+        entry.primary = ph;
+        this.sendInterface({ type: "update_cell", target: ph.target, entry: ph });
+    }
+
+    /**
+     * Give `entry` a cell if it shows nothing yet (output arriving with no
+     * `cell_configure`), placed by default. The top entry (the driver's own
+     * output) shows nothing.
+     */
+    ensureCell(entry: Entry): void {
+        if (entry.visual || entry === this.hierarchy) {
+            return;
+        }
+        entry.setCell(new Cell({}));
+        entry.target ??= this.targetFor(entry, null, "cell");
+        if (entry.echo.status.status === "absent") {
+            entry.echo.status = { status: "running" };
+        }
+        this.sendInterface({ type: "update_cell", target: entry.target, entry });
     }
 
     /**
@@ -134,12 +216,49 @@ export class Buche {
      * merge into its echo, and a provided `represents` onto the entry itself.
      */
     ensure(message: EchoConfiguration & CreationInfo) {
+        const fresh = this.hierarchy.getAt(message.from, false) === null;
         const post = this.hierarchy.getAt(message.from, true)!;
+        // A `$` entry (`$stdout`, `$gui`...) is a view of its parent: it
+        // stands for it unless told otherwise. It shows the parent's echo too.
+        if (fresh && post.field?.startsWith("$") && post.parent !== this.hierarchy) {
+            post.represents = post.parent!.address();
+            post.echo.configure({ ...echoConfiguration(post.parent!.echo), id: undefined });
+        }
         post.echo.configure(message);
         if (message.represents !== undefined) {
             post.represents = message.represents;
         }
+        if (message.status !== undefined) {
+            this.setLiveStatus(post.representative() ?? post, message.status);
+        }
+        // What a configured entry says about itself, its views show too.
+        for (const child of Object.values(post.children)) {
+            if (child.field?.startsWith("$") || child === post.primary) {
+                child.echo.configure({ ...message, id: undefined, represents: undefined });
+            }
+        }
         return post;
+    }
+
+    /**
+     * The entry that output sent from `message.from` goes to: it claims its
+     * parent's placeholder, or gets a cell of its own, if it shows nothing yet.
+     */
+    output(message: CreationInfo): Entry {
+        this.claim(message.from, "cell");
+        const entry = this.ensure(message);
+        this.ensureCell(entry);
+        return entry;
+    }
+
+    /** Switch a live entry between running and standby (a spent one stays). */
+    private setLiveStatus(entry: Entry, status: "running" | "standby"): void {
+        const current = entry.echo.status.status;
+        if (current === "done" || current === "error" || current === status) {
+            return;
+        }
+        entry.echo.status = { status };
+        this.sendInterface({ type: "update_entry", entry });
     }
 }
 
@@ -182,10 +301,12 @@ export interface BucheRunArguments {
 
 export async function bucheRun(args: BucheRunArguments) {
     const buche = new Buche({
-        initialZones: zoneMap(args.interface.zones),
         sendDriver(outMessage: OutgoingDriverMessage) {
             args.loggers.driverOut?.(outMessage);
-            if (
+            if (outMessage.type === "spawn") {
+                // (One driver only, here: see src/drivers.ts for hosts of more.)
+                console.warn("[buche] spawn: not supported here", outMessage);
+            } else if (
                 outMessage.type === "signal" &&
                 (outMessage as SignalRequest).to.length === 1 &&
                 (outMessage as SignalRequest).to[0] === "$proc"

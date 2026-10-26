@@ -2,7 +2,7 @@ import type { Buche } from "../core.ts";
 import type { EchoConfiguration } from "../echo.ts";
 import type { Entry } from "../entry.ts";
 import { Prompt, type PromptConfiguration } from "../prompt.ts";
-import type { Zone } from "../zone.ts";
+import type { Target } from "../types.ts";
 import type { BaseMessage, CreationInfo } from "./common.ts";
 
 export interface PromptConfigureMessage
@@ -34,9 +34,10 @@ export function handle$prompt_configure(buche: Buche, obj: PromptConfigureMessag
             return;
         }
         entry.prompt.configure(obj);
-        sendRefresh(buche, entry, entry.prompt.zones.main);
+        sendRefresh(buche, entry);
         return;
     }
+    const claimed = buche.claim(obj.from, "prompt");
     const entry = buche.ensure(obj);
     if (entry.prompt) {
         // Reconfiguring a live prompt (submit reset, cd, config reload): the
@@ -44,27 +45,26 @@ export function handle$prompt_configure(buche: Buche, obj: PromptConfigureMessag
         // updated. Any parse still awaiting its answer is now void.
         entry.prompt.request_id = null;
         entry.prompt.configure(obj);
-        sendRefresh(buche, entry, buche.findPlace(entry, obj));
+        sendRefresh(buche, entry);
         return;
     }
-    // A fresh prompt: install it. Record the zone it sits in, by name, so
-    // descendants' named lookups (e.g. "@tab") resolve to *this* zone instead
-    // of bubbling to a same-named zone elsewhere: every TabbedZone answers to
-    // "tab", and the root registry keeps only one. The prompt's own "@" (its
-    // log) and "pop" are defined by the Prompt and win over the zone's names.
-    const zone = buche.findPlace(entry, obj);
-    for (const name of zone.names) {
-        entry.zones[name] ??= zone;
+    // A fresh prompt: it goes where it asks (by default, in a tab beside the
+    // prompt it was started from, linked to it), or takes the place of the
+    // placeholder it claimed (which was a cell: it is one no more).
+    if (claimed) {
+        entry.cell = null;
+    } else {
+        entry.target = buche.targetFor(entry, obj.zone, "prompt");
     }
     entry.setPrompt(new Prompt(obj));
     entry.echo.status = { status: "running" };
-    sendRefresh(buche, entry, zone);
+    sendRefresh(buche, entry, entry.target);
 }
 
-function sendRefresh(buche: Buche, entry: Entry, zone: Zone): void {
+function sendRefresh(buche: Buche, entry: Entry, target: Target | null = null): void {
     buche.sendInterface({
         type: "update_prompt",
-        zone: zone,
+        target,
         entry: entry,
     });
 }

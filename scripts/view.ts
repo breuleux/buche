@@ -33,8 +33,8 @@
  *                           interface message. Default: 0.5 (or boot line pause).
  *   -d, --dir     DIR       A directory to copy; the copy becomes the command's
  *                           working directory. Must point to a directory.
- *   -l, --layout  FILE      HTML layout whose zones seed the interface.
- *                           Default: layouts/standard.html.
+ *   -l, --layout  FILE      Initial layout (carreau JSON: see layouts/).
+ *                           Default: one pane, named "main".
  *       --port    PORT      Port to listen on. Default: 0 (pick a free port).
  *   -o, --output  FILE      Accepted for CLI compatibility (unused here).
  *   -v, --verbose           Expand full field values when pretty-printing the
@@ -52,8 +52,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import type { ServerWebSocket } from "bun";
-import type { OutgoingDriverMessage, SignalRequest } from "../src/driver-exchange/outgoing.ts";
-import { ProcessCommunicator } from "../src/process.ts";
+import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
+import { Drivers } from "../src/drivers.ts";
+import { layoutScript } from "../src/page.ts";
 import { formatMessage } from "./format.ts";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -137,8 +138,8 @@ if (values.dir !== undefined) {
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const componentsDir = join(scriptDir, "../src/components");
-const layoutPath = values.layout ?? join(scriptDir, "../layouts/standard.html");
-const layout = readFileSync(layoutPath, "utf8");
+const carreauDir = join(scriptDir, "../node_modules/carreau/src");
+const layout = values.layout ? readFileSync(values.layout, "utf8") : null;
 
 // Bundle the component definitions for the browser (self-registering custom
 // elements) so the layout renders. Built once at startup, in memory.
@@ -161,6 +162,8 @@ const page = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Buche</title>
+<link rel="stylesheet" href="/carreau/style.css" />
+<link rel="stylesheet" href="/carreau/prompt.css" />
 <link rel="stylesheet" href="/components.css" />
 <style>
   :root { color-scheme: dark; }
@@ -171,12 +174,13 @@ const page = `<!doctype html>
     color: #d0d0d0;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  #buche { position: fixed; inset: 0; }
-  #buche > * { width: 100%; height: 100%; }
+  /* The layout (carreau) fills the window. */
+  #buche { position: fixed; inset: 0; display: flex; padding: 4px; box-sizing: border-box; }
 </style>
 </head>
 <body>
-<div id="buche">${layout}</div>
+${layoutScript(layout)}
+<div id="buche"></div>
 <script type="module" src="/client.js"></script>
 </body>
 </html>
@@ -185,7 +189,7 @@ const page = `<!doctype html>
 /** Per-connection state: the driver process plus a timestamp of the last
  *  message seen in *either* direction, used to pace injected messages. */
 interface Session {
-    proc: ProcessCommunicator;
+    drivers: Drivers;
     lastActivity: number;
 }
 
@@ -208,23 +212,23 @@ function logMessage(role: string, message: unknown): void {
 
 /** Spawn the driver process for a connection and relay its output to the page. */
 function startSession(ws: ServerWebSocket<unknown>): void {
-    const proc = new ProcessCommunicator(command as string, { cwd });
-    const session: Session = { proc, lastActivity: Date.now() };
-    sessions.set(ws, session);
-
-    void (async () => {
-        try {
-            for await (const message of proc.messages()) {
+    // The session's drivers: the command, and the shells started later (see
+    // src/drivers.ts).
+    const session: Session = {
+        drivers: new Drivers({
+            cwd,
+            receive(message) {
                 session.lastActivity = Date.now();
                 logMessage("driverIn", message);
                 if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify(message));
                 }
-            }
-        } catch (err) {
-            console.error("[buche] process stream error:", err);
-        }
-    })();
+            },
+        }),
+        lastActivity: Date.now(),
+    };
+    session.drivers.start(command as string);
+    sessions.set(ws, session);
 
     injectMessages(ws, session);
 }
@@ -276,18 +280,13 @@ function handleClientMessage(ws: ServerWebSocket<unknown>, raw: string): void {
     }
     session.lastActivity = Date.now();
     logMessage("driverOut", message);
-    const signal = message as SignalRequest;
-    if (message.type === "signal" && signal.to?.length === 1 && signal.to[0] === "$proc") {
-        session.proc.kill(signal.code);
-    } else {
-        session.proc.send(message);
-    }
+    session.drivers.send(message);
 }
 
 function endSession(ws: ServerWebSocket<unknown>): void {
     const session = sessions.get(ws);
     sessions.delete(ws);
-    session?.proc.kill();
+    session?.drivers.kill();
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -313,6 +312,11 @@ const server = Bun.serve({
         }
         if (path === "/client.js") {
             return new Response(clientJs, { headers: { "content-type": contentType(".js") } });
+        }
+        // The layout engine's stylesheets.
+        if (path === "/carreau/style.css" || path === "/carreau/prompt.css") {
+            const file = Bun.file(join(carreauDir, path.slice("/carreau/".length)));
+            return new Response(file, { headers: { "content-type": contentType(".css") } });
         }
         // Component stylesheets: components.css and the files it @imports live in
         // src/components; serve any *.css by basename from there.

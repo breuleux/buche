@@ -5,19 +5,23 @@
 // (unless `background`), and gives it back when its process ends (unless
 // `sticky`); a new prompt takes the focus unless `background`.
 
+import { panes as panesOf } from "carreau/src/model";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { EchoBox } from "../src/components/echo-box.tsx";
 import { EmbeddedTerm } from "../src/components/embedded-term.tsx";
 import type { PromptCollection } from "../src/components/prompt-collection.tsx";
-import { TabbedZoneElement } from "../src/components/zone.tsx";
 import { Buche, type InM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { BucheInterface } from "../src/interface.tsx";
-import { zoneMap } from "../src/zone.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
 });
+
+// Whether an element shows (happy-dom's checkVisibility ignores `hidden`,
+// which the layout uses for what isn't shown).
+const shown = (el: Element | null | undefined) =>
+    !!el && el.isConnected && !el.closest("[hidden]");
 
 // Let MutationObservers deliver, then the microtasks they schedule run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -27,17 +31,10 @@ const SHELL = ["$proc", "cq"];
 
 function setup() {
     const container = document.createElement("div");
-    // (Names passed explicitly: parsed markup would construct the element
-    // before its `names` attribute is set.)
-    container.append(new TabbedZoneElement(["@", "main"]));
     document.body.append(container);
-    const iface = new BucheInterface({
-        container,
-        template: container.firstElementChild as Element,
-    });
+    const iface = new BucheInterface({ container });
     const sent: OutgoingDriverMessage[] = [];
     const buche: Buche = new Buche({
-        initialZones: zoneMap(iface.zones),
         sendDriver: (m) => sent.push(m),
         sendInterface: (m) => iface.processMessage(buche, m),
     });
@@ -197,16 +194,16 @@ describe("automatic focus", () => {
         expect(ctx.iface.focus.current).toBe(other);
     });
 
-    test("a cell in a new tab takes the focus there (not its echo in the log)", async () => {
+    test("a cell in a new tab takes the focus there", async () => {
         const ctx = setup();
         ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         await settle();
         const { box } = run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
         const cell = box();
-        expect(cell?.closest(".tab-pane-pane")).not.toBeNull();
+        expect(cell?.closest(".carreau-scroll")).toBeNull();
+        expect(shown(cell)).toBe(true);
         expect(ctx.iface.focus.current).toBe(cell);
-        // Only the cell carries the id; the echo in the prompt's log doesn't.
         expect(ctx.container.querySelectorAll(`#${cell?.id}`)).toHaveLength(1);
     });
 
@@ -216,10 +213,10 @@ describe("automatic focus", () => {
         await settle();
         run(ctx, { label: "sleep" }, { zone: "tab" });
         await settle();
-        expect(prompt(ctx.container).checkVisibility()).toBe(false);
+        expect(shown(prompt(ctx.container))).toBe(false);
 
         ctx.iface.focusPrompt();
-        expect(prompt(ctx.container).checkVisibility()).toBe(true);
+        expect(shown(prompt(ctx.container))).toBe(true);
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 
@@ -229,20 +226,22 @@ describe("automatic focus", () => {
         await settle();
         const { box } = run(ctx, { label: "sleep", background: true }, { zone: "tab" });
         await settle();
-        expect(box()?.checkVisibility()).toBe(false);
+        expect(shown(box())).toBe(false);
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 });
 
 describe("tab ✕", () => {
     const tabClose = (container: HTMLElement, label: string) => {
-        const tab = [...container.querySelectorAll(".tab-pane-tab")].find(
-            (t) => t.querySelector(".tab-pane-tab-label")?.textContent === label,
+        const tab = [...container.querySelectorAll(".carreau-tab")].find(
+            (t) => t.querySelector(".carreau-tab-short")?.textContent === label,
         );
-        return tab?.querySelector<HTMLElement>(".tab-pane-tab-close") ?? null;
+        return tab?.querySelector<HTMLElement>(".carreau-tab-close") ?? null;
     };
+    const hasTab = (container: HTMLElement, label: string) =>
+        [...container.querySelectorAll(".carreau-tab-short")].some((t) => t.textContent === label);
 
-    test("on a cell's tab, acts like the cell's ✕; the tab goes when the cell does", async () => {
+    test("ends the cell's process; the tab goes when it has ended", async () => {
         const ctx = setup();
         ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
         await settle();
@@ -253,16 +252,19 @@ describe("tab ✕", () => {
 
         tabClose(ctx.container, "sleep")?.click();
         expect([...ctx.iface.interactions.purge()]).toEqual([
-            // Running (cell_configure says so): SIGTERM, as from the cell's ✕.
+            // Running (cell_configure says so): SIGTERM.
             { type: "user_signal", code: 15, entry },
         ]);
-        expect(tabClose(ctx.container, "sleep")).not.toBeNull();
+        // Closing meanwhile (a spinner instead of the ✕).
+        expect(hasTab(ctx.container, "sleep")).toBe(true);
+        expect(tabClose(ctx.container, "sleep")).toBeNull();
 
         ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "error" } });
         await settle();
+        await settle();
         expect(box()).toBeNull();
-        expect(tabClose(ctx.container, "sleep")).toBeNull();
-        // The tab that was shown before comes back, with the focus.
+        expect(hasTab(ctx.container, "sleep")).toBe(false);
+        // The layout puts the focus where it belongs: back on the prompt.
         expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 
@@ -273,83 +275,250 @@ describe("tab ✕", () => {
         run(ctx, { label: "sleep", background: true }, { zone: "tab" });
         ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
         await settle();
-        expect(tabClose(ctx.container, "sleep")).not.toBeNull();
+        expect(hasTab(ctx.container, "sleep")).toBe(true);
 
         tabClose(ctx.container, "sleep")?.click();
-        expect(tabClose(ctx.container, "sleep")).toBeNull();
+        await settle();
+        expect(hasTab(ctx.container, "sleep")).toBe(false);
+    });
+
+    test("a process with two tabs ends with the last one", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const proc = [...SHELL, "2"];
+        ctx.driver({ type: "configure", from: proc, zone: "tab", label: "app" });
+        ctx.driver({ type: "text", from: [...proc, "$stdout"], stream: "stdout", text: "x" });
+        ctx.driver({ type: "data", from: [...proc, "$gui"], data: 1 });
+        await settle();
+        const tabs = () =>
+            [...ctx.container.querySelectorAll(".carreau-tab")].filter(
+                (t) => shown(t) && t.textContent?.startsWith("app"),
+            );
+        expect(tabs()).toHaveLength(2);
+        ctx.iface.interactions.purge();
+        tabs()[1].querySelector<HTMLElement>(".carreau-tab-close")?.click();
+        await settle();
+        const signals = () =>
+            [...ctx.iface.interactions.purge()].filter((m: any) => m.type === "user_signal");
+        expect(signals()).toEqual([]);
+        expect(tabs()).toHaveLength(1);
+        tabs()[0].querySelector<HTMLElement>(".carreau-tab-close")?.click();
+        expect(signals().map((m: any) => m.code)).toEqual([15]);
     });
 });
 
-describe("zone lookup", () => {
-    test("bubbles up through the zones entries were placed in, before the layout's", () => {
-        const container = document.createElement("div");
-        // Three tabbed zones, every one named "tab" among others; in the
-        // layout-wide registry, "tab" is the last one (right) — a lookup that
-        // reaches the root resolves to the wrong zone, which is what the
-        // placement records are for.
-        const left = new TabbedZoneElement(["left"]);
-        const main = new TabbedZoneElement(["@", "main"]);
-        const right = new TabbedZoneElement(["right"]);
-        container.append(left, main, right);
-        document.body.append(container);
-        const iface = new BucheInterface({ container, template: container });
-        const buche: Buche = new Buche({
-            initialZones: zoneMap(iface.zones),
-            sendDriver: () => {},
-            sendInterface: (m) => iface.processMessage(buche, m),
-        });
-        const driver = (m: Record<string, unknown>) => buche.handle({ to: TERM, ...m } as InM);
-        const zoneOf = (label: string) =>
-            [...container.querySelectorAll("echo-box")]
-                .find((b) => (b as EchoBox).boundEntry?.echo.label === label)
-                ?.closest("tabbed-zone");
-
+describe("placement", () => {
+    test("reserved zones are relative to where the command came from; names are panes", async () => {
+        const ctx = setup();
+        const { driver, iface } = ctx;
+        const ws = iface.layout.ws;
+        const paneOf = (label: string) => {
+            for (const t of ws.trees()) {
+                for (const p of panesOf(t)) {
+                    if (p.tabs.some((tab: any) => tab.title === label)) {
+                        return p;
+                    }
+                }
+            }
+            return null;
+        };
         driver({ type: "prompt_configure", from: SHELL, label: "cq" });
-        // `@left coquille`: the sub-shell is configured in the left zone; its
-        // prompt goes there through the entry's "" placement.
-        const sub = [...SHELL, "1"];
-        driver({ type: "configure", from: sub, zone: "left" });
-        driver({
-            type: "cell_configure",
-            from: [...sub, "$main"],
-            zone: "left",
-            label: "coquille",
-            represents: sub,
-        });
-        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        const main = paneOf("cq");
+        expect(main?.name).toBe("main");
 
-        // In the sub-shell: `@tab ls` goes to a tab of the left zone, where the
-        // sub-shell lives; a plain command goes to the sub-shell's log.
+        // `@left coquille`: the sub-shell's placeholder goes in a new pane on
+        // the left, and its prompt takes its place there.
+        const sub = [...SHELL, "1"];
+        driver({ type: "configure", from: sub, zone: "@left", label: "coquille" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        const left = paneOf("sub");
+        expect(left).not.toBeNull();
+        expect(left).not.toBe(paneOf("cq"));
+        expect(paneOf("coquille")).toBeNull();
+
+        // From the sub-shell, `@r ls` goes back right, into the main pane.
+        driver({ type: "cell_configure", from: [...sub, "cq", "2"], zone: "@r", label: "right" });
+        expect(paneOf("right")).toBe(paneOf("cq"));
+        // `@tab` beside its prompt, in its pane.
         driver({
             type: "cell_configure",
-            from: [...sub, "cq", "2"],
+            from: [...sub, "cq", "3"],
             zone: "tab",
             label: "tabbed",
         });
-        driver({ type: "cell_configure", from: [...sub, "cq", "3"], zone: null, label: "plain" });
-        expect(zoneOf("tabbed")).toBe(left);
-        expect(zoneOf("plain")).toBe(left);
+        expect(paneOf("tabbed")).toBe(paneOf("sub"));
+        // Inline: in the sub-shell's stream.
+        driver({ type: "cell_configure", from: [...sub, "cq", "4"], label: "plain" });
         expect(
-            [...container.querySelectorAll("echo-box")]
-                .find((b) => (b as EchoBox).boundEntry?.echo.label === "plain")
-                ?.closest("buche-term")
-                ?.querySelector(".prompt-collection-tab")?.textContent,
-        ).toBe("sub");
-
-        // From the main shell, `@tab ls` goes to the main zone's tabs — the
-        // prompt's placement, not the root registry's arbitrary "tab" (right).
-        driver({ type: "cell_configure", from: [...SHELL, "4"], zone: "tab", label: "main-tab" });
-        expect(zoneOf("main-tab")).toBe(main);
-        // The same through the configure chain, as coquille does it.
-        driver({ type: "configure", from: [...SHELL, "5"], zone: "tab" });
+            iface.layout.boxOf(ctx.buche.get([...sub, "cq", "4"]))?.closest(".carreau-scroll"),
+        ).not.toBeNull();
+        // Names: an existing pane, or a new one.
+        driver({ type: "cell_configure", from: [...sub, "cq", "5"], zone: "main", label: "far" });
+        expect(paneOf("far")).toBe(paneOf("cq"));
         driver({
             type: "cell_configure",
-            from: [...SHELL, "5", "$main"],
-            label: "main-tab-configured",
+            from: [...sub, "cq", "6"],
+            zone: "logs",
+            label: "logged",
         });
-        expect(zoneOf("main-tab-configured")).toBe(main);
-        // And explicit names still resolve from anywhere.
-        driver({ type: "cell_configure", from: [...sub, "cq", "5"], zone: "main", label: "far" });
-        expect(zoneOf("far")).toBe(main);
+        expect(paneOf("logged")?.name).toBe("logs");
+    });
+
+    test("a nested shell started inline gets a tab linked to its parent's", async () => {
+        const ctx = setup();
+        const { driver, iface } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const sub = [...SHELL, "1"];
+        driver({ type: "configure", from: sub, label: "coquille" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        await settle();
+        const tabs = [...ctx.container.querySelectorAll(".carreau-tab")].filter(shown);
+        const labels = tabs.map((t) => t.querySelector(".carreau-tab-short")?.textContent);
+        expect(labels).toEqual(["cq", "sub"]);
+        expect(tabs.every((t) => t.classList.contains("linked"))).toBe(true);
+        // The sub-shell's commands go in the merged stream.
+        driver({ type: "cell_configure", from: [...sub, "cq", "2"], label: "ls" });
+        await settle();
+        expect(shown(iface.layout.boxOf(ctx.buche.get([...sub, "cq", "2"])))).toBe(true);
+    });
+});
+
+describe("a shell ending", () => {
+    const labels = (container: HTMLElement) =>
+        [...container.querySelectorAll(".carreau-tab-short")]
+            .filter(shown)
+            .map((t) => t.textContent);
+
+    test("leaves its sub-shell and its running commands alone", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "cell_configure", from: [...SHELL, "2"], label: "sleep" });
+        const sub = [...SHELL, "3"];
+        driver({ type: "configure", from: sub, label: "coquille" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        await settle();
+        expect(labels(container)).toEqual(["cq", "sub"]);
+        iface.interactions.purge();
+
+        // Ctrl+D in the outer shell: it ends, not what runs under it.
+        driver({ type: "close", from: SHELL, propagate: false, outcome: { type: "success" } });
+        await settle();
+        await settle();
+        expect(labels(container)).toEqual(["sub"]);
+        expect(
+            [...iface.interactions.purge()].filter((m: any) => m.type === "user_signal"),
+        ).toEqual([]);
+        // Its cells went to the sub-shell's stream, the running one included.
+        expect(shown(iface.layout.boxOf(ctx.buche.get([...SHELL, "2"])))).toBe(true);
+    });
+
+    test("alone, its tab stays while a command still runs in it", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "prompt_configure", from: ["$proc", "other"], label: "other" });
+        driver({ type: "cell_configure", from: [...SHELL, "2"], label: "sleep" });
+        await settle();
+        iface.interactions.purge();
+
+        driver({ type: "close", from: SHELL, propagate: false, outcome: { type: "success" } });
+        await settle();
+        expect(labels(container)).toEqual(["cq", "other"]);
+        expect(
+            [...iface.interactions.purge()].filter((m: any) => m.type === "user_signal"),
+        ).toEqual([]);
+
+        driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        await settle();
+        await settle();
+        expect(labels(container)).toEqual(["other"]);
+    });
+});
+
+describe("slots", () => {
+    const pick = (chooser: Element, key: string) =>
+        chooser.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+
+    test("an empty named pane offers a shell, which goes there", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "cell_configure", from: [...SHELL, "2"], zone: "logs", label: "x" });
+        driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        const ws = iface.layout.ws;
+        await ws.closeTab(ws.paneByName("logs")!.tabs[0].id);
+        await settle();
+        const chooser = container.querySelector("slot-chooser")!;
+        expect(shown(chooser)).toBe(true);
+        iface.focus.focus(prompt(container));
+        iface.interactions.purge();
+
+        pick(chooser, "3");
+        const [command] = [...iface.interactions.purge()] as any[];
+        const zone = `~${ws.paneByName("logs")!.id}`;
+        expect(command).toMatchObject({ type: "user_command", text: "cq", command: "run", zone });
+        // The shell's placeholder, then its prompt, go into the pane.
+        const sub = [...SHELL, "3"];
+        driver({ type: "configure", from: sub, zone, label: "cq" });
+        driver({ type: "prompt_configure", from: [...sub, "cq"], label: "sub" });
+        expect(ws.paneByName("logs")!.tabs.map((t) => t.title)).toEqual(["sub"]);
+    });
+
+    test("insert offers a new scroll column, named at random, empty, which stays", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const ws = iface.layout.ws;
+        ws.select({ id: iface.layout.promptNodeOf(ctx.buche.get(SHELL))! });
+        iface.layout.insert();
+        await settle();
+        const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
+        pick(chooser, "1");
+        await settle();
+        // (Its name is then edited in its tab: see View.editTabTitle.)
+        const named = (t: { title: string }) => /^[a-z]+-[a-z]+$/.test(t.title);
+        const tab = ws.root.type === "pane" ? ws.root.tabs.find(named) : undefined;
+        const stream = tab?.group?.children[0];
+        expect(stream?.type).toBe("scroll-column");
+        expect(stream && "children" in stream && stream.children).toEqual([]);
+        expect([...container.querySelectorAll("slot-chooser")].filter(shown)).toHaveLength(0);
+    });
+
+    test("typing in a slot runs a command there, from the last prompt", async () => {
+        const ctx = setup();
+        const { driver, iface, container } = ctx;
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        iface.focus.focus(prompt(container));
+        iface.layout.insert("right", true);
+        await settle();
+        const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
+        iface.interactions.purge();
+        for (const key of "ls") {
+            pick(chooser, key);
+        }
+        const field = chooser.querySelector("input")!;
+        expect(field.value).toBe("ls");
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        const [command] = [...iface.interactions.purge()] as any[];
+        expect(command).toMatchObject({ type: "user_command", text: "ls", command: "run" });
+        expect(command.zone).toMatch(/^~/);
+    });
+
+    test("with no prompt, the shell is one of its own", async () => {
+        const ctx = setup();
+        const { iface, container } = ctx;
+        await settle();
+        const chooser = [...container.querySelectorAll("slot-chooser")].find(shown)!;
+        pick(chooser, "3");
+        const [spawn] = [...iface.interactions.purge()] as any[];
+        expect(spawn).toMatchObject({ type: "user_spawn", command: "cq" });
+        // The machine starts it at an address of its own, its prompt going there.
+        const sent: any[] = [];
+        ctx.buche.sendDriver = (m) => sent.push(m);
+        ctx.buche.handle(spawn);
+        expect(sent).toEqual([{ type: "spawn", from: ["$term"], to: ["$d1"], command: "cq" }]);
+        ctx.driver({ type: "prompt_configure", from: ["$d1", "$proc", "cq"], label: "cq" });
+        expect(iface.layout.ws.paneByName("main")!.tabs.map((t) => t.title)).toEqual(["cq"]);
     });
 });

@@ -1,0 +1,9 @@
+{"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq"}
+{"$role":"interfaceOut","type":"update_prompt","target":{"zone":"tab","anchor":null,"link":true},"entry":{"echo":"#102","cell":null,"prompt":"#103"}}
+{"$role":"driverIn","type":"configure","from":["$proc","cq","2"],"to":["$term"],"zone":"@r","label":"app"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"right","anchor":["$proc","cq"]},"entry":{"echo":"#105","cell":"#106","prompt":null,"represents":["$proc","cq","2"]}}
+{"$role":"driverIn","type":"data","from":["$proc","cq","2","$gui"],"to":["$term"],"data":{"x":1}}
+{"$role":"interfaceOut","type":"cell_command","command":{"type":"data","data":{"x":1}},"entry":{"echo":"#105","cell":"#106","prompt":null,"represents":["$proc","cq","2"]}}
+{"$role":"driverIn","type":"text","from":["$proc","cq","2","$stdout"],"to":["$term"],"stream":"stdout","text":"late output\r\n"}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":["$proc","cq","2","$gui"]},"entry":{"echo":"#107","cell":"#108","prompt":null,"represents":["$proc","cq","2"]}}
+{"$role":"interfaceOut","type":"cell_command","command":{"type":"text","stream":"stdout","text":"late output\r\n"},"entry":{"echo":"#107","cell":"#108","prompt":null,"represents":["$proc","cq","2"]}}

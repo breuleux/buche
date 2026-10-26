@@ -89,7 +89,7 @@
 
 import type { DomProps } from "myjsx/jsx-runtime";
 import type { FocusCommittable } from "../focus.ts";
-import { normalizeChord } from "../keychord.ts";
+import { expandMod, normalizeChord } from "../keychord.ts";
 import type { Json } from "../types.ts";
 import { RUNTIME } from "./buche-gui-runtime.ts";
 import type { EchoBox } from "./echo-box.tsx";
@@ -188,6 +188,9 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
         }
     }
 
+    // Moved along with its box (moveBefore), it stays as it is.
+    connectedMoveCallback(): void {}
+
     private ensureBox(): void {
         if (this.box !== null) {
             return;
@@ -207,13 +210,13 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
     /** Whether the GUI sizes itself to its content (the iframe reports a
      *  height, and the element grows to it). False when the cell has a height
      *  of its own — pinned by a gutter drag (the `pinned` attribute), or a box
-     *  filling a tab-pane pane — in which case the GUI just fills it (CSS, see
+     *  filling its pane (`fills`) — in which case the GUI just fills it (CSS, see
      *  the echo-box stylesheet; compare the fitting logic in cell.ts). */
     private dynamicSizing(): boolean {
         this.ensureBox();
         const box = this.box;
         const pinned = (box?.cellContentHeight ?? null) !== null;
-        const fillsPane = box?.parentElement?.classList.contains("tab-pane-pane") ?? false;
+        const fillsPane = box?.hasAttribute("fills") ?? false;
         return !pinned && !fillsPane;
     }
 
@@ -403,7 +406,8 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
     }
 
     private sendConfig(): void {
-        this.postTagged({ [TAG]: "config", chords: this.interceptChords().map(normalizeChord) });
+        const chords = this.interceptChords().map((c) => normalizeChord(expandMod(c)));
+        this.postTagged({ [TAG]: "config", chords });
     }
 
     private post(message: unknown): void {
@@ -442,6 +446,13 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
             this.sendInfo();
             for (const message of this.queue.splice(0)) {
                 this.frame.contentWindow?.postMessage(message, "*");
+            }
+            // The chords to hand back, and the focus, may have been sent
+            // before the document was up (the GUI takes the focus as soon as
+            // it appears): they were lost then.
+            this.sendConfig();
+            if (document.activeElement === this.frame) {
+                this.postTagged({ [TAG]: "focus" });
             }
             return;
         }

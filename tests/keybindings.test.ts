@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import type { EchoBox } from "../src/components/echo-box.tsx";
 import type { EditorFactory, PromptCollection } from "../src/components/prompt-collection.tsx";
+import { Buche, type InM } from "../src/core.ts";
 import { Entry } from "../src/entry.ts";
 import { BucheInterface } from "../src/interface.tsx";
 import { ModalKeys } from "../src/keybindings.ts";
@@ -157,7 +158,12 @@ describe("ModalKeys", () => {
 function makeInterface(): [BucheInterface, HTMLElement] {
     const container = document.createElement("div");
     document.body.append(container);
-    const iface = new BucheInterface({ container, template: "<div></div>" });
+    const iface = new BucheInterface({ container });
+    // (The empty "main" pane offers a slot: these tests put their own cells
+    // around it, and navigate among them only.)
+    for (const chooser of container.querySelectorAll("slot-chooser")) {
+        chooser.removeAttribute("focusable");
+    }
     return [iface, container];
 }
 
@@ -193,14 +199,6 @@ function makePromptCollection(): [PromptCollection, Entry] {
     return [pc, entry];
 }
 
-// A `<buche-term>` hosting a prompt-collection — the shell view Ctrl+L clears
-// within (one per tab).
-function makeTerm(): [HTMLElement, PromptCollection] {
-    const term = document.createElement("buche-term");
-    const [pc] = makePromptCollection();
-    return [term, pc];
-}
-
 // The interface's FocusManager navigates by layout; happy-dom has none (all
 // rects are empty), but it does compute inline `display`/`flex-direction`, and
 // empty rects keep flex items in DOM order — enough for a flex column.
@@ -233,67 +231,6 @@ describe("BucheInterface global bindings", () => {
         iface.keys.detach();
     });
 
-    test("'k' signals the focused cell's entry", () => {
-        const [iface, container] = makeInterface();
-        const [b1, entry] = makeCell();
-        container.append(b1);
-        iface.focus.focus(b1);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        b1.status = "running";
-        key(container, "keydown", { key: "k", ctrlKey: true });
-        // An unresponsive cell gets SIGKILL instead (like the ✕ handler).
-        b1.status = "unresponsive";
-        key(container, "keydown", { key: "k", ctrlKey: true });
-
-        const messages = Array.from(iface.interactions.purge());
-        expect(messages).toEqual([
-            { type: "user_signal", code: 15, entry },
-            { type: "user_signal", code: 9, entry },
-        ]);
-        iface.keys.detach();
-    });
-
-    test("'d' dispatches the close event, like clicking ✕", () => {
-        const [iface, container] = makeInterface();
-        const [b1] = makeCell();
-        container.append(b1);
-        iface.focus.focus(b1);
-
-        let closes = 0;
-        container.addEventListener("close", () => closes++);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "d", ctrlKey: true });
-        expect(closes).toBe(1);
-        iface.keys.detach();
-    });
-
-    test("from a prompt, 'k' and 'd' apply to the cell right above it", () => {
-        const [iface, container] = makeInterface();
-        column(container);
-        const [b1] = makeCell();
-        const [b2, entry2] = makeCell();
-        const [pc] = makePromptCollection();
-        container.append(b1, b2, pc);
-        b2.status = "running";
-        iface.focus.focus(promptRow(pc));
-
-        const closed: EventTarget[] = [];
-        container.addEventListener("close", (e) => closed.push(e.target!));
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "k", ctrlKey: true });
-        key(container, "keydown", { key: "d", ctrlKey: true });
-        expect(Array.from(iface.interactions.purge())).toEqual([
-            { type: "user_signal", code: 15, entry: entry2 },
-        ]);
-        expect(closed).toEqual([b2]);
-        // The focus stays on the prompt.
-        expect(iface.focus.current).toBe(promptRow(pc));
-        iface.keys.detach();
-    });
-
     test("the focused cell holds the DOM focus; releasing Ctrl moves it into the terminal", () => {
         const [iface, container] = makeInterface();
         column(container);
@@ -317,64 +254,6 @@ describe("BucheInterface global bindings", () => {
         expect(iface.keys.capturing).toBe(false);
         expect(iface.focus.holdCommits).toBe(false);
         expect(focused).toBe(1);
-        iface.keys.detach();
-    });
-
-    test("'l' clears spent cells — C-q-l or plain Ctrl+L", () => {
-        const [iface, container] = makeInterface();
-        const [doneBox] = makeCell();
-        const [errBox] = makeCell();
-        const [runBox] = makeCell();
-        doneBox.status = "done";
-        errBox.status = "error";
-        runBox.status = "running";
-        container.append(doneBox, errBox, runBox);
-
-        key(container, "keydown", { key: "q", ctrlKey: true });
-        key(container, "keydown", { key: "l", ctrlKey: true });
-        key(window, "keyup", { key: "Control" });
-        expect(doneBox.isConnected).toBe(false);
-        expect(errBox.isConnected).toBe(false);
-        expect(runBox.isConnected).toBe(true);
-
-        // Plain Ctrl+L clears only in a prompt input, and is swallowed there.
-        const [pc] = makePromptCollection();
-        const [late] = makeCell();
-        late.status = "done";
-        container.append(late, pc);
-
-        // Elsewhere it passes through (a pty's clear-screen stays intact).
-        const past = key(container, "keydown", { key: "l", ctrlKey: true });
-        expect(past.defaultPrevented).toBe(false);
-        expect(late.isConnected).toBe(true);
-
-        const editor = pc.querySelector<HTMLElement>(".stub-editor")!;
-        const ev = key(editor, "keydown", { key: "l", ctrlKey: true });
-        expect(ev.defaultPrevented).toBe(true);
-        expect(late.isConnected).toBe(false);
-        expect(runBox.isConnected).toBe(true);
-        iface.keys.detach();
-    });
-
-    test("Ctrl+L clears only the <buche-term> hosting the prompt, not other tabs", () => {
-        const [iface, container] = makeInterface();
-        const [termA, pcA] = makeTerm();
-        const [termB, pcB] = makeTerm();
-        const [aDone] = makeCell();
-        const [aRun] = makeCell();
-        const [bDone] = makeCell();
-        aDone.status = "done";
-        aRun.status = "running";
-        bDone.status = "done";
-        termA.append(pcA, aDone, aRun);
-        termB.append(pcB, bDone);
-        container.append(termA, termB);
-
-        const editorA = termA.querySelector<HTMLElement>(".stub-editor")!;
-        key(editorA, "keydown", { key: "l", ctrlKey: true });
-        expect(aDone.isConnected).toBe(false); // the prompt's own view cleared
-        expect(aRun.isConnected).toBe(true); // running cells stay
-        expect(bDone.isConnected).toBe(true); // the other tab keeps its cells
         iface.keys.detach();
     });
 
@@ -416,6 +295,143 @@ describe("BucheInterface global bindings", () => {
         const mod = isMac() ? { metaKey: true } : { ctrlKey: true };
         key(container, "keydown", { key: "p", ...mod });
         expect(iface.focus.current).toBe(promptRow(pc));
+        iface.keys.detach();
+    });
+});
+
+// ── Cell actions, on cells in the layout ─────────────────────────────────────
+
+const SHELL = ["$proc", "cq"];
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function machineInterface() {
+    const [iface, container] = makeInterface();
+    const buche: Buche = new Buche({
+        sendDriver: () => {},
+        sendInterface: (m) => iface.processMessage(buche, m),
+    });
+    const driver = (m: Record<string, unknown>) => buche.handle({ to: ["$term"], ...m } as InM);
+    // Cells (commands run from a prompt) with the given statuses.
+    let seq = 1;
+    const cells = (shell: string[], ...statuses: string[]) =>
+        statuses.map((status, i) => {
+            const from = [...shell, String(++seq)];
+            driver({ type: "cell_configure", from, label: `c${seq}` });
+            if (status !== "running") {
+                driver({
+                    type: "close",
+                    from,
+                    outcome: { type: status === "done" ? "success" : "error" },
+                });
+            }
+            const entry = buche.get(from);
+            return { entry, box: iface.layout.boxOf(entry)! };
+        });
+    const promptOf = (shell: string[]) => iface.layout.promptElement(buche.get(shell))!;
+    return { iface, container, buche, driver, cells, promptOf };
+}
+
+describe("cell actions", () => {
+    test("'k' signals the focused cell's entry", () => {
+        const { iface, container, driver, cells } = machineInterface();
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const [{ entry, box }] = cells(SHELL, "running");
+        iface.focus.focus(box);
+        iface.interactions.purge();
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "k", ctrlKey: true });
+        // An unresponsive cell gets SIGKILL instead.
+        entry.echo.status = { status: "unresponsive" };
+        entry.fire();
+        key(container, "keydown", { key: "k", ctrlKey: true });
+        const signals = [...iface.interactions.purge()].filter(
+            (m: any) => m.type === "user_signal",
+        );
+        expect(signals).toEqual([
+            { type: "user_signal", code: 15, entry },
+            { type: "user_signal", code: 9, entry },
+        ]);
+        iface.keys.detach();
+    });
+
+    test("'d' closes the cell, like its tab's ✕", async () => {
+        const { iface, container, driver, cells } = machineInterface();
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const [{ box }] = cells(SHELL, "done");
+        iface.focus.focus(box);
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "d", ctrlKey: true });
+        await settle();
+        expect(box.isConnected).toBe(false);
+        iface.keys.detach();
+    });
+
+    test("from a prompt, 'k' and 'd' apply to the cell right above it", async () => {
+        const { iface, container, driver, cells, promptOf } = machineInterface();
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const [, { entry, box }] = cells(SHELL, "done", "running");
+        iface.focus.focus(promptOf(SHELL));
+        iface.interactions.purge();
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "k", ctrlKey: true });
+        key(container, "keydown", { key: "d", ctrlKey: true });
+        const signals = [...iface.interactions.purge()].filter(
+            (m: any) => m.type === "user_signal",
+        );
+        expect(signals).toEqual([
+            { type: "user_signal", code: 15, entry },
+            { type: "user_signal", code: 15, entry },
+        ]);
+        expect(box.isConnected).toBe(true); // (closing: until its process ends)
+        // The focus stays on the prompt.
+        expect(iface.focus.current).toBe(promptOf(SHELL));
+        iface.keys.detach();
+    });
+
+    test("'l' clears spent cells — C-q-l, or plain Ctrl+L in a prompt", async () => {
+        const { iface, container, driver, cells, promptOf } = machineInterface();
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        const [done, err, run] = cells(SHELL, "done", "error", "running");
+
+        key(container, "keydown", { key: "q", ctrlKey: true });
+        key(container, "keydown", { key: "l", ctrlKey: true });
+        key(window, "keyup", { key: "Control" });
+        await settle();
+        expect(done.box.isConnected).toBe(false);
+        expect(err.box.isConnected).toBe(false);
+        expect(run.box.isConnected).toBe(true);
+
+        const [, late] = cells(SHELL, "running", "done");
+        // Elsewhere, Ctrl+L passes through (a pty's clear-screen stays intact).
+        const past = key(container, "keydown", { key: "l", ctrlKey: true });
+        expect(past.defaultPrevented).toBe(false);
+        await settle();
+        expect(late.box.isConnected).toBe(true);
+
+        const ev = key(promptOf(SHELL), "keydown", { key: "l", ctrlKey: true });
+        expect(ev.defaultPrevented).toBe(true);
+        await settle();
+        expect(late.box.isConnected).toBe(false);
+        expect(run.box.isConnected).toBe(true);
+        iface.keys.detach();
+    });
+
+    test("Ctrl+L clears only the prompt's own stream", async () => {
+        const { iface, buche, driver, cells, promptOf } = machineInterface();
+        const other = ["$proc", "other"];
+        driver({ type: "prompt_configure", from: SHELL, label: "cq" });
+        driver({ type: "prompt_configure", from: other, label: "other" });
+        const [a] = cells(SHELL, "done");
+        const [b] = cells(other, "done");
+
+        iface.layout.revealPrompt(buche.get(SHELL));
+        key(promptOf(SHELL), "keydown", { key: "l", ctrlKey: true });
+        await settle();
+        expect(a.box.isConnected).toBe(false);
+        expect(b.box.isConnected).toBe(true);
         iface.keys.detach();
     });
 });

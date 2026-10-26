@@ -9,7 +9,7 @@ export interface DataMessage extends BaseMessage {
 }
 
 export function handle$data(buche: Buche, obj: DataMessage): void {
-    const entry = buche.ensure(obj);
+    const entry = buche.output(obj);
     buche.sendInterface({
         type: "cell_command",
         command: {

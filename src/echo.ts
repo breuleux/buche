@@ -56,6 +56,14 @@ export interface EchoConfiguration {
      * disables the mirroring.
      */
     represents?: Address | null;
+
+    /**
+     * Switch the (represented) entry between running and standby. A standby
+     * entry is a temporary interface the user may be done with: it is killed
+     * by a clear, like spent cells are removed, or once it has stayed scrolled
+     * out of view for a while. Ignored once the entry is done or errored.
+     */
+    status?: "running" | "standby";
 }
 
 /** The DOM id of the element showing the echo answering command `id`. */
@@ -67,7 +75,8 @@ export type ViewLabel = "pty" | "gui";
 
 /** Whether the echo's process can still receive signals (kill, resize, ...). */
 export function killable(echo: Echo): boolean {
-    return echo.status.status === "running" || echo.status.status === "unresponsive";
+    const { status } = echo.status;
+    return status === "running" || status === "unresponsive" || status === "standby";
 }
 
 export class Echo extends WithId() {
@@ -122,4 +131,17 @@ export class Echo extends WithId() {
         this.background = config.background ?? this.background;
         this.ephemeral = config.ephemeral ?? this.ephemeral;
     }
+}
+
+/** An echo's configuration, to pass on (e.g. to the views of a process). */
+export function echoConfiguration(echo: Echo): EchoConfiguration {
+    return {
+        submission: echo.submission ?? undefined,
+        label: echo.label,
+        color: echo.color,
+        id: echo.id,
+        sticky: echo.sticky,
+        background: echo.background,
+        ephemeral: echo.ephemeral,
+    };
 }

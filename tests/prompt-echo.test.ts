@@ -6,7 +6,6 @@ import { Buche, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import type { Entry } from "../src/entry.ts";
 import { resetId } from "../src/utils.ts";
-import { Zone, type Zone as ZoneT, zoneMap } from "../src/zone.ts";
 
 const PROMPT = ["$proc", "cq"];
 
@@ -16,13 +15,12 @@ interface Fixture {
     interfaceOut: OutM[];
 }
 
-function machine(zones: ZoneT[] = [new Zone({ names: ["@"] })]): Fixture {
+function machine(): Fixture {
     const fixture = {
         driverOut: [] as OutgoingDriverMessage[],
         interfaceOut: [] as OutM[],
     } as Fixture;
     fixture.buche = new Buche({
-        initialZones: zoneMap(zones),
         sendDriver: (m) => fixture.driverOut.push(m),
         sendInterface: (m) => fixture.interfaceOut.push(m),
     });
@@ -80,7 +78,7 @@ describe("prompt_configure echo", () => {
         expect(p.submission.content.filigrane).toBe("ls -l");
         expect(prompt(f).echo.status.status).toBe("unresponsive"); // untouched
         expect(f.interfaceOut).toEqual([
-            { type: "update_prompt", zone: p.zones.main, entry: prompt(f) },
+            { type: "update_prompt", target: null, entry: prompt(f) },
         ]);
     });
 
@@ -169,11 +167,12 @@ describe("prompt_configure echo", () => {
         expect(f.buche.get([...PROMPT, "1", "$main"]).echo.status.status).toBe("running");
     });
 
-    test("reconfiguring a live prompt leaves its zones and status alone", () => {
+    test("reconfiguring a live prompt leaves its place and status alone", () => {
         resetId(100);
         const f = machine();
         const entry = prompt(f);
-        const zones = Object.keys(entry.zones).sort();
+        const target = entry.target;
+        f.interfaceOut.length = 0;
         entry.echo.status = { status: "done" };
         f.buche.handle({
             type: "prompt_configure",
@@ -181,7 +180,8 @@ describe("prompt_configure echo", () => {
             to: ["$term"],
             label: "new",
         } as never);
-        expect(Object.keys(entry.zones).sort()).toEqual(zones);
+        expect(entry.target).toBe(target);
+        expect((f.interfaceOut[0] as any).target).toBe(null); // (it doesn't move)
         expect(entry.echo.status.status).toBe("done"); // not re-stamped running
         expect(entry.echo.label).toBe("new"); // the configuration did apply
     });

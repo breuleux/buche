@@ -1,0 +1,4 @@
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": "@r", "label": "app"}
+{"type": "data", "from": ["$proc", "cq", "2", "$gui"], "to": ["$term"], "data": {"x": 1}}
+{"type": "text", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "stream": "stdout", "text": "late output\r\n"}

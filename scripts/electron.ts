@@ -6,8 +6,8 @@
  * Options:
  *   -c, --command COMMAND   Shell command driving the session. Default: cq.
  *   -d, --dir DIR           Working directory for that process.
- *   -l, --layout FILE       HTML layout seeding the interface zones.
- *                           Default: layouts/standard.html.
+ *   -l, --layout FILE       Initial layout (carreau JSON: see layouts/).
+ *                           Default: one pane, named "main".
  *       --devtools          Open the window's devtools on start.
  *       --print-messages    Print the incoming/outgoing driver messages on
  *                           stdout (hidden by default).
@@ -32,6 +32,7 @@ import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
+import { layoutScript } from "../src/page.ts";
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const root = join(scriptDir, "..");
@@ -47,9 +48,9 @@ const { values } = parseArgs({
     },
 });
 
-const layoutPath = values.layout ?? join(root, "layouts/standard.html");
-const layout = readFileSync(layoutPath, "utf8");
+const layout = values.layout ? readFileSync(values.layout, "utf8") : null;
 const componentsDir = join(root, "src/components");
+const carreauDir = join(root, "node_modules/carreau/src");
 
 /** `components.css` with every `@import` inlined, recursively. */
 function stylesheet(file: string, seen = new Set<string>()): string {
@@ -70,6 +71,10 @@ const page = `<!doctype html>
 <meta charset="utf-8" />
 <title>Buche</title>
 <style>
+${readFileSync(join(carreauDir, "style.css"), "utf8")}
+${readFileSync(join(carreauDir, "prompt.css"), "utf8")}
+</style>
+<style>
 ${stylesheet("components.css")}
 </style>
 <style>
@@ -81,12 +86,13 @@ ${stylesheet("components.css")}
     color: #d0d0d0;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  #buche { position: fixed; inset: 0; }
-  #buche > * { width: 100%; height: 100%; }
+  /* The layout (carreau) fills the window. */
+  #buche { position: fixed; inset: 0; display: flex; padding: 4px; box-sizing: border-box; }
 </style>
 </head>
 <body>
-<div id="buche">${layout}</div>
+${layoutScript(layout)}
+<div id="buche"></div>
 <script defer src="renderer.js"></script>
 </body>
 </html>

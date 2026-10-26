@@ -5,6 +5,27 @@ export type To = Address;
 
 export type ZoneDescriptor = string;
 
+/**
+ * Where to put a new cell or prompt, as the core resolves it (the interface's
+ * layout engine does the actual placing). Reserved zones are relative to the
+ * `anchor`:
+ *  - "inline": in the scroll stream the anchor is in (a cell's default);
+ *  - "tab": a new tab beside the anchor (a prompt's default);
+ *  - "left" | "right" | "up" | "down": into the neighbour pane on that side,
+ *    created if there is none.
+ * Any other zone names a pane.
+ */
+export interface Target {
+    zone: string;
+
+    /** Address of the entry to place relative to; null: the default spot. */
+    anchor: Address | null;
+
+    /** For a prompt: link its tab with the prompt tab it lands next to, so
+     *  that their streams merge. */
+    link?: boolean;
+}
+
 export type Accent = string;
 
 export interface Selection {

@@ -108,37 +108,36 @@ export type CellCommand =
     | ResolveCommand
     | ResponseCommand;
 
-/** Cell view layout.
- *  - `"split"`: `text` commands go to the terminal view, GUI commands to the
- *    GUI view (the two are switchable).
- *  - `"unified"`: no terminal; `text` commands are sent to the GUI as a
- *    special case of the `data` command (schema `"buche:text"`). */
-export type CellMode = "split" | "unified";
-
-export interface CellConfiguration {
-    mode?: CellMode;
-}
+/** Cell configuration (nothing yet: what a cell shows is up to what it is sent). */
+// biome-ignore lint/suspicious/noEmptyInterface: extended by cell_configure
+export interface CellConfiguration {}
 
 /** Counter behind the per-cell ids under which GUI iframes serve `proc://`. */
 let guiSeq = 0;
 
 export class Cell extends WithId() implements CellConfiguration {
-    zones: Record<string, never>; // cells do not define zones currently
-
-    /** How the terminal and GUI views are used (see {@link CellMode}). */
-    mode: CellMode = "split";
+    /**
+     * The terminal view is only there in case it's needed (a placeholder's,
+     * to take input before any output): it goes away if a GUI comes first.
+     */
+    provisional = false;
 
     constructor(config: CellConfiguration) {
         super();
         this.configure(config);
-        this.zones = {};
     }
 
-    configure(config: CellConfiguration) {
-        Object.assign(this, config);
-        if (this.mode !== "split" && this.mode !== "unified") {
-            this.mode = "split";
-        }
+    configure(config: CellConfiguration) {}
+
+    /** Give the box a terminal right away, provisionally (see `provisional`). */
+    provideTerminal(entry: Entry, box: EchoBox): void {
+        this.handle$text({ type: "text", stream: "stdout", text: "" }, entry, box);
+        this.provisional = true;
+    }
+
+    /** The terminal is in use: it stays, whatever comes next. */
+    settle(): void {
+        this.provisional = false;
     }
 
     /** The cell's GUI view, creating it (and the <buche-gui> iframe) on first
@@ -152,6 +151,10 @@ export class Cell extends WithId() implements CellConfiguration {
         gui.setAttribute("proc-cell-id", `c${++guiSeq}`);
         if (!gui.hasAttribute("sandbox")) {
             gui.setAttribute("sandbox", "allow-scripts");
+        }
+        if (this.provisional) {
+            box.removeView("pty");
+            this.provisional = false;
         }
         box.setView("gui", gui);
         box.showView("gui");
@@ -169,34 +172,6 @@ export class Cell extends WithId() implements CellConfiguration {
         box.bump("gui");
     }
 
-    /** Bring the box in line with the mode. A unified cell has no terminal
-     *  view: switching to unified removes it, forwarding whatever it held to
-     *  the GUI as text. Call after each (re)configuration. */
-    applyMode(box: EchoBox): void {
-        if (this.mode !== "unified") {
-            return;
-        }
-        const pty = box.getView("pty")?.firstElementChild;
-        if (!(pty instanceof EmbeddedTerm)) {
-            return;
-        }
-        // The terminal parses asynchronously: wait for its content to settle
-        // before lifting it out.
-        void pty.flush().then(() => {
-            if (box.getView("pty")?.firstElementChild !== pty) {
-                return;
-            }
-            const text = pty.getText();
-            if (text !== "") {
-                this.sendToGui(
-                    { type: "data", data: { $schema: "buche:text", text, stream: "stdout" } },
-                    box,
-                );
-            }
-            box.removeView("pty");
-        });
-    }
-
     handle(message: CellCommand, entry: Entry, box: EchoBox) {
         type HT = (m: CellCommand, entry: Entry, box: EchoBox) => void;
         const handler = this[`handle$${message.type}`];
@@ -204,16 +179,8 @@ export class Cell extends WithId() implements CellConfiguration {
     }
 
     handle$text(message: TextCommand, entry: Entry, box: EchoBox) {
-        if (this.mode === "unified") {
-            // No terminal: text is a special case of the data command.
-            this.sendToGui(
-                {
-                    type: "data",
-                    data: { $schema: "buche:text", text: message.text, stream: message.stream },
-                },
-                box,
-            );
-            return;
+        if (message.text !== "") {
+            this.settle();
         }
         let view = box.getView("pty")?.childNodes[0] as EmbeddedTerm;
         if (!view) {
@@ -234,14 +201,14 @@ export class Cell extends WithId() implements CellConfiguration {
             // Dynamic sizing (rows grow with content) is the default, capped
             // by the box's max-height; a user drag pins the rows to the
             // dragged height, and double-clicking the bar frees it again.
-            // A box placed directly in a tab-pane pane fills it, so with no
+            // A box that is its pane's whole content fills it, so with no
             // drag height the grid is pinned to the rendered cell height — the
-            // terminal spans the whole pane (see the `.tab-pane-pane > echo-box`
-            // CSS). Boxes inside a <buche-term> keep dynamic sizing — except
-            // when there is a GUI view: then the terminal matches the GUI's
-            // height, so switching views does not change the box's size.
-            const fillsPane = box.parentElement?.classList.contains("tab-pane-pane") ?? false;
+            // terminal spans the whole pane (see the `echo-box[fills]` CSS).
+            // Boxes in a scroll stream keep dynamic sizing — except when there
+            // is a GUI view: then the terminal matches the GUI's height, so
+            // switching views does not change the box's size.
             const fit = () => {
+                const fillsPane = box.hasAttribute("fills");
                 const explicit = box.cellContentHeight;
                 if (explicit !== null) {
                     view.fit(explicit, box.maxContentHeight);

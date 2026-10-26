@@ -140,8 +140,6 @@ export type Editability = "readonly" | "editable" | "frozen";
 export type EditorFactory = (options: {
     doc: string;
     onChange?: (value: string) => void;
-    /** Invoked when the user asks to rotate focus (-1 = previous, +1 = next). */
-    onNavigate?: (direction: -1 | 1) => void;
 }) => PromptEditor;
 
 interface Row {
@@ -330,7 +328,7 @@ function acceptFiligrane(view: EditorView): boolean {
 
 // Default editor: a CodeMirror EditorView. Built lazily so merely importing this
 // module never touches CodeMirror's runtime (keeps injected-editor tests light).
-const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
+const codeMirrorEditor: EditorFactory = ({ doc, onChange }) => {
     darkTheme ??= EditorView.theme(
         {
             "&": { color: "#d4d4d4", backgroundColor: "transparent" },
@@ -350,30 +348,8 @@ const codeMirrorEditor: EditorFactory = ({ doc, onChange, onNavigate }) => {
         state: EditorState.create({
             doc,
             extensions: [
-                // Cmd/Ctrl-Left/Right rotate focus across the collection's prompts.
-                // High precedence so they win over CodeMirror's line-boundary moves.
                 Prec.highest(
                     keymap.of([
-                        {
-                            key: "Mod-ArrowLeft",
-                            run: () => {
-                                if (!onNavigate) {
-                                    return false;
-                                }
-                                onNavigate(-1);
-                                return true;
-                            },
-                        },
-                        {
-                            key: "Mod-ArrowRight",
-                            run: () => {
-                                if (!onNavigate) {
-                                    return false;
-                                }
-                                onNavigate(1);
-                                return true;
-                            },
-                        },
                         // At the end of the text, ArrowRight accepts the ghost
                         // text (filigrane) instead of moving past the last
                         // character — like other ghost-text UIs. It defers to
@@ -627,7 +603,6 @@ export class PromptCollection extends HTMLElement {
                     }),
                 );
             },
-            onNavigate: (dir) => this.rotate(dir),
         });
         editorHost.appendChild(editor.dom);
 
@@ -857,21 +832,6 @@ export class PromptCollection extends HTMLElement {
             return null;
         }
         return virtual;
-    }
-
-    /** Rotate the active prompt cyclically (-1 = previous, +1 = next) and focus
-     *  it. Bound to Cmd/Ctrl-Left / Cmd/Ctrl-Right in the CodeMirror editor. */
-    private rotate(direction: -1 | 1): void {
-        if (this.order.length < 2 || this.active === null) {
-            return;
-        }
-        const cur = this.order.indexOf(this.active);
-        if (cur < 0) {
-            return;
-        }
-        const n = this.order.length;
-        const next = (cur + direction + n) % n;
-        this.showPrompt(this.order[next]);
     }
 
     /** Move a prompt to a new index in the tab order. */

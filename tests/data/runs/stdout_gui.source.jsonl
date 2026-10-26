@@ -1,0 +1,5 @@
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": null, "id": "c1", "label": "plot", "submission": {"content": {"text": "plot", "ranges": []}}}
+{"type": "text", "from": ["$proc", "cq", "2", "$stdout"], "to": ["$term"], "stream": "stdout", "text": "loading\r\n"}
+{"type": "data", "from": ["$proc", "cq", "2", "$gui"], "to": ["$term"], "data": {"x": 1}}
+{"type": "close", "from": ["$proc", "cq", "2"], "to": ["$term"], "outcome": {"type": "success", "code": 0}}

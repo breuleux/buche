@@ -25,7 +25,6 @@ const destroyed: string[] = [];
 // The editor handle, plus a test hook to fire the navigation callback that the
 // real CodeMirror editor binds to Cmd/Ctrl-Left/Right.
 type StubEditor = ReturnType<EditorFactory> & {
-    navigate?: (dir: -1 | 1) => void;
     /** Last spans/base-style/selection handed to the editor, for assertions. */
     spans?: StyleSpan[];
     baseStyle?: string;
@@ -35,7 +34,7 @@ type StubEditor = ReturnType<EditorFactory> & {
 };
 
 function stubFactory(): EditorFactory {
-    return ({ doc, onChange, onNavigate }) => {
+    return ({ doc, onChange }) => {
         let value = doc;
         const dom = document.createElement("div");
         dom.className = "stub-editor";
@@ -69,7 +68,6 @@ function stubFactory(): EditorFactory {
                 destroyed.push(value);
                 dom.remove();
             },
-            navigate: onNavigate,
         };
         return editor;
     };
@@ -791,36 +789,6 @@ describe("prompt-collection — reordering", () => {
         expect(pc.prompts).toEqual([c, a, b]);
         expect(tabs(pc).map((t) => t.textContent)).toEqual(["c", "a", "b"]);
         expect(events).toEqual([[c, a, b]]);
-    });
-});
-
-describe("prompt-collection — focus rotation", () => {
-    test("Cmd-Left / Cmd-Right rotate the active prompt cyclically", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a" }));
-        const b = pc.addPrompt(makeEntry({ label: "b" }));
-        const c = pc.addPrompt(makeEntry({ label: "c" }));
-        // Fire the navigation callback of the currently-active prompt's editor,
-        // as Cmd/Ctrl-Left/Right would in the real CodeMirror editor.
-        const nav = (dir: -1 | 1) =>
-            (pc.getEditor(pc.activePrompt!) as StubEditor).navigate?.(dir);
-
-        expect(pc.activePrompt).toBe(a);
-        nav(1);
-        expect(pc.activePrompt).toBe(b);
-        nav(1);
-        expect(pc.activePrompt).toBe(c);
-        nav(1);
-        expect(pc.activePrompt).toBe(a); // wraps forward
-        nav(-1);
-        expect(pc.activePrompt).toBe(c); // wraps backward
-    });
-
-    test("rotation is a no-op with a single prompt", () => {
-        const pc = make();
-        const a = pc.addPrompt(makeEntry({ label: "a" }));
-        (pc.getEditor(a) as StubEditor).navigate?.(1);
-        expect(pc.activePrompt).toBe(a);
     });
 });
 

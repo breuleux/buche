@@ -1,0 +1,5 @@
+{"$role":"driverIn","type":"prompt_configure","from":["$proc","cq"],"to":["$term"],"label":"cq"}
+{"$role":"interfaceOut","type":"update_prompt","target":{"zone":"tab","anchor":null,"link":true},"entry":{"echo":"#102","cell":null,"prompt":"#103"}}
+{"$role":"driverIn","type":"configure","from":["$proc","?"],"to":["$term"],"represents":null,"ephemeral":true}
+{"$role":"driverIn","type":"close","from":["$proc","?"],"to":["$term"],"outcome":{"type":"success","code":0}}
+{"$role":"interfaceOut","type":"update_entry","entry":{"echo":"#104","cell":null,"prompt":null}}

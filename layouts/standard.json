@@ -1,0 +1,4 @@
+{
+  "root": { "type": "pane", "id": "main", "weight": 1, "tabs": [], "active": 0, "name": "main" },
+  "floating": []
+}

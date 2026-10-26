@@ -21,6 +21,7 @@ export const outgoingDriverMessageTypes = new Set<string>([
     "parse",
     "resize",
     "signal",
+    "spawn",
     "sync",
     "text",
 ]);
@@ -33,6 +34,7 @@ export const incomingInterfaceMessageTypes = new Set<string>([
     "user_input",
     "user_resize",
     "user_signal",
+    "user_spawn",
     "user_text",
 ]);
 

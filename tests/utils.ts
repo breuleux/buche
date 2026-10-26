@@ -6,7 +6,6 @@ import { Buche, type InM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import type { OutgoingInterfaceMessage } from "../src/interface-exchange/outgoing.ts";
 import { AsyncQueue } from "../src/utils.ts";
-import { Zone, zoneMap } from "../src/zone.ts";
 
 export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T, void, unknown> {
     const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
@@ -32,7 +31,6 @@ export class MachinePlayer {
 
     constructor(datadir: string) {
         this.machine = new Buche({
-            initialZones: zoneMap([new Zone({ names: ["@"] })]),
             sendDriver: this.driverQueue.push.bind(this.driverQueue),
             sendInterface: this.interfaceQueue.push.bind(this.interfaceQueue),
         });

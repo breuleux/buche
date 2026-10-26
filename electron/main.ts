@@ -13,8 +13,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import { formatMessage } from "../scripts/format.ts";
-import type { OutgoingDriverMessage, SignalRequest } from "../src/driver-exchange/outgoing.ts";
-import { ProcessCommunicator } from "../src/process.ts";
+import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
+import { Drivers } from "../src/drivers.ts";
 import {
     initProcProtocol,
     registerProcScheme,
@@ -127,42 +127,29 @@ async function start(): Promise<void> {
         win.webContents.openDevTools({ mode: "detach" });
     }
 
-    // One driver process per window; they die with each other (like the
-    // WebSocket session of scripts/view.ts dies with its socket). The window
-    // closes on the process's raw exit — not on the pipes reaching EOF, since
-    // a grandchild inheriting them could hold the window open past the exit
-    // (e.g. after Ctrl+D closes the shell).
-    const proc = new ProcessCommunicator(command, { cwd: config.cwd });
+    // The window's driver processes (the first one, and the shells started
+    // later: see src/drivers.ts); they die with the window, and the window
+    // with them (like the WebSocket session of scripts/view.ts dies with its
+    // socket). The window closes on the last one's raw exit — not on the
+    // pipes reaching EOF, since a grandchild inheriting them could hold the
+    // window open past the exit (e.g. after Ctrl+D closes the shell).
     let closed = false;
-    void proc.exited.then(() => shutdown());
-
-    function sendToRenderer(message: unknown): void {
-        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-            win.webContents.send("driver:message", message);
-        }
-    }
-
-    void (async () => {
-        try {
-            for await (const message of proc.messages()) {
-                logMessage("driverIn", message);
-                sendToRenderer(message);
+    const drivers = new Drivers({
+        cwd: config.cwd,
+        receive(message) {
+            logMessage("driverIn", message);
+            if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+                win.webContents.send("driver:message", message);
             }
-        } catch (err) {
-            console.error("[buche] process stream error:", err);
-        }
-    })();
+        },
+        exited: () => shutdown(),
+    });
+    drivers.start(command);
 
-    // The renderer's driver messages: written to the process, except a signal
-    // addressed to `$proc`, which is the process killing itself.
+    // The renderer's driver messages, to the driver each is for.
     ipcMain.on("driver:message", (_event, message: OutgoingDriverMessage) => {
         logMessage("driverOut", message);
-        const signal = message as SignalRequest;
-        if (message.type === "signal" && signal.to?.length === 1 && signal.to[0] === "$proc") {
-            proc.kill(signal.code);
-        } else {
-            proc.send(message);
-        }
+        drivers.send(message);
     });
 
     // Window title changes from the renderer (C-q-t popup, see
@@ -176,7 +163,7 @@ async function start(): Promise<void> {
             return;
         }
         closed = true;
-        proc.kill();
+        drivers.kill();
         app.quit();
     }
 

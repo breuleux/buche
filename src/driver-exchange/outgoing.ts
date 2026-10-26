@@ -22,6 +22,12 @@ export interface CommandRequest extends BaseRequest {
      * to focus the new cell).
      */
     id?: string;
+
+    /**
+     * Where what the command shows goes (a zone, as in `@zone cmd`), when the
+     * terminal decided it (e.g. a slot the user picked it for).
+     */
+    zone?: string;
 }
 
 export interface ParseRequest extends BaseRequest {
@@ -44,6 +50,17 @@ export interface ParseRequest extends BaseRequest {
 export interface SignalRequest extends BaseRequest {
     type: "signal";
     code: number;
+}
+
+/**
+ * Start another driver (a shell), at the address `to` (one segment, e.g.
+ * `["$d1"]`): its messages come with their addresses under it, and messages
+ * to addresses under it go to it. For the host running the drivers, not for a
+ * driver: it starts `command`, in the terminal's working directory.
+ */
+export interface SpawnRequest extends BaseRequest {
+    type: "spawn";
+    command: string;
 }
 
 export interface TextRequest extends BaseRequest {
@@ -87,6 +104,7 @@ export type OutgoingDriverMessage =
     | ParseRequest
     | CommandRequest
     | SignalRequest
+    | SpawnRequest
     | TextRequest
     | DataRequest
     | ResizeRequest

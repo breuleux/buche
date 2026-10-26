@@ -1,0 +1,124 @@
+/* The layout (carreau, see layout.ts), as buche shows it. */
+
+.carreau-tab {
+	font-size: 12px;
+	line-height: 22px;
+}
+
+/* A prompt's editor spans the prompt. */
+.carreau-prompt > prompt-collection {
+	flex: 1;
+	min-width: 0;
+}
+
+/* A cell's header (its `long`): where the command was typed (the prompt's
+ * context, as the prompt showed it), then the command. */
+.buche-long-context {
+	font-size: 11px;
+	line-height: 14px;
+}
+
+/* As tight as the echo box's header was: the context row flush, 2px around
+ * the command. */
+.carreau-long:has(> .buche-long-context, > .buche-long-command) {
+	padding-top: 2px;
+	padding-bottom: 2px;
+}
+
+.buche-long-context + .buche-long-command {
+	padding-top: 2px;
+}
+
+.buche-long-context > .styled-text,
+.buche-long-command > .styled-text {
+	white-space: pre-wrap;
+}
+
+/* A cell in a tab of its own fills its pane, edge to edge (cells in a stream
+ * keep their spacing). */
+.carreau-pane:not(.carreau-scrollcell) > .carreau-body:has(> .carreau-content > echo-box) {
+	padding: 0;
+}
+
+echo-box[fills] .echo-box-cell {
+	padding: 0;
+}
+
+/* What to put in an empty slot (slot-chooser.ts). */
+slot-chooser {
+	display: block;
+	margin: auto;
+	padding: 10px 14px;
+	min-width: 240px;
+	font-size: 12px;
+	line-height: 20px;
+	color: #b8bac0;
+	outline: none;
+	border-radius: 4px;
+}
+
+slot-chooser:focus-within {
+	background: color-mix(in srgb, #ffffff 4%, transparent);
+}
+
+.slot-chooser-option {
+	padding: 0 8px;
+	border-radius: 3px;
+	cursor: pointer;
+	white-space: pre;
+}
+
+.slot-chooser-option:hover {
+	color: #e6e7ea;
+}
+
+slot-chooser:focus-within .slot-chooser-option.active {
+	color: #fff;
+	background: color-mix(in srgb, #ffffff 10%, transparent);
+}
+
+.slot-chooser-field {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	padding: 4px 8px;
+	color: #e6e7ea;
+	background: #15161b;
+	border: 1px solid #5a5f78;
+	border-radius: 3px;
+	outline: none;
+}
+
+.slot-chooser-message {
+	font-style: italic;
+}
+
+/* A chooser that may well not be needed (an empty pane before the first
+ * prompt, which likely goes there): it shows only after a moment. */
+slot-chooser[delayed] {
+	animation: slot-chooser-reveal 0s linear 1s both;
+}
+
+@keyframes slot-chooser-reveal {
+	from {
+		visibility: hidden;
+	}
+	to {
+		visibility: visible;
+	}
+}
+
+/* A cell in the layout has the background of where it sits (its pane, its
+ * stream): its box paints none, and its terminal takes that colour, focused or
+ * not (`--cell-bg`, which the layout keeps: see Layout.matchBackground). */
+echo-box[bare],
+echo-box[bare][focused],
+echo-box[bare][focus-path] {
+	background: transparent;
+}
+
+echo-box[bare] embedded-term,
+echo-box[bare][focused] embedded-term,
+echo-box[bare][focus-path] embedded-term {
+	--embedded-term-bg: var(--cell-bg, #1c1c1c);
+}

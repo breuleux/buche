@@ -1,17 +1,15 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { Cell, type CellCommand } from "../src/cell.ts";
 import { BucheGui, GUI_SEND_EVENT } from "../src/components/buche-gui.tsx";
 import { EchoBox } from "../src/components/echo-box.tsx";
 import type { PromptCollection } from "../src/components/prompt-collection.tsx";
-import { TabbedZoneElement } from "../src/components/zone.tsx";
 import { Buche, type InM, type OutM } from "../src/core.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Entry } from "../src/entry.ts";
 import { BucheInterface } from "../src/interface.tsx";
 import { resetId } from "../src/utils.ts";
-import { Zone, type Zone as ZoneT, zoneMap } from "../src/zone.ts";
 
 afterEach(() => {
     document.body.replaceChildren();
@@ -25,13 +23,12 @@ interface Fixture {
     interfaceOut: OutM[];
 }
 
-function machine(zones: ZoneT[] = [new Zone({ names: ["@"] })]): Fixture {
+function machine(): Fixture {
     const fixture = {
         driverOut: [] as OutgoingDriverMessage[],
         interfaceOut: [] as OutM[],
     } as Fixture;
     fixture.buche = new Buche({
-        initialZones: zoneMap(zones),
         sendDriver: (m) => fixture.driverOut.push(m),
         sendInterface: (m) => fixture.interfaceOut.push(m),
     });
@@ -109,20 +106,29 @@ describe("cell gui views", () => {
         expect(b.getView("gui")?.childElementCount).toBe(1);
     });
 
-    test("split mode sends text to the terminal view", () => {
+    test("text goes to the terminal view", () => {
         const b = box();
-        const cell = new Cell({ mode: "split" });
+        const cell = new Cell({});
         run(cell, b, { type: "text", stream: "stdout", text: "hello\n" });
         expect(b.views).toContain("pty");
         expect(b.views).not.toContain("gui");
     });
 
-    test("unified mode sends text to the gui as a data command", () => {
+    test("a provisional terminal goes when a gui comes first", () => {
         const b = box();
-        const cell = new Cell({ mode: "unified" });
-        run(cell, b, { type: "text", stream: "stdout", text: "hello\n" });
-        expect(b.views).toContain("gui");
-        expect(b.views).not.toContain("pty");
+        const cell = new Cell({});
+        cell.provideTerminal(new Entry({}), b);
+        expect(b.views).toEqual(["pty"]);
+        run(cell, b, { type: "data", data: {} });
+        expect(b.views).toEqual(["gui"]);
+    });
+
+    test("a terminal that was written to stays", () => {
+        const b = box();
+        const cell = new Cell({});
+        cell.provideTerminal(new Entry({}), b);
+        run(cell, b, { type: "text", stream: "stdout", text: "hi" }, { type: "data", data: {} });
+        expect(b.views).toEqual(["pty", "gui"]);
     });
 
     test("a response does not bring the gui into existence", () => {
@@ -193,12 +199,10 @@ describe("gui size information", () => {
         expect(infos(gui)[0]).toMatchObject({ dynamicHeight: true });
     });
 
-    test("a box filling a tab-pane pane announces dynamicHeight false", () => {
-        const pane = document.createElement("div");
-        pane.className = "tab-pane-pane";
-        document.body.append(pane);
+    test("a box filling its pane announces dynamicHeight false", () => {
         const b = document.createElement("echo-box") as EchoBox;
-        pane.append(b);
+        b.setAttribute("fills", "");
+        document.body.append(b);
         const cell = new Cell({});
         run(cell, b, { type: "data", data: {} });
         const gui = b.getView("gui")!.firstElementChild as BucheGui;
@@ -213,15 +217,10 @@ describe("gui size information", () => {
 describe("gui kill from the interface", () => {
     function setup() {
         const container = document.createElement("div");
-        container.append(new TabbedZoneElement(["@", "main"]));
         document.body.append(container);
-        const iface = new BucheInterface({
-            container,
-            template: container.firstElementChild as Element,
-        });
+        const iface = new BucheInterface({ container });
         const sent: OutgoingDriverMessage[] = [];
         const buche: Buche = new Buche({
-            initialZones: zoneMap(iface.zones),
             sendDriver: (m) => sent.push(m),
             sendInterface: (m) => iface.processMessage(buche, m),
         });
@@ -230,7 +229,7 @@ describe("gui kill from the interface", () => {
         return { iface, driver, sent };
     }
 
-    test("every gui hands the capture-mode chord to the page", () => {
+    test("every gui hands the capture-mode and navigation-mode chords to the page", () => {
         const { iface, driver } = setup();
         driver({ type: "cell_configure", from: ["p"] });
         driver({ type: "cell_send", from: ["p"], message: { type: "data", data: {} } });
@@ -239,6 +238,8 @@ describe("gui kill from the interface", () => {
         // Ctrl+Q (the capture-mode entry) escapes the iframe into nav mode.
         expect(gui!.interceptChords()).toContain(iface.keys.enter);
         expect(gui!.interceptChords()).toContain("ctrl+q");
+        // Alt+Q (the layout's navigation mode) too.
+        expect(gui!.interceptChords()).toContain("Alt+q");
     });
 
     test("the focus moves to the gui when it appears", () => {
@@ -268,29 +269,6 @@ describe("gui kill from the interface", () => {
         expect(box.querySelectorAll("embedded-term").length).toBe(1);
         expect(box.querySelectorAll("buche-gui").length).toBe(1);
         expect(iface.focus.current).toBe(gui);
-    });
-
-    test("switching to unified drops the terminal, forwarding its text to the gui", async () => {
-        const { driver } = setup();
-        driver({ type: "cell_configure", from: ["p"] });
-        driver({ type: "text", from: ["p"], stream: "stdout", text: "hi there\n" });
-        const box = document.querySelector<EchoBox>("echo-box")!;
-        expect(box.querySelectorAll("embedded-term").length).toBe(1);
-
-        const send = vi.spyOn(BucheGui.prototype, "send");
-        driver({ type: "cell_configure", from: ["p"], mode: "unified" });
-        // The forwarding waits for the terminal to parse what it was given.
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        try {
-            expect(box.querySelectorAll("embedded-term").length).toBe(0);
-            expect(box.views).toEqual(["gui"]);
-            expect(send.mock.calls.map((c) => c[0])).toContainEqual({
-                type: "data",
-                data: { $schema: "buche:text", text: "hi there\n", stream: "stdout" },
-            });
-        } finally {
-            send.mockRestore();
-        }
     });
 
     // A focusable outside the cell, to have somewhere for the focus to go

@@ -6,6 +6,7 @@ import { handle$user_focus, type UserFocusMessage } from "./_user_focus.ts";
 import { handle$user_input, type UserInputMessage } from "./_user_input.ts";
 import { handle$user_resize, type UserResizeMessage } from "./_user_resize.ts";
 import { handle$user_signal, type UserSignalMessage } from "./_user_signal.ts";
+import { handle$user_spawn, type UserSpawnMessage } from "./_user_spawn.ts";
 import { handle$user_text, type UserTextMessage } from "./_user_text.ts";
 
 /** Registry of message handlers, keyed by message `type`. */
@@ -16,8 +17,9 @@ export const handlers = {
     user_input: handle$user_input,
     user_resize: handle$user_resize,
     user_signal: handle$user_signal,
+    user_spawn: handle$user_spawn,
     user_text: handle$user_text,
 } as const;
 
 /** Union of every message type. */
-export type IncomingInterfaceMessage = CellGuiFeedbackMessage | UserCommandMessage | UserFocusMessage | UserInputMessage | UserResizeMessage | UserSignalMessage | UserTextMessage;
+export type IncomingInterfaceMessage = CellGuiFeedbackMessage | UserCommandMessage | UserFocusMessage | UserInputMessage | UserResizeMessage | UserSignalMessage | UserSpawnMessage | UserTextMessage;

@@ -1,0 +1,7 @@
+{"type": "prompt_configure", "from": ["$proc", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "2"], "to": ["$term"], "zone": "left", "label": "cq"}
+{"type": "prompt_configure", "from": ["$proc", "cq", "2", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "3"], "to": ["$term"], "zone": null, "label": "cq"}
+{"type": "prompt_configure", "from": ["$proc", "cq", "3", "cq"], "to": ["$term"], "label": "cq"}
+{"type": "configure", "from": ["$proc", "cq", "3", "?"], "to": ["$term"], "represents": null, "ephemeral": true}
+{"type": "close", "from": ["$proc", "cq", "3", "?"], "to": ["$term"], "outcome": {"type": "success", "code": 0}}
