@@ -1,6 +1,6 @@
-import type { Cell, CellKind, Status } from "./cell";
+import { type Cell, type CellKind, isSpent } from "./cell";
 import { GroupCell, makeCell } from "./cells/index.ts";
-import type { Address, Target } from "./types";
+import type { Target } from "./types";
 import { Hierarchy, type HierarchyArgs } from "./utils";
 
 /** The field of a placeholder entry, under the entry it stands in for. */
@@ -18,19 +18,19 @@ export class Entry extends Hierarchy {
      * then whatever claimed it. Later children go beside it.
      */
     primary: Entry | null = null;
-    /**
-     * The address of the entry this one stands for (set by `configure`).
-     * While set, the entry's status mirrors the represented entry's, and user
-     * interactions (signal, input, resize) are routed to its address.
-     */
-    represents: Address | null = null;
-
     /** Listeners */
     listeners: Array<(entry: this) => void> = [];
 
     constructor(args: HierarchyArgs) {
         super(args);
-        this.cell = new GroupCell({ color: this.parent?.cell.color });
+        // Until told otherwise, an entry looks like the one it is under (a
+        // process's views look like it) — except at the top, which has no look
+        // of its own to give.
+        const parent = this.parent;
+        const look = parent?.parent
+            ? { label: parent.cell.label, color: parent.cell.color, icon: parent.cell.icon }
+            : { color: parent?.cell.color };
+        this.cell = new GroupCell(look);
     }
 
     /** Give the entry a new cell of `kind` (it shows something else now: a
@@ -54,22 +54,6 @@ export class Entry extends Hierarchy {
         this.field = field;
     }
 
-    /**
-     * The entry named by {@link Entry.represents}, resolved from the root of
-     * the hierarchy; null when `represents` is unset or names no existing
-     * entry.
-     */
-    representative(): Entry | null {
-        if (this.represents === null) {
-            return null;
-        }
-        let root: Entry = this;
-        while (root.parent) {
-            root = root.parent;
-        }
-        return root.getAt(this.represents);
-    }
-
     fire() {
         for (const listener of this.listeners) {
             listener(this);
@@ -77,25 +61,25 @@ export class Entry extends Hierarchy {
     }
 
     toJSON() {
-        const json: Record<string, unknown> = { cell: this.cell };
-        if (this.represents !== null) {
-            json.represents = this.represents;
-        }
-        return json;
+        return { cell: this.cell };
     }
 }
 
 /**
- * The status an entry displays: its represented entry's when it represents a
- * live one (the represented entry is the process; the cell or prompt is its
- * handle), its own otherwise — including when `represents` names no existing
- * entry or an entry nothing ever configured (status `absent`), which means
- * there is no process to mirror yet.
+ * Where signalling `entry` (its ✕) goes next: the group above it (a process,
+ * which shows nothing itself; not the root), once everything else under that
+ * group is signalled or spent — closing a process's last view ends the
+ * process. Null when the signal stops at `entry`.
  */
-export function statusOf(entry: Entry): Status {
-    const rep = entry.representative();
-    if (rep === null || rep.cell.status.status === "absent") {
-        return entry.cell.status;
+export function bubblesTo(entry: Entry): Entry | null {
+    const group = entry.parent;
+    if (!group?.parent || group.visual || isSpent(group.cell.status.status)) {
+        return null;
     }
-    return rep.cell.status;
+    const others = Object.values(group.children).filter((child) => child !== entry);
+    const done = others.every((child) => {
+        const { status } = child.cell.status;
+        return status === "unresponsive" || isSpent(status);
+    });
+    return done ? group : null;
 }

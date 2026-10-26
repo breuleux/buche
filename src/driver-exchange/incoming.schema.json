@@ -151,24 +151,13 @@
           "type": "boolean",
           "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
         },
-        "represents": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Address"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Address of the entry this one stands for (typically the process that owns it). While set, the entry's status mirrors that entry's, and user signals, input and resizes are routed to its address. Explicit null disables the mirroring."
-        },
         "status": {
           "type": "string",
           "enum": [
             "running",
             "standby"
           ],
-          "description": "Switch the (represented) entry between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
+          "description": "Switch the entry (and what is under it) between running and standby. A standby entry is a temporary interface the user may be done with: it is killed by a clear, like spent cells are removed, or once it has stayed scrolled out of view for a while. Ignored once the entry is done or errored."
         },
         "from": {
           "$ref": "#/definitions/Address",
@@ -201,7 +190,7 @@
         "type"
       ],
       "additionalProperties": false,
-      "description": "Declares (or reconfigures) an entry. It carries the cell configuration (label, color, `represents`, `ephemeral`, ...), which the entry's views show too, and says where the entry goes (`zone`).\n\nWith a `kind`, the entry shows something itself: a terminal, a frame or a prompt (see  {@link  ViewConfiguration.kind } ); the first time, it takes the place of its parent's placeholder if it can. Without, it is a process, or any non-visual parent of cells and prompts: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
+      "description": "Declares (or reconfigures) an entry. It carries the cell configuration (label, color, `ephemeral`, ...), which the entry's views show too, and says where the entry goes (`zone`).\n\nWith a `kind`, the entry shows something itself: a terminal, a frame or a prompt (see  {@link  ViewConfiguration.kind } ); the first time, it takes the place of its parent's placeholder if it can. Without, it is a process, or any non-visual parent of cells and prompts: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
     },
     "PromptBindings": {
       "type": "object",

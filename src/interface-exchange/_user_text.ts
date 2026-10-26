@@ -15,13 +15,13 @@ export function handle$user_text(buche: Buche, obj: UserTextMessage): void {
     if (obj.entry.cell?.kind === "pending") {
         buche.claim([...obj.entry.parent!.address(), "$stdout"], "terminal");
     }
-    // Input reaches the represented entry (the process), not the cell itself.
-    const target = obj.entry.representative() ?? obj.entry;
+    // Input goes to the cell's own address: its driver knows what it is for
+    // (a process's `$stdout` is its terminal).
     buche.sendDriver({
         type: "text",
         stream: "stdin",
         text: obj.text,
         from: ["$term"],
-        to: target.address(),
+        to: obj.entry.address(),
     });
 }

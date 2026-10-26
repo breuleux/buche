@@ -26,8 +26,8 @@ export interface ViewConfiguration extends PromptConfiguration {
 
 /**
  * Declares (or reconfigures) an entry. It carries the cell configuration
- * (label, color, `represents`, `ephemeral`, ...), which the entry's views
- * show too, and says where the entry goes (`zone`).
+ * (label, color, `ephemeral`, ...), which the entry's views show too, and
+ * says where the entry goes (`zone`).
  *
  * With a `kind`, the entry shows something itself: a terminal, a frame or a
  * prompt (see {@link ViewConfiguration.kind}); the first time, it takes the
@@ -98,16 +98,15 @@ function configureView(buche: Buche, obj: ConfigureMessage, kind: ViewKind): voi
         entry.replaceCell(kind);
         target = entry.target = buche.targetFor(entry, obj.zone, kind);
     }
+    // A new cell starts running; a live one (a retune: a prompt's submit
+    // reset, cd, config reload...) keeps its status.
+    if (fresh || claimed) {
+        entry.cell.status = { status: obj.status ?? "running" };
+    }
     if (entry.cell instanceof PromptCell) {
-        // Any parse still awaiting its answer is now void. A live prompt
-        // (submit reset, cd, config reload) keeps its status.
+        // Any parse still awaiting its answer is now void.
         entry.cell.request_id = null;
         entry.cell.configurePrompt(obj);
-        if (fresh || claimed) {
-            entry.cell.status = { status: "running" };
-        }
-    } else if (obj.status === undefined || entry.representative() !== null) {
-        entry.cell.status = { status: "running" };
     }
     buche.sendInterface({ type: "update_cell", target, entry });
 }

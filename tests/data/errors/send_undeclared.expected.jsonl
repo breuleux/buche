@@ -1,7 +1,7 @@
 {"$role":"driverIn","type":"send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}
 {"$role":"interfaceOut","type":"problem","code":"undeclared","reason":"Nothing at [\"$proc\",\"cq\",\"52\"] to send text to (declare it with a configure first)","input":{"type":"send","from":["$proc","cq","52"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"hi"}}}
 {"$role":"driverIn","type":"configure","from":["$proc","cq","53"],"to":["$term"],"label":"group"}
-{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#105","represents":["$proc","cq","53"]}}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#105"}}
 {"$role":"driverIn","type":"send","from":["$proc","cq","53"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"to the group"}}
 {"$role":"interfaceOut","type":"problem","code":"undeclared","reason":"Nothing at [\"$proc\",\"cq\",\"53\"] to send text to (declare it with a configure first)","input":{"type":"send","from":["$proc","cq","53"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"to the group"}}}
 {"$role":"driverIn","type":"send","from":["$proc","cq","53","$stdout"],"to":["$term"],"message":{"type":"text","stream":"stdout","text":"to an undeclared view"}}

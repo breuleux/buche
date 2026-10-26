@@ -2,7 +2,6 @@ import type { EchoBox } from "./components/echo-box.tsx";
 import type { Entry } from "./entry.ts";
 import type {
     Accent,
-    Address,
     Icon,
     Json,
     StyledText,
@@ -170,18 +169,11 @@ export interface CellConfiguration {
     ephemeral?: boolean;
 
     /**
-     * Address of the entry this one stands for (typically the process that
-     * owns it). While set, the entry's status mirrors that entry's, and user
-     * signals, input and resizes are routed to its address. Explicit null
-     * disables the mirroring.
-     */
-    represents?: Address | null;
-
-    /**
-     * Switch the (represented) entry between running and standby. A standby
-     * entry is a temporary interface the user may be done with: it is killed
-     * by a clear, like spent cells are removed, or once it has stayed scrolled
-     * out of view for a while. Ignored once the entry is done or errored.
+     * Switch the entry (and what is under it) between running and standby. A
+     * standby entry is a temporary interface the user may be done with: it is
+     * killed by a clear, like spent cells are removed, or once it has stayed
+     * scrolled out of view for a while. Ignored once the entry is done or
+     * errored.
      */
     status?: "running" | "standby";
 }

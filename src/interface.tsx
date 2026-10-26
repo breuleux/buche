@@ -13,7 +13,7 @@ import {
 import { refocusTitleEditor, showTitleEditor } from "./components/title-editor.ts";
 import { showToast } from "./components/toast.ts";
 import type { Buche } from "./core";
-import { type Entry, statusOf } from "./entry.ts";
+import type { Entry } from "./entry.ts";
 import { type FocusChangeDetail, FocusManager } from "./focus.ts";
 import type { IncomingInterfaceMessage } from "./interface-exchange/incoming";
 import type {
@@ -517,13 +517,13 @@ export class BucheInterface implements Interface {
         if (entry?.cell?.kind !== "prompt") {
             return true;
         }
-        return !isSpent(statusOf(entry).status);
+        return !isSpent(entry.cell.status.status);
     }
 
     /** The live prompt focused last (else any live one). */
     private lastPromptEntry(): Entry | null {
         const live = (e: Entry | undefined | null): e is Entry =>
-            e?.cell?.kind === "prompt" && !isSpent(statusOf(e).status);
+            e?.cell?.kind === "prompt" && !isSpent(e.cell.status.status);
         for (const { element, tags } of [...this.focus.history].reverse()) {
             const pc = tags.includes("prompt")
                 ? (element.closest("prompt-collection") as PromptCollection | null)
@@ -572,8 +572,8 @@ export class BucheInterface implements Interface {
             return;
         }
         // Nothing to kill once the process is spent — and signaling would
-        // mark the entry (and what represents it) unresponsive for nothing.
-        const { status } = statusOf(entry);
+        // mark the entry unresponsive for nothing.
+        const { status } = entry.cell.status;
         if (isSpent(status)) {
             return;
         }
@@ -669,20 +669,17 @@ export class BucheInterface implements Interface {
         }
         const box = current.closest("echo-box");
         const ent = box instanceof EchoBox ? box.boundEntry : null;
-        if (ent && (ent === entry || ent.representative() === entry)) {
-            // Stickiness is a property of the echo on screen, which is not
-            // the entry whose process ended when the echo only `represents`
-            // it (a cell showing a process's output, say).
+        if (ent === entry) {
             // Its tab is being closed (that's why it ended): where the focus
             // goes is carreau's to decide once the tab is gone (in its tab
             // group or linked group: see `focusAfterClose`), not the history's,
             // which could be anywhere.
-            if (this.layout.isClosing(ent)) {
+            if (this.layout.isClosing(entry)) {
                 return;
             }
             // Only in a prompt's stream, where the prompt is right below:
             // elsewhere (its own tab or pane), the cell keeps the focus.
-            if (!ent.cell.sticky && !entry.cell.sticky && this.layout.inPromptColumn(ent)) {
+            if (!entry.cell.sticky && this.layout.inPromptColumn(entry)) {
                 this.focus.back();
             }
         }
@@ -772,19 +769,13 @@ export class BucheInterface implements Interface {
         const { entry } = message;
         entry.fire();
         this.releaseEndedCell(entry);
-        // What ends with its process (the entry, or the views standing for
-        // it): ephemeral cells, and prompts (see Layout.promptEnded). Not what
-        // runs below it: a sub-shell, its commands, outlive their shell.
+        // What ends goes, if it is a prompt (see Layout.promptEnded) or
+        // ephemeral. (A process's views end with it: its close reaches them.)
         if (!killable(entry.cell)) {
-            for (const e of entry.walk()) {
-                if (e !== entry && e.representative() !== entry) {
-                    continue;
-                }
-                if (e.cell?.kind === "prompt") {
-                    this.layout.promptEnded(e);
-                } else if (e.cell.ephemeral && this.layout.has(e)) {
-                    this.layout.remove(e);
-                }
+            if (entry.cell.kind === "prompt") {
+                this.layout.promptEnded(entry);
+            } else if (entry.cell.ephemeral && this.layout.has(entry)) {
+                this.layout.remove(entry);
             }
         }
         // A cell that ended may have been what kept an ended prompt's tab.

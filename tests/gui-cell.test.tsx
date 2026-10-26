@@ -276,9 +276,9 @@ describe("gui kill from the interface", () => {
     });
 
     test("a cell sticky through its process keeps the focus when that process ends", () => {
-        // The shape coquille produces for a main cell: the cell is a handle on
-        // the process (`represents`), the process is configured on its own, and
-        // `close` comes from it — so the ended entry is not the sticky echo.
+        // The shape coquille produces for a main cell: the cell is a view of
+        // the process, which is configured on its own, and `close` comes from
+        // it — and reaches the sticky view.
         const { iface, driver } = setup();
         const other = standIn(iface);
         iface.focus.focus(other, "api");
@@ -287,7 +287,6 @@ describe("gui kill from the interface", () => {
             type: "configure",
             kind: "frame",
             from: ["$proc", "1", "$main"],
-            represents: ["$proc", "1"],
             sticky: true,
         });
         driver({

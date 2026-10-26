@@ -1,6 +1,6 @@
 {"$role":"driverIn","type":"configure","from":["$proc","cq","3"],"to":["$term"],"zone":null}
-{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#105","represents":["$proc","cq","3"]}}
+{"$role":"interfaceOut","type":"update_cell","target":{"zone":"inline","anchor":null},"entry":{"cell":"#105"}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"error","code":1}}
 {"$role":"interfaceOut","type":"update_entry","entry":{"cell":"#103"}}
-{"$role":"interfaceOut","type":"update_entry","entry":{"cell":"#105","represents":["$proc","cq","3"]}}
+{"$role":"interfaceOut","type":"update_entry","entry":{"cell":"#105"}}
 {"$role":"driverIn","type":"close","from":["$proc","cq","3"],"to":["$term"],"outcome":{"type":"success","code":0}}

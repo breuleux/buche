@@ -166,10 +166,10 @@ export class Buche {
             return null;
         }
         ph.replaceCell(kind);
-        // A view (`$stdout`, `$frame`...) claiming it brings its own look: the
-        // one it was configured with, else its parent's.
-        if (field.startsWith("$")) {
-            const look = (existing ?? parent!).cell;
+        // A claimant configured beforehand brings the look it was given (the
+        // placeholder has its process's).
+        if (existing) {
+            const look = existing.cell;
             const before = JSON.stringify([ph.cell.label, ph.cell.color, ph.cell.icon]);
             ph.cell.configure({ label: look.label, color: look.color, icon: look.icon });
             if (JSON.stringify([ph.cell.label, ph.cell.color, ph.cell.icon]) !== before) {
@@ -183,25 +183,22 @@ export class Buche {
     /**
      * Declare (the first time) the placeholder of a configured entry: an
      * empty cell standing in for whatever it shows first, placed where the
-     * entry was configured to go. It represents the entry, so it can take
-     * input (and signals) before anything else exists.
+     * entry was configured to go. It can take input (and signals) before
+     * anything else exists: its signals bubble up to the entry (see
+     * user_signal), and typing into it makes it the entry's `$stdout`.
      */
     ensurePlaceholder(entry: Entry, zone: ZoneDescriptor | null | undefined): void {
         // (Nor for what shows itself already, nor for a placeholder's address:
-        // a retune of one, maybe of one that doesn't exist. Nor for a view,
-        // `$stdout` say, configured ahead of its output: it claims its
-        // parent's placeholder, or gets a cell, when its output comes.)
+        // a retune of one, maybe of one that doesn't exist.)
         if (
             entry.primary ||
             entry.visual ||
             entry.field === PLACEHOLDER ||
-            (entry.field?.startsWith("$") && entry.parent !== this.hierarchy) ||
             entry === this.hierarchy
         ) {
             return;
         }
         const ph = entry.getAt([PLACEHOLDER], true)!;
-        ph.represents = entry.address();
         ph.replaceCell("pending");
         ph.cell.configure(cellConfiguration(entry.cell));
         ph.cell.status = { status: "running" };
@@ -213,36 +210,26 @@ export class Buche {
     /**
      * Get (creating it if needed) the entry at `message.from` and apply a
      * cell configuration to it: the {@link CellConfiguration} fields merge
-     * into its cell, and a provided `represents` onto the entry itself.
+     * into its cell (and its views', see `views`).
      */
     ensure(message: CellConfiguration & CreationInfo) {
-        const fresh = this.hierarchy.getAt(message.from, false) === null;
         const post = this.hierarchy.getAt(message.from, true)!;
-        // A `$` entry (`$stdout`, `$frame`...) is a view of its parent: it
-        // stands for it unless told otherwise. It shows the parent's look too.
-        if (fresh && post.field?.startsWith("$") && post.parent !== this.hierarchy) {
-            post.represents = post.parent!.address();
-            post.cell.configure({ ...cellConfiguration(post.parent!.cell), id: undefined });
-        }
         post.cell.configure(message);
-        if (message.represents !== undefined) {
-            post.represents = message.represents;
-        }
         if (message.status !== undefined) {
-            this.setLiveStatus(post.representative() ?? post, message.status);
+            this.setLiveStatus(post, message.status);
         }
         // What a configured entry says about itself, its views show too.
         for (const child of this.views(post)) {
-            child.cell.configure({ ...message, id: undefined, represents: undefined });
+            child.cell.configure({ ...message, id: undefined });
         }
         return post;
     }
 
-    /** An entry's views: its `$` children, and what shows it (its primary). */
+    /** An entry's views: the children of a group (a process's terminal,
+     *  frame, placeholder...). What is under a cell (a prompt's commands, say)
+     *  is no view of it. */
     private views(entry: Entry): Entry[] {
-        return Object.values(entry.children).filter(
-            (child) => child.field?.startsWith("$") || child === entry.primary,
-        );
+        return entry.visual ? [] : Object.values(entry.children);
     }
 
     /**
@@ -293,14 +280,17 @@ export class Buche {
         }
     }
 
-    /** Switch a live entry between running and standby (a spent one stays). */
+    /** Switch a live entry, and what is live under it, between running and
+     *  standby (what is spent stays). */
     private setLiveStatus(entry: Entry, status: "running" | "standby"): void {
-        const current = entry.cell.status.status;
-        if (isSpent(current) || current === status) {
-            return;
+        for (const e of entry.walk()) {
+            const current = e.cell.status.status;
+            if (isSpent(current) || current === status || current === "absent") {
+                continue;
+            }
+            e.cell.status = { status };
+            this.sendInterface({ type: "update_entry", entry: e });
         }
-        entry.cell.status = { status };
-        this.sendInterface({ type: "update_entry", entry });
     }
 }
 

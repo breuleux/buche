@@ -65,7 +65,7 @@ import type { DomProps } from "myjsx/jsx-runtime";
 import { isSpent } from "../cell.ts";
 import { PromptCell } from "../cells/prompt.ts";
 import { defaultTheme, resolveColor, styleToCss } from "../color.ts";
-import { type Entry, statusOf } from "../entry.ts";
+import type { Entry } from "../entry.ts";
 import { chordFromEvent, normalizeChord } from "../keychord.ts";
 import type { HighlightRange, InteractiveStyledText, Selection, StyledText } from "../types.ts";
 import { buildStyledText } from "./utils.tsx";
@@ -812,10 +812,9 @@ export class PromptCollection extends HTMLElement {
         if (!row) {
             return;
         }
-        // A prompt whose process has terminated (close → status done or error,
-        // through `represents` when it stands for a process) has no further
-        // use: drop its editor.
-        if (isSpent(statusOf(entry).status)) {
+        // A prompt whose process has terminated (its close reaches the prompt:
+        // status done or error) has no further use: drop its editor.
+        if (isSpent(entry.cell.status.status)) {
             this.removePrompt(entry);
             return;
         }

@@ -36,7 +36,7 @@ import type { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection } from "./components/prompt-collection.tsx";
 import { SlotChooser } from "./components/slot-chooser.ts";
 import { buildIcon, buildStyledText } from "./components/utils.tsx";
-import { type Entry, statusOf } from "./entry.ts";
+import { bubblesTo, type Entry } from "./entry.ts";
 import type { Address, StyledText, Target } from "./types.ts";
 
 /** What the layout needs from the interface. */
@@ -86,7 +86,7 @@ export function defaultLayout(): WorkspaceData {
 }
 
 function tabStatus(entry: Entry): StatusString {
-    const status = statusOf(entry).status;
+    const status = entry.cell.status.status;
     return status === "absent" ? "running" : status;
 }
 
@@ -524,9 +524,7 @@ export class Layout {
     private bind(entry: Entry, tabId: string): void {
         this.tabs.set(entry, tabId);
         this.entries.set(tabId, entry);
-        const refresh = (): void => this.refresh(entry);
-        entry.listeners.push(refresh);
-        entry.representative()?.listeners.push(refresh);
+        entry.listeners.push((): void => this.refresh(entry));
     }
 
     private unbind(entry: Entry): void {
@@ -1109,12 +1107,10 @@ export class Layout {
         if (!pop) {
             return;
         }
-        const signaled = new Set<Entry>();
+        // (Each is signalled: the last of a process's views signals it.)
         for (const entry of this.popEntries()) {
-            const process = entry.representative() ?? entry;
-            if (this.alive(entry) && !signaled.has(process)) {
-                signaled.add(process);
-                this.host.signal(entry, statusOf(entry).status === "unresponsive" ? 9 : 15);
+            if (this.alive(entry)) {
+                this.host.signal(entry, entry.cell.status.status === "unresponsive" ? 9 : 15);
             }
         }
         this.pop = null;
@@ -1184,32 +1180,31 @@ export class Layout {
     }
 
     private alive(entry: Entry): boolean {
-        return !isSpent(statusOf(entry).status);
+        return !isSpent(entry.cell.status.status);
     }
 
     /**
-     * Closing a tab ends its process: terminated (killed, if it doesn't
-     * answer anymore), and closed once it has ended. Unless another tab still
-     * shows that process (its terminal, beside its GUI): that one stays, and
-     * the process with it. The process can refuse (e.g. to ask about unsaved
-     * changes, then be told to stay): marked unresponsive by the SIGTERM, it
-     * says it is running (or on standby) again, and the close is cancelled.
+     * Closing a tab signals its entry (see user_signal). When that ends its
+     * process — the last of the process's views — the process is terminated
+     * (killed, if it doesn't answer anymore), and the tab closes once it has
+     * ended. The process can refuse (e.g. to ask about unsaved changes, then
+     * be told to stay): marked unresponsive by the SIGTERM, it says it is
+     * running (or on standby) again, and the close is cancelled. A cell
+     * under no process (a cell of its own, under a prompt say) is waited for
+     * the same way: its driver ends it. Only a view of a process that goes on
+     * (in another view) closes right away.
      */
     private close(tab: Tab): Promise<void> {
         const entry = this.entries.get(tab.id);
         if (!entry || !this.alive(entry)) {
             return Promise.resolve();
         }
-        const process = entry.representative() ?? entry;
-        const others = [...this.tabs.keys()].some(
-            (e) => e !== entry && (e.representative() ?? e) === process && this.alive(e),
-        );
-        if (others) {
-            return Promise.resolve();
-        }
-        const unresponsive = statusOf(entry).status === "unresponsive";
+        const group = entry.parent;
+        const view = !!group?.parent && !group.visual;
+        const ends = !view || bubblesTo(entry) !== null;
+        const unresponsive = entry.cell.status.status === "unresponsive";
         this.host.signal(entry, unresponsive ? 9 : 15);
-        if (unresponsive) {
+        if (unresponsive || !ends) {
             return Promise.resolve();
         }
         return new Promise((resolve, reject) => {
@@ -1217,7 +1212,7 @@ export class Layout {
             // only what it was before.)
             let signalled = false;
             const check = (): void => {
-                const { status } = statusOf(entry);
+                const { status } = entry.cell.status;
                 if (status === "unresponsive") {
                     signalled = true;
                     return;
@@ -1226,14 +1221,14 @@ export class Layout {
                 if (alive && !signalled) {
                     return;
                 }
-                process.listeners = process.listeners.filter((l) => l !== check);
+                entry.listeners = entry.listeners.filter((l) => l !== check);
                 if (alive) {
                     reject(new Error("the process refused to close"));
                 } else {
                     resolve();
                 }
             };
-            process.listeners.push(check);
+            entry.listeners.push(check);
         });
     }
 
@@ -1249,7 +1244,7 @@ export class Layout {
     private checkStandby(): void {
         for (const [id, box] of this.boxes) {
             const entry = this.entries.get(id);
-            if (!entry || statusOf(entry).status !== "standby") {
+            if (entry?.cell.status.status !== "standby") {
                 this.parked.delete(id);
                 continue;
             }

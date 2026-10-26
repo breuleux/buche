@@ -3,8 +3,8 @@
 // `spawn` message: see SpawnRequest), each at an address of its own.
 //
 // The first driver's addresses are its own. Another one's live under its
-// address (`["$d1"]`...): what it sends comes back with `from` (and
-// `represents`) under it, and messages to addresses under it go to it, with
+// address (`["$d1"]`...): what it sends comes back with `from` under it, and
+// messages to addresses under it go to it, with
 // the prefix taken off. A `signal` to a driver's `["$proc"]` kills it.
 
 import type { InM } from "./core.ts";
@@ -44,11 +44,7 @@ export class Drivers {
             try {
                 for await (const message of proc.messages()) {
                     const m = message as unknown as Record<string, unknown>;
-                    this.options.receive({
-                        ...m,
-                        from: under(m.from),
-                        ...("represents" in m ? { represents: under(m.represents) } : {}),
-                    } as unknown as InM);
+                    this.options.receive({ ...m, from: under(m.from) } as unknown as InM);
                 }
             } catch (err) {
                 console.error(`[buche] driver ${id || "(first)"}: stream error:`, err);

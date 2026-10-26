@@ -516,14 +516,19 @@ describe("tab ✕", () => {
             );
         expect(tabs()).toHaveLength(2);
         ctx.iface.interactions.purge();
+        const signalled = () => {
+            ctx.flush();
+            return ctx.sent.filter((m) => m.type === "signal").map((m) => m.to);
+        };
+        // The first tab: its view is signalled (nothing to coquille), and the
+        // tab goes right away — the process goes on in the other.
         tabs()[1].querySelector<HTMLElement>(".carreau-tab-close")?.click();
         await settle();
-        const signals = () =>
-            [...ctx.iface.interactions.purge()].filter((m: any) => m.type === "user_signal");
-        expect(signals()).toEqual([]);
+        expect(signalled()).toEqual([[...proc, "$frame"]]);
         expect(tabs()).toHaveLength(1);
+        // The last one: the process is signalled with it.
         tabs()[0].querySelector<HTMLElement>(".carreau-tab-close")?.click();
-        expect(signals().map((m: any) => m.code)).toEqual([15]);
+        expect(signalled().slice(1)).toEqual([[...proc, "$stdout"], proc]);
     });
 });
 

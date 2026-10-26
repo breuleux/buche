@@ -1,5 +1,5 @@
 {"$role":"driverIn","type":"configure","kind":"prompt","from":["$proc","cq"],"to":["$term"],"label":"cq"}
 {"$role":"interfaceOut","type":"update_cell","target":{"zone":"tab","anchor":null,"link":true},"entry":{"cell":"#103"}}
-{"$role":"driverIn","type":"configure","from":["$proc","?"],"to":["$term"],"represents":null,"ephemeral":true}
+{"$role":"driverIn","type":"configure","from":["$proc","?"],"to":["$term"],"ephemeral":true}
 {"$role":"driverIn","type":"close","from":["$proc","?"],"to":["$term"],"outcome":{"type":"success","code":0}}
 {"$role":"interfaceOut","type":"update_entry","entry":{"cell":"#104"}}

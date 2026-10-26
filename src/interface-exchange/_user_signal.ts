@@ -1,5 +1,5 @@
 import type { Buche } from "../core.ts";
-import type { Entry } from "../entry.ts";
+import { bubblesTo, type Entry } from "../entry.ts";
 
 export interface UserSignalMessage {
     type: "user_signal";
@@ -10,21 +10,22 @@ export interface UserSignalMessage {
     entry: Entry;
 }
 
+/**
+ * The user signals an entry (its ✕): the signal goes to its address, and the
+ * entry is marked unresponsive until its driver ends it. It then bubbles up
+ * (see bubblesTo): closing a process's last view signals the process. Each
+ * driver acts on the addresses it owns (signals to a process's views mean
+ * nothing to coquille, say: the process's own does).
+ */
 export function handle$user_signal(buche: Buche, obj: UserSignalMessage): void {
-    // A cell representing a process (e.g. its `$main` cell) signals the
-    // process, not itself; the unresponsive marking lands on the process too,
-    // so every view of it (and of the cell, which mirrors it) shows it.
-    const target = obj.entry.representative() ?? obj.entry;
-    buche.sendDriver({
-        type: "signal",
-        code: obj.code,
-        from: ["$term"],
-        to: target.address(),
-    });
-    // We expect a response from the shell; hold the echo until it closes.
-    target.cell.status = { status: "unresponsive" };
-    buche.sendInterface({
-        type: "update_entry",
-        entry: target,
-    });
+    for (let entry: Entry | null = obj.entry; entry; entry = bubblesTo(entry)) {
+        buche.sendDriver({
+            type: "signal",
+            code: obj.code,
+            from: ["$term"],
+            to: entry.address(),
+        });
+        entry.cell.status = { status: "unresponsive" };
+        buche.sendInterface({ type: "update_entry", entry });
+    }
 }
