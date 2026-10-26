@@ -211,8 +211,8 @@ export class BucheInterface implements Interface {
     //   p             focus the latest prompt
     //   k / d         kill / close the focused cell — from a prompt, the cell
     //                 right above it
-    //   l             clear all spent cells (Ctrl+L does the same, but only
-    //                 while typing in a prompt)
+    //   l             clear all spent cells (Ctrl+L clears only those of the
+    //                 prompt's own shell view, while typing in a prompt)
     //   t             rename the window (popup, see title-editor.ts)
     // Extend or override through `iface.keys.on(...) / .onCapture(...) /
     // .onRelease(...)`.
@@ -250,13 +250,16 @@ export class BucheInterface implements Interface {
             chords: {
                 "Mod+p": () => this.focusPrompt(),
                 // C-l clears, but only in a prompt input: elsewhere it belongs
-                // to what has the focus (a pty's clear-screen).
+                // to what has the focus (a pty's clear-screen). In a prompt it
+                // clears only that prompt's own shell view (the <buche-term>
+                // hosting its prompt collection) — other tabs keep their
+                // spent cells.
                 "Ctrl+l": (e) => {
                     const target = e.target;
                     if (!(target instanceof Element) || !target.closest('[focusable="prompt"]')) {
                         return false;
                     }
-                    this.clearSpentCells();
+                    this.clearSpentCells(target.closest("buche-term") ?? this.container);
                 },
                 "Ctrl+Tab": () => this.cycleTabs(true),
                 "Ctrl+Shift+Tab": () => this.cycleTabs(false),
@@ -413,11 +416,12 @@ export class BucheInterface implements Interface {
         this.targetCell()?.dispatchEvent(new CustomEvent<null>("close", { bubbles: true }));
     }
 
-    /** Remove every spent cell (done or error), wherever it shows: log cells,
-     *  tab cells (the tabs go with the boxes, see the "destroy" event), pop
-     *  cells. Running cells are left alone — no signals are sent. */
-    clearSpentCells(): void {
-        for (const box of this.container.querySelectorAll("echo-box")) {
+    /** Remove every spent cell inside `scope` (the whole container by
+     *  default), wherever it shows: log cells, tab cells (the tabs go with the
+     *  boxes, see the "destroy" event), pop cells. Running cells are left
+     *  alone — no signals are sent. */
+    clearSpentCells(scope: Element = this.container): void {
+        for (const box of scope.querySelectorAll("echo-box")) {
             if (box instanceof EchoBox && (box.status === "done" || box.status === "error")) {
                 box.destroy();
             }

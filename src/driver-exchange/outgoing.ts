@@ -27,7 +27,10 @@ export interface CommandRequest extends BaseRequest {
 export interface ParseRequest extends BaseRequest {
     type: "parse";
     text: string;
-    position: number;
+
+    /** The prompt's selection when the parse was requested (`start === end`
+     *  is the plain cursor position). */
+    selection: Selection;
 
     /**
      * Reference number for this parse. Whatever answers it — the highlight

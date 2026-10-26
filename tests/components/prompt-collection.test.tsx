@@ -328,7 +328,7 @@ describe("prompt-collection — editor values", () => {
         expect(entry.prompt?.submission.content.selection).toEqual({ start: 3, end: 3 });
     });
 
-    test("editing fires textchange with entry, text and position", () => {
+    test("editing fires textchange with entry, text and selection", () => {
         const pc = make();
         const entry = pc.addPrompt(makeEntry({ label: "a", content: plain("") }));
         const editor = pc.getEditor(entry) as StubEditor;
@@ -344,7 +344,7 @@ describe("prompt-collection — editor values", () => {
         expect(events).toHaveLength(1);
         expect(events[0].entry).toBe(entry);
         expect(events[0].text).toBe("hello");
-        expect(events[0].position).toBe(2);
+        expect(events[0].selection).toEqual({ start: 2, end: 2 });
     });
 
     test("setValue fires textchange; an entry.fire() reset does not", () => {

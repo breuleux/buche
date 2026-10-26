@@ -166,7 +166,7 @@ export class TabbedZone extends Zone {
                 type: "user_input",
                 entry: entry,
                 text: event.detail.text,
-                position: event.detail.position,
+                selection: event.detail.selection,
             });
         });
         bt.prompts.addPrompt(entry);

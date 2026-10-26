@@ -55,6 +55,17 @@ A quick liveness check in Python: `BUCHE_CONTROL_FD` in `os.environ` **and**
 `os.fstat(int(...))` succeeds. Degrade to plain text output when absent (CI,
 pipes).
 
+### Shell environment (`coquille`)
+
+buche's companion shell `coquille` exports `CQ_CURRENT_COMMAND` while it
+handles a prompt command (Enter/submit, Tab/complete, …): the **JSON
+serialization of the `command` message** it is dispatching — `text`,
+`selection` (`start === end` is the plain cursor), `command`, `id`, `from`,
+`to` (see `references/outgoing.schema.json`). Processes spawned by the
+submitted command inherit it, so a GUI program can read the submission that
+launched it (`JSON.parse(os.environ["CQ_CURRENT_COMMAND"])`). Absent when the
+process was started any other way.
+
 ---
 
 ## 2. Creating and configuring the cell

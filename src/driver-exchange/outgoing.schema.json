@@ -44,15 +44,16 @@
         "text": {
           "type": "string"
         },
-        "position": {
-          "type": "number"
+        "selection": {
+          "$ref": "#/definitions/Selection",
+          "description": "The prompt's selection when the parse was requested (`start === end` is the plain cursor position)."
         },
         "request_id": {
           "type": "string",
           "description": "Reference number for this parse. Whatever answers it — the highlight echo (a `prompt_configure` carrying `request_id`) — repeats it, so the machine can drop answers to superseded inputs (the user typed on in the meantime)."
         }
       },
-      "required": ["from", "position", "request_id", "text", "to", "type"],
+      "required": ["from", "request_id", "selection", "text", "to", "type"],
       "additionalProperties": false
     },
     "Address": {
@@ -60,6 +61,21 @@
       "items": {
         "type": "string"
       }
+    },
+    "Selection": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "description": "Inclusive starting position of the selection"
+        },
+        "end": {
+          "type": "number",
+          "description": "Exclusive ending position of the selection"
+        }
+      },
+      "required": ["start", "end"],
+      "additionalProperties": false
     },
     "CommandRequest": {
       "type": "object",
@@ -79,7 +95,7 @@
         },
         "selection": {
           "$ref": "#/definitions/Selection",
-          "description": "The prompt's selection when the command fired (`start === end` is the plain cursor position)."
+          "description": "The prompt's selection when the command fired."
         },
         "command": {
           "type": "string"
@@ -90,21 +106,6 @@
         }
       },
       "required": ["command", "from", "selection", "text", "to", "type"],
-      "additionalProperties": false
-    },
-    "Selection": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "number",
-          "description": "Inclusive starting position of the selection"
-        },
-        "end": {
-          "type": "number",
-          "description": "Exclusive ending position of the selection"
-        }
-      },
-      "required": ["start", "end"],
       "additionalProperties": false
     },
     "SignalRequest": {
