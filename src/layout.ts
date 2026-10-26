@@ -490,9 +490,15 @@ export class Layout {
         );
     }
 
-    /** The prompt node of a prompt entry's column, if shown. */
+    /**
+     * The prompt node showing a prompt entry (null: none). Linked prompts share
+     * one column — the stream's first member's shows them all, whoever types —
+     * so it is that column's prompt, the one on screen (its own column's is in
+     * a tab body carreau keeps hidden, which reads as no size at all).
+     */
     promptNodeOf(entry: Entry): string | null {
-        const col = this.columnOf(this.tabs.get(entry) ?? "");
+        const id = this.tabs.get(entry);
+        const col = id ? (this.columnOf(this.streamTab(id)) ?? this.columnOf(id)) : null;
         return col?.children.at(-1)?.id ?? null;
     }
 
@@ -1052,7 +1058,9 @@ export class Layout {
         const margin = 8;
         const q = anchor?.cell?.kind === "prompt" ? this.promptNodeOf(anchor) : null;
         const p = q ? this.view.pxRect(q) : null;
-        const bottom = p ? p.y - 4 : r.y + r.h - margin;
+        // (A prompt that isn't shown reads as a line at the top of the page: no
+        // edge to keep clear, so stay within the pane.)
+        const bottom = p?.h ? p.y - 4 : r.y + r.h - margin;
         const h = Math.max(60, bottom - (r.y + margin));
         return { x: r.x + margin, y: bottom - h, w: Math.max(240, r.w - 2 * margin), h };
     }

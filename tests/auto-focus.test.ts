@@ -6,6 +6,7 @@
 // `sticky`); a new prompt takes the focus unless `background`.
 
 import { panes as panesOf } from "carreau/src/model";
+import type { Rect } from "carreau/src/types";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { EchoBox } from "../src/components/echo-box.tsx";
 import { EmbeddedTerm } from "../src/components/embedded-term.tsx";
@@ -970,10 +971,21 @@ describe("slots", () => {
 });
 
 describe("@pop", () => {
-    // A command from the prompt, answered by a cell at `from` in the pop.
-    function pop(ctx: ReturnType<typeof setup>, n: string, echo: Record<string, unknown> = {}) {
-        const entry = (prompt(ctx.container).closest("prompt-collection") as PromptCollection)
-            .prompts[0];
+    /** The entry of a shown prompt (by label). */
+    function promptEntry(container: HTMLElement, label?: string) {
+        const el = prompt(container, label);
+        return (el.closest("prompt-collection") as PromptCollection).entryOf(el)!;
+    }
+
+    // A command from a prompt (by label, default the shell's), answered by a
+    // cell at `n` under it, in the pop.
+    function pop(
+        ctx: ReturnType<typeof setup>,
+        n: string,
+        echo: Record<string, unknown> = {},
+        whose?: string,
+    ) {
+        const entry = promptEntry(ctx.container, whose);
         ctx.iface.pushCommand({
             action: { builtin: "submit" },
             entry,
@@ -983,7 +995,7 @@ describe("@pop", () => {
         });
         ctx.flush();
         const id = (ctx.sent.at(-1) as { id: string }).id;
-        const from = [...SHELL, n];
+        const from = [...entry.address(), n];
         ctx.driver({
             type: "configure",
             kind: "terminal",
@@ -995,6 +1007,32 @@ describe("@pop", () => {
         });
         const box = () => ctx.container.querySelector<EchoBox>(`#echo-${id}`);
         return { from, box, entry: () => box()?.boundEntry };
+    }
+
+    /**
+     * Geometry the pop is placed by: a 900×600 area with its prompt along the
+     * bottom 40 pixels. (happy-dom reads no geometry at all; what isn't shown
+     * reads as no size, as a browser reports it.)
+     */
+    function fakeGeometry(ctx: ReturnType<typeof setup>): () => void {
+        const { layout } = ctx.iface;
+        const area: Rect = { x: 0, y: 0, w: 900, h: 600 };
+        const promptRow: Rect = { x: 0, y: 500, w: 900, h: 40 };
+        const unseen: Rect = { x: 0, y: 0, w: 0, h: 0 };
+        const real = layout.view.pxRect.bind(layout.view);
+        layout.view.pxRect = (id: string): Rect | null => {
+            const el = ctx.container.querySelector<HTMLElement>(`[data-id="${id}"]`);
+            if (!el) {
+                return real(id);
+            }
+            if (el.closest("[hidden]")) {
+                return unseen;
+            }
+            return el.classList.contains("carreau-prompt") ? promptRow : area;
+        };
+        return () => {
+            layout.view.pxRect = real;
+        };
     }
 
     async function started() {
@@ -1086,5 +1124,39 @@ describe("@pop", () => {
             code: 15,
             entry: e,
         });
+    });
+
+    test("from a linked prompt, over the prompt the stream shows", async () => {
+        const ctx = setup();
+        const { driver, container, iface } = ctx;
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        const sub = [...SHELL, "1"];
+        driver({ type: "configure", from: sub, label: "coquille" });
+        driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label: "sub" });
+        await settle();
+        // The linked prompts share one stream: whoever types, the same prompt
+        // shows (the other's column is a hidden tab body, which reads as no
+        // size at all: the pop has to go by the one on screen).
+        [...container.querySelectorAll<HTMLElement>(".carreau-tab")]
+            .find((t) => shown(t) && t.querySelector(".carreau-tab-short")?.textContent === "sub")
+            ?.click();
+        await settle();
+
+        const restore = fakeGeometry(ctx);
+        const fromCq = pop(ctx, "2");
+        await settle();
+        expect(shown(fromCq.box())).toBe(true);
+        const overThePrompt = iface.layout.ws.floating[0].rect;
+        const fromSub = pop(ctx, "2", {}, "sub");
+        restore();
+        await settle();
+
+        expect(shown(fromSub.box())).toBe(true);
+        expect(fromSub.entry()).toBe(ctx.buche.get([...sub, "cq", "2"]));
+        // The bottom just above the prompt (4 pixels), the top inside the pane:
+        // the window grows up from there (see FloatingWindow's `fit`).
+        expect(overThePrompt).toEqual({ x: 8, y: 8, w: 884, h: 488 });
+        expect(iface.layout.ws.floating).toHaveLength(1);
+        expect(iface.layout.ws.floating[0].rect).toEqual(overThePrompt);
     });
 });
