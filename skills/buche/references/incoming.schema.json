@@ -42,12 +42,30 @@
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
-          "type": "string",
-          "description": "The cell/tab label."
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StyledText"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "The cell/tab label: styled text (its ranges' styles can set the font, e.g. \"mono\" or \"sans\"), or a plain string."
         },
         "color": {
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Icon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The cell/tab icon, shown before the label. Explicit null removes it."
         },
         "id": {
           "type": "string",
@@ -246,6 +264,95 @@
         "ranges"
       ],
       "additionalProperties": false
+    },
+    "Icon": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ImageIcon"
+        },
+        {
+          "$ref": "#/definitions/GlyphIcon"
+        }
+      ],
+      "description": "A cell/tab icon: an image, or a character drawn in a font, on an optional coloured circle or square."
+    },
+    "ImageIcon": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "image"
+        },
+        "mimetype": {
+          "type": "string",
+          "description": "The image's MIME type, e.g. \"image/png\" or \"image/svg+xml\"."
+        },
+        "data": {
+          "type": "string",
+          "description": "The image: base64 when `encoding` is \"base64\", else the text itself (SVG)."
+        },
+        "encoding": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "base64",
+            null
+          ],
+          "description": "How `data` is encoded: \"base64\", or null/absent for text."
+        },
+        "mask": {
+          "type": "boolean",
+          "description": "If true, only the image's shape counts: it is painted in the current text colour (like a glyph), e.g. for a monochrome SVG."
+        }
+      },
+      "required": [
+        "type",
+        "mimetype",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "An icon from image data."
+    },
+    "GlyphIcon": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "glyph"
+        },
+        "text": {
+          "type": "string",
+          "description": "The character (or a few) to draw."
+        },
+        "font": {
+          "type": "string",
+          "description": "Font family: a CSS font-family list, or a keyword (mono, sans, serif, cursive)."
+        },
+        "color": {
+          "$ref": "#/definitions/Accent",
+          "description": "Style of the character (an accent: colour, bold, italic...)."
+        },
+        "background": {
+          "$ref": "#/definitions/Accent",
+          "description": "Background colour of the shape behind the character (none if absent)."
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "circle",
+            "square"
+          ],
+          "description": "Shape of the background. Default: \"circle\"."
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "An icon drawn as a character."
     },
     "Address": {
       "type": "array",
@@ -607,12 +714,30 @@
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
-          "type": "string",
-          "description": "The cell/tab label."
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StyledText"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "The cell/tab label: styled text (its ranges' styles can set the font, e.g. \"mono\" or \"sans\"), or a plain string."
         },
         "color": {
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Icon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The cell/tab icon, shown before the label. Explicit null removes it."
         },
         "id": {
           "type": "string",
@@ -765,12 +890,30 @@
           "description": "What was submitted: the command text, and the context it was submitted in (e.g. the prompt it was typed at: host, path, branch). The context, when present, is shown above the echo box in the accent color. A configuration may give either subfield alone; the other keeps its current value. Echos are read-only, always: the content's `editability` (see InteractiveStyledText) defaults to \"readonly\" here and any value has no effect (only \"readonly\" is supported for echos for now)."
         },
         "label": {
-          "type": "string",
-          "description": "The cell/tab label."
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StyledText"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "The cell/tab label: styled text (its ranges' styles can set the font, e.g. \"mono\" or \"sans\"), or a plain string."
         },
         "color": {
           "$ref": "#/definitions/Accent",
           "description": "Accent color for the component."
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Icon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The cell/tab icon, shown before the label. Explicit null removes it."
         },
         "id": {
           "type": "string",

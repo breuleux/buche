@@ -126,6 +126,7 @@ export class Theme {
         monospace: "monospace",
         sans: "sans-serif",
         serif: "serif",
+        cursive: "cursive",
     };
 
     constructor(options?: unknown) {
@@ -239,7 +240,7 @@ export class Theme {
      *   - decoration (combinable): `underline`/`u`, `strike`/`strikethrough`/`s`,
      *     `overline`/`o`
      *   - opacity: `dim`/`faint`
-     *   - family: `mono`/`monospace`, `sans`/`sans-serif`, `serif`
+     *   - family: `mono`/`monospace`, `sans`/`sans-serif`, `serif`, `cursive`
      *
      * Any remaining tokens are treated as a color description; `color` is only set
      * when at least one such token is present (so `"bold"` alone leaves color to be

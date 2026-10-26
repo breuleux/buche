@@ -63,6 +63,55 @@ export interface StyledText {
     ranges: HighlightRange[];
 }
 
+/**
+ * A cell/tab icon: an image, or a character drawn in a font, on an optional
+ * coloured circle or square.
+ */
+export type Icon = ImageIcon | GlyphIcon;
+
+/** An icon from image data. */
+export interface ImageIcon {
+    type: "image";
+
+    /** The image's MIME type, e.g. "image/png" or "image/svg+xml". */
+    mimetype: string;
+
+    /** The image: base64 when `encoding` is "base64", else the text itself (SVG). */
+    data: string;
+
+    /** How `data` is encoded: "base64", or null/absent for text. */
+    encoding?: "base64" | null;
+
+    /**
+     * If true, only the image's shape counts: it is painted in the current
+     * text colour (like a glyph), e.g. for a monochrome SVG.
+     */
+    mask?: boolean;
+}
+
+/** An icon drawn as a character. */
+export interface GlyphIcon {
+    type: "glyph";
+
+    /** The character (or a few) to draw. */
+    text: string;
+
+    /**
+     * Font family: a CSS font-family list, or a keyword (mono, sans, serif,
+     * cursive).
+     */
+    font?: string;
+
+    /** Style of the character (an accent: colour, bold, italic...). */
+    color?: Accent;
+
+    /** Background colour of the shape behind the character (none if absent). */
+    background?: Accent;
+
+    /** Shape of the background. Default: "circle". */
+    shape?: "circle" | "square";
+}
+
 export interface InteractiveStyledText extends StyledText {
     /**
      * Editability status of the text. Defaults to "editable" in a prompt,

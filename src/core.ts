@@ -161,6 +161,16 @@ export class Buche {
             return null;
         }
         ph.placeholder = false;
+        // A view (`$stdout`, `$gui`...) claiming it brings its own look: the
+        // one it was configured with, else its parent's.
+        if (field.startsWith("$")) {
+            const look = (existing ?? parent!).echo;
+            const before = JSON.stringify([ph.echo.label, ph.echo.color, ph.echo.icon]);
+            ph.echo.configure({ label: look.label, color: look.color, icon: look.icon });
+            if (JSON.stringify([ph.echo.label, ph.echo.color, ph.echo.icon]) !== before) {
+                this.sendInterface({ type: "update_entry", entry: ph });
+            }
+        }
         ph.rename(field);
         return ph;
     }
@@ -173,11 +183,14 @@ export class Buche {
      */
     ensurePlaceholder(entry: Entry, zone: ZoneDescriptor | null | undefined): void {
         // (Nor for what shows itself already, nor for a placeholder's address:
-        // a retune of one, maybe of one that doesn't exist.)
+        // a retune of one, maybe of one that doesn't exist. Nor for a view,
+        // `$stdout` say, configured ahead of its output: it claims its
+        // parent's placeholder, or gets a cell, when its output comes.)
         if (
             entry.primary ||
             entry.visual ||
             entry.field === PLACEHOLDER ||
+            (entry.field?.startsWith("$") && entry.parent !== this.hierarchy) ||
             entry === this.hierarchy
         ) {
             return;
@@ -232,12 +245,33 @@ export class Buche {
             this.setLiveStatus(post.representative() ?? post, message.status);
         }
         // What a configured entry says about itself, its views show too.
-        for (const child of Object.values(post.children)) {
-            if (child.field?.startsWith("$") || child === post.primary) {
-                child.echo.configure({ ...message, id: undefined, represents: undefined });
-            }
+        for (const child of this.views(post)) {
+            child.echo.configure({ ...message, id: undefined, represents: undefined });
         }
         return post;
+    }
+
+    /** An entry's views: its `$` children, and what shows it (its primary). */
+    private views(entry: Entry): Entry[] {
+        return Object.values(entry.children).filter(
+            (child) => child.field?.startsWith("$") || child === entry.primary,
+        );
+    }
+
+    /**
+     * After a reconfiguration that changes how `entry` looks (label, colour,
+     * icon, submission): bring what already shows it, or its views, up to
+     * date (nothing is installed).
+     */
+    relook(entry: Entry, message: EchoConfiguration): void {
+        if (!LOOK.some((k) => message[k] !== undefined)) {
+            return;
+        }
+        for (const e of [entry, ...this.views(entry)]) {
+            if (e.visual) {
+                this.sendInterface({ type: "update_entry", entry: e });
+            }
+        }
     }
 
     /**
@@ -261,6 +295,9 @@ export class Buche {
         this.sendInterface({ type: "update_entry", entry });
     }
 }
+
+/** The configuration fields that change how an entry looks. */
+const LOOK = ["label", "color", "icon", "submission"] as const;
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {

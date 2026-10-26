@@ -15,7 +15,11 @@ export interface ConfigureMessage extends BaseMessage, CreationInfo, EchoConfigu
 }
 
 export function handle$configure(buche: Buche, obj: ConfigureMessage): void {
+    const fresh = buche.hierarchy.getAt(obj.from, false) === null;
     const entry = buche.ensure(obj);
+    if (!fresh) {
+        buche.relook(entry, obj);
+    }
     // Declaring a process marks it running; reconfiguring one that has
     // already started (or ended) leaves its status alone.
     if (entry.echo.status.status === "absent") {

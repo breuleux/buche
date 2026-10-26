@@ -30,10 +30,11 @@ import type { LayoutNode, PaneNode, Tab, WorkspaceData } from "carreau/src/types
 import { View } from "carreau/src/view";
 import { Workspace } from "carreau/src/workspace";
 import { defaultTheme } from "./color.ts";
-import { EchoBox } from "./components/echo-box.tsx";
+import "./components/echo-box.tsx"; // (registers <echo-box>)
+import type { EchoBox } from "./components/echo-box.tsx";
 import type { PromptCollection } from "./components/prompt-collection.tsx";
 import { SlotChooser } from "./components/slot-chooser.ts";
-import { buildStyledText } from "./components/utils.tsx";
+import { buildIcon, buildStyledText } from "./components/utils.tsx";
 import type { StatusString } from "./echo.ts";
 import { type Entry, statusOf } from "./entry.ts";
 import type { Address, StyledText, Target } from "./types.ts";
@@ -159,7 +160,9 @@ function chooserTab(): Tab {
 }
 
 /** What a tab shows of an entry: its label, command and status. */
-function tabMeta(entry: Entry): Pick<Tab, "title" | "short" | "long" | "accent" | "status"> {
+function tabMeta(
+    entry: Entry,
+): Pick<Tab, "title" | "icon" | "short" | "long" | "accent" | "status"> {
     const echo = entry.echo;
     const { content, context } = echo.submission ?? {};
     const line = (cls: string, text: StyledText | undefined) =>
@@ -168,8 +171,9 @@ function tabMeta(entry: Entry): Pick<Tab, "title" | "short" | "long" | "accent" 
             : "";
     const long = line("buche-long-context", context) + line("buche-long-command", content);
     return {
-        title: echo.label,
-        short: escapeHtml(echo.label),
+        title: echo.label.text,
+        icon: echo.icon ? buildIcon(echo.icon).outerHTML : undefined,
+        short: buildStyledText(echo.label, defaultTheme).outerHTML,
         long: long || undefined,
         accent: echo.color ? resolveColor(echo.color) : undefined,
         status: tabStatus(entry),
@@ -972,10 +976,13 @@ export class Layout {
                     this.host.signal(entry, 9);
                 }
             },
-            commitFocus: (_tab, content) => {
+            commitFocus: (tab, content) => {
+                // (`content` is carreau's wrapper around what renderTab gave,
+                // the box: the box is the one to ask.)
+                const box = this.boxes.get(tab.id);
                 const chooser = content?.querySelector("slot-chooser");
-                if (content instanceof EchoBox) {
-                    this.host.focus(content);
+                if (box?.isConnected) {
+                    this.host.focus(box);
                 } else if (chooser instanceof HTMLElement) {
                     chooser.focus({ preventScroll: true });
                 }
