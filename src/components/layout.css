@@ -34,6 +34,13 @@
 	white-space: pre-wrap;
 }
 
+/* A stream cell is as tall as its content, without carreau's floor for
+ * natural-sized cells: a command that printed nothing (`cd`) is its header,
+ * then just room for the squashed cursor of its empty terminal. */
+.carreau-scrollcell.carreau-natural-column {
+	min-height: 0;
+}
+
 /* A cell in a tab of its own fills its pane, edge to edge (cells in a stream
  * keep their spacing). */
 .carreau-pane:not(.carreau-scrollcell) > .carreau-body:has(> .carreau-content > echo-box) {

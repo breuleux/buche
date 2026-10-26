@@ -11,7 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, systemPreferences } from "electron";
 import { formatMessage } from "../scripts/format.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
@@ -167,6 +167,8 @@ async function start(): Promise<void> {
         app.quit();
     }
 
+    guardQuit(win);
+
     win.on("closed", shutdown);
     app.on("before-quit", shutdown);
     app.on("window-all-closed", shutdown);
@@ -185,6 +187,104 @@ async function start(): Promise<void> {
         }, 500);
         watch.unref();
     }
+}
+
+/** How long Cmd+Q must be held to quit, in ms. */
+const QUIT_HOLD = 1000;
+
+/**
+ * The OS key repeat timings, in ms: the delay before the first repeat and the
+ * interval between repeats (macOS keeps them in units of 15 ms; elsewhere, or
+ * when unset, typical values).
+ */
+function keyRepeat(): { delay: number; interval: number } {
+    if (process.platform === "darwin") {
+        const delay = systemPreferences.getUserDefault("InitialKeyRepeat", "integer");
+        const interval = systemPreferences.getUserDefault("KeyRepeat", "integer");
+        return { delay: (delay || 25) * 15, interval: (interval || 6) * 15 };
+    }
+    return { delay: 500, interval: 35 };
+}
+
+/**
+ * Quitting takes holding Cmd+Q (Ctrl+Q off macOS) for QUIT_HOLD ms, so that a
+ * stray press doesn't end the session. The press is taken from the menu (and
+ * the page); the renderer shows a hint while it is held (`window:quitHint`,
+ * see src/components/quit-hint.ts). Quitting from the menu with the mouse is
+ * unaffected.
+ *
+ * The hold is tracked through key repeats, since macOS sends no keyup for a
+ * key released while Cmd is still down: it ends on a keyup of Q or of the
+ * modifier, on the window losing focus, or when the next repeat is overdue.
+ */
+function guardQuit(win: BrowserWindow): void {
+    const mac = process.platform === "darwin";
+    const margin = 150;
+    let start = 0;
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+    let done: ReturnType<typeof setTimeout> | null = null;
+
+    const hint = (state: "start" | "cancel") => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+            win.webContents.send("window:quitHint", { state, duration: QUIT_HOLD });
+        }
+    };
+    const cancel = () => {
+        if (!start) {
+            return;
+        }
+        start = 0;
+        if (watchdog) {
+            clearTimeout(watchdog);
+        }
+        if (done) {
+            clearTimeout(done);
+        }
+        watchdog = done = null;
+        hint("cancel");
+    };
+    // The key counts as released when its next (repeat) keydown is overdue.
+    const expectNext = (wait: number) => {
+        if (watchdog) {
+            clearTimeout(watchdog);
+        }
+        watchdog = setTimeout(cancel, wait + margin);
+    };
+
+    win.webContents.on("before-input-event", (event, input) => {
+        const isQ = input.code === "KeyQ";
+        const isMod = mac ? input.key === "Meta" : input.key === "Control";
+        if (input.type === "keyUp") {
+            if (isQ || isMod) {
+                cancel();
+            }
+            return;
+        }
+        if (input.type !== "keyDown" || !isQ) {
+            return;
+        }
+        const mod = mac ? input.meta && !input.control : input.control && !input.meta;
+        if (!mod || input.alt || input.shift) {
+            return;
+        }
+        // (Also keeps the menu's Quit accelerator from firing.)
+        event.preventDefault();
+        const { delay, interval } = keyRepeat();
+        if (!start || !input.isAutoRepeat) {
+            cancel();
+            start = Date.now();
+            hint("start");
+            expectNext(delay);
+            done = setTimeout(() => {
+                if (start) {
+                    app.quit();
+                }
+            }, QUIT_HOLD);
+        } else {
+            expectNext(interval);
+        }
+    });
+    win.on("blur", cancel);
 }
 
 void start();

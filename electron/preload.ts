@@ -27,6 +27,12 @@ ipcRenderer.on("window:closeTab", () => {
     window.postMessage({ __buche: "window:closeTab" }, "*");
 });
 
+// Cmd+Q being held (electron/main.ts, `guardQuit`): shown by the page as a
+// hint (src/components/quit-hint.ts).
+ipcRenderer.on("window:quitHint", (_event, hint: { state: string; duration: number }) => {
+    window.postMessage({ __buche: "window:quitHint", ...hint }, "*");
+});
+
 contextBridge.exposeInMainWorld("buche", {
     driver: {
         send: (message: unknown) => ipcRenderer.send("driver:message", message),

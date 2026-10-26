@@ -8,6 +8,7 @@
  */
 import "../src/components/echo-box.tsx";
 
+import { listenQuitHint } from "../src/components/quit-hint.ts";
 import { Buche, type InM } from "../src/core.ts";
 import { BucheInterface } from "../src/interface.tsx";
 import { pageSetup } from "../src/page.ts";
@@ -21,6 +22,7 @@ if (!bridge?.driver) {
 }
 
 const iface = new BucheInterface(pageSetup());
+listenQuitHint();
 
 const buche = new Buche({
     sendDriver(message) {
