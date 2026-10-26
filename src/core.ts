@@ -245,7 +245,7 @@ export class Buche {
 
     /**
      * After a reconfiguration that changes how `entry` looks (label, colour,
-     * icon, submission): bring what already shows it, or its views, up to
+     * icon, submission, grow): bring what already shows it, or its views, up to
      * date (nothing is installed).
      */
     relook(entry: Entry, message: CellConfiguration): void {
@@ -306,7 +306,7 @@ export class Buche {
 }
 
 /** The configuration fields that change how an entry looks. */
-const LOOK = ["label", "color", "icon", "submission"] as const;
+const LOOK = ["label", "color", "icon", "submission", "grow"] as const;
 
 const baseHandlers = {
     buche_error(buche: Buche, obj: BucheErrorMessage): void {

@@ -23,6 +23,12 @@ echo-box[fills] {
 	height: 100%;
 }
 
+/* A `grow` cell (see CellConfiguration.grow): no ceiling, it takes the
+ * height its content needs in the stream, which scrolls instead of it. */
+echo-box[grow] {
+	max-height: none;
+}
+
 /* The box itself takes the DOM focus while navigated onto, without the
  * browser's own outline. */
 echo-box:focus {

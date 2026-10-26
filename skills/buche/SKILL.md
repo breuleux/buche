@@ -139,6 +139,10 @@ under `ConfigureMessage`):
   appears.
 - `background`: create the cell without stealing the focus.
 - `sticky`: keep the focus in the cell when your process ends.
+- `grow`: lift the height cap a cell has in a scroll stream (normally ~500px,
+  past which the cell scrolls on its own): the cell takes all the height its
+  content needs, and the user scrolls the stream instead. Meant for long,
+  growing content such as a chat transcript.
 
 **The GUI does not exist yet** at this point: it comes into being with the
 first GUI command, starting from an empty document. Everything in it arrives
@@ -320,7 +324,8 @@ tag, no import:
 Sizing information:
 
 - **`window.bucheInfo`** — `{width, height, maxHeight, dynamicHeight}` of the
-  cell in CSS pixels, accurate before your first script runs.
+  cell in CSS pixels, accurate before your first script runs (`maxHeight` is
+  0 when the cell has no cap, as with `grow`).
 - **`window` `"buche-info"`** event — fired whenever it changes
   (`e.detail`), e.g. after the user drags the cell's size gutter.
 - **`window` `"resize"`** events fire whenever the cell's size changes; react

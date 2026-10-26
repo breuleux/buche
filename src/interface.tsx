@@ -256,6 +256,10 @@ export class BucheInterface implements Interface {
         if (entry.cell.id !== undefined) {
             eb.id = echoElementId(entry.cell.id);
         }
+        // `grow`: no height cap (see echo-box.css), kept up to date.
+        const grow = () => eb.toggleAttribute("grow", entry.cell.grow);
+        entry.listeners.push(grow);
+        grow();
         return eb;
     }
 

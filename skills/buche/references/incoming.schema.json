@@ -155,6 +155,10 @@
           "type": "boolean",
           "description": "If true, the element showing this entry (the cell's box, and with it its tab) is removed when the entry is marked done or error. Prompts already go away when their process ends."
         },
+        "grow": {
+          "type": "boolean",
+          "description": "If true, the cell takes whatever height its content needs in a scroll stream, instead of being capped (its own scrollbar past the cap): e.g. a chat transcript, read by scrolling the stream itself."
+        },
         "status": {
           "type": "string",
           "enum": [

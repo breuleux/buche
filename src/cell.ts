@@ -169,6 +169,13 @@ export interface CellConfiguration {
     ephemeral?: boolean;
 
     /**
+     * If true, the cell takes whatever height its content needs in a scroll
+     * stream, instead of being capped (its own scrollbar past the cap): e.g.
+     * a chat transcript, read by scrolling the stream itself.
+     */
+    grow?: boolean;
+
+    /**
      * Switch the entry (and what is under it) between running and standby. A
      * standby entry is a temporary interface the user may be done with: it is
      * killed by a clear, like spent cells are removed, or once it has stayed
@@ -229,6 +236,7 @@ export function cellConfiguration(cell: Cell): CellConfiguration {
         sticky: cell.sticky,
         background: cell.background,
         ephemeral: cell.ephemeral,
+        grow: cell.grow,
     };
 }
 
@@ -268,6 +276,9 @@ export abstract class Cell extends WithId() {
     /** If true, the showing element is removed once the entry is spent. */
     ephemeral = false;
 
+    /** If true, no height cap in a scroll stream. */
+    grow = false;
+
     /** Status of the component. */
     status: Status = { status: "absent" };
 
@@ -292,6 +303,7 @@ export abstract class Cell extends WithId() {
         this.sticky = config.sticky ?? this.sticky;
         this.background = config.background ?? this.background;
         this.ephemeral = config.ephemeral ?? this.ephemeral;
+        this.grow = config.grow ?? this.grow;
     }
 
     /** Take over the look and status of `prev`, the cell this one replaces
@@ -305,6 +317,7 @@ export abstract class Cell extends WithId() {
         this.sticky = prev.sticky;
         this.background = prev.background;
         this.ephemeral = prev.ephemeral;
+        this.grow = prev.grow;
         this.status = prev.status;
         return this;
     }
