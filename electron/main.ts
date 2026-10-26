@@ -2,7 +2,7 @@
 // scripts/view.ts. It owns the driver process (typically the coquille shell)
 // and relays its messages to the renderer, where the Buche core and the
 // interface run (see electron/renderer.ts). It also registers the native
-// `proc://` scheme for GUI cells (see electron/proc-protocol.ts).
+// `proc://` and `lib://` schemes for GUI cells (see electron/proc-protocol.ts).
 //
 // Not launched directly: `bun run electron` (scripts/electron.ts) builds the
 // bundles, writes dist/electron/{index.html,renderer.js,preload.cjs,runtime.html}
@@ -15,7 +15,9 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, systemPreferences } fro
 import { formatMessage } from "../scripts/format.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
+import { LibraryRegistry } from "../src/library.ts";
 import {
+    initLibProtocol,
     initProcProtocol,
     registerProcScheme,
     setRuntimeHtml,
@@ -135,6 +137,9 @@ async function start(): Promise<void> {
 
     initProcProtocol();
     setWebContents(win.webContents);
+    // The libraries the drivers declare (src/library.ts), served at lib://.
+    const libraries = new LibraryRegistry();
+    initLibProtocol(libraries);
     // Renderer problems would otherwise only be visible in devtools. Electron's
     // dev-mode CSP lecture (which vanishes in a packaged app) is skipped.
     win.webContents.on("console-message", (event) => {
@@ -159,6 +164,7 @@ async function start(): Promise<void> {
     let closed = false;
     const drivers = new Drivers({
         cwd: config.cwd,
+        libraries,
         receive(message) {
             logMessage("driverIn", message);
             if (!win.isDestroyed() && !win.webContents.isDestroyed()) {

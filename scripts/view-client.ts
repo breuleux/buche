@@ -13,9 +13,13 @@
  */
 import "../src/components/echo-box.tsx";
 
+import { BucheGui } from "../src/components/buche-gui.tsx";
 import { Buche, type InM } from "../src/core.ts";
 import { BucheInterface } from "../src/interface.tsx";
 import { pageSetup } from "../src/page.ts";
+
+// GUI frames load lib:// libraries from the server (see scripts/view.ts).
+BucheGui.libBase = `${location.origin}/lib/`;
 
 const iface = new BucheInterface(pageSetup());
 // For inspection from the devtools (and browser scripts).

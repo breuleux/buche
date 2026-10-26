@@ -14,6 +14,12 @@
           "$ref": "#/definitions/ErrorMessage"
         },
         {
+          "$ref": "#/definitions/LibraryMessage"
+        },
+        {
+          "$ref": "#/definitions/LibraryContentMessage"
+        },
+        {
           "$ref": "#/definitions/SendMessage"
         },
         {
@@ -584,6 +590,120 @@
       ],
       "additionalProperties": false,
       "description": "An error reported by the process"
+    },
+    "LibraryMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "library",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "id": {
+          "type": "string",
+          "description": "The library's id, the host part of its URLs: 16 to 63 characters in `[a-z0-9-]`. Whoever knows it can load the library, so it must be unguessable. An id is bound to its files: declaring it again with different files is refused."
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/LibraryFile"
+          },
+          "description": "The files, by path in the library (e.g. `\"js/main.js\"`)."
+        }
+      },
+      "required": [
+        "files",
+        "from",
+        "id",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "Declare a library: files served to GUI cells at `lib://<id>/<path>`, which can reference each other by relative URLs. The driver sending it is the library's authority: it vouches for the files (a shell checks that the process declaring them could read them), and supplies their content on request (`library_fetch`, answered by `library_content`) — except for the files whose content comes with the declaration. See src/library.ts.\n\nHandled by the host running the drivers (src/drivers.ts), not the terminal."
+    },
+    "LibraryFile": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "SHA-256 of the file's content, lowercase hex. Required without `content`; checked against it otherwise."
+        },
+        "mimetype": {
+          "type": "string",
+          "description": "MIME type the file is served with."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content, inline, encoded as `encoding` says."
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "utf-8",
+            "base64"
+          ],
+          "description": "Encoding of `content`; defaults to `\"utf-8\"`."
+        }
+      },
+      "required": [
+        "mimetype"
+      ],
+      "additionalProperties": false,
+      "description": "A file of a declared library (see  {@link  LibraryMessage } ): its hash, the authority (the declaring driver) supplying the content on request; or its content itself, which needs no authority."
+    },
+    "LibraryContentMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "library_content",
+          "description": "Type of the message."
+        },
+        "from": {
+          "$ref": "#/definitions/Address",
+          "description": "Address of the issuing process."
+        },
+        "to": {
+          "$ref": "#/definitions/To",
+          "description": "Target of the message."
+        },
+        "request_id": {
+          "type": "string",
+          "description": "The `request_id` of the `library_fetch` this answers."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content, encoded as `encoding` says (absent on error)."
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "base64",
+            "utf-8"
+          ],
+          "description": "Encoding of `content`; defaults to `\"base64\"`."
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the content can't be supplied."
+        }
+      },
+      "required": [
+        "from",
+        "request_id",
+        "to",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "The answer to a `library_fetch` request: the content of a library file, or why it can't be had (the file is gone, or changed since it was declared). Handled by the host running the drivers (src/drivers.ts)."
     },
     "SendMessage": {
       "type": "object",

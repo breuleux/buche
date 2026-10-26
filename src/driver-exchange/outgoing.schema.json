@@ -26,6 +26,9 @@
           "$ref": "#/definitions/ResizeRequest"
         },
         {
+          "$ref": "#/definitions/LibraryFetchRequest"
+        },
+        {
           "$ref": "#/definitions/SyncRequest"
         }
       ],
@@ -322,6 +325,32 @@
       },
       "required": ["from", "pixel", "to", "type"],
       "additionalProperties": false
+    },
+    "LibraryFetchRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "library_fetch"
+        },
+        "from": {
+          "$ref": "#/definitions/Address"
+        },
+        "to": {
+          "$ref": "#/definitions/Address"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Repeated by the `library_content` answer."
+        },
+        "hash": {
+          "type": "string",
+          "description": "SHA-256 of the content wanted, lowercase hex."
+        }
+      },
+      "required": ["from", "hash", "request_id", "to", "type"],
+      "additionalProperties": false,
+      "description": "Ask a library's authority (the driver that declared it, see `library`) for the content of one of its files, by hash. Sent by the host, addressed to the driver itself (`[\"$proc\"]`); answered by a `library_content` carrying the same `request_id`."
     },
     "SyncRequest": {
       "$ref": "#/definitions/SyncMessage"

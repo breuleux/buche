@@ -51,6 +51,8 @@
 //   buche.request(data)    same, but returns a Promise resolved by a `response`
 //                          command carrying the same `response_id`
 //   buche.proc(url)        fetch a `proc://` resource (see below), as a Response
+//   buche.lib(url)         the URL a `lib://<id>/<path>` URL loads from (itself
+//                          in native mode; see "lib:// libraries" below)
 //   buche.blur()           hand the focus back to the page (it stays on the
 //                          cell)
 //   buche.leave()          "the user is done": the focus leaves the cell
@@ -73,6 +75,19 @@
 //     (`window.buche.proc.respond`) instead of postMessage.
 //     The runtime picks the native path when the document's own origin is a
 //     `proc:` one, or when a preload bridge is present.
+//
+// # `lib://` libraries
+//
+// Files a process declared through its shell (see src/library.ts), at
+// `lib://<id>/<path>`, served by the host rather than the process.
+//
+//   * In Electron the scheme is registered for real: everything just works,
+//     relative URLs between a library's files included.
+//   * Over the web they are served over HTTP, at `BucheGui.libBase`: the
+//     runtime rewrites `lib:` URLs in `src`/`href` attributes (synchronously,
+//     before `html` content is inserted, so scripts load from the right
+//     place), and in `fetch` / `XMLHttpRequest`. Elsewhere (a script setting
+//     `src` itself, CSS, imports in inline modules), use `buche.lib(url)`.
 //
 // Nothing is intercepted by default. `interceptChords` is read, and the chords
 // sent to the iframe, each time the focus enters it (on `commitFocus()`, or on
@@ -116,10 +131,16 @@ export interface ProcResponse {
 }
 
 // Put the runtime first in the document (after the doctype, if any, so the
-// document doesn't drop to quirks mode).
+// document doesn't drop to quirks mode), preceded by where `lib:` URLs go.
 function inject(html: string): string {
+    const base = BucheGui.libBase;
+    const runtime =
+        (base === null
+            ? ""
+            : `<script>window.__bucheLibBase=${JSON.stringify(base).replace(/</g, "\\u003c")}</script>`) +
+        RUNTIME;
     const doctype = /^\s*<!doctype[^>]*>/i.exec(html);
-    return doctype ? doctype[0] + RUNTIME + html.slice(doctype[0].length) : RUNTIME + html;
+    return doctype ? doctype[0] + runtime + html.slice(doctype[0].length) : runtime + html;
 }
 
 /** The preload bridge the Electron glue exposes (see `electron/preload.ts`). */
@@ -154,6 +175,14 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
      * go through {@link interceptChords}.
      */
     static defaultInterceptChords: () => readonly string[] = () => [];
+
+    /**
+     * Where `lib://<id>/<path>` URLs are fetched from in srcdoc (web) mode, as
+     * `<libBase><id>/<path>` (e.g. "http://localhost:1234/lib/"); null leaves
+     * them alone. Native (Electron) frames load `lib:` themselves. See
+     * src/library.ts.
+     */
+    static libBase: string | null = null;
 
     /**
      * Chords the iframe hands to the page instead of handling them (e.g.

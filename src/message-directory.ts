@@ -7,6 +7,8 @@ export const incomingDriverMessageTypes = new Set<string>([
     "close",
     "configure",
     "error",
+    "library",
+    "library_content",
     "send",
     "sync",
 ]);
@@ -15,6 +17,7 @@ export const incomingDriverMessageTypes = new Set<string>([
 export const outgoingDriverMessageTypes = new Set<string>([
     "command",
     "data",
+    "library_fetch",
     "parse",
     "resize",
     "signal",

@@ -24,6 +24,7 @@
 // src/interface.tsx) and answers through the preload (`proc:response`).
 
 import { ipcMain, protocol, type WebContents } from "electron";
+import type { LibraryRegistry } from "../src/library.ts";
 
 interface CachedResource {
     content: string;
@@ -59,19 +60,43 @@ export function setWebContents(wc: WebContents): void {
     contents = wc;
 }
 
-/** Must run before the app is ready. */
+/** Must run before the app is ready (registers `lib:` too, since the
+ *  privileged schemes are registered in one go). */
 export function registerProcScheme(): void {
+    const privileges = {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+    };
     protocol.registerSchemesAsPrivileged([
-        {
-            scheme: "proc",
-            privileges: {
-                standard: true,
-                secure: true,
-                supportFetchAPI: true,
-                corsEnabled: true,
-            },
-        },
+        { scheme: "proc", privileges },
+        { scheme: "lib", privileges },
     ]);
+}
+
+/**
+ * Serve `lib://<id>/<path>` from the library registry (see src/library.ts).
+ * Each library is an origin of its own, loaded from the cells' `proc://`
+ * origins: hence the CORS header, which module scripts and `fetch` need.
+ */
+export function initLibProtocol(libraries: LibraryRegistry): void {
+    protocol.handle("lib", async (request) => {
+        const url = new URL(request.url);
+        if (request.method !== "GET" && request.method !== "HEAD") {
+            return new Response("method not allowed", { status: 405 });
+        }
+        const answer = await libraries.serve(url.hostname, url.pathname);
+        return new Response(request.method === "HEAD" ? null : (answer.body as BodyInit), {
+            status: answer.status,
+            headers: {
+                "content-type": answer.mimetype,
+                "access-control-allow-origin": "*",
+                // A library's files never change under its id.
+                ...(answer.status === 200 && { "cache-control": "max-age=31536000, immutable" }),
+            },
+        });
+    });
 }
 
 const bodyOf = (r: { content?: string; encoding?: string | null }): BodyInit =>

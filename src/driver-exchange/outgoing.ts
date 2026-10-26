@@ -98,6 +98,22 @@ export interface ResizeRequest extends BaseRequest {
     };
 }
 
+/**
+ * Ask a library's authority (the driver that declared it, see `library`) for
+ * the content of one of its files, by hash. Sent by the host, addressed to
+ * the driver itself (`["$proc"]`); answered by a `library_content` carrying
+ * the same `request_id`.
+ */
+export interface LibraryFetchRequest extends BaseRequest {
+    type: "library_fetch";
+
+    /** Repeated by the `library_content` answer. */
+    request_id: string;
+
+    /** SHA-256 of the content wanted, lowercase hex. */
+    hash: string;
+}
+
 // UNUSED: see `sync` (driver-exchange/_sync.ts).
 export type SyncRequest = SyncMessage;
 
@@ -110,4 +126,5 @@ export type OutgoingDriverMessage =
     | TextRequest
     | DataRequest
     | ResizeRequest
+    | LibraryFetchRequest
     | SyncRequest;

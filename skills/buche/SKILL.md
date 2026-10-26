@@ -317,6 +317,7 @@ tag, no import:
 | `buche(data)` / `buche.send(data)` | relay `data` to your process (§4) |
 | `buche.request(data)` | like `buche(data)`, but adds a fresh `response_id` and returns a Promise; your process resolves it with a `response` command (rejects if the answer carries `error`) |
 | `buche.proc(url, {method})` | fetch a `proc://` resource; returns a `Response` (§6) |
+| `buche.lib(url)` | the URL a `lib://` URL loads from (§6) |
 | `buche.blur()` | give the keyboard back to the terminal (focus stays on your cell) |
 | `buche.leave()` | "the user is done": the focus leaves your cell entirely, even when sticky |
 | `buche.autofocus()` | focus `[autofocus]` / `#prime-focus` / the last focused element |
@@ -367,6 +368,66 @@ for binary; §3).
 Better: **push resources ahead of the request** with a cache-seeding `resolve`
 (a `resolve` with `path` but no `request_id`), so `app.js` and images load
 with zero round trips.
+
+### `lib://` libraries: files served for you
+
+For static files (your app's JS, CSS, images), declare a **library** instead:
+you only send hashes, your shell (cq) supplies the content when it's needed,
+and buche keeps it in a store shared by every session. Nothing is sent twice,
+and the files keep loading after your process exits.
+
+Your process gets a salt of its own in `$BUCHE_LIB_SALT`. Prove you can read
+each file with `HMAC-SHA256(key = the salt as UTF-8, message = the content)`
+in hex, and send this on the control channel:
+
+```json
+{"type": "library", "from": ["$proc"], "id": "k3j9x0c2m8q4z7w1v5b6",
+ "files": {"js/main.js":  {"file": "/abs/path/to/main.js",  "mimetype": "text/javascript", "proof": "<hex>"},
+           "js/util.js":  {"file": "/abs/path/to/util.js",  "mimetype": "text/javascript", "proof": "<hex>"},
+           "style.css":   {"file": "/abs/path/to/style.css", "mimetype": "text/css",        "proof": "<hex>"}}}
+```
+
+- **`id`**: 16 to 63 characters in `[a-z0-9-]`, **unguessable**. Anyone who
+  knows the id can load the library. Use random bytes, or a hash of the proofs.
+  An id stays bound to its files: declaring it again with different files is
+  refused, so use a new id when the files change.
+- **`file`**: an absolute path to a regular file (at most 64 MiB).
+- The keys are the paths in the library: the files are served at
+  `lib://<id>/<path>`, and relative URLs between them work
+  (`import "./util.js"` in `js/main.js`). Note that `fetch()` resolves against
+  the *page*, not the module: use `new URL("../data.json", import.meta.url)`.
+
+**Or give the content inline**, for any file, in place of `file` and
+`proof`: `{"mimetype": "application/json", "content": "...", "encoding":
+"utf-8"}` (`"base64"` for binary). Inline files need no proof and no
+authority: a library made only of them can be declared without cq (e.g. by a
+program buche runs directly), straight to `["$term"]`. Choose an unguessable
+id all the same.
+
+cq reads the files, checks the proofs, and passes the library on. Anything
+wrong (a missing file, a bad proof) shows up as an error in the terminal, and
+nothing is declared. Messages you send after the declaration (your `html`)
+reach buche after it, so you can use `lib://` URLs right away:
+
+```json
+{"type": "send", "from": ["$proc"], "message": {"type": "html",
+ "content": "<link rel=stylesheet href='lib://k3j9x0c2m8q4z7w1v5b6/style.css'><script type=module src='lib://k3j9x0c2m8q4z7w1v5b6/js/main.js'></script>"}}
+```
+
+If a file changes after you declared it, loading it fails until you declare a
+library (with a new id) for the new content. A file already in buche's store
+keeps loading.
+
+The store (`~/.cache/buche/lib`, or `$BUCHE_LIB_STORE`) is capped at 512 MiB
+(`$BUCHE_LIB_STORE_LIMIT`, e.g. `2G`), dropping the files used longest ago
+first. The files of the libraries a buche window serves are never dropped
+while it runs.
+
+In the browser view (not Electron), `lib://` URLs are rewritten for you in
+`src`/`href` attributes of `html` content and in `fetch`/XHR. Anywhere else
+(a script setting `src` itself, `url()` in inline CSS, `import` in an inline
+module), go through **`buche.lib(url)`**, which gives the URL to load (the
+same URL in Electron).
 
 ---
 

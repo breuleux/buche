@@ -54,6 +54,7 @@ import { parseArgs } from "node:util";
 import type { ServerWebSocket } from "bun";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
+import { LibraryRegistry } from "../src/library.ts";
 import { layoutScript } from "../src/page.ts";
 import { formatMessage } from "./format.ts";
 
@@ -210,6 +211,11 @@ function logMessage(role: string, message: unknown): void {
     );
 }
 
+// The libraries the drivers declare (src/library.ts), shared by every session
+// and served over HTTP at /lib/<id>/<path>: the GUI runtime rewrites lib://
+// URLs to that (see BucheGui.libBase, set by scripts/view-client.ts).
+const libraries = new LibraryRegistry();
+
 /** Spawn the driver process for a connection and relay its output to the page. */
 function startSession(ws: ServerWebSocket<unknown>): void {
     // The session's drivers: the command, and the shells started later (see
@@ -217,6 +223,7 @@ function startSession(ws: ServerWebSocket<unknown>): void {
     const session: Session = {
         drivers: new Drivers({
             cwd,
+            libraries,
             receive(message) {
                 session.lastActivity = Date.now();
                 logMessage("driverIn", message);
@@ -296,6 +303,23 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 const contentType = (ext: string): string => CONTENT_TYPES[ext] ?? "application/octet-stream";
 
+/** Answer a request for /lib/<rest>, `rest` being `<id>/<path>`. */
+async function serveLibrary(rest: string, method: string): Promise<Response> {
+    const slash = rest.indexOf("/");
+    if (slash < 0 || (method !== "GET" && method !== "HEAD")) {
+        return new Response("not found", { status: 404 });
+    }
+    const answer = await libraries.serve(rest.slice(0, slash), rest.slice(slash));
+    return new Response(method === "HEAD" ? null : (answer.body as BodyInit), {
+        status: answer.status,
+        headers: {
+            "content-type": answer.mimetype,
+            "access-control-allow-origin": "*",
+            ...(answer.status === 200 && { "cache-control": "max-age=31536000, immutable" }),
+        },
+    });
+}
+
 const server = Bun.serve({
     port: values.port ? Number(values.port) : 0,
     fetch(req, server) {
@@ -309,6 +333,11 @@ const server = Bun.serve({
         }
         if (path === "/") {
             return new Response(page, { headers: { "content-type": contentType(".html") } });
+        }
+        // Library files (see `libraries` above). Loaded from the GUIs'
+        // opaque-origin srcdoc frames, hence the CORS header.
+        if (path.startsWith("/lib/")) {
+            return serveLibrary(path.slice("/lib/".length), req.method);
         }
         if (path === "/client.js") {
             return new Response(clientJs, { headers: { "content-type": contentType(".js") } });

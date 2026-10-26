@@ -3,6 +3,8 @@
 import { handle$close, type CloseMessage } from "./_close.ts";
 import { handle$configure, type ConfigureMessage } from "./_configure.ts";
 import { handle$error, type ErrorMessage } from "./_error.ts";
+import { handle$library, type LibraryMessage } from "./_library.ts";
+import { handle$library_content, type LibraryContentMessage } from "./_library_content.ts";
 import { handle$send, type SendMessage } from "./_send.ts";
 import { handle$sync, type SyncMessage } from "./_sync.ts";
 
@@ -11,9 +13,11 @@ export const handlers = {
     close: handle$close,
     configure: handle$configure,
     error: handle$error,
+    library: handle$library,
+    library_content: handle$library_content,
     send: handle$send,
     sync: handle$sync,
 } as const;
 
 /** Union of every message type. */
-export type IncomingDriverMessage = CloseMessage | ConfigureMessage | ErrorMessage | SendMessage | SyncMessage;
+export type IncomingDriverMessage = CloseMessage | ConfigureMessage | ErrorMessage | LibraryMessage | LibraryContentMessage | SendMessage | SyncMessage;

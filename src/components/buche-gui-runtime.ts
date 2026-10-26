@@ -8,6 +8,12 @@ export function bucheGuiRuntime(): void {
     // True when this document itself is served from a registered custom
     // scheme (Electron): native fetch/attributes handle proc:// by themselves.
     const native = location.protocol !== "about:" && location.protocol !== "file:";
+    // Where `lib://<id>/<path>` is served in web mode (set before the runtime
+    // by <buche-gui>, see BucheGui.libBase): the URL a lib: URL loads from,
+    // or null when it is not one (or loads natively).
+    const libBase: string | null = native ? null : ((window as any).__bucheLibBase ?? null);
+    const libUrl = (url: string): string | null =>
+        libBase !== null && /^lib:\/\//i.test(url) ? libBase + url.slice("lib://".length) : null;
 
     // Indirect eval: `exec` and `register` evaluate caller-supplied code in
     // the iframe's global scope, by design.
@@ -106,6 +112,10 @@ export function bucheGuiRuntime(): void {
                     : input instanceof Request
                       ? input.url
                       : String(input);
+            const lib = libUrl(url);
+            if (lib !== null) {
+                return realFetch(lib, init);
+            }
             const proc = asProcUrl(url);
             if (proc === null) {
                 return realFetch(input, init);
@@ -116,6 +126,11 @@ export function bucheGuiRuntime(): void {
         (window as any).XMLHttpRequest = class extends RealXHR {
             open(...args: any[]): void {
                 const open = super.open as (...a: any[]) => void;
+                const lib = libUrl(String(args[1]));
+                if (lib !== null) {
+                    open(args[0], lib, ...args.slice(2));
+                    return;
+                }
                 const proc = asProcUrl(String(args[1]));
                 if (proc === null) {
                     open(...args);
@@ -148,6 +163,11 @@ export function bucheGuiRuntime(): void {
     };
     const rewriteOne = (el: Element, attr: string): void => {
         const value = el.getAttribute(attr);
+        const lib = value ? libUrl(value) : null;
+        if (lib !== null) {
+            el.setAttribute(attr, lib);
+            return;
+        }
         const url = value ? asProcUrl(value) : null;
         const dataset = (el as HTMLElement).dataset;
         if (url === null || dataset.procRewritten === "1") {
@@ -173,6 +193,22 @@ export function bucheGuiRuntime(): void {
             }
             for (const el of Array.from(root.querySelectorAll(tag))) {
                 rewriteOne(el, attr);
+            }
+        }
+    };
+    // Rewrite lib: src/href attributes under `root` (web mode), synchronously:
+    // done on `html` content before it is inserted, so that scripts and
+    // stylesheets load from the right place the first time.
+    const rewriteLibUrls = (root: Element): void => {
+        if (libBase === null) {
+            return;
+        }
+        for (const [tag, attr] of Object.entries(SRC_ATTRS)) {
+            for (const el of Array.from(root.querySelectorAll(tag))) {
+                const lib = libUrl(el.getAttribute(attr) ?? "");
+                if (lib !== null) {
+                    el.setAttribute(attr, lib);
+                }
             }
         }
     };
@@ -250,6 +286,7 @@ export function bucheGuiRuntime(): void {
     const apply = (target: HTMLElement, mode: string, content: string): Element[] => {
         const tmp = document.createElement("div");
         tmp.innerHTML = content;
+        rewriteLibUrls(tmp);
         runScripts(tmp);
         const nodes = Array.from(tmp.childNodes) as Element[];
         if (mode === "set") {
@@ -536,6 +573,8 @@ export function bucheGuiRuntime(): void {
     buche.proc = (url: string, opts?: { method?: string }): Promise<Response> => {
         return procFetch(url, opts);
     };
+    // The URL a `lib://` URL loads from here (itself, natively).
+    buche.lib = (url: string): string => libUrl(url) ?? url;
     buche.blur = (): void => {
         toParent({ [TAG]: "blur" });
     };

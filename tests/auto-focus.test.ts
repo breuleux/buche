@@ -675,6 +675,20 @@ describe("placement", () => {
         expect(paneOf("logged")?.name).toBe("logs");
     });
 
+    test("a `grow` cell's box has no height cap, as its configuration says", () => {
+        const { driver, iface, buche } = setup();
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        const chat = [...SHELL, "1"];
+        driver({ type: "configure", kind: "frame", from: chat, grow: true });
+        const box = iface.layout.boxOf(buche.get(chat));
+        expect(box?.hasAttribute("grow")).toBe(true);
+        driver({ type: "configure", from: chat, grow: false });
+        expect(box?.hasAttribute("grow")).toBe(false);
+        const plain = [...SHELL, "2"];
+        driver({ type: "configure", kind: "frame", from: plain });
+        expect(iface.layout.boxOf(buche.get(plain))?.hasAttribute("grow")).toBe(false);
+    });
+
     test("split zones always make a new pane; float zones a new window", async () => {
         const ctx = setup();
         const { driver, iface } = ctx;

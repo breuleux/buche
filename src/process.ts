@@ -124,6 +124,17 @@ export class ProcessCommunicator {
     }
 
     private start(): void {
+        const env: NodeJS.ProcessEnv = {
+            ...process.env,
+            BUCHE_CONTROL_FD: "5",
+            BUCHE_DATA_FD: "4",
+            ...this.options.env,
+        };
+        // Set by a shell (cq) for its processes, to prove they can read the
+        // files of the libraries they declare: one inherited from whatever
+        // started buche must not make a driver believe it runs under a shell
+        // (see src/library.ts).
+        delete env.BUCHE_LIB_SALT;
         const spawnOptions: SpawnOptions = {
             stdio: [
                 "pipe", // fd0 stdin  — opened, untouched
@@ -134,12 +145,7 @@ export class ProcessCommunicator {
                 "pipe", // fd5 control
             ],
             cwd: this.options.cwd,
-            env: {
-                ...process.env,
-                BUCHE_CONTROL_FD: "5",
-                BUCHE_DATA_FD: "4",
-                ...this.options.env,
-            },
+            env,
         };
 
         const child = Array.isArray(this.command)
