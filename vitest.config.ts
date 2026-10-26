@@ -1,14 +1,25 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { defaultClientConditions } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
 
 const fromRoot = (rel: string) => fileURLToPath(new URL(rel, import.meta.url));
 
+const carreauPackage = JSON.parse(
+    readFileSync(fromRoot("./node_modules/carreau/package.json"), "utf8"),
+) as { version: string };
+
 export default defineConfig({
+    // What carreau's own build defines (its sources are compiled here).
+    define: { __CARREAU_VERSION__: JSON.stringify(carreauPackage.version) },
     resolve: {
         alias: {
             "myjsx/jsx-runtime": fromRoot("./src/jsx/jsx-runtime.ts"),
             "myjsx/jsx-dev-runtime": fromRoot("./src/jsx/jsx-dev-runtime.ts"),
         },
+        // Carreau from its sources (as the Electron build has it), not its
+        // build (dist/, which may be stale): in the DOM environments too.
+        conditions: ["source", ...defaultClientConditions],
     },
     // Carreau resolves through its "source" condition; its .ts sources are
     // transformed, not externalized (see test.server below).

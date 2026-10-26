@@ -12,9 +12,9 @@
  *       --devtools          Open the window's devtools on start.
  *       --print-messages    Print the incoming/outgoing driver messages on
  *                           stdout (hidden by default).
- *       --reset-bindings    Back to the default modifiers and bindings: the
- *                           configuration file's own are commented out (the
- *                           rest of the file is kept). Then exit.
+ *       --reset-bindings    Back to the default bindings: the configuration
+ *                           file's own are commented out (the rest of the
+ *                           file is kept). Then exit.
  *
  * Configuration: ~/.config/buche/config.yaml (or under $XDG_CONFIG_HOME),
  * over the defaults (config/default.yaml); created, if missing, as a copy of
@@ -68,8 +68,8 @@ if (values["reset-bindings"]) {
     const { path, changed } = resetBindings();
     console.log(
         changed
-            ? `buche: ${path}: modifiers and bindings reset to the defaults`
-            : `buche: ${path}: no modifiers or bindings of its own, nothing to reset`,
+            ? `buche: ${path}: bindings reset to the defaults`
+            : `buche: ${path}: no bindings of its own, nothing to reset`,
     );
     process.exit(0);
 }

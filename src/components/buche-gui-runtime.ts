@@ -444,48 +444,40 @@ export function bucheGuiRuntime(): void {
     // Whether a chord was handed to the page and the focus hasn't left yet.
     let handingOff = false;
 
-    // Keys named by their physical key, for Alt chords (as in keychord.ts).
-    const CODE_KEYS: Record<string, string> = {
-        Minus: "-",
-        Equal: "=",
-        BracketLeft: "[",
-        BracketRight: "]",
-        Backslash: "\\",
-        Semicolon: ";",
-        Quote: "'",
-        Backquote: "`",
-        Comma: ",",
-        Period: ".",
-        Slash: "/",
+    // Punctuation keys' codes.
+    const PUNCTUATION: Record<string, string> = {
+        "-": "Minus",
+        "=": "Equal",
+        "[": "BracketLeft",
+        "]": "BracketRight",
+        "\\": "Backslash",
+        ";": "Semicolon",
+        "'": "Quote",
+        "`": "Backquote",
+        ",": "Comma",
+        ".": "Period",
+        "/": "Slash",
     };
     const MODIFIER_CODE = /^(Alt|Control|Meta|Shift)(Left|Right)$/;
 
-    // Same format as chordFromEvent in keychord.ts (and the same key: see
-    // eventKey there).
-    const chordOf = (e: KeyboardEvent): string => {
-        const parts: string[] = [];
-        if (e.ctrlKey) {
-            parts.push("ctrl");
-        }
-        if (e.altKey) {
-            parts.push("alt");
-        }
-        if (e.shiftKey) {
-            parts.push("shift");
-        }
-        if (e.metaKey) {
-            parts.push("meta");
-        }
-        // With Alt (Option, on a Mac), a key types another character (Alt+Q:
-        // "œ") or starts a dead key (Alt+E): the chord is the key's, then.
-        let key = e.key;
-        const typed = key === "Dead" || (key.length === 1 && !/[\x20-\x7e]/.test(key));
-        if (e.altKey && typed && e.code) {
-            const m = /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code);
-            key = m ? (m[1] ?? m[2]).toLowerCase() : (CODE_KEYS[e.code] ?? key);
-        }
-        parts.push(key === " " ? "space" : key.toLowerCase());
-        return parts.join("+");
+    // The chords a key event can stand for, as eventChords in config.ts: by
+    // its physical key (its code), then by the key it types.
+    const chordsOf = (e: KeyboardEvent): string[] => {
+        const mods = [
+            e.shiftKey && "Shift",
+            e.altKey && "Alt",
+            e.ctrlKey && "Ctrl",
+            e.metaKey && "Meta",
+        ].filter(Boolean);
+        const k = e.key;
+        const typed = /^[a-z]$/i.test(k)
+            ? `Key${k.toUpperCase()}`
+            : /^\d$/.test(k)
+              ? `Digit${k}`
+              : k === " "
+                ? "Space"
+                : (PUNCTUATION[k] ?? k);
+        return [e.code, typed].filter(Boolean).map((key) => [...mods, key].join("+"));
     };
 
     const forward = (type: "keydown" | "keyup" | "modifier", e: KeyboardEvent): void => {
@@ -504,7 +496,7 @@ export function bucheGuiRuntime(): void {
     window.addEventListener(
         "keydown",
         (e) => {
-            if (chords.has(chordOf(e))) {
+            if (chordsOf(e).some((c) => chords.has(c))) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 handingOff = true;

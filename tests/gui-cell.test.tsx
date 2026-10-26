@@ -215,7 +215,7 @@ describe("gui kill from the interface", () => {
         const gui = document.querySelector<BucheGui>("buche-gui");
         expect(gui).not.toBeNull();
         // Alt+Q (the layout's navigation mode) escapes the iframe.
-        expect(gui!.interceptChords()).toContain("Alt+q");
+        expect(gui!.interceptChords()).toContain("Alt+KeyQ");
     });
 
     test("the focus moves to the gui when it appears", () => {

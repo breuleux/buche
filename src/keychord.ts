@@ -1,5 +1,5 @@
 // Shared key-chord parsing, used by prompt bindings (prompt-collection.tsx)
-// and by the interface's global bindings (keybindings.ts).
+// (The interface's key bindings are config.ts and keymap.ts's.)
 
 /** Modifier aliases → canonical modifier name. */
 const MODIFIER_ALIASES: Record<string, "ctrl" | "alt" | "shift" | "meta"> = {

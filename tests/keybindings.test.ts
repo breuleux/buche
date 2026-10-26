@@ -8,7 +8,6 @@ import type { BucheConfig } from "../src/config.ts";
 import { Buche, type InM } from "../src/core.ts";
 import { Entry } from "../src/entry.ts";
 import { BucheInterface } from "../src/interface.tsx";
-import { GlobalKeys } from "../src/keybindings.ts";
 import { isMac } from "../src/keychord.ts";
 import "../src/components/echo-box.tsx";
 import "../src/components/prompt-collection.tsx";
@@ -27,71 +26,6 @@ function key(
     target.dispatchEvent(ev);
     return ev;
 }
-
-describe("GlobalKeys", () => {
-    test("chords fire and are swallowed", () => {
-        const box = document.createElement("div");
-        document.body.append(box);
-        const hits: string[] = [];
-        const keys = new GlobalKeys({
-            "Ctrl+p": () => {
-                hits.push("p");
-            },
-        });
-        keys.attach();
-
-        const ev = key(box, "keydown", { key: "p", ctrlKey: true });
-        expect(hits).toEqual(["p"]);
-        expect(ev.defaultPrevented).toBe(true);
-
-        // Wrong modifier set → no match.
-        key(box, "keydown", { key: "p", ctrlKey: true, metaKey: true });
-        expect(hits).toEqual(["p"]);
-        keys.detach();
-    });
-
-    test("a handler returning false lets the key through", () => {
-        const box = document.createElement("div");
-        document.body.append(box);
-        const keys = new GlobalKeys({ "Ctrl+l": () => false });
-        keys.attach();
-        expect(key(box, "keydown", { key: "l", ctrlKey: true }).defaultPrevented).toBe(false);
-        keys.detach();
-    });
-
-    test("keys are seen even when the DOM focus is outside the interface", () => {
-        // After a click in empty space the DOM focus sits on `body`: keydowns
-        // from there never go through the container — the window listener
-        // still sees them.
-        document.body.append(document.createElement("div"));
-        const hits: string[] = [];
-        const keys = new GlobalKeys({
-            "Ctrl+p": () => {
-                hits.push("p");
-            },
-        });
-        keys.attach();
-
-        key(document.body, "keydown", { key: "p", ctrlKey: true });
-        expect(hits).toEqual(["p"]);
-        keys.detach();
-    });
-
-    test("Mod expands per-platform in chords", () => {
-        const box = document.createElement("div");
-        document.body.append(box);
-        let hits = 0;
-        const keys = new GlobalKeys({
-            "Mod+p": () => {
-                hits++;
-            },
-        });
-        keys.attach();
-        key(box, "keydown", { key: "p", ...(isMac() ? { metaKey: true } : { ctrlKey: true }) });
-        expect(hits).toBe(1);
-        keys.detach();
-    });
-});
 
 function makeInterface(): [BucheInterface, HTMLElement] {
     const container = document.createElement("div");
@@ -377,18 +311,23 @@ describe("cell actions", () => {
 });
 
 describe("configured bindings", () => {
-    test("a custom Nav chord, Nav binding and global binding", () => {
+    function setup(bindings: unknown[]) {
         const container = document.createElement("div");
         document.body.append(container);
-        const iface = new BucheInterface({
-            container,
-            config: {
-                modifiers: { Nav: "Ctrl+e" },
-                bindings: { "Nav+t": "renameWindow", "Alt+n": "nextTab" },
-            },
-        });
+        const iface = new BucheInterface({ container, config: { bindings } });
+        return { iface, container };
+    }
+
+    test("the user's rules over the defaults: another key for nav, a new global", () => {
+        const { iface, container } = setup([
+            { key: "alt+q", action: "-setMode" },
+            { key: "ctrl+e", action: "setMode", args: { mode: "nav", hold: "ctrl" } },
+            { key: "alt+n", action: "nextTab" },
+            // Over the default T (renameWindow), in nav mode.
+            { key: "t", action: "kill", when: "mode == nav" },
+        ]);
         const calls: string[] = [];
-        iface.renameWindow = () => calls.push("rename");
+        iface.killCell = () => calls.push("kill");
         iface.cycleTabs = (forward) => calls.push(forward ? "next" : "prev");
 
         // Alt+Q no longer enters navigation mode; Ctrl+E does.
@@ -400,32 +339,26 @@ describe("configured bindings", () => {
         key(container, "keydown", { key: "Control", code: "ControlLeft", ctrlKey: true });
         key(container, "keydown", { key: "e", code: "KeyE", ctrlKey: true });
         expect(iface.nav.mode).toBe("held");
+        expect(iface.keys.mode).toBe("nav");
         key(container, "keydown", { key: "t", code: "KeyT", ctrlKey: true });
         key(container, "keyup", { key: "Control", code: "ControlLeft" });
         expect(iface.nav.mode).toBe("off");
 
         key(container, "keydown", { key: "n", code: "KeyN", altKey: true });
-        expect(calls).toEqual(["rename", "next"]);
-        // GUIs hand both chords over.
-        expect(BucheGui.defaultInterceptChords()).toEqual(
-            expect.arrayContaining(["Ctrl+e", "Alt+n"]),
-        );
-        expect(BucheGui.defaultInterceptChords()).not.toContain("Alt+q");
+        expect(calls).toEqual(["kill", "next"]);
+        // GUIs hand both chords over, not the old one.
+        const chords = BucheGui.defaultInterceptChords();
+        expect(chords).toEqual(expect.arrayContaining(["Ctrl+KeyE", "Alt+KeyN"]));
+        expect(chords).not.toContain("Alt+KeyQ");
         iface.keys.detach();
     });
-});
 
-describe("several modifiers", () => {
-    test("each is a mode of its own, one on at a time", () => {
-        const container = document.createElement("div");
-        document.body.append(container);
-        const iface = new BucheInterface({
-            container,
-            config: {
-                modifiers: { Nav: "Alt+q", Move: "Alt+w" },
-                bindings: { "Nav+t": "renameWindow", "Nav+w": "focusPrompt", "Move+t": "kill" },
-            },
-        });
+    test("another mode: on its own, with its own bindings", () => {
+        const { iface, container } = setup([
+            { key: "alt+w", action: "setMode", args: { mode: "move", hold: "alt" } },
+            { key: "t", action: "kill", when: "mode == move" },
+            { key: "w", action: "focusPrompt", when: "mode == nav" },
+        ]);
         const calls: string[] = [];
         iface.renameWindow = () => calls.push("rename");
         iface.focusPrompt = () => calls.push("prompt");
@@ -435,37 +368,47 @@ describe("several modifiers", () => {
         const release = () => key(container, "keyup", { key: "Alt", code: "AltLeft" });
         key(container, "keydown", { key: "Alt", code: "AltLeft", altKey: true });
 
-        // Alt+W: the Move mode; T there is its own.
+        // Alt+W: the move mode; T there is its own.
         down("w");
-        expect(iface.modes.Move.mode).toBe("held");
-        expect(iface.modes.Nav.mode).toBe("off");
-        expect(iface.nav).toBe(iface.modes.Move);
+        expect(iface.keys.mode).toBe("move");
+        expect(iface.nav.mode).toBe("held");
         down("t");
         release();
-        expect(iface.modes.Move.mode).toBe("off");
+        expect(iface.keys.mode).toBe("");
 
-        // Alt+Q: the Nav mode; W there is Nav's binding, not the Move mode.
+        // Alt+Q: the nav mode; W there is nav's binding, not the move mode.
         key(container, "keydown", { key: "Alt", code: "AltLeft", altKey: true });
         down("q");
-        expect(iface.modes.Nav.mode).toBe("held");
+        expect(iface.keys.mode).toBe("nav");
         down("w");
-        expect(iface.modes.Move.mode).toBe("off");
+        expect(iface.keys.mode).toBe("nav");
         down("t");
         release();
         expect(calls).toEqual(["kill", "prompt", "rename"]);
         expect(BucheGui.defaultInterceptChords()).toEqual(
-            expect.arrayContaining(["Alt+q", "Alt+w"]),
+            expect.arrayContaining(["Alt+KeyQ", "Alt+KeyW"]),
         );
+        iface.keys.detach();
+    });
+
+    test("out of a mode, layout operations can be bound too", () => {
+        const { iface, container } = setup([{ key: "ctrl+alt+u", action: "undo" }]);
+        const ran: string[] = [];
+        iface.nav.run = (action) => {
+            ran.push(String(action));
+        };
+        key(container, "keydown", { key: "u", code: "KeyU", ctrlKey: true, altKey: true });
+        expect(ran).toEqual(["undo"]);
         iface.keys.detach();
     });
 });
 
 describe("bindings from inside a GUI iframe", () => {
     /** An interface with a <buche-gui>, and a way to post as its iframe. */
-    function guiInterface(config: BucheConfig | null) {
+    function guiInterface(config: BucheConfig | undefined) {
         const container = document.createElement("div");
         document.body.append(container);
-        const iface = new BucheInterface({ container, config: config ?? undefined });
+        const iface = new BucheInterface({ container, config });
         const gui = document.createElement("buche-gui") as BucheGui;
         container.append(gui);
         const frame = gui.querySelector("iframe") ?? gui.shadowRoot?.querySelector("iframe");
@@ -476,19 +419,49 @@ describe("bindings from inside a GUI iframe", () => {
         return { iface, gui, fromFrame };
     }
 
-    test("every global binding but clearPrompt is handed over", () => {
-        guiInterface(BucheInterface.defaultConfig);
+    test("the bindings that can apply in a frame are handed over", () => {
+        const { iface } = guiInterface({
+            bindings: [
+                { key: "ctrl+k", action: "kill", when: "inFrame" },
+                { key: "ctrl+j", action: "kill", when: "inPTY || !inFrame" },
+            ],
+        });
         const mod = isMac() ? "Meta" : "Ctrl";
         const chords = BucheGui.defaultInterceptChords();
-        expect(chords).toContain("Alt+q");
-        expect(chords).toContain(`${mod}+p`);
-        expect(chords).not.toContain("Ctrl+l");
+        expect(chords).toEqual(
+            expect.arrayContaining(["Alt+KeyQ", `${mod}+KeyP`, "Ctrl+Tab", "Ctrl+KeyK"]),
+        );
+        // In a prompt only, in a mode only, or not in a frame: not.
+        expect(chords).not.toContain("Ctrl+KeyL");
+        expect(chords).not.toContain("ArrowLeft");
+        expect(chords).not.toContain("Ctrl+KeyJ");
+        iface.keys.detach();
+    });
+
+    test("a binding in a frame: its condition holds there", () => {
+        const { iface, gui, fromFrame } = guiInterface({
+            bindings: [{ key: "ctrl+k", action: "kill", when: "inFrame" }],
+        });
+        const calls: string[] = [];
+        iface.killCell = () => calls.push("kill");
+        fromFrame({
+            "buche-gui": "keydown",
+            type: "keydown",
+            key: "k",
+            code: "KeyK",
+            ctrlKey: true,
+        });
+        expect(calls).toEqual(["kill"]);
+        expect(gui).toBeTruthy();
+        iface.keys.detach();
     });
 
     test("a modifier's side is known from a key pressed in the iframe", () => {
         const { iface, gui, fromFrame } = guiInterface({
-            modifiers: { Nav: "AltLeft+q" },
-            bindings: {},
+            bindings: [
+                { key: "alt+q", action: "-setMode" },
+                { key: "alt+q", action: "setMode", args: { mode: "nav", hold: "altleft" } },
+            ],
         });
         gui.focus();
         const keyMsg = (tag: string, type: string, init: Record<string, unknown>) =>

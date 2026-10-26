@@ -23,7 +23,7 @@ beforeAll(() => {
     window.dispatchEvent(
         new MessageEvent("message", {
             source: window,
-            data: { "buche-gui": "config", chords: ["alt+q", "alt+,", "meta+p"] },
+            data: { "buche-gui": "config", chords: ["Alt+KeyQ", "Alt+Comma", "Meta+KeyP"] },
         }),
     );
 });

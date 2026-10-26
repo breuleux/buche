@@ -1,129 +1,150 @@
 # buche's default configuration.
 #
-# Your own, ~/.config/buche/config.yaml, goes over it: what you set there wins
-# (a binding by its chord, a modifier by its name, a prefix's table key by
-# key), the rest is taken from here; `~` removes a default (`Nav+k: ~`). It is
-# made the first time buche runs, as a copy of this file commented out. To
-# get back to the default modifiers and bindings (your own are commented out,
+# Your own, ~/.config/buche/config.yaml, goes over it: its bindings come after
+# these, and on a key press the last binding for it whose condition holds wins
+# (so yours win). It is made the first time buche runs, as a copy of this file
+# commented out. To get back to the default bindings (yours are commented out,
 # the rest of the file is kept), run:
 #
 #     buche --reset-bindings
 #
-# Chord syntax: modifiers and a key, joined with "+", e.g. "Ctrl+Shift+Tab".
-#   Modifiers: Ctrl (Control), Alt (Option), Shift, Meta (Cmd, Super), and Mod
-#              (Cmd on macOS, Ctrl elsewhere).
-#   Keys:      a letter or digit (a, 7), a punctuation key (, . / ; ' ` [ ] \ - =),
-#              Left, Right, Up, Down, Enter, Tab, Space, Escape, Backspace, F1...
-#              Key codes work too (KeyQ, ArrowLeft, Comma). Keys with Shift are
-#              written as the unshifted key: Shift+, rather than <.
+# Bindings are a list of rules, as VS Code's keybindings:
 #
-# Bindings with a modifier work anywhere ("global"). Bindings of the form
-# Nav+<chord> work in the Nav mode (see modifiers below), where they take keys
-# without the mode's modifier (holding it or not makes no difference).
-# A Nav binding whose value is a table is a prefix: after it, the next key is
-# looked up in that table (e.g. Nav+i, then Left).
-
-# Modifiers: modes of their own, by name. Each is entered with its chord, and
-# lasts while that chord's modifier is held; pressing the key again while
-# still holding it (Alt+q, q) makes it last until the chord or Escape is
-# pressed again. A chord has exactly one modifier, which can be restricted to
-# the key on one side: AltLeft+q, CtrlRight+q, ...
+#   - { key: KEY, action: ACTION, when: CONDITION, args: { ... } }
 #
-# Nav is the navigation mode below. Define more as you like (e.g.
-# `Move: Ctrl+e`) and bind keys in them the same way (`Move+Left: swapLeft`);
-# one mode is on at a time. Any navigation action works in any mode.
-modifiers:
-  Nav: Alt+q
+# key:    a chord: modifiers and a key, joined with "+" (ctrl+shift+tab); or a
+#         sequence of chords, separated by spaces (i enter: I, then Enter).
+#           Modifiers: ctrl (control), alt (option), shift, meta (cmd, super),
+#                      and mod (cmd on macOS, ctrl elsewhere).
+#           Keys:      a letter or digit (a, 7), a punctuation key (, . / ; ' `
+#                      [ ] \ - =), left, right, up, down, enter, tab, space,
+#                      escape, backspace, f1...; key codes too (KeyQ, Comma).
+#                      Keys with Shift are written unshifted: shift+, not <.
+#           (Quote a key with , [ ] { } in it: key: "shift+,".)
+# action: what it does (see below). `-ACTION` removes the bindings before it
+#         for that action (and that key, and that condition, if given): e.g.
+#         - { key: ctrl+l, action: -clearPrompt }
+# when:   when it applies (none: always). Contexts: mode (the mode on, or ""),
+#         inPrompt, inPTY (a terminal cell), inFrame (a GUI cell); with ==, !=,
+#         !, &&, || and parentheses: e.g. mode == nav, inPrompt && !mode.
+#         (Quote a condition starting with "!": when: "!inPrompt".)
+# args:   the action's arguments (setMode's, below).
+#
+# A key without ctrl, alt or cmd (or a function key) needs a mode: elsewhere,
+# it would take the key away from typing.
+#
+# Inside a GUI cell (an iframe), the bindings that can apply there (no
+# condition, or one that holds with inFrame) take their keys from it.
+#
+# Modes: setMode enters one, with args
+#   mode:   its name (for the conditions: mode == NAME);
+#   hold:   the modifier (the key's only one) that keeps it on while held;
+#           a side can be given: altleft, ctrlright, ...;
+#   sticky: repeat (default): the key pressed again, still holding, keeps it
+#           on until it is left (the key once more, or leaveMode); never: it
+#           lasts while held, only.
+# In a mode, the layout is in navigation mode, and the mode's modifier is left
+# out of keys: { key: left, ..., when: mode == nav } is Alt+Left, or Left.
+#
+# Actions:
+#   setMode, leaveMode
+#   focusPrompt, clearPrompt (in a prompt: clear its stream), nextTab,
+#   prevTab, kill, renameWindow
+#   insert, insertFloat, insertInto{Left,Right,Up,Down} (a new tab in the pane
+#   on that side), insert{Left,Right,Up,Down} (in a new pane on that side)
+#   carreau's layout operations: focus*, expand*, unexpand, swap*, move*,
+#   moveInto*, parent, root, child, closeTab, closePane, forceCloseTab,
+#   renameTab, namePane, group, collapse, float, toggleMaximize, maximize,
+#   restore, mark, moveMarked, clear, grow/shrink{Width,Height}, undo, redo
 
 bindings:
   # ── Global ──────────────────────────────────────────────────────────────────
-  # Actions: focusPrompt, clearPrompt (only in a prompt), nextTab, prevTab,
-  # closeTab, kill, renameWindow.
-  Mod+p: focusPrompt
-  Ctrl+l: clearPrompt
-  Ctrl+Tab: nextTab
-  Ctrl+Shift+Tab: prevTab
-  Mod+Right: nextTab
-  Mod+Left: prevTab
+  # Navigation mode: Alt+Q, as long as Alt is held (Alt+Q, Q: until left).
+  - { key: alt+q, action: setMode, args: { mode: nav, hold: alt } }
+  - { key: mod+p, action: focusPrompt }
+  - { key: ctrl+l, action: clearPrompt, when: inPrompt }
+  - { key: ctrl+tab, action: nextTab }
+  - { key: ctrl+shift+tab, action: prevTab }
+  - { key: mod+right, action: nextTab }
+  - { key: mod+left, action: prevTab }
 
   # ── Navigation mode ─────────────────────────────────────────────────────────
+  - { key: escape, action: leaveMode, when: mode == nav }
+
   # Focus, and widen the focus to the containing cells.
-  Nav+Left: focusLeft
-  Nav+Right: focusRight
-  Nav+Up: focusUp
-  Nav+Down: focusDown
-  Nav+Shift+Left: expandLeft
-  Nav+Shift+Right: expandRight
-  Nav+Shift+Up: expandUp
-  Nav+Shift+Down: expandDown
-  Nav+u: unexpand
-  "Nav+/": root
-  "Nav+Shift+,": parent
-  "Nav+Shift+.": child
+  - { key: left,          action: focusLeft, when: mode == nav }
+  - { key: right,         action: focusRight, when: mode == nav }
+  - { key: up,            action: focusUp, when: mode == nav }
+  - { key: down,          action: focusDown, when: mode == nav }
+  - { key: shift+left,    action: expandLeft, when: mode == nav }
+  - { key: shift+right,   action: expandRight, when: mode == nav }
+  - { key: shift+up,      action: expandUp, when: mode == nav }
+  - { key: shift+down,    action: expandDown, when: mode == nav }
+  - { key: u,             action: unexpand, when: mode == nav }
+  - { key: "/",           action: root, when: mode == nav }
+  - { key: "shift+,",     action: parent, when: mode == nav }
+  - { key: "shift+.",     action: child, when: mode == nav }
 
   # Tabs and panes.
-  "Nav+,": prevTab
-  "Nav+.": nextTab
-  Nav+n: renameTab
-  Nav+Shift+n: namePane
-  Nav+w: closeTab
+  - { key: ",",           action: prevTab, when: mode == nav }
+  - { key: ".",           action: nextTab, when: mode == nav }
+  - { key: n,             action: renameTab, when: mode == nav }
+  - { key: shift+n,       action: namePane, when: mode == nav }
+  - { key: w,             action: closeTab, when: mode == nav }
   # Close without waiting for the cell to agree (one that refuses, or hangs):
   # its process is killed.
-  Nav+Shift+w: forceCloseTab
-  Nav+m: toggleMaximize
-  Nav+f: float
-  Nav+g: group
-  Nav+Shift+g: collapse
-  Nav+x: mark
-  Nav+v: moveMarked
-  Nav+l: clear
+  - { key: shift+w,       action: forceCloseTab, when: mode == nav }
+  - { key: m,             action: toggleMaximize, when: mode == nav }
+  - { key: f,             action: float, when: mode == nav }
+  - { key: g,             action: group, when: mode == nav }
+  - { key: shift+g,       action: collapse, when: mode == nav }
+  - { key: x,             action: mark, when: mode == nav }
+  - { key: v,             action: moveMarked, when: mode == nav }
+  - { key: l,             action: clear, when: mode == nav }
 
   # Sizes.
-  "Nav+]": growHeight
-  "Nav+Shift+]": growWidth
-  "Nav+[": shrinkHeight
-  "Nav+Shift+[": shrinkWidth
+  - { key: "]",           action: growHeight, when: mode == nav }
+  - { key: "shift+]",     action: growWidth, when: mode == nav }
+  - { key: "[",           action: shrinkHeight, when: mode == nav }
+  - { key: "shift+[",     action: shrinkWidth, when: mode == nav }
 
   # History.
-  Nav+z: undo
-  Nav+Shift+z: redo
+  - { key: z,             action: undo, when: mode == nav }
+  - { key: shift+z,       action: redo, when: mode == nav }
 
   # Buche's own: kill the cell (from a prompt, the one above it) without closing
-  # it; focus a prompt (as Mod+p); rename the window.
-  Nav+k: kill
-  Nav+p: focusPrompt
-  Nav+t: renameWindow
+  # it; focus a prompt (as Mod+P); rename the window.
+  - { key: k,             action: kill, when: mode == nav }
+  - { key: p,             action: focusPrompt, when: mode == nav }
+  - { key: t,             action: renameWindow, when: mode == nav }
 
-  # Insert a new tab (what goes in it, you then pick): Enter, in the focused
-  # cell's pane; a direction, in the pane on that side; Shift+direction, in a
-  # new pane on that side; f, in a new floating window.
-  Nav+i:
-    Enter: insert
-    f: insertFloat
-    Left: insertIntoLeft
-    Right: insertIntoRight
-    Up: insertIntoUp
-    Down: insertIntoDown
-    Shift+Left: insertLeft
-    Shift+Right: insertRight
-    Shift+Up: insertUp
-    Shift+Down: insertDown
+  # Insert a new tab (what goes in it, you then pick): I, then Enter, in the
+  # focused cell's pane; a direction, in the pane on that side; Shift+direction,
+  # in a new pane on that side; F, in a new floating window.
+  - { key: i enter,       action: insert, when: mode == nav }
+  - { key: i f,           action: insertFloat, when: mode == nav }
+  - { key: i left,        action: insertIntoLeft, when: mode == nav }
+  - { key: i right,       action: insertIntoRight, when: mode == nav }
+  - { key: i up,          action: insertIntoUp, when: mode == nav }
+  - { key: i down,        action: insertIntoDown, when: mode == nav }
+  - { key: i shift+left,  action: insertLeft, when: mode == nav }
+  - { key: i shift+right, action: insertRight, when: mode == nav }
+  - { key: i shift+up,    action: insertUp, when: mode == nav }
+  - { key: i shift+down,  action: insertDown, when: mode == nav }
 
-  # Swap the focused cell with its neighbour.
-  Nav+s:
-    Left: swapLeft
-    Right: swapRight
-    Up: swapUp
-    Down: swapDown
+  # Swap the focused cell with its neighbour: S, then a direction.
+  - { key: s left,        action: swapLeft, when: mode == nav }
+  - { key: s right,       action: swapRight, when: mode == nav }
+  - { key: s up,          action: swapUp, when: mode == nav }
+  - { key: s down,        action: swapDown, when: mode == nav }
 
-  # Move the focused tab: into the tabs of the cell on that side, or (with
-  # Shift) beside the focused cell.
-  Nav+a:
-    Left: moveIntoLeft
-    Right: moveIntoRight
-    Up: moveIntoUp
-    Down: moveIntoDown
-    Shift+Left: moveLeft
-    Shift+Right: moveRight
-    Shift+Up: moveUp
-    Shift+Down: moveDown
+  # Move the focused tab: A, then a direction, into the tabs of the cell on that
+  # side; or Shift+direction, beside the focused cell.
+  - { key: a left,        action: moveIntoLeft, when: mode == nav }
+  - { key: a right,       action: moveIntoRight, when: mode == nav }
+  - { key: a up,          action: moveIntoUp, when: mode == nav }
+  - { key: a down,        action: moveIntoDown, when: mode == nav }
+  - { key: a shift+left,  action: moveLeft, when: mode == nav }
+  - { key: a shift+right, action: moveRight, when: mode == nav }
+  - { key: a shift+up,    action: moveUp, when: mode == nav }
+  - { key: a shift+down,  action: moveDown, when: mode == nav }

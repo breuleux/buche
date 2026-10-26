@@ -30,9 +30,10 @@ function commentOut(lines: string[]): string[] {
 
 const USER_HEADER = `\
 # Your buche configuration: it goes over the defaults, which are below,
-# commented out. What you set here wins; the rest is the default's. Uncomment
-# what you change (and its section's header: modifiers:, bindings:), or add
-# your own entries; \`~\` removes a default (e.g. \`Nav+k: ~\`).
+# commented out, for reference. Your bindings come after them: for a key, the
+# last binding whose condition holds wins, so yours do. Uncomment \`bindings:\`
+# and add yours under it; \`action: -NAME\` removes the defaults' bindings for
+# that action (e.g. \`- { key: ctrl+l, action: -clearPrompt }\`).
 #
 `;
 
@@ -49,7 +50,7 @@ export function ensureUserConfig(): string {
 }
 
 /** The sections `--reset-bindings` resets. */
-const BINDING_SECTIONS = ["modifiers", "bindings"];
+const BINDING_SECTIONS = ["bindings"];
 
 /**
  * The lines of a YAML document's top-level section (e.g. `bindings`): [start,
@@ -72,9 +73,9 @@ function sectionBlock(lines: string[], section: string): [number, number] | null
 }
 
 /**
- * Back to the default modifiers and bindings: the `modifiers` and `bindings`
- * sections of the user's configuration are replaced with the default ones,
- * commented out — as text: the rest of the file (comments included) is kept.
+ * Back to the default bindings: the `bindings` section of the user's
+ * configuration is replaced with the default one, commented out — as text:
+ * the rest of the file (comments included) is kept.
  * Returns the file's path, and whether anything changed.
  */
 export function resetBindings(): { path: string; changed: boolean } {

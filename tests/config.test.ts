@@ -6,275 +6,205 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { resolveBindings } from "../src/config.ts";
+import { type Context, frameChords, parseCondition, resolveBindings } from "../src/config.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const resolve = (
-    bindings: Record<string, unknown>,
-    modifiers: Record<string, unknown> | undefined = { Nav: "Alt+q" },
-    mac = false,
-) => resolveBindings([{ modifiers, bindings }], mac);
+const NAV = { key: "alt+q", action: "setMode", args: { mode: "nav", hold: "alt" } };
 
-const mode = (modifiers: Record<string, unknown>, name = "Nav") =>
-    resolve({}, modifiers).bindings.modes[name];
+const resolve = (bindings: unknown, mac = false) => resolveBindings([{ bindings }], mac);
+/** The rules' keys and actions, compactly. */
+const summary = (bindings: unknown[], mac = false) =>
+    resolve([NAV, ...bindings], mac)
+        .rules.slice(1)
+        .map((r) => `${r.keys.join(" ")} ${r.action}`);
 
-describe("resolveBindings", () => {
-    test("a modifier's chord", () => {
-        const { bindings, errors } = resolve({}, { Nav: "Ctrl+Space" });
-        expect(errors).toEqual([]);
-        expect(bindings.modes).toEqual({
-            Nav: {
-                modifier: "Control",
-                code: "Space",
-                side: "either",
-                chord: "Ctrl+space",
-                bindings: {},
-                prefixes: {},
-            },
-        });
-    });
-
-    test("a modifier's chord, on one side", () => {
-        expect(mode({ Nav: "AltLeft+q" })).toMatchObject({
-            modifier: "Alt",
-            code: "KeyQ",
-            side: "left",
-        });
-        expect(mode({ Nav: "RightCmd+;" })).toMatchObject({
-            modifier: "Meta",
-            code: "Semicolon",
-            side: "right",
-            chord: "Meta+;",
-        });
+describe("conditions", () => {
+    const ctx = (c: Partial<Context>): Context => ({
+        mode: "",
+        inPrompt: false,
+        inPTY: false,
+        inFrame: false,
+        ...c,
     });
 
     test.each([
-        ["q", "exactly one modifier"],
-        ["Ctrl+Alt+q", "exactly one modifier"],
-        ["Alt", "the key is missing"],
-        ["Alt+nope", "is not a key"],
-    ])("a bad chord (%s), and no other modifier: Nav is Alt+q", (chord, message) => {
-        const { bindings, errors } = resolve({}, { Nav: chord });
-        expect(errors).toHaveLength(2);
-        expect(errors[0]).toContain(message);
-        expect(errors[1]).toContain("none defined");
-        expect(Object.keys(bindings.modes)).toEqual(["Nav"]);
-        expect(bindings.modes.Nav).toMatchObject({ modifier: "Alt", code: "KeyQ" });
+        ["mode == nav", { mode: "nav" }, true],
+        ["mode == nav", {}, false],
+        ["mode != nav", { mode: "move" }, true],
+        ["mode", {}, false],
+        ["!mode", {}, true],
+        ["inPrompt && !mode", { inPrompt: true }, true],
+        ["inPrompt && !mode", { inPrompt: true, mode: "nav" }, false],
+        ["inPTY || inFrame", { inFrame: true }, true],
+        ["!(inPTY || inFrame)", { inFrame: true }, false],
+        ["mode == 'nav' && (inPrompt || inPTY)", { mode: "nav", inPTY: true }, true],
+    ])("%s with %o: %s", (text, c, expected) => {
+        expect(parseCondition(text).test(ctx(c))).toBe(expected);
     });
 
-    test("no modifiers section: Nav is Alt+q", () => {
-        const { bindings, errors } = resolve({ "Nav+Left": "focusLeft" }, {});
-        expect(errors).toEqual(["modifiers: none defined (using Nav: Alt+q)"]);
-        expect(bindings.modes.Nav).toMatchObject({
-            code: "KeyQ",
-            bindings: { ArrowLeft: "focusLeft" },
-        });
+    test.each([
+        ["inPrompts", "unknown context"],
+        ["mode ==", "expected a value"],
+        ["(inPrompt", "expected )"],
+        ["inPrompt inPTY", 'unexpected "inPTY"'],
+        ["inPrompt &&", "unexpected end"],
+    ])("bad: %s", (text, message) => {
+        expect(() => parseCondition(text)).toThrow(message);
     });
 
-    test("bad modifier definitions", () => {
-        const { bindings, errors } = resolve(
-            {},
-            {
-                Nav: "Alt+q",
-                Move: "AltLeft+q",
-                Ctrl: "Alt+w",
-                "my mode": "Alt+e",
-                Mod: "Alt+r",
-                Two: "Alt+t",
-            },
-        );
-        expect(errors).toHaveLength(4);
-        expect(errors.join("\n")).toMatch(/Move: same chord as Nav/);
-        expect(errors.join("\n")).toMatch(/Ctrl: that name is a keyboard modifier's/);
-        expect(errors.join("\n")).toMatch(/Mod: that name is a keyboard modifier's/);
-        expect(errors.join("\n")).toMatch(/my mode: a modifier's name is a word/);
-        expect(Object.keys(bindings.modes)).toEqual(["Nav", "Two"]);
+    test("the modes named", () => {
+        const c = parseCondition("mode == nav || mode == move && inPrompt");
+        expect(c.usesMode).toBe(true);
+        expect(c.modes).toEqual(["nav", "move"]);
     });
+});
 
-    test("several modifiers: each with its own bindings", () => {
-        const { bindings, errors } = resolve(
-            {
-                "Nav+Left": "focusLeft",
-                "Move+Left": "swapLeft",
-                "Move+Shift+q": "undo",
-                "Move+i": { Enter: "insert" },
-            },
-            { Nav: "Alt+q", Move: "Ctrl+e" },
-        );
-        expect(errors).toEqual([]);
-        expect(bindings.modes.Nav).toMatchObject({
-            bindings: { ArrowLeft: "focusLeft" },
-            prefixes: {},
-        });
-        expect(bindings.modes.Move).toMatchObject({
-            modifier: "Control",
-            code: "KeyE",
-            bindings: { ArrowLeft: "swapLeft", "Shift+KeyQ": "undo" },
-            prefixes: { KeyI: { Enter: "insert" } },
-        });
-    });
-
-    test("bindings in an undefined mode, or a mode's chord in bindings", () => {
-        const { errors } = resolve({ "Move+Left": "focusLeft", Nav: "Alt+q" });
-        expect(errors).toHaveLength(2);
-        expect(errors[0]).toMatch(
-            /Move\+Left: "Move" is not a modifier \(define it under modifiers:\)/,
-        );
-        expect(errors[1]).toMatch(/Nav: .*define it under modifiers:/);
-    });
-
-    test("bindings and prefixes, by key code", () => {
-        const { bindings, errors } = resolve({
-            "Nav+Left": "focusLeft",
-            "Nav+Shift+,": "parent",
-            "Nav+]": "growHeight",
-            "Nav+k": "kill",
-            "Nav+i": { Enter: "insert", "Shift+Up": "insertUp", f: "insertFloat" },
-        });
-        expect(errors).toEqual([]);
-        expect(bindings.modes.Nav.bindings).toEqual({
-            ArrowLeft: "focusLeft",
-            "Shift+Comma": "parent",
-            BracketRight: "growHeight",
-            KeyK: "kill",
-        });
-        expect(bindings.modes.Nav.prefixes).toEqual({
-            KeyI: { Enter: "insert", "Shift+ArrowUp": "insertUp", KeyF: "insertFloat" },
-        });
-    });
-
-    test("bad mode bindings are reported and left out", () => {
-        const { bindings, errors } = resolve({
-            "Nav+q": "undo",
-            "Nav+Alt+x": "undo",
-            "Nav+y": "frobnicate",
-            "Nav+s": { Left: "swapLeft", Right: "nope" },
-            "Nav+u": null,
-        });
-        expect(errors).toHaveLength(4);
-        expect(errors.join("\n")).toMatch(/Nav\+q: .*toggles the mode/);
-        expect(errors.join("\n")).toMatch(/Nav\+Alt\+x: Alt is the mode's modifier/);
-        expect(errors.join("\n")).toMatch(/Nav\+y: unknown navigation action "frobnicate"/);
-        expect(errors.join("\n")).toMatch(/Nav\+s Right: unknown navigation action "nope"/);
-        expect(bindings.modes.Nav.bindings).toEqual({});
-        expect(bindings.modes.Nav.prefixes).toEqual({ KeyS: { ArrowLeft: "swapLeft" } });
-    });
-
-    test("global bindings, with Mod by platform", () => {
-        const spec = { "Mod+p": "focusPrompt", "Ctrl+Shift+Tab": "prevTab" };
-        expect(resolve(spec, undefined, true).bindings.global).toEqual({
-            "Meta+p": "focusPrompt",
-            "Shift+Ctrl+Tab": "prevTab",
-        });
-        expect(resolve(spec, { Nav: "Alt+q" }, false).bindings.global).toEqual({
-            "Ctrl+p": "focusPrompt",
-            "Shift+Ctrl+Tab": "prevTab",
-        });
+describe("resolveBindings", () => {
+    test("keys: chords and sequences, in the canonical form", () => {
         expect(
-            resolve({ "Mod+Right": "nextTab" }, { Nav: "Alt+q" }, true).bindings.global,
-        ).toEqual({
-            "Meta+ArrowRight": "nextTab",
-        });
+            summary([
+                { key: "ctrl+shift+tab", action: "prevTab" },
+                { key: "mod+p", action: "focusPrompt" },
+                { key: "left", action: "focusLeft", when: "mode == nav" },
+                { key: "shift+,", action: "parent", when: "mode == nav" },
+                { key: "i shift+up", action: "insertUp", when: "mode == nav" },
+                { key: "Alt+KeyQ ArrowLeft", action: "undo" },
+            ]),
+        ).toEqual([
+            "Shift+Ctrl+Tab prevTab",
+            "Ctrl+KeyP focusPrompt",
+            "ArrowLeft focusLeft",
+            "Shift+Comma parent",
+            "KeyI Shift+ArrowUp insertUp",
+            "Alt+KeyQ ArrowLeft undo",
+        ]);
+        expect(summary([{ key: "mod+p", action: "focusPrompt" }], true)).toEqual([
+            "Meta+KeyP focusPrompt",
+        ]);
     });
 
-    test("bad global bindings are reported and left out", () => {
-        const { bindings, errors } = resolve({
-            p: "focusPrompt",
-            "Shift+p": "focusPrompt",
-            "Ctrl+p": "focusLeft",
-            "CtrlLeft+p": "focusPrompt",
-            "Alt+q": "nextTab",
-            F5: "nextTab",
-        });
-        expect(errors).toHaveLength(5);
-        expect(errors[4]).toMatch(/Alt\+q: that chord enters the Nav mode/);
-        expect(bindings.global).toEqual({ F5: "nextTab" });
-    });
-
-    test("layers: the user's over the defaults", () => {
-        const defaults = {
-            modifiers: { Nav: "Alt+q" },
-            bindings: {
-                "Mod+p": "focusPrompt",
-                "Ctrl+l": "clearPrompt",
-                "Nav+Comma": "prevTab",
-                "Nav+k": "kill",
-                "Nav+u": "unexpand",
-                "Nav+s": { Left: "swapLeft", Right: "swapRight" },
-                "Nav+i": { Enter: "insert" },
+    test("modes", () => {
+        const { rules, errors } = resolve([
+            NAV,
+            {
+                key: "ctrl+e",
+                action: "setMode",
+                args: { mode: "move", hold: "ctrlright", sticky: "never" },
             },
+        ]);
+        expect(errors).toEqual([]);
+        expect(rules.map((r) => r.mode)).toEqual([
+            { name: "nav", hold: "Alt", side: "either", code: "KeyQ", sticky: "repeat" },
+            { name: "move", hold: "Ctrl", side: "right", code: "KeyE", sticky: "never" },
+        ]);
+    });
+
+    test.each([
+        [{ key: "alt+q", action: "frobnicate" }, 'unknown action "frobnicate"'],
+        [{ action: "nextTab" }, "no key"],
+        [{ key: "alt+q" }, "no action"],
+        [{ key: "alt+q", action: "nextTab", whne: "x" }, 'unknown field "whne"'],
+        [{ key: "alt+nope", action: "nextTab" }, '"nope" is not a key'],
+        [{ key: "altleft+q", action: "nextTab" }, "a modifier's side is for setMode's hold"],
+        [{ key: "q", action: "nextTab" }, "needs a mode"],
+        [{ key: "q", action: "nextTab", when: "inPrompt" }, "needs a mode"],
+        [{ key: "alt+q", action: "nextTab", when: "inPrompts" }, 'unknown context "inPrompts"'],
+        [{ key: "alt+q", action: "nextTab", args: 3 }, "args: expected a table"],
+        [{ key: "alt+e", action: "setMode", args: { hold: "alt" } }, "args.mode"],
+        [{ key: "alt+e", action: "setMode", args: { mode: "m" } }, "args.hold"],
+        [{ key: "alt+e", action: "setMode", args: { mode: "m", hold: "ctrl" } }, "the one held"],
+        [
+            { key: "ctrl+alt+e", action: "setMode", args: { mode: "m", hold: "alt" } },
+            "the one held",
+        ],
+        [
+            { key: "alt+e x", action: "setMode", args: { mode: "m", hold: "alt" } },
+            "not a sequence",
+        ],
+        [
+            { key: "alt+e", action: "setMode", args: { mode: "m", hold: "alt", sticky: "yes" } },
+            "sticky",
+        ],
+        [
+            { key: "alt+e", action: "focusLeft", when: "mode == mvoe" },
+            'no rule enters the mode "mvoe"',
+        ],
+        ["alt+e", "expected { key, action, when, args }"],
+    ])("bad: %o", (entry, message) => {
+        const { errors } = resolve([NAV, entry]);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain(message);
+    });
+
+    test("bindings must be a list", () => {
+        expect(resolve({ "alt+q": "nextTab" }).errors[0]).toContain("expected a list");
+    });
+
+    test("no mode left: Alt+Q for nav", () => {
+        const { rules, errors } = resolve([
+            { key: "left", action: "focusLeft", when: "mode == nav" },
+        ]);
+        expect(errors).toEqual(["bindings: no rule enters a mode (setMode): using Alt+Q for nav"]);
+        expect(rules[0]).toMatchObject({
+            action: "setMode",
+            keys: ["Alt+KeyQ"],
+            mode: { name: "nav" },
+        });
+    });
+
+    test("layers: concatenated, a removal taking out what's before it", () => {
+        const defaults = {
+            bindings: [
+                NAV,
+                { key: "ctrl+l", action: "clearPrompt", when: "inPrompt" },
+                { key: "ctrl+tab", action: "nextTab" },
+                { key: "mod+right", action: "nextTab" },
+                { key: "k", action: "kill", when: "mode == nav" },
+                { key: "t", action: "kill", when: "inPTY && mode == nav" },
+            ],
         };
         const user = {
-            modifiers: { Move: "Ctrl+e" },
-            bindings: {
-                // The same chords, written otherwise.
-                "Cmd+p": "nextTab",
-                "Nav+,": "nextTab",
-                "Nav+k": null,
-                "Nav+s": { Right: null, Up: "swapUp" },
-                "Nav+i": "insert",
-                "Ctrl+l": null,
-                "Move+Left": "moveLeft",
-            },
+            bindings: [
+                { key: "ctrl+tab", action: "-nextTab" },
+                { action: "-kill", when: "mode == nav" },
+                { key: "ctrl+l", action: "clearPrompt" },
+            ],
         };
-        const { bindings, errors } = resolveBindings([defaults, user], true);
+        const { rules, errors } = resolveBindings([defaults, user], false);
         expect(errors).toEqual([]);
-        expect(Object.keys(bindings.modes)).toEqual(["Nav", "Move"]);
-        expect(bindings.global).toEqual({ "Meta+p": "nextTab" });
-        expect(bindings.modes.Nav.bindings).toEqual({
-            Comma: "nextTab",
-            KeyU: "unexpand",
-            KeyI: "insert",
-        });
-        expect(bindings.modes.Nav.prefixes).toEqual({
-            KeyS: { ArrowLeft: "swapLeft", ArrowUp: "swapUp" },
-        });
-        expect(bindings.modes.Move.bindings).toEqual({ ArrowLeft: "moveLeft" });
+        expect(
+            rules.map((r) => `${r.keys.join(" ")} ${r.action} ${r.when?.text ?? ""}`.trim()),
+        ).toEqual([
+            "Alt+KeyQ setMode",
+            "Ctrl+KeyL clearPrompt inPrompt",
+            "Ctrl+ArrowRight nextTab",
+            "KeyT kill inPTY && mode == nav",
+            "Ctrl+KeyL clearPrompt",
+        ]);
     });
 
-    test("layers: within one, the last of a chord's spellings wins", () => {
-        const { bindings } = resolveBindings(
-            [
-                {
-                    modifiers: { Nav: "Alt+q" },
-                    bindings: { "Nav+,": "prevTab", "Nav+Comma": "nextTab" },
-                },
-            ],
-            false,
-        );
-        expect(bindings.modes.Nav.bindings).toEqual({ Comma: "nextTab" });
-    });
-
-    test("layers: a modifier overridden in place, or removed with its bindings", () => {
-        const defaults = {
-            modifiers: { Nav: "Alt+q", Move: "Alt+w" },
-            bindings: { "Nav+k": "kill", "Move+Left": "moveLeft" },
-        };
-        const over = resolveBindings([defaults, { modifiers: { Nav: "Ctrl+e" } }], false);
-        expect(over.errors).toEqual([]);
-        expect(Object.keys(over.bindings.modes)).toEqual(["Nav", "Move"]);
-        expect(over.bindings.modes.Nav).toMatchObject({
-            code: "KeyE",
-            bindings: { KeyK: "kill" },
-        });
-        const gone = resolveBindings([defaults, { modifiers: { Move: null } }], false);
-        expect(gone.errors).toEqual([]);
-        expect(Object.keys(gone.bindings.modes)).toEqual(["Nav"]);
-    });
-
-    test("layers: a default made wrong by the user's is reported as the default's", () => {
-        const { bindings, errors } = resolveBindings(
-            [
-                { modifiers: { Nav: "Alt+q" }, bindings: { "Nav+k": "kill" } },
-                { modifiers: { Nav: "Alt+k" } },
-            ],
+    test("layers: errors in the defaults say so", () => {
+        const { errors } = resolveBindings(
+            [{ bindings: [NAV, { key: "q", action: "kill" }] }, {}],
             false,
         );
         expect(errors).toEqual([
-            "bindings: Nav+k: this key toggles the mode, it can't be bound (in the defaults)",
+            "bindings[1] (in the defaults) (q): a key without Ctrl, Alt or Cmd needs a mode (when: mode == ...)",
         ]);
-        expect(bindings.modes.Nav.bindings).toEqual({});
+    });
+
+    test("frameChords: the rules that can apply in a frame", () => {
+        const { rules } = resolve([
+            NAV,
+            { key: "ctrl+p", action: "focusPrompt" },
+            { key: "ctrl+l", action: "clearPrompt", when: "inPrompt" },
+            { key: "ctrl+k", action: "kill", when: "inFrame" },
+            { key: "ctrl+j", action: "kill", when: "!inFrame" },
+            { key: "ctrl+i f", action: "insertFloat" },
+            { key: "left", action: "focusLeft", when: "mode == nav" },
+        ]);
+        expect(frameChords(rules)).toEqual(["Alt+KeyQ", "Ctrl+KeyP", "Ctrl+KeyK", "Ctrl+KeyI"]);
     });
 
     test("the default configuration has no errors", () => {
@@ -309,27 +239,39 @@ describe("the user's configuration file", () => {
         }
     }
     const defaults = readFileSync(join(root, "config/default.yaml"), "utf8");
-
-    const commentedOut = (text: string) =>
-        text.split("\n").every((line) => /^\s*(#|$)/.test(line));
+    const parse = (path: string) =>
+        JSON.parse(
+            execFileSync(
+                "bun",
+                [
+                    "-e",
+                    `console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(${JSON.stringify(path)}).text())))`,
+                ],
+                { encoding: "utf8" },
+            ),
+        );
 
     test("is made from the defaults, commented out", () => {
         withConfigHome((home, run) => {
             run("loadUserConfig");
-            const text = readFileSync(join(home, "buche/config.yaml"), "utf8");
-            expect(commentedOut(text)).toBe(true);
-            expect(text).toContain("# modifiers:\n#   Nav: Alt+q\n");
-            expect(text).toContain("#   Nav+Left: focusLeft\n");
+            const path = join(home, "buche/config.yaml");
+            const text = readFileSync(path, "utf8");
+            expect(text.split("\n").every((line) => /^\s*(#|$)/.test(line))).toBe(true);
+            expect(text).toContain("# bindings:\n");
+            expect(text).toContain(
+                "#   - { key: alt+q, action: setMode, args: { mode: nav, hold: alt } }\n",
+            );
             // (Uncommented, it is the defaults.)
             const uncommented = text
                 .split("\n")
                 .map((l) => l.replace(/^# (?!\s*#)/, ""))
                 .join("\n");
-            expect(uncommented).toContain(defaults.slice(defaults.indexOf("modifiers:")));
+            expect(uncommented).toContain(defaults.slice(defaults.indexOf("\nbindings:")));
+            expect(parse(path)).toBe(null);
         });
     });
 
-    test("--reset-bindings comments out its modifiers and bindings, and only them", () => {
+    test("--reset-bindings comments out its bindings, and only them", () => {
         withConfigHome((home, run) => {
             const path = join(home, "buche/config.yaml");
             run("ensureUserConfig");
@@ -338,11 +280,8 @@ describe("the user's configuration file", () => {
                 [
                     "# mine",
                     "theme: dark",
-                    "modifiers:",
-                    "  Nav: Ctrl+e",
-                    "  Move: Ctrl+w",
                     "bindings:",
-                    "  Nav+Left: focusRight",
+                    "  - { key: ctrl+e, action: setMode, args: { mode: nav, hold: ctrl } }",
                     "",
                     "# the end",
                     "other:",
@@ -352,26 +291,10 @@ describe("the user's configuration file", () => {
             );
             run("resetBindings");
             const text = readFileSync(path, "utf8");
-            expect(
-                text.startsWith(
-                    "# mine\ntheme: dark\n# modifiers:\n#   Nav: Alt+q\n# bindings:\n",
-                ),
-            ).toBe(true);
-            expect(text).not.toContain("Ctrl+e");
-            expect(text).not.toContain("Ctrl+w");
-            expect(
-                text.endsWith("#     Shift+Down: moveDown\n\n# the end\nother:\n  x: 1\n"),
-            ).toBe(true);
-            // What's left of it: the rest.
-            const json = execFileSync(
-                "bun",
-                [
-                    "-e",
-                    `console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(${JSON.stringify(path)}).text())))`,
-                ],
-                { encoding: "utf8" },
-            );
-            expect(JSON.parse(json)).toEqual({ theme: "dark", other: { x: 1 } });
+            expect(text.startsWith("# mine\ntheme: dark\n# bindings:\n")).toBe(true);
+            expect(text).not.toContain("ctrl+e");
+            expect(text.endsWith("when: mode == nav }\n\n# the end\nother:\n  x: 1\n")).toBe(true);
+            expect(parse(path)).toEqual({ theme: "dark", other: { x: 1 } });
         });
     });
 

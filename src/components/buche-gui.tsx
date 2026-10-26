@@ -95,7 +95,8 @@
 // Nothing is intercepted by default. `interceptChords` is read, and the chords
 // sent to the iframe, each time the focus enters it (on `commitFocus()`, or on
 // a click inside it), so the set can change at any time; e.g. with a global
-// binding for nav mode: `gui.interceptChords = () => [bindings.navMode]`.
+// binding for nav mode: `gui.interceptChords = () => ["Alt+q"]` (chords as the
+// configuration writes them, see config.ts).
 //
 // Communication goes through postMessage only, so it works with sandboxed
 // (cross-origin) iframes too; messages are only accepted from the iframe's
@@ -105,9 +106,10 @@
 // consolidated components.css).
 
 import type { DomProps } from "myjsx/jsx-runtime";
+import { canonicalChord } from "../config.ts";
 import { guiCspMeta } from "../csp.ts";
 import type { FocusCommittable } from "../focus.ts";
-import { expandMod, normalizeChord } from "../keychord.ts";
+import { isMac } from "../keychord.ts";
 import type { Json } from "../types.ts";
 import { RUNTIME } from "./buche-gui-runtime.ts";
 import type { EchoBox } from "./echo-box.tsx";
@@ -437,7 +439,10 @@ export class BucheGui extends HTMLElement implements FocusCommittable {
     }
 
     private sendConfig(): void {
-        const chords = this.interceptChords().map((c) => normalizeChord(expandMod(c)));
+        // (In the canonical form, see config.ts: what the runtime matches.)
+        const chords = this.interceptChords()
+            .map((c) => canonicalChord(c, isMac()))
+            .filter((c) => c !== null);
         this.postTagged({ [TAG]: "config", chords });
     }
 
