@@ -481,3 +481,118 @@ describe("bindings from inside a GUI iframe", () => {
         iface.keys.detach();
     });
 });
+
+describe("inherited prompt bindings", () => {
+    function setup() {
+        const container = document.createElement("div");
+        document.body.append(container);
+        const iface = new BucheInterface({ container });
+        const sent: Record<string, unknown>[] = [];
+        const buche: Buche = new Buche({
+            sendDriver: (m) => sent.push(m as unknown as Record<string, unknown>),
+            sendInterface: (m) => iface.processMessage(buche, m),
+        });
+        const driver = (m: Record<string, unknown>) =>
+            buche.handle({ to: ["$term"], ...m } as InM);
+        const commands = () => {
+            // (What the interface queued, the core handles.)
+            for (const m of iface.interactions.purge()) {
+                buche.handle(m as InM);
+            }
+            return sent.filter((m) => m.type === "command");
+        };
+        const boxOf = (from: string[]) => iface.layout.boxOf(buche.get(from))!;
+        const ctrl = (target: EventTarget, k: string) =>
+            key(target, "keydown", { key: k, code: `Key${k.toUpperCase()}`, ctrlKey: true });
+        return { iface, buche, driver, commands, boxOf, ctrl };
+    }
+    const SEL = { command: "@pop sel", inherit: true };
+
+    test("fired in a cell under the prompt: to the prompt, anchored on the cell", () => {
+        const { iface, driver, commands, boxOf, ctrl } = setup();
+        driver({
+            type: "configure",
+            kind: "prompt",
+            from: SHELL,
+            bindings: { "Ctrl+B": SEL, "Ctrl+J": { command: "mine" } },
+        });
+        const cell = [...SHELL, "1", "$stdout"];
+        driver({ type: "configure", kind: "terminal", from: cell });
+        const box = boxOf(cell);
+
+        const ev = ctrl(box, "b");
+        expect(ev.defaultPrevented).toBe(true);
+        expect(commands()).toEqual([
+            {
+                type: "command",
+                from: ["$term"],
+                to: SHELL,
+                text: "",
+                selection: { start: 0, end: 0 },
+                action: SEL,
+                id: expect.any(String),
+                anchor: cell,
+            },
+        ]);
+        // Not inherited: the prompt's own only.
+        expect(ctrl(box, "j").defaultPrevented).toBe(false);
+        // Nor outside the prompt's address.
+        const other = ["$proc", "other", "$stdout"];
+        driver({ type: "configure", kind: "terminal", from: other });
+        expect(ctrl(boxOf(other), "b").defaultPrevented).toBe(false);
+        expect(commands()).toHaveLength(1);
+        iface.keys.detach();
+    });
+
+    test("the closest prompt's wins; in a prompt, its own bindings", () => {
+        const { iface, buche, driver, commands, boxOf, ctrl } = setup();
+        driver({ type: "configure", kind: "prompt", from: SHELL, bindings: { "Ctrl+B": SEL } });
+        const sub = [...SHELL, "1", "cq"];
+        driver({
+            type: "configure",
+            kind: "prompt",
+            from: sub,
+            bindings: { "Ctrl+B": { command: "sub-sel", inherit: true } },
+        });
+        const cell = [...sub, "2", "$stdout"];
+        driver({ type: "configure", kind: "terminal", from: cell });
+        ctrl(boxOf(cell), "b");
+        expect(commands().map((c) => [c.to, (c.action as { command: string }).command])).toEqual([
+            [sub, "sub-sel"],
+        ]);
+        // In the sub-prompt itself, Ctrl+B is its own (it fires it, with its text).
+        const row = iface.layout.promptElement(buche.get(sub))!;
+        ctrl(row, "b");
+        expect(commands()).toHaveLength(2);
+        expect(commands()[1]).toMatchObject({ to: sub, action: { command: "sub-sel" } });
+        expect(commands()[1].anchor).toBeUndefined();
+        iface.keys.detach();
+    });
+
+    test("the keymap's rules come first", () => {
+        const { iface, driver, commands, boxOf, ctrl } = setup();
+        // (Ctrl+Tab: nextTab, by default.)
+        driver({ type: "configure", kind: "prompt", from: SHELL, bindings: { "Ctrl+Tab": SEL } });
+        const cell = [...SHELL, "1", "$stdout"];
+        driver({ type: "configure", kind: "terminal", from: cell });
+        key(boxOf(cell), "keydown", { key: "Tab", code: "Tab", ctrlKey: true });
+        expect(commands()).toEqual([]);
+        expect(ctrl).toBeTruthy();
+        iface.keys.detach();
+    });
+
+    test("a GUI under the prompt hands the inherited chords over", () => {
+        const { iface, driver } = setup();
+        driver({ type: "configure", kind: "prompt", from: SHELL, bindings: { "Ctrl+B": SEL } });
+        const cell = [...SHELL, "1", "$stdout"];
+        driver({ type: "configure", kind: "frame", from: cell });
+        driver({ type: "send", from: cell, message: { type: "data", data: {} } });
+        const gui = document.querySelector<BucheGui>("buche-gui")!;
+        expect(gui.interceptChords()).toContain("Ctrl+B");
+        // The bindings are read as they are when the focus enters it.
+        driver({ type: "configure", kind: "prompt", from: SHELL, bindings: { "Ctrl+O": SEL } });
+        expect(gui.interceptChords()).toContain("Ctrl+O");
+        expect(gui.interceptChords()).not.toContain("Ctrl+B");
+        iface.keys.detach();
+    });
+});

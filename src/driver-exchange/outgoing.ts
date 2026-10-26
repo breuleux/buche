@@ -9,6 +9,9 @@ export interface BaseRequest {
 
 export interface CommandRequest extends BaseRequest {
     type: "command";
+
+    /** The prompt's text when the command fired (empty: fired elsewhere, see
+     *  `anchor`). */
     text: string;
 
     /** The prompt's selection when the command fired. */
@@ -29,6 +32,14 @@ export interface CommandRequest extends BaseRequest {
      * terminal decided it (e.g. a slot the user picked it for).
      */
     zone?: string;
+
+    /**
+     * Where the command was performed, when not in the prompt: the address of
+     * the cell an inherited binding fired in (see `inherit` on actions). What
+     * the command shows is meant to go relative to it: pass it on as the
+     * `anchor` of what it configures.
+     */
+    anchor?: Address;
 }
 
 export interface ParseRequest extends BaseRequest {

@@ -528,6 +528,15 @@ export class Layout {
         return null;
     }
 
+    /** Show a cell: its tab active (and it, selected). */
+    revealCell(entry: Entry): void {
+        const tabId = this.tabs.get(entry);
+        const ft = tabId && this.findTab(tabId);
+        if (ft) {
+            this.ws.activateTab(ft.pane.id, ft.index);
+        }
+    }
+
     /** Make a prompt the one shown in its stream (its tab active), and select it. */
     revealPrompt(entry: Entry): HTMLElement | null {
         const tabId = this.tabs.get(entry);
@@ -711,9 +720,14 @@ export class Layout {
             }
             // What was shown stays shown for a background cell, and beside a
             // process's first view (its later outputs) — but a view of the
-            // process (`$stdout`, `$frame`) is shown: the last one comes first.
+            // process (`$stdout`, `$frame`) is shown: the last one comes first;
+            // and so is what was placed beside an anchor it was given.
             const later =
-                !isPrompt && !!at && !this.columnOf(anchorTab!) && !entry.field?.startsWith("$");
+                !isPrompt &&
+                !!at &&
+                !target.anchored &&
+                !this.columnOf(anchorTab!) &&
+                !entry.field?.startsWith("$");
             const keep = (entry.cell.background || later) && before;
             const show = ok && this.findTab(keep ? before : tab.id);
             if (show) {

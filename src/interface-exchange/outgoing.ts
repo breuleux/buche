@@ -13,7 +13,7 @@ export interface UpdateCellMessage {
     /** The component's entry (echo, cell, prompt, zones). */
     entry: Entry;
 
-    /** For a prompt: take the focus (see PromptConfiguration.focus). */
+    /** Take the focus: a prompt, or a new cell (see PromptConfiguration.focus). */
     focus?: boolean;
 }
 

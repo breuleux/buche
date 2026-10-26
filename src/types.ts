@@ -29,6 +29,11 @@ export interface Target {
     /** For a prompt: link its tab with the prompt tab it lands next to, so
      *  that their streams merge. */
     link?: boolean;
+
+    /** The anchor was given (a configuration's `anchor`), not implied by the
+     *  entry's address: a cell beside it is shown, not kept behind as one of
+     *  a process's later outputs. */
+    anchored?: boolean;
 }
 
 export type Accent = string;
@@ -49,6 +54,16 @@ export interface CommandAction {
 
     /** If true, the prompt's content is frozen as the action fires. */
     freeze?: boolean;
+
+    /**
+     * If true, the binding also works in every cell under the prompt's
+     * address (the cells of the commands run from it, and theirs...); the
+     * closest prompt's inherited binding for a key wins (and in a prompt, its
+     * own bindings). Fired from such a cell, the command
+     * request's `anchor` is that cell's address, and its text and selection
+     * are empty (not the prompt's).
+     */
+    inherit?: boolean;
 }
 
 /** One of the driver's built-in actions (e.g. coquille's submit, next...). */
@@ -58,6 +73,16 @@ export interface BuiltinAction {
 
     /** If true, the prompt's content is frozen as the action fires. */
     freeze?: boolean;
+
+    /**
+     * If true, the binding also works in every cell under the prompt's
+     * address (the cells of the commands run from it, and theirs...); the
+     * closest prompt's inherited binding for a key wins (and in a prompt, its
+     * own bindings). Fired from such a cell, the command
+     * request's `anchor` is that cell's address, and its text and selection
+     * are empty (not the prompt's).
+     */
+    inherit?: boolean;
 }
 
 /**

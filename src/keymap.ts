@@ -30,6 +30,9 @@ export interface KeymapHost {
     context(event: KeyboardEvent): Omit<Context, "mode">;
     /** Carreau's navigation mode, following the modes. */
     setNavMode(mode: NavMode, commit: boolean): void;
+    /** A key no rule took (out of any mode): true if the host did (it is
+     *  then swallowed). */
+    unmatched?(event: KeyboardEvent): boolean;
 }
 
 const isTextField = (t: EventTarget | null): boolean =>
@@ -213,6 +216,9 @@ export class Keymap {
                 (!r.mode || this.modifierHeld(r.mode, e)),
         );
         if (!rule) {
+            if (!active && this.host.unmatched?.(e)) {
+                this.swallow(e);
+            }
             return;
         }
         this.swallow(e);

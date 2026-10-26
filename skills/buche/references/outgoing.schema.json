@@ -97,7 +97,8 @@
           "$ref": "#/definitions/Address"
         },
         "text": {
-          "type": "string"
+          "type": "string",
+          "description": "The prompt's text when the command fired (empty: fired elsewhere, see `anchor`)."
         },
         "selection": {
           "$ref": "#/definitions/Selection",
@@ -114,6 +115,10 @@
         "zone": {
           "type": "string",
           "description": "Where what the command shows goes (a zone, as in `@zone cmd`), when the terminal decided it (e.g. a slot the user picked it for)."
+        },
+        "anchor": {
+          "$ref": "#/definitions/Address",
+          "description": "Where the command was performed, when not in the prompt: the address of the cell an inherited binding fired in (see `inherit` on actions). What the command shows is meant to go relative to it: pass it on as the `anchor` of what it configures."
         }
       },
       "required": ["action", "from", "selection", "text", "to", "type"],
@@ -143,6 +148,10 @@
         "freeze": {
           "type": "boolean",
           "description": "If true, the prompt's content is frozen as the action fires."
+        },
+        "inherit": {
+          "type": "boolean",
+          "description": "If true, the binding also works in every cell under the prompt's address (the cells of the commands run from it, and theirs...); the closest prompt's inherited binding for a key wins (and in a prompt, its own bindings). Fired from such a cell, the command request's `anchor` is that cell's address, and its text and selection are empty (not the prompt's)."
         }
       },
       "required": ["command"],
@@ -159,6 +168,10 @@
         "freeze": {
           "type": "boolean",
           "description": "If true, the prompt's content is frozen as the action fires."
+        },
+        "inherit": {
+          "type": "boolean",
+          "description": "If true, the binding also works in every cell under the prompt's address (the cells of the commands run from it, and theirs...); the closest prompt's inherited binding for a key wins (and in a prompt, its own bindings). Fired from such a cell, the command request's `anchor` is that cell's address, and its text and selection are empty (not the prompt's)."
         }
       },
       "required": ["builtin"],

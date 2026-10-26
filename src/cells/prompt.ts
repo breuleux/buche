@@ -22,6 +22,12 @@ export interface PromptConfiguration {
      * prompt's content, to hand it back to the user. Not kept: each
      * configuration with it focuses the prompt once. (It overrides
      * `background` for a new prompt.)
+     *
+     * For a new cell, or a new process (the cell standing in for what it
+     * shows): it takes the focus as it appears, as a command's echo does (see
+     * CommandRequest's `id`): e.g. for a command submitted by another one,
+     * which buche didn't send. Only when the entry is created (and, as for a
+     * prompt, it overrides `background`).
      */
     focus?: boolean;
 }

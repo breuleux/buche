@@ -127,6 +127,17 @@ export class Buche {
     }
 
     /**
+     * What an explicit anchor address stands for: the entry there if it shows
+     * something, else what it shows (a process: its primary). Null if nothing
+     * shows there (yet, or anymore), or if it is `entry` itself.
+     */
+    placementAnchor(address: Address, entry: Entry): Entry | null {
+        const node = this.hierarchy.getAt(address, false);
+        const shown = node?.visual ? node : (node?.primary ?? null);
+        return shown && shown !== entry && shown.visual ? shown : null;
+    }
+
+    /**
      * Where a new cell or prompt for `entry` goes, given the zone it asks for
      * (null or "": the default). Leading "@" are ignored, and l/r/u/d are
      * short for left/right/up/down (sl/sr/su/sd for sleft/sright/sup/sdown, f
@@ -134,23 +145,33 @@ export class Buche {
      * the entry showing its parent (a process's later outputs: beside the
      * first one), else inline; a prompt goes in a new tab, linked to the
      * prompt it lands next to.
+     *
+     * All relative to the entry's anchor (see anchorOf), or to `anchor` if
+     * given and something shows there (see placementAnchor); the default is
+     * then inline in its stream (or a tab beside it), as for a prompt.
      */
-    targetFor(entry: Entry, zone: ZoneDescriptor | null | undefined, kind: CellKind): Target {
+    targetFor(
+        entry: Entry,
+        zone: ZoneDescriptor | null | undefined,
+        kind: CellKind,
+        anchor?: Address | null,
+    ): Target {
         let name = (zone ?? "").replace(/^@/, "");
         name = ZONE_ALIASES[name] ?? name;
-        const anchor = this.anchorOf(entry);
-        const at = anchor?.address() ?? null;
+        const explicit = anchor ? this.placementAnchor(anchor, entry) : null;
+        const at = (explicit ?? this.anchorOf(entry))?.address() ?? null;
+        const anchored = explicit ? { anchored: true } : {};
         if (name !== "") {
-            return { zone: name, anchor: at };
+            return { zone: name, anchor: at, ...anchored };
         }
         if (kind === "prompt") {
-            return { zone: "tab", anchor: at, link: true };
+            return { zone: "tab", anchor: at, link: true, ...anchored };
         }
         const sibling = entry.parent?.primary;
-        if (sibling && sibling !== entry && sibling.visual) {
+        if (!explicit && sibling && sibling !== entry && sibling.visual) {
             return { zone: "tab", anchor: sibling.address() };
         }
-        return { zone: "inline", anchor: at };
+        return { zone: "inline", anchor: at, ...anchored };
     }
 
     /**
@@ -198,7 +219,12 @@ export class Buche {
      * anything else exists: its signals bubble up to the entry (see
      * user_signal), and typing into it makes it the entry's `$stdout`.
      */
-    ensurePlaceholder(entry: Entry, zone: ZoneDescriptor | null | undefined): void {
+    ensurePlaceholder(
+        entry: Entry,
+        zone: ZoneDescriptor | null | undefined,
+        anchor?: Address | null,
+        focus = false,
+    ): void {
         // (Nor for what shows itself already, nor for a placeholder's address:
         // a retune of one, maybe of one that doesn't exist.)
         if (
@@ -213,9 +239,14 @@ export class Buche {
         ph.replaceCell("pending");
         ph.cell.configure(cellConfiguration(entry.cell));
         ph.cell.status = { status: "running" };
-        ph.target = this.targetFor(entry, zone, "pending");
+        ph.target = this.targetFor(entry, zone, "pending", anchor);
         entry.primary = ph;
-        this.sendInterface({ type: "update_cell", target: ph.target, entry: ph });
+        this.sendInterface({
+            type: "update_cell",
+            target: ph.target,
+            entry: ph,
+            ...(focus ? { focus: true } : {}),
+        });
     }
 
     /**

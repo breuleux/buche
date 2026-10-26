@@ -105,7 +105,7 @@
         },
         "focus": {
           "type": "boolean",
-          "description": "If true, the prompt takes the focus (its tab shown, if hidden), as this configuration is applied: e.g. for a command that just changed the prompt's content, to hand it back to the user. Not kept: each configuration with it focuses the prompt once. (It overrides `background` for a new prompt.)"
+          "description": "If true, the prompt takes the focus (its tab shown, if hidden), as this configuration is applied: e.g. for a command that just changed the prompt's content, to hand it back to the user. Not kept: each configuration with it focuses the prompt once. (It overrides `background` for a new prompt.)\n\nFor a new cell, or a new process (the cell standing in for what it shows): it takes the focus as it appears, as a command's echo does (see CommandRequest's `id`): e.g. for a command submitted by another one, which buche didn't send. Only when the entry is created (and, as for a prompt, it overrides `background`)."
         },
         "kind": {
           "$ref": "#/definitions/ViewKind",
@@ -188,6 +188,17 @@
           ],
           "description": "Which zone to put the element in."
         },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Address of the entry the zone is relative to (e.g. \"right\": right of it), instead of the one `from` implies (its closest ancestor showing something: for a command, the prompt it came from). E.g. a command's output beside the cell the command was performed on. An entry that shows nothing itself (a process) stands for what it shows. Like `zone`, only heeded when the entry is created; ignored if nothing shows there."
+        },
         "type": {
           "type": "string",
           "const": "configure",
@@ -204,7 +215,7 @@
         "type"
       ],
       "additionalProperties": false,
-      "description": "Declares (or reconfigures) an entry. It carries the cell configuration (label, color, `ephemeral`, ...), which the entry's views show too, and says where the entry goes (`zone`).\n\nWith a `kind`, the entry shows something itself: a terminal, a frame or a prompt (see  {@link  ViewConfiguration.kind } ); the first time, it takes the place of its parent's placeholder if it can. Without, it is a process, or any non-visual parent of cells and prompts: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
+      "description": "Declares (or reconfigures) an entry. It carries the cell configuration (label, color, `ephemeral`, ...), which the entry's views show too, and says where the entry goes (`zone`, relative to `anchor`).\n\nWith a `kind`, the entry shows something itself: a terminal, a frame or a prompt (see  {@link  ViewConfiguration.kind } ); the first time, it takes the place of its parent's placeholder if it can. Without, it is a process, or any non-visual parent of cells and prompts: the first time, it gets a placeholder (`<from>.?`), an empty cell placed in `zone` that stands in for the first cell or prompt the entry shows (see `Buche.claim`), and takes its input meanwhile."
     },
     "PromptBindings": {
       "type": "object",
@@ -236,6 +247,10 @@
         "freeze": {
           "type": "boolean",
           "description": "If true, the prompt's content is frozen as the action fires."
+        },
+        "inherit": {
+          "type": "boolean",
+          "description": "If true, the binding also works in every cell under the prompt's address (the cells of the commands run from it, and theirs...); the closest prompt's inherited binding for a key wins (and in a prompt, its own bindings). Fired from such a cell, the command request's `anchor` is that cell's address, and its text and selection are empty (not the prompt's)."
         }
       },
       "required": [
@@ -254,6 +269,10 @@
         "freeze": {
           "type": "boolean",
           "description": "If true, the prompt's content is frozen as the action fires."
+        },
+        "inherit": {
+          "type": "boolean",
+          "description": "If true, the binding also works in every cell under the prompt's address (the cells of the commands run from it, and theirs...); the closest prompt's inherited binding for a key wins (and in a prompt, its own bindings). Fired from such a cell, the command request's `anchor` is that cell's address, and its text and selection are empty (not the prompt's)."
         }
       },
       "required": [

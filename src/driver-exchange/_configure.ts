@@ -27,7 +27,7 @@ export interface ViewConfiguration extends PromptConfiguration {
 /**
  * Declares (or reconfigures) an entry. It carries the cell configuration
  * (label, color, `ephemeral`, ...), which the entry's views show too, and
- * says where the entry goes (`zone`).
+ * says where the entry goes (`zone`, relative to `anchor`).
  *
  * With a `kind`, the entry shows something itself: a terminal, a frame or a
  * prompt (see {@link ViewConfiguration.kind}); the first time, it takes the
@@ -75,7 +75,7 @@ export function handle$configure(buche: Buche, obj: ConfigureMessage): void {
         entry.cell.status = { status: obj.status ?? "running" };
     }
     // A reconfiguration does not move anything: the placeholder is made once.
-    buche.ensurePlaceholder(entry, obj.zone);
+    buche.ensurePlaceholder(entry, obj.zone, obj.anchor, obj.focus === true);
 }
 
 /**
@@ -96,7 +96,7 @@ function configureView(buche: Buche, obj: ConfigureMessage, kind: ViewKind): voi
     let target = null;
     if (fresh) {
         entry.replaceCell(kind);
-        target = entry.target = buche.targetFor(entry, obj.zone, kind);
+        target = entry.target = buche.targetFor(entry, obj.zone, kind, obj.anchor);
     }
     // A new cell starts running; a live one (a retune: a prompt's submit
     // reset, cd, config reload...) keeps its status.
@@ -112,6 +112,7 @@ function configureView(buche: Buche, obj: ConfigureMessage, kind: ViewKind): voi
         type: "update_cell",
         target,
         entry,
-        ...(kind === "prompt" && obj.focus ? { focus: true } : {}),
+        // (A prompt, at any configuration; a cell, as it is made.)
+        ...(obj.focus && (kind === "prompt" || target) ? { focus: true } : {}),
     });
 }

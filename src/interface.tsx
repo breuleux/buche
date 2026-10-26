@@ -1,9 +1,11 @@
 import { KeyboardNav, type NavAction, type WorkspaceData } from "carreau";
 import { echoElementId, isSpent, killable } from "./cell.ts";
+import { PromptCell } from "./cells/prompt.ts";
 import { BucheGui, GUI_APPEAR_EVENT, GUI_SEND_EVENT } from "./components/buche-gui.tsx";
 import { EchoBox } from "./components/echo-box.tsx";
 import { EmbeddedTerm } from "./components/embedded-term.tsx";
 import {
+    boundAction,
     PromptCollection,
     type PromptCommandDetail,
     type PromptCommandEvent,
@@ -29,10 +31,10 @@ import type {
     UpdateCellMessage,
     UpdateEntryMessage,
 } from "./interface-exchange/outgoing";
-import { isMac } from "./keychord.ts";
+import { chordFromEvent, isMac } from "./keychord.ts";
 import { Keymap } from "./keymap.ts";
 import { Layout, type LayoutOptions } from "./layout.ts";
-import type { Json, Target } from "./types.ts";
+import type { Action, Json, Target } from "./types.ts";
 import type { BucheErrorMessage } from "./utils";
 import { AsyncQueue } from "./utils.ts";
 
@@ -73,6 +75,9 @@ const rectDistance = (a: DOMRect, b: DOMRect): number => {
     const dy = Math.max(0, b.top - a.bottom, a.top - b.bottom);
     return Math.hypot(dx, dy);
 };
+
+/** Whether a prompt binding's action is inherited (see `inherit`). */
+const inherits = (action: Action): boolean => typeof action === "object" && !!action.inherit;
 
 export class BucheInterface implements Interface {
     /** The default configuration, when none is given (the pages always give
@@ -264,6 +269,14 @@ export class BucheInterface implements Interface {
                 return;
             }
             const entry = this.guiEntry(el);
+            // Typed in it, the chords its prompts' inherited bindings bind
+            // escape it too (read each time the focus enters it).
+            if (el instanceof BucheGui && entry) {
+                el.interceptChords = () => [
+                    ...BucheGui.defaultInterceptChords(),
+                    ...this.inheritedKeys(entry),
+                ];
+            }
             if (entry?.cell.background) {
                 return;
             }
@@ -344,6 +357,7 @@ export class BucheInterface implements Interface {
                 };
             },
             setNavMode: (mode, commit) => this.nav.setMode(mode, commit),
+            unmatched: (e) => this.runInheritedBinding(e),
         });
         keys.attach();
         // Every GUI iframe hands the chords of the rules that can apply in it
@@ -353,6 +367,92 @@ export class BucheInterface implements Interface {
         const intercepted = frameChords(rules);
         BucheGui.defaultInterceptChords = () => intercepted;
         return keys;
+    }
+
+    // ── Inherited prompt bindings ─────────────────────────────────────────────
+    // A prompt's binding with `inherit` also works in every cell under the
+    // prompt's address (the cells of the commands run from it, theirs...):
+    // the closest prompt's that binds the key wins, and a prompt's own
+    // bindings win in it (it handles them itself, see PromptCollection). They
+    // come after the keymap's rules (see Keymap: `unmatched`). Fired from a
+    // cell, the command goes to the prompt with that cell's address as its
+    // `anchor` (what it shows goes relative to it), and no text or selection:
+    // they are the prompt's, not the cell's.
+
+    /** The entry a key's target is in: a prompt (its row), or a cell (its box). */
+    private keyEntry(target: EventTarget | null): Entry | null {
+        if (!(target instanceof Element)) {
+            return null;
+        }
+        const pc = target.closest("prompt-collection");
+        const prompt = pc instanceof PromptCollection ? pc.entryContaining(target) : null;
+        if (prompt) {
+            return prompt;
+        }
+        const box = target.closest("echo-box");
+        return box instanceof EchoBox ? box.boundEntry : null;
+    }
+
+    /** The closest prompt above `entry` with an inherited binding for one of
+     *  these chords, and its action. */
+    inheritedBinding(entry: Entry, chords: string[]): { prompt: Entry; action: Action } | null {
+        for (let e = entry.parent; e; e = e.parent) {
+            if (!(e.cell instanceof PromptCell)) {
+                continue;
+            }
+            const inherited = Object.fromEntries(
+                Object.entries(e.cell.bindings).filter(([, a]) => inherits(a)),
+            );
+            const bound = boundAction(inherited, chords);
+            if (bound) {
+                return { prompt: e, action: bound.action };
+            }
+        }
+        return null;
+    }
+
+    /** The keys the prompts above `entry` bind with `inherit`. */
+    inheritedKeys(entry: Entry): string[] {
+        const keys: string[] = [];
+        for (let e = entry.parent; e; e = e.parent) {
+            if (e.cell instanceof PromptCell) {
+                for (const [key, action] of Object.entries(e.cell.bindings)) {
+                    if (inherits(action)) {
+                        keys.push(key);
+                    }
+                }
+            }
+        }
+        return keys;
+    }
+
+    /** A key no keymap rule took: an inherited binding's, if any (see above). */
+    private runInheritedBinding(e: KeyboardEvent): boolean {
+        const entry = this.keyEntry(e.target);
+        if (!entry) {
+            return false;
+        }
+        const chords = [chordFromEvent(e)];
+        // (A prompt's own binding: its own to fire.)
+        if (entry.cell instanceof PromptCell && boundAction(entry.cell.bindings, chords)) {
+            return false;
+        }
+        const found = this.inheritedBinding(entry, chords);
+        if (!found) {
+            return false;
+        }
+        const id = `c${++this.commandSeq}`;
+        this.focus.expect(echoElementId(id));
+        this.interactions.push({
+            type: "user_command",
+            id,
+            entry: found.prompt,
+            text: "",
+            selection: { start: 0, end: 0 },
+            action: found.action,
+            anchor: entry.address(),
+        });
+        return true;
     }
 
     /** Run a bound action (see installKeys). */
@@ -596,7 +696,8 @@ export class BucheInterface implements Interface {
     // the meantime, or the cell is `background`. When the focused cell's
     // process ends, the focus goes back to where it was, if the cell is in a
     // prompt's stream and isn't `sticky`. A new prompt takes the focus unless
-    // it is `background`.
+    // it is `background`; a new cell, if configured with `focus` (even if
+    // `background`, as for a prompt).
 
     /** Relay a prompt's command to the machine, expecting the cell answering it. */
     pushCommand(detail: PromptCommandDetail): void {
@@ -694,8 +795,13 @@ export class BucheInterface implements Interface {
         if (!this.layout.has(entry) && target) {
             const box = this.layout.installCell(entry, target);
             entry.cell.initialize(entry, box);
+            // (Configured to take the focus: shown, wherever it went.)
+            if (message.focus === true) {
+                this.layout.revealCell(entry);
+            }
             if (
                 (box.id && this.focus.expecting === box.id) ||
+                message.focus === true ||
                 this.takesOverFocus(buche, entry, target)
             ) {
                 this.focus.focus(box, "auto");

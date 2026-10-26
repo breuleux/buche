@@ -69,7 +69,7 @@ import { isSpent } from "../cell.ts";
 import { PromptCell } from "../cells/prompt.ts";
 import { defaultTheme, resolveColor, styleToCss } from "../color.ts";
 import type { Entry } from "../entry.ts";
-import { chordFromEvent, normalizeChord } from "../keychord.ts";
+import { chordFromEvent, expandMod, normalizeChord } from "../keychord.ts";
 import type { Action, InteractiveStructuredText, Selection, TextPart } from "../types.ts";
 import { plainText, spliceText, textParts } from "../utils.ts";
 import { buildStructuredText } from "./utils.tsx";
@@ -77,6 +77,25 @@ import { buildStructuredText } from "./utils.tsx";
 /** The cell of an entry of the collection, if it is a prompt. */
 function promptOf(entry: Entry): PromptCell | null {
     return entry.cell instanceof PromptCell ? entry.cell : null;
+}
+
+/**
+ * The action a prompt's `bindings` map binds to one of these chords (the
+ * first one that is bound), and the binding's key. `chords`: canonical
+ * chords (see chordFromEvent), or virtual ones ("previous"/"next").
+ */
+export function boundAction(
+    bindings: Record<string, Action>,
+    chords: string[],
+): { key: string; action: Action } | null {
+    for (const chord of chords) {
+        for (const [key, action] of Object.entries(bindings)) {
+            if (normalizeChord(expandMod(key)) === chord) {
+                return { key, action };
+            }
+        }
+    }
+    return null;
 }
 
 // ── Key bindings ────────────────────────────────────────────────────────────
@@ -762,16 +781,22 @@ export class PromptCollection extends HTMLElement {
         if (virtual) {
             chords.push(virtual);
         }
-        for (const chord of chords) {
-            for (const [key, binding] of Object.entries(bindings)) {
-                if (normalizeChord(key) === chord) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.fireAction(entry, binding, e);
-                    return;
-                }
+        const bound = boundAction(bindings, chords);
+        if (bound) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.fireAction(entry, bound.action, e);
+        }
+    }
+
+    /** The prompt whose row holds `node` (anything in it), if any. */
+    entryContaining(node: Node): Entry | null {
+        for (const [entry, { row }] of this.rows) {
+            if (row.contains(node)) {
+                return entry;
             }
         }
+        return null;
     }
 
     // Fire an action (a key binding's, or a clicked context part's): a

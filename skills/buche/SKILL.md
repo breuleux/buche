@@ -134,6 +134,10 @@ under `ConfigureMessage`):
   floating window over the prompt, closed — the process terminated — as soon
   as the focus leaves it), or the name of a pane (made if there is none).
   Users type the same as `@zone` before a command (`@left ls`).
+- `anchor`: the address of the entry `zone` is relative to ("right": right
+  of it; "pop": over its pane; no zone: beside it), instead of the prompt your
+  command came from. A process's address stands for what it shows. Only
+  heeded when the entry is created; ignored if nothing shows there.
 - `id`: when answering a submitted command, repeat the `id` from the `command`
   message you received; buche then moves the focus to your cell when it
   appears.

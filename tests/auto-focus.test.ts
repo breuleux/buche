@@ -674,6 +674,139 @@ describe("placement", () => {
         expect(paneOf("logged")?.name).toBe("logs");
     });
 
+    test("`focus`: a new cell, or a process's, takes the focus as it appears", () => {
+        const { driver, iface, buche } = setup();
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        const prompt = iface.layout.promptElement(buche.get(SHELL));
+        iface.focus.focus(prompt!, "click");
+        // Without: the prompt keeps it.
+        driver({ type: "configure", kind: "terminal", from: [...SHELL, "1"] });
+        expect(iface.focus.current).toBe(prompt);
+        // A cell.
+        driver({ type: "configure", kind: "terminal", from: [...SHELL, "2"], focus: true });
+        expect(iface.focus.current).toBe(iface.layout.boxOf(buche.get([...SHELL, "2"])));
+        // A process: the cell standing in for what it shows, then what claims it.
+        const proc = [...SHELL, "3"];
+        driver({ type: "configure", from: proc, zone: "tab", focus: true });
+        driver({ type: "configure", kind: "terminal", from: [...proc, "$stdout"] });
+        const box = iface.layout.boxOf(buche.get([...proc, "$stdout"]));
+        expect(box).toBeTruthy();
+        expect(iface.focus.current).toBe(box);
+        // Only as it is made: a reconfiguration with it moves nothing.
+        iface.focus.focus(prompt!, "click");
+        driver({ type: "configure", kind: "terminal", from: [...SHELL, "2"], focus: true });
+        expect(iface.focus.current).toBe(prompt);
+    });
+
+    test("an inherited binding's pop, then what it submits: shown and focused beside the cell", async () => {
+        const { driver, iface, buche } = setup();
+        const settle = () => new Promise((r) => setTimeout(r, 0));
+        const boxOf = (from: string[]) => iface.layout.boxOf(buche.get(from));
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        // X: a cell in a tab of its own, focused.
+        const X = [...SHELL, "9", "$stdout"];
+        driver({ type: "configure", from: [...SHELL, "9"], zone: "tab" });
+        driver({ type: "configure", kind: "terminal", from: X });
+        iface.focus.focus(boxOf(X)!, "click");
+        // The binding fires in X (buche expects c1): `@pop sel`, anchored on X.
+        iface.focus.expect("echo-c1");
+        const sel = [...SHELL, "1"];
+        driver({ type: "configure", from: sel, zone: "pop", anchor: X, id: "c1" });
+        driver({ type: "configure", kind: "terminal", from: [...sel, "$stdout"] });
+        await settle();
+        expect(iface.focus.current).toBe(boxOf([...sel, "$stdout"]));
+        // sel submits `bed <file>`: anchored on X, asking for the focus. Its
+        // tab, beside X, is shown, and focused (the pop goes).
+        const bed = [...SHELL, "2"];
+        driver({ type: "configure", from: bed, anchor: X, focus: true });
+        driver({ type: "configure", kind: "terminal", from: [...bed, "$stdout"] });
+        driver({ type: "close", from: sel, outcome: { type: "success" } });
+        await settle();
+        const box = boxOf([...bed, "$stdout"])!;
+        expect(iface.focus.current).toBe(box);
+        expect(box.closest("[hidden]")).toBeNull();
+    });
+
+    test("an explicit anchor: a cell in a tab beside it is shown", () => {
+        const { driver, iface, buche } = setup();
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        const X = [...SHELL, "9", "$stdout"];
+        driver({ type: "configure", from: [...SHELL, "9"], zone: "tab" });
+        driver({ type: "configure", kind: "terminal", from: X });
+        // (Beside a process's first output, its later ones stay behind; beside
+        // an anchor it was given, a cell is shown.)
+        driver({ type: "configure", kind: "terminal", from: [...SHELL, "3"], anchor: X });
+        const box = iface.layout.boxOf(buche.get([...SHELL, "3"]))!;
+        expect(box.closest("[hidden]")).toBeNull();
+    });
+
+    test("an explicit anchor: zones relative to it, not to the prompt", () => {
+        const ctx = setup();
+        const { driver, iface } = ctx;
+        const ws = iface.layout.ws;
+        const paneOf = (label: string) => {
+            for (const t of ws.trees()) {
+                for (const p of panesOf(t)) {
+                    if (p.tabs.some((tab: any) => tab.title === label)) {
+                        // (By id: nodes are replaced as the layout changes.)
+                        return { id: p.id, name: p.name };
+                    }
+                }
+            }
+            return null;
+        };
+        const terminal = (n: string, extra: Record<string, unknown>) =>
+            driver({
+                type: "configure",
+                kind: "terminal",
+                from: [...SHELL, n],
+                label: n,
+                ...extra,
+            });
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        // A cell off in a pane of its own: the anchor.
+        terminal("far", { zone: "logs" });
+        const logs = paneOf("far")?.id;
+        expect(paneOf("far")?.name).toBe("logs");
+        expect(logs).not.toBe(paneOf("cq")?.id);
+
+        // A tab beside it, in its pane (not the prompt's).
+        terminal("tabbed", { zone: "tab", anchor: [...SHELL, "far"] });
+        expect(paneOf("tabbed")?.id).toBe(logs);
+        // With no zone: beside it too (it isn't in a stream).
+        terminal("plain", { anchor: [...SHELL, "far"] });
+        expect(paneOf("plain")?.id).toBe(logs);
+        // A direction: from its pane (a new pane on that side of it).
+        terminal("split", { zone: "sdown", anchor: [...SHELL, "far"] });
+        const split = paneOf("split")?.id;
+        expect(split).not.toBe(logs);
+        expect(split).not.toBe(paneOf("cq")?.id);
+
+        // A process: its placeholder, then what claims it, beside the anchor.
+        const proc = [...SHELL, "proc"];
+        driver({
+            type: "configure",
+            from: proc,
+            zone: "tab",
+            anchor: [...SHELL, "far"],
+            label: "p",
+        });
+        driver({ type: "configure", kind: "terminal", from: [...proc, "$stdout"], label: "out" });
+        expect(paneOf("out")?.id).toBe(logs);
+        // An anchor on a process: what it shows.
+        terminal("byproc", { zone: "tab", anchor: proc });
+        expect(paneOf("byproc")?.id).toBe(logs);
+
+        // Nothing there: as if no anchor was given (in the prompt's stream).
+        terminal("lost", { anchor: [...SHELL, "nowhere"] });
+        expect(
+            iface.layout.boxOf(ctx.buche.get([...SHELL, "lost"]))?.closest(".carreau-scroll"),
+        ).not.toBeNull();
+        // Only at creation: a reconfiguration with an anchor moves nothing.
+        terminal("tabbed", { zone: "tab", anchor: [...SHELL, "split"] });
+        expect(paneOf("tabbed")?.id).toBe(logs);
+    });
+
     test("a `grow` cell's box has no height cap, as its configuration says", () => {
         const { driver, iface, buche } = setup();
         driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
