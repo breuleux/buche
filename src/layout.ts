@@ -75,6 +75,8 @@ type Slot = { tabId: string } | { paneId: string };
 export interface LayoutOptions {
     /** Seconds a standby cell may stay scrolled out of view before it is killed. */
     standbyTimeout?: number;
+    /** The shell a new tab's "Shell" choice runs (none: no such choice). */
+    shell?: string;
 }
 
 /** Zones relative to the anchor: into the neighbour pane on that side. */
@@ -201,6 +203,7 @@ export class Layout {
     /** Standby cells: seconds spent scrolled out of view, by tab id. */
     private parked = new Map<string, number>();
     private standbyTimeout: number;
+    private shell: string | undefined;
 
     constructor(
         private host: LayoutHost,
@@ -209,6 +212,7 @@ export class Layout {
         options: LayoutOptions = {},
     ) {
         this.standbyTimeout = options.standbyTimeout ?? 30;
+        this.shell = options.shell;
         this.ws = new Workspace(data.root);
         this.ws.load(data);
         this.ws.undoableClose = false;
@@ -926,6 +930,7 @@ export class Layout {
         const zone = `~${"tabId" in where ? where.tabId : where.paneId}`;
         this.slots.set(zone, where);
         const el = new SlotChooser();
+        const shell = this.shell;
         // A new group, empty, which stays when emptied: things go there later.
         const group = (name: string, make: () => PaneNode | SplitNode): Tab => {
             const root = make();
@@ -952,19 +957,23 @@ export class Layout {
             { label: "New pane", pick: () => named(emptyPane) },
             { label: "New scroll column", pick: () => named(() => scrollColumn([])) },
             { label: "New scroll row", pick: () => named(() => scrollRow([])) },
-            {
-                // From the last prompt (in its directory); with none, a shell
-                // of its own (in the terminal's).
-                label: "Shell (cq)",
-                pick: () => {
-                    const p = this.host.lastPrompt();
-                    if (p) {
-                        this.host.run(p, "cq", zone);
-                    } else {
-                        this.host.spawn("cq", zone);
-                    }
-                },
-            },
+            ...(shell === undefined
+                ? []
+                : [
+                      {
+                          // From the last prompt (in its directory); with none, a
+                          // shell of its own (in the terminal's).
+                          label: `Shell (${shell})`,
+                          pick: () => {
+                              const p = this.host.lastPrompt();
+                              if (p) {
+                                  this.host.run(p, shell, zone);
+                              } else {
+                                  this.host.spawn(shell, zone);
+                              }
+                          },
+                      },
+                  ]),
         ]);
         el.setCommand("A command to run here (from the last prompt)", (text) => {
             const p = this.host.lastPrompt();

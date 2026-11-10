@@ -27,6 +27,101 @@ import type { Modifier } from "carreau";
 /** The configuration, as parsed from YAML. */
 export interface BucheConfig {
     bindings?: unknown;
+    shell?: unknown;
+}
+
+/**
+ * The shell: the program a window starts with (and the "Shell" choice of a
+ * new tab). `command` is run as a command line: a name on PATH, or a path to
+ * an executable (`~/` is the home directory). With `github`, the executables
+ * of the repository's latest release in `version` (a semver range) for this
+ * platform are installed (see scripts/tools.ts) in a directory put first on
+ * PATH; `command` then defaults to the repository's name. `assets`: the names
+ * of the release's archives to install (their part before the platform, e.g.
+ * "coquille" for coquille-aarch64-apple-darwin.tar.xz); default: all of them.
+ */
+export interface ShellConfig {
+    command: string;
+    github?: string;
+    version?: string;
+    assets?: string[];
+}
+
+/**
+ * Resolve configs' shell: the last layer that has one wins, as a whole (a
+ * user's `shell` is not merged with the defaults'). `shell: CMD` is short for
+ * `shell: { command: CMD }`. What is wrong is reported in `errors`, and the
+ * layer is skipped.
+ */
+export function resolveShell(layers: (BucheConfig | null | undefined)[]): {
+    shell: ShellConfig | null;
+    errors: string[];
+} {
+    const errors: string[] = [];
+    let shell: ShellConfig | null = null;
+    layers.forEach((config, layer) => {
+        const raw = config?.shell;
+        if (raw === undefined || raw === null) {
+            return;
+        }
+        const where = `shell${layer < layers.length - 1 ? " (in the defaults)" : ""}`;
+        const fail = (message: string) => errors.push(`${where}: ${message}`);
+        if (typeof raw === "string") {
+            if (raw.trim()) {
+                shell = { command: raw };
+            } else {
+                fail("empty command");
+            }
+            return;
+        }
+        if (typeof raw !== "object" || Array.isArray(raw)) {
+            fail("expected a command, or { command, github, version, assets }");
+            return;
+        }
+        const { command, github, version, assets, ...rest } = raw as Record<string, unknown>;
+        const unknown = Object.keys(rest);
+        if (unknown.length) {
+            fail(`unknown field(s): ${unknown.join(", ")}`);
+            return;
+        }
+        if (command !== undefined && (typeof command !== "string" || !command.trim())) {
+            fail("`command` must be a non-empty string");
+            return;
+        }
+        if (
+            github !== undefined &&
+            (typeof github !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(github))
+        ) {
+            fail("`github` must be OWNER/REPO");
+            return;
+        }
+        if (version !== undefined && (typeof version !== "string" || github === undefined)) {
+            fail("`version` must be a string, and goes with `github`");
+            return;
+        }
+        if (
+            assets !== undefined &&
+            (github === undefined ||
+                !Array.isArray(assets) ||
+                !assets.every((a) => typeof a === "string"))
+        ) {
+            fail("`assets` must be a list of names, and goes with `github`");
+            return;
+        }
+        const name = typeof github === "string" ? github.split("/")[1] : undefined;
+        const cmd = (command as string | undefined) ?? name;
+        if (!cmd) {
+            fail("needs a `command` (or a `github` repository)");
+            return;
+        }
+        shell = {
+            command: cmd,
+            ...(github !== undefined && { github: github as string }),
+            ...(version !== undefined && { version: version as string }),
+            ...(assets !== undefined && { assets: assets as string[] }),
+        };
+    });
+    return { shell, errors };
 }
 
 export type Mod = "Shift" | "Alt" | "Ctrl" | "Meta";

@@ -58,6 +58,29 @@
 #   renameTab, namePane, group, collapse, float, toggleMaximize, maximize,
 #   restore, mark, moveMarked, clear, grow/shrink{Width,Height}, undo, redo
 
+# The shell: the program a window starts with (unless given with -c), and the
+# one a new tab's "Shell" choice runs. Either a command line, run as is: a
+# program's name, found on $PATH (nothing is installed), or a path to an
+# executable:
+#
+#   shell: cq
+#   shell: ~/bin/myshell --flag
+#
+# or a GitHub repository whose releases carry archives (or bare binaries) for
+# each platform, named after it (aarch64-apple-darwin, x86_64-unknown-linux-
+# musl, linux-amd64...). The latest release in `version` (a semver range) is
+# installed under ~/.local/share/buche/tools (or $XDG_DATA_HOME), once: then
+# that one is used, without going online, until `buche --update` looks for a
+# newer one. All the executables in it are put first on PATH, for the shell
+# and everything it runs. `command` defaults to the repository's name;
+# `assets` picks the release's archives to install, by the name before the
+# platform (default: all of them). A `shell` of yours replaces this one as a
+# whole.
+shell:
+  command: cq
+  github: breuleux/coquille
+  version: ">=0.0.1"
+
 bindings:
   # ── Global ──────────────────────────────────────────────────────────────────
   # Navigation mode: Alt+Q, as long as Alt is held (Alt+Q, Q: until left).

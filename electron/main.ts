@@ -8,13 +8,15 @@
 // - `bun run electron` (scripts/electron.ts) builds the bundles into
 //   dist/electron and starts Electron with this file, passing the run
 //   configuration in the BUCHE_ELECTRON environment variable as JSON:
-//   { command, cwd, layout, devtools, printMessages, parent, dir }.
+//   { command, cwd, layout, devtools, printMessages, update, parent, dir }.
 // - The packaged app (`bun run package`, see electron-builder.yml), started
 //   from the Dock, a desktop launcher or a terminal: no BUCHE_ELECTRON, the
 //   same options are taken from the command line (see `argvConfig`).
 // Either way the configuration (~/.config/buche/config.yaml over the
 // defaults) and the layout are read here at startup, and handed to the page
-// through the preload (`page:setup`).
+// through the preload (`page:setup`). So is the shell (its `shell` section:
+// see src/config.ts), its tools installed first if it has some (see
+// scripts/tools.ts), and put first on PATH.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -24,6 +26,7 @@ import { parseArgs } from "node:util";
 import {
     app,
     BrowserWindow,
+    dialog,
     ipcMain,
     Menu,
     nativeImage,
@@ -31,7 +34,14 @@ import {
     systemPreferences,
 } from "electron";
 import { formatMessage } from "../scripts/format.ts";
+import {
+    expandHome,
+    prependPath,
+    type ResolvedShell,
+    resolveShellCommand,
+} from "../scripts/tools.ts";
 import { loadUserConfig, resetBindings } from "../scripts/user-config.ts";
+import { resolveShell } from "../src/config.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
 import { LibraryRegistry } from "../src/library.ts";
@@ -44,8 +54,10 @@ import {
 } from "./proc-protocol.ts";
 
 interface RunConfig {
-    /** Shell command driving the session. */
+    /** Shell command driving the session (default: the configuration's). */
     command?: string;
+    /** Look for a newer release of the shell's tools (see scripts/tools.ts). */
+    update?: boolean;
     /** Pid of the launcher (scripts/electron.ts); the app quits when it dies. */
     parent?: number;
     /** The directory the build script wrote the bundles and pages into. */
@@ -62,7 +74,7 @@ interface RunConfig {
 
 /**
  * The run configuration from the command line (the packaged app): the
- * launcher's options (-c, -d, -l, --devtools, --print-messages,
+ * launcher's options (-c, -d, -l, --devtools, --print-messages, --update,
  * --reset-bindings). Lenient, since Electron and the desktop may add flags of
  * their own (e.g. --no-sandbox); relative paths are the caller's.
  */
@@ -77,6 +89,7 @@ function argvConfig(): RunConfig & { resetBindings?: boolean } {
             layout: { type: "string", short: "l" },
             devtools: { type: "boolean" },
             "print-messages": { type: "boolean" },
+            update: { type: "boolean" },
             "reset-bindings": { type: "boolean" },
         },
     });
@@ -89,6 +102,7 @@ function argvConfig(): RunConfig & { resetBindings?: boolean } {
         layout: layout && resolve(layout),
         devtools: values.devtools === true,
         printMessages: values["print-messages"] === true,
+        update: values.update === true,
         resetBindings: values["reset-bindings"] === true,
     };
 }
@@ -109,7 +123,6 @@ function launcherConfig(): RunConfig | undefined {
 
 const fromLauncher = launcherConfig();
 const config: RunConfig & { resetBindings?: boolean } = fromLauncher ?? argvConfig();
-const command = config.command ?? "cq";
 // The bundle directory: handed over by the build script, or the packaged
 // app's (`__dirname` is the source directory in a bun bundle).
 const here = config.dir ?? app.getAppPath();
@@ -118,7 +131,7 @@ const here = config.dir ?? app.getAppPath();
  * The PATH of the user's login shell. An app started from the Dock, Finder
  * or a desktop launcher gets the session's bare PATH (on macOS, launchd's
  * /usr/bin:/bin:/usr/sbin:/sbin), without what the shell's startup files add
- * — where `cq` usually is. Interactive too, since PATH is often set in
+ * — where the shell may be. Interactive too, since PATH is often set in
  * ~/.zshrc or config.fish; the marker skips whatever those print.
  */
 function loginShellPath(): string | undefined {
@@ -196,6 +209,18 @@ async function start(): Promise<void> {
     ipcMain.on("page:setup", (event) => {
         event.returnValue = { layout, config: user, defaultConfig: defaults };
     });
+
+    // The shell: its tools installed meanwhile (if it has some: the first run
+    // downloads them), while the window opens.
+    const shellConfig = resolveShell([defaults, user]);
+    for (const error of shellConfig.errors) {
+        console.error(`buche: config: ${error}`);
+    }
+    const shell = shellConfig.shell ?? { command: process.env.SHELL || "sh" };
+    const command = config.command ?? expandHome(shell.command);
+    const tools: Promise<ResolvedShell | Error> = resolveShellCommand(shell, {
+        update: config.update,
+    }).catch((e: Error) => e);
 
     await app.whenReady();
 
@@ -301,6 +326,16 @@ async function start(): Promise<void> {
         },
         exited: () => shutdown(),
     });
+    // The tools first on PATH, for the shell and everything it runs. If they
+    // could not be installed, the command is run anyway (it may be on PATH).
+    const resolved = await tools;
+    if (resolved instanceof Error) {
+        const message = `${shell.github}: ${resolved.message}`;
+        console.error(`buche: ${message}`);
+        dialog.showErrorBox("buche: could not install the shell", message);
+    } else if (resolved.binDir) {
+        prependPath(resolved.binDir);
+    }
     drivers.start(command);
 
     // The renderer's driver messages, to the driver each is for.

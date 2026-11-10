@@ -1,18 +1,22 @@
 /**
  * Build the Electron app and run it — rebuild and relaunch in one command.
  *
- *   bun run electron [-c COMMAND] [-d DIR] [-l LAYOUT] [--devtools] [--print-messages]
+ *   bun run electron [-c COMMAND] [-d DIR] [-l LAYOUT] [--devtools] [--print-messages] [--update]
  *   bun run electron --reset-bindings
  *   bun run electron --build-only
  *
  * Options:
- *   -c, --command COMMAND   Shell command driving the session. Default: cq.
+ *   -c, --command COMMAND   Shell command driving the session. Default: the
+ *                           configuration's `shell` (see config/default.yaml).
  *   -d, --dir DIR           Working directory for that process.
  *   -l, --layout FILE       Initial layout (carreau JSON: see layouts/).
  *                           Default: one pane, named "main".
  *       --devtools          Open the window's devtools on start.
  *       --print-messages    Print the incoming/outgoing driver messages on
  *                           stdout (hidden by default).
+ *       --update            Look for a newer release of the shell's tools,
+ *                           if it is installed from GitHub (see
+ *                           scripts/tools.ts); else, the installed one is used.
  *       --reset-bindings    Back to the default bindings: the configuration
  *                           file's own are commented out (the rest of the
  *                           file is kept). Then exit.
@@ -65,6 +69,7 @@ const { values } = parseArgs({
         layout: { type: "string", short: "l" },
         devtools: { type: "boolean" },
         "print-messages": { type: "boolean" },
+        update: { type: "boolean" },
         "reset-bindings": { type: "boolean" },
         "build-only": { type: "boolean" },
     },
@@ -250,15 +255,18 @@ const child = Bun.spawn([electronBin, join(outDir, "main.cjs")], {
         ...process.env,
         BUCHE_ELECTRON: JSON.stringify({
             dir: outDir,
-            command: values.command ?? "cq",
+            command: values.command,
             cwd: values.dir,
             layout: values.layout && resolve(values.layout),
             parent: process.pid,
             devtools: values.devtools ?? false,
             printMessages: values["print-messages"] ?? false,
+            update: values.update ?? false,
         }),
     },
 });
-console.log(`buche (electron): running ${values.command ?? "cq"} (pid ${child.pid})`);
+console.log(
+    `buche (electron): running${values.command ? ` ${values.command}` : ""} (pid ${child.pid})`,
+);
 
 await child.exited;

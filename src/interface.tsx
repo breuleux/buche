@@ -19,6 +19,7 @@ import {
     frameChords,
     type Rule,
     resolveBindings,
+    resolveShell,
 } from "./config.ts";
 import type { Buche } from "./core";
 import type { Entry } from "./entry.ts";
@@ -112,7 +113,10 @@ export class BucheInterface implements Interface {
         }
         // The user's configuration over the defaults.
         const { rules, errors } = resolveBindings([defaults, args.config], isMac());
-        for (const error of errors) {
+        // The shell, for a new tab's "Shell" choice (its tools, if it has
+        // some, are already on PATH: see scripts/tools.ts).
+        const { shell, errors: shellErrors } = resolveShell([defaults, args.config]);
+        for (const error of [...errors, ...shellErrors]) {
             showToast(`config: ${error}`);
         }
         this.focus = new FocusManager(this.container, {
@@ -155,7 +159,7 @@ export class BucheInterface implements Interface {
             },
             this.container,
             args.layout,
-            args,
+            { ...args, shell: shell?.command },
         );
         // The layout's selection follows the focus; the pop closes when the
         // focus leaves it (not mid-navigation: where it ends, see below).
