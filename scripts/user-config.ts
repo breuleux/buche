@@ -5,11 +5,13 @@
  * (scripts/electron.ts, scripts/view.ts), which hand it to the page with the
  * defaults (see src/page.ts); what it means is src/config.ts's.
  *
- * Bun only (`Bun.YAML`).
+ * Also bundled into the Electron main process (electron/main.ts), which reads
+ * it at startup in a packaged app: plain Node, no Bun APIs.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { type BucheConfig, resolveBindings } from "../src/config.ts";
 
 const root = join(dirname(new URL(import.meta.url).pathname), "..");
@@ -38,11 +40,11 @@ const USER_HEADER = `\
 `;
 
 /** The user's configuration file, made (the defaults, commented out) if it was missing. */
-export function ensureUserConfig(): string {
+export function ensureUserConfig(defaultsPath = defaultConfigPath): string {
     const path = userConfigPath();
     if (!existsSync(path)) {
         mkdirSync(dirname(path), { recursive: true });
-        const defaults = readFileSync(defaultConfigPath, "utf8").split("\n");
+        const defaults = readFileSync(defaultsPath, "utf8").split("\n");
         writeFileSync(path, USER_HEADER + commentOut(defaults).join("\n"));
         console.log(`buche: created ${path} (the defaults, commented out)`);
     }
@@ -78,12 +80,15 @@ function sectionBlock(lines: string[], section: string): [number, number] | null
  * the rest of the file (comments included) is kept.
  * Returns the file's path, and whether anything changed.
  */
-export function resetBindings(): { path: string; changed: boolean } {
+export function resetBindings(defaultsPath = defaultConfigPath): {
+    path: string;
+    changed: boolean;
+} {
     const path = userConfigPath();
     if (!existsSync(path)) {
-        return { path: ensureUserConfig(), changed: true };
+        return { path: ensureUserConfig(defaultsPath), changed: true };
     }
-    const defaults = readFileSync(defaultConfigPath, "utf8").split("\n");
+    const defaults = readFileSync(defaultsPath, "utf8").split("\n");
     const lines = readFileSync(path, "utf8").split("\n");
     let changed = false;
     for (const section of BINDING_SECTIONS) {
@@ -93,7 +98,7 @@ export function resetBindings(): { path: string; changed: boolean } {
             continue;
         }
         if (!defaultBlock) {
-            throw new Error(`${defaultConfigPath} has no ${section} section`);
+            throw new Error(`${defaultsPath} has no ${section} section`);
         }
         lines.splice(
             block[0],
@@ -109,7 +114,7 @@ export function resetBindings(): { path: string; changed: boolean } {
 }
 
 function parseConfig(path: string): BucheConfig {
-    const parsed = Bun.YAML.parse(readFileSync(path, "utf8")) as unknown;
+    const parsed = parseYaml(readFileSync(path, "utf8")) as unknown;
     if (parsed === null || parsed === undefined) {
         return {};
     }
@@ -124,9 +129,12 @@ function parseConfig(path: string): BucheConfig {
  * If it can't be read: the defaults only, with a warning. Problems with the
  * bindings are reported on stderr too (the page shows them as well).
  */
-export function loadUserConfig(): { user: BucheConfig; defaults: BucheConfig } {
-    const defaults = parseConfig(defaultConfigPath);
-    const path = ensureUserConfig();
+export function loadUserConfig(defaultsPath = defaultConfigPath): {
+    user: BucheConfig;
+    defaults: BucheConfig;
+} {
+    const defaults = parseConfig(defaultsPath);
+    const path = ensureUserConfig(defaultsPath);
     let user: BucheConfig;
     try {
         user = parseConfig(path);

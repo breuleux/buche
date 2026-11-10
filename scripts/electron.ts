@@ -3,6 +3,7 @@
  *
  *   bun run electron [-c COMMAND] [-d DIR] [-l LAYOUT] [--devtools] [--print-messages]
  *   bun run electron --reset-bindings
+ *   bun run electron --build-only
  *
  * Options:
  *   -c, --command COMMAND   Shell command driving the session. Default: cq.
@@ -15,6 +16,8 @@
  *       --reset-bindings    Back to the default bindings: the configuration
  *                           file's own are commented out (the rest of the
  *                           file is kept). Then exit.
+ *       --build-only        Build dist/electron and exit (what `bun run
+ *                           package` packages: see electron-builder.yml).
  *
  * Configuration: ~/.config/buche/config.yaml (or under $XDG_CONFIG_HOME),
  * over the defaults (config/default.yaml); created, if missing, as a copy of
@@ -27,8 +30,11 @@
  * always runs it — an instance you are using is left alone.
  *
  * Everything is bundled into dist/electron (main, preload, renderer, the page
- * with the component stylesheets inlined, and the GUI runtime document served
- * at proc://…/), then Electron is started on it. Each run opens a new window;
+ * with the component stylesheets inlined, the GUI runtime document served
+ * at proc://…/, the default configuration and a package.json for packaging),
+ * then Electron is started on it. The bundle is self-contained (no
+ * node_modules) and machine-independent: the user's configuration and the
+ * layout are read by the main process at startup, not baked in. Each run opens a new window;
  * instances already running are left alone. The window dies with this script —
  * Ctrl+C through the shared process group, or the ppid check in
  * electron/main.ts when the script exits by other means.
@@ -43,11 +49,10 @@
  */
 import "./dom-setup.ts";
 import { copyFileSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { guiRuntimeDocument } from "../src/components/buche-gui-runtime.ts";
-import { configScript, layoutScript } from "../src/page.ts";
-import { loadUserConfig, resetBindings } from "./user-config.ts";
+import { ensureUserConfig, resetBindings } from "./user-config.ts";
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const root = join(scriptDir, "..");
@@ -61,6 +66,7 @@ const { values } = parseArgs({
         devtools: { type: "boolean" },
         "print-messages": { type: "boolean" },
         "reset-bindings": { type: "boolean" },
+        "build-only": { type: "boolean" },
     },
 });
 
@@ -74,9 +80,11 @@ if (values["reset-bindings"]) {
     process.exit(0);
 }
 
-const config = loadUserConfig();
+if (!values["build-only"]) {
+    // Made, if missing, before the window reads it (and says so here).
+    ensureUserConfig();
+}
 
-const layout = values.layout ? readFileSync(values.layout, "utf8") : null;
 const componentsDir = join(root, "src/components");
 const carreauDir = join(root, "node_modules/carreau/src");
 
@@ -120,8 +128,6 @@ ${stylesheet("components.css")}
 </style>
 </head>
 <body>
-${layoutScript(layout)}
-${configScript(config)}
 <div id="buche"></div>
 <script defer src="renderer.js"></script>
 </body>
@@ -182,6 +188,32 @@ writeFileSync(join(outDir, "runtime.html"), guiRuntimeDocument());
 // and the window, index.html as the favicon. (assets/buche.png is buche.svg
 // rasterized — see assets/README.md.)
 copyFileSync(join(root, "assets/buche.png"), join(outDir, "buche.png"));
+// The defaults the user's configuration goes over (read by main.ts).
+copyFileSync(join(root, "config/default.yaml"), join(outDir, "default.yaml"));
+// The packaged app's manifest (electron-builder packages this directory as is).
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+    version: string;
+};
+writeFileSync(
+    join(outDir, "package.json"),
+    `${JSON.stringify(
+        {
+            name: "buche",
+            productName: "Buche",
+            version: pkg.version,
+            description: "A terminal for interactive HTML views",
+            author: "Olivier Breuleux",
+            main: "main.cjs",
+        },
+        null,
+        2,
+    )}\n`,
+);
+
+if (values["build-only"]) {
+    console.log(`buche (electron): built ${outDir}`);
+    process.exit(0);
+}
 
 // Dev loop (BUCHE_CARREAU_WATCH=1, opt-in: an instance you are using must never be
 // disturbed): while a linked carreau's sources change, re-bundle the renderer and
@@ -220,6 +252,7 @@ const child = Bun.spawn([electronBin, join(outDir, "main.cjs")], {
             dir: outDir,
             command: values.command ?? "cq",
             cwd: values.dir,
+            layout: values.layout && resolve(values.layout),
             parent: process.pid,
             devtools: values.devtools ?? false,
             printMessages: values["print-messages"] ?? false,

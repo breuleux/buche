@@ -10,11 +10,20 @@ function pageJson<T>(id: string): T | undefined {
     return json ? (JSON.parse(json) as T) : undefined;
 }
 
+/** What the Electron preload hands over in place of the page's JSON tags. */
+interface BridgedSetup {
+    layout?: WorkspaceData;
+    config?: BucheConfig;
+    defaultConfig?: BucheConfig;
+}
+
 /**
  * The #buche container, the initial layout and the configuration (the
  * user's, and the defaults it goes over), given by the page as JSON in
  * `<script type="application/json">` tags (#buche-layout, #buche-config,
- * #buche-default-config; absent: the defaults).
+ * #buche-default-config) — scripts/view.ts — or, in Electron, read by the
+ * main process at startup and exposed by the preload as `window.buche.setup`
+ * (see electron/main.ts). Absent: the defaults.
  */
 export function pageSetup(): {
     container: HTMLElement;
@@ -26,11 +35,12 @@ export function pageSetup(): {
     if (!container) {
         throw new Error("buche: the #buche container is missing");
     }
+    const bridged = (window as unknown as { buche?: { setup?: BridgedSetup } }).buche?.setup;
     return {
         container,
-        layout: pageJson<WorkspaceData>("buche-layout"),
-        config: pageJson<BucheConfig>("buche-config"),
-        defaultConfig: pageJson<BucheConfig>("buche-default-config"),
+        layout: pageJson<WorkspaceData>("buche-layout") ?? bridged?.layout,
+        config: pageJson<BucheConfig>("buche-config") ?? bridged?.config,
+        defaultConfig: pageJson<BucheConfig>("buche-default-config") ?? bridged?.defaultConfig,
     };
 }
 

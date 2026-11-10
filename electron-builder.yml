@@ -1,0 +1,41 @@
+# Packaging (`bun run package`): dist/electron, built by
+# `bun run electron --build-only`, is the whole app — self-contained, no
+# node_modules — wrapped for macOS and Linux into dist/release.
+#
+#   bun run package               # this machine's platform
+#   bun run package -- --mac      # or --linux; both work from macOS
+#   bun run package -- --linux --arm64
+appId: quebec.mila.buche
+productName: Buche
+copyright: Copyright © Olivier Breuleux
+electronVersion: 41.1.0
+directories:
+  app: dist/electron
+  output: dist/release
+  buildResources: assets
+# The bundle has no dependencies to install or rebuild.
+npmRebuild: false
+nodeGypRebuild: false
+asar: true
+# Everything is already bundled into main.cjs/renderer.js: keep the project's
+# own dependencies, which electron-builder would otherwise add, out.
+files:
+  - "**/*"
+  - "!node_modules{,/**/*}"
+
+mac:
+  target: [dmg, zip]
+  icon: assets/buche.png
+  category: public.app-category.developer-tools
+  # Unsigned unless CSC_LINK/CSC_NAME is set (see README: distributing).
+  identity: null
+
+linux:
+  target: [AppImage, tar.gz]
+  icon: assets/buche.png
+  executableName: buche
+  category: Development
+  synopsis: A terminal for interactive HTML views
+  desktop:
+    entry:
+      StartupWMClass: Buche

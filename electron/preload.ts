@@ -34,6 +34,10 @@ ipcRenderer.on("window:quitHint", (_event, hint: { state: string; duration: numb
 });
 
 contextBridge.exposeInMainWorld("buche", {
+    // The initial layout and the configuration, read by the main process at
+    // startup (see `pageSetup` in src/page.ts). Synchronous: the renderer
+    // needs them before it builds the interface.
+    setup: ipcRenderer.sendSync("page:setup") as unknown,
     driver: {
         send: (message: unknown) => ipcRenderer.send("driver:message", message),
     },

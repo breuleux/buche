@@ -4,13 +4,23 @@
 // interface run (see electron/renderer.ts). It also registers the native
 // `proc://` and `lib://` schemes for GUI cells (see electron/proc-protocol.ts).
 //
-// Not launched directly: `bun run electron` (scripts/electron.ts) builds the
-// bundles, writes dist/electron/{index.html,renderer.js,preload.cjs,runtime.html}
-// and starts Electron with this file, passing the run configuration in the
-// BUCHE_ELECTRON environment variable as JSON: { command, cwd, devtools, printMessages }.
+// Two ways in:
+// - `bun run electron` (scripts/electron.ts) builds the bundles into
+//   dist/electron and starts Electron with this file, passing the run
+//   configuration in the BUCHE_ELECTRON environment variable as JSON:
+//   { command, cwd, layout, devtools, printMessages, parent, dir }.
+// - The packaged app (`bun run package`, see electron-builder.yml), started
+//   from the Dock, a desktop launcher or a terminal: no BUCHE_ELECTRON, the
+//   same options are taken from the command line (see `argvConfig`).
+// Either way the configuration (~/.config/buche/config.yaml over the
+// defaults) and the layout are read here at startup, and handed to the page
+// through the preload (`page:setup`).
 
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { homedir, userInfo } from "node:os";
+import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import {
     app,
     BrowserWindow,
@@ -21,6 +31,7 @@ import {
     systemPreferences,
 } from "electron";
 import { formatMessage } from "../scripts/format.ts";
+import { loadUserConfig, resetBindings } from "../scripts/user-config.ts";
 import type { OutgoingDriverMessage } from "../src/driver-exchange/outgoing.ts";
 import { Drivers } from "../src/drivers.ts";
 import { LibraryRegistry } from "../src/library.ts";
@@ -41,18 +52,99 @@ interface RunConfig {
     dir?: string;
     /** Working directory for the process. */
     cwd?: string;
+    /** Initial layout file (carreau JSON, see layouts/). */
+    layout?: string;
     /** Open the devtools on start. */
     devtools?: boolean;
     /** Print the driver messages on the main process's stdout. */
     printMessages?: boolean;
 }
 
-const config: RunConfig = JSON.parse(process.env.BUCHE_ELECTRON ?? "{}") as RunConfig;
+/**
+ * The run configuration from the command line (the packaged app): the
+ * launcher's options (-c, -d, -l, --devtools, --print-messages,
+ * --reset-bindings). Lenient, since Electron and the desktop may add flags of
+ * their own (e.g. --no-sandbox); relative paths are the caller's.
+ */
+function argvConfig(): RunConfig & { resetBindings?: boolean } {
+    const { values } = parseArgs({
+        args: process.argv.slice(app.isPackaged ? 1 : 2),
+        strict: false,
+        allowPositionals: true,
+        options: {
+            command: { type: "string", short: "c" },
+            dir: { type: "string", short: "d" },
+            layout: { type: "string", short: "l" },
+            devtools: { type: "boolean" },
+            "print-messages": { type: "boolean" },
+            "reset-bindings": { type: "boolean" },
+        },
+    });
+    const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+    const dir = str(values.dir);
+    const layout = str(values.layout);
+    return {
+        command: str(values.command),
+        cwd: dir && resolve(dir),
+        layout: layout && resolve(layout),
+        devtools: values.devtools === true,
+        printMessages: values["print-messages"] === true,
+        resetBindings: values["reset-bindings"] === true,
+    };
+}
+
+/**
+ * The launcher's run configuration, if this process is the launcher's own
+ * child: one inherited from further up (a shell of another buche window
+ * starting the packaged app) is not for it.
+ */
+function launcherConfig(): RunConfig | undefined {
+    const json = process.env.BUCHE_ELECTRON;
+    // The shells started here (which may run `buche` themselves) must not
+    // inherit it.
+    delete process.env.BUCHE_ELECTRON;
+    const config = json ? (JSON.parse(json) as RunConfig) : undefined;
+    return config?.parent === process.ppid ? config : undefined;
+}
+
+const fromLauncher = launcherConfig();
+const config: RunConfig & { resetBindings?: boolean } = fromLauncher ?? argvConfig();
 const command = config.command ?? "cq";
-// The bundle directory, handed over by the build script (`__dirname` is the
-// source directory in a bun bundle, and there is no reliable runtime handle
-// on the bundle's own location).
-const here = config.dir ?? __dirname;
+// The bundle directory: handed over by the build script, or the packaged
+// app's (`__dirname` is the source directory in a bun bundle).
+const here = config.dir ?? app.getAppPath();
+
+/**
+ * The PATH of the user's login shell. An app started from the Dock, Finder
+ * or a desktop launcher gets the session's bare PATH (on macOS, launchd's
+ * /usr/bin:/bin:/usr/sbin:/sbin), without what the shell's startup files add
+ * — where `cq` usually is. Interactive too, since PATH is often set in
+ * ~/.zshrc or config.fish; the marker skips whatever those print.
+ */
+function loginShellPath(): string | undefined {
+    const shell = process.env.SHELL || userInfo().shell || "/bin/sh";
+    const marker = "__BUCHE_ENV__";
+    const result = spawnSync(shell, ["-i", "-l", "-c", `echo ${marker}; env`], {
+        encoding: "utf8",
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "ignore"],
+    });
+    const env = result.stdout?.split(marker)[1];
+    const line = env?.split("\n").find((l) => l.startsWith("PATH="));
+    return line ? line.slice("PATH=".length) : undefined;
+}
+
+// Not started from a terminal (the Dock, a launcher): the shell's PATH, and
+// the home directory rather than / as the working directory.
+if (!fromLauncher && !process.stdout.isTTY) {
+    const path = loginShellPath();
+    if (path) {
+        process.env.PATH = path;
+    }
+}
+if (config.cwd === undefined && process.cwd() === "/") {
+    config.cwd = homedir();
+}
 
 // Outgoing/incoming driver messages, printed like scripts/view.ts does —
 // hidden unless the run was started with --print-messages.
@@ -77,6 +169,33 @@ async function start(): Promise<void> {
     // is written next to this bundle by the build script.
     registerProcScheme();
     setRuntimeHtml(readFileSync(join(here, "runtime.html"), "utf8"));
+
+    // The defaults are copied next to the bundle by the build script.
+    const defaultsPath = join(here, "default.yaml");
+    if (config.resetBindings) {
+        const { path, changed } = resetBindings(defaultsPath);
+        console.log(
+            changed
+                ? `buche: ${path}: bindings reset to the defaults`
+                : `buche: ${path}: no bindings of its own, nothing to reset`,
+        );
+        app.exit(0);
+        return;
+    }
+    // What the page starts with (src/page.ts, `pageSetup`), asked for by the
+    // preload before the renderer runs.
+    const { user, defaults } = loadUserConfig(defaultsPath);
+    let layout: unknown;
+    if (config.layout) {
+        try {
+            layout = JSON.parse(readFileSync(config.layout, "utf8"));
+        } catch (e) {
+            console.error(`buche: ${config.layout}: ${(e as Error).message}`);
+        }
+    }
+    ipcMain.on("page:setup", (event) => {
+        event.returnValue = { layout, config: user, defaultConfig: defaults };
+    });
 
     await app.whenReady();
 
