@@ -1,0 +1,70 @@
+# Build the Electron app for macOS and Linux, and publish it as a GitHub
+# release: push a tag (`git tag v0.1.0 && git push origin v0.1.0`). The app's
+# version is the tag's (package.json's is left at 0.0.0).
+#
+# Run by hand (Actions > Release > Run workflow), it builds without
+# releasing: the packages are the run's artifacts.
+#
+# The platforms are coquille's (the default shell, installed from its
+# releases): macOS on Apple Silicon, Linux x86-64.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac --arm64
+          - os: ubuntu-latest
+            target: --linux --x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+      - run: bun run test
+      - name: Package
+        run: bun run package -- ${{ matrix.target }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: buche-${{ runner.os }}
+          path: |
+            dist/release/*.dmg
+            dist/release/*.zip
+            dist/release/*.AppImage
+            dist/release/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum * > sha256.sum
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" artifacts/*
+          --repo "$GITHUB_REPOSITORY"
+          --title "$GITHUB_REF_NAME"
+          --generate-notes
