@@ -2,12 +2,12 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "buche",
   "owner": { "name": "Olivier Breuleux" },
-  "description": "Skills for programming buche: GUI cell protocol, iframe runtime, proc:// resources",
+  "description": "Skills for making programs for the Buche terminal: the Buche protocol, GUI cells, the iframe runtime API, proc:// resources, focus and sizing",
   "plugins": [
     {
       "name": "buche",
       "source": "./",
-      "description": "Reference skills for programming buche GUI cells"
+      "description": "Reference skills for making programs for the Buche terminal"
     }
   ]
 }

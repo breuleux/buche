@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "buche",
   "version": "0.0.0",
-  "description": "Reference skills for programming buche: the GUI cell protocol, the iframe runtime API, proc:// resources, focus and sizing",
+  "description": "Reference skills for making programs for the Buche terminal: the Buche protocol, GUI cells, the iframe runtime API, proc:// resources, focus and sizing",
   "author": { "name": "Olivier Breuleux" },
   "repository": "https://github.com/breuleux/buche",
   "keywords": ["buche", "terminal", "gui", "iframe"]
