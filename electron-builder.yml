@@ -27,8 +27,16 @@ mac:
   target: [dmg, zip]
   icon: assets/buche.png
   category: public.app-category.developer-tools
-  # Unsigned unless CSC_LINK/CSC_NAME is set (see README: distributing).
-  identity: null
+  # Ad-hoc signed ("-": no Apple account needed). Left unsigned, the bundle
+  # keeps Electron's own signature, which no longer matches it: macOS on
+  # Apple Silicon then calls the app "damaged". Ad-hoc signed, a downloaded
+  # copy is only "from an unidentified developer" (System Settings > Privacy
+  # & Security > Open Anyway). A Developer ID (and notarization) is what
+  # removes that warning too.
+  identity: "-"
+  # Needed for notarization only; with an ad-hoc signature it would stop the
+  # app's own frameworks from loading (library validation).
+  hardenedRuntime: false
 
 linux:
   target: [AppImage, tar.gz]
