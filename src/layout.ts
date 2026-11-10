@@ -714,9 +714,18 @@ export class Layout {
             const dest = pane(beside?.pane ?? null);
             const after = beside ? this.afterComplex(beside.pane, beside.index) : dest.tabs.length;
             const before = dest.tabs[dest.active]?.id;
-            const ok = into(dest, after);
-            if (ok && isPrompt && target.link && stream && this.columnOf(stream)) {
-                this.link(tab.id, stream);
+            const linking = isPrompt && !!target.link && !!stream && !!this.columnOf(stream);
+            // A linked prompt: right after its stream's tab, joining the complex
+            // that tab is in there (carreau's `near`: else after the complex).
+            const ok =
+                linking && beside
+                    ? this.ws.hostDrop(
+                          { kind: "external", node: newPane() },
+                          { kind: "tab", paneId: dest.id, index: beside.index + 1, near: true },
+                      )
+                    : into(dest, after);
+            if (ok && linking) {
+                this.link(tab.id, stream!);
             }
             // What was shown stays shown for a background cell, and beside a
             // process's first view (its later outputs) — but a view of the
@@ -731,6 +740,10 @@ export class Layout {
             const keep = (entry.cell.background || later) && before;
             const show = ok && this.findTab(keep ? before : tab.id);
             if (show) {
+                if (!keep) {
+                    // Closed before the focus leaves it: back to where it was.
+                    this.ws.markOpened(tab.id);
+                }
                 this.ws.activateTab(show.pane.id, show.index);
             }
             return;

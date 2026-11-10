@@ -64,6 +64,7 @@ function run(
     ctx: ReturnType<typeof setup>,
     echo: Record<string, unknown> = {},
     cell: Record<string, unknown> = {},
+    n = "2",
 ): { id: string; box: () => EchoBox | null } {
     const { iface, sent, flush, driver, container } = ctx;
     const entry = (prompt(container).closest("prompt-collection") as PromptCollection).prompts[0];
@@ -78,7 +79,7 @@ function run(
     const request = sent.at(-1) as OutgoingDriverMessage & { id?: string };
     expect(request.type).toBe("command");
     const id = request.id as string;
-    const from = [...SHELL, "2"];
+    const from = [...SHELL, n];
     driver({ type: "configure", kind: "terminal", from, zone: null, id, ...echo, ...cell });
     return { id, box: () => container.querySelector(`#echo-${id}`) };
 }
@@ -283,6 +284,37 @@ describe("automatic focus", () => {
         await settle();
         expect(ctx.container.querySelector(`#echo-${id}`)).not.toBeNull();
         expect(ctx.iface.focus.current).toBe(other);
+    });
+
+    test("a cell in a new tab, closed right away: the focus goes back to the prompt", async () => {
+        const ctx = setup();
+        ctx.driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        await settle();
+        // A first tab, after the prompt's; then the focus back on the prompt.
+        run(ctx, { label: "first" }, { zone: "tab" });
+        ctx.driver({ type: "close", from: [...SHELL, "2"], outcome: { type: "success" } });
+        await settle();
+        ctx.iface.focusPrompt();
+        await settle();
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
+        // The new one goes just after the prompt's tab (before the first one).
+        const { box } = run(ctx, { label: "ls" }, { zone: "tab" }, "3");
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+        // (Like `@tab ls`: its process is over by the time it's closed.)
+        ctx.driver({ type: "close", from: [...SHELL, "3"], outcome: { type: "success" } });
+        await settle();
+        expect(ctx.iface.focus.current).toBe(box());
+        const ws = ctx.iface.layout.ws;
+        const sel = ws.node(ws.selection.id);
+        expect(sel?.type).toBe("pane");
+        const pane = sel as Extract<typeof sel, { type: "pane" }>;
+        expect(pane.tabs.length).toBe(3);
+        expect(pane.active).toBe(1);
+        await ws.closeTab(pane.tabs[pane.active].id);
+        await settle();
+        // Not the first tab, on its right: back to the prompt.
+        expect(ctx.iface.focus.current).toBe(prompt(ctx.container));
     });
 
     test("a cell in a new tab takes the focus there", async () => {
@@ -922,6 +954,26 @@ describe("placement", () => {
         });
         await settle();
         expect(shown(iface.layout.boxOf(ctx.buche.get([...sub, "cq", "2"])))).toBe(true);
+    });
+
+    test("a nested shell's linked tab goes right after its opener's, not at the group's end", async () => {
+        const ctx = setup();
+        const { driver } = ctx;
+        driver({ type: "configure", kind: "prompt", from: SHELL, label: "cq" });
+        for (const [n, label] of [
+            ["1", "sub"],
+            ["2", "sub2"],
+        ]) {
+            const sub = [...SHELL, n];
+            driver({ type: "configure", from: sub, label: "coquille" });
+            driver({ type: "configure", kind: "prompt", from: [...sub, "cq"], label });
+        }
+        await settle();
+        const tabs = [...ctx.container.querySelectorAll(".carreau-tab")].filter(shown);
+        const labels = tabs.map((t) => t.querySelector(".carreau-tab-short")?.textContent);
+        // Both started from cq: the latest just after it.
+        expect(labels).toEqual(["cq", "sub2", "sub"]);
+        expect(tabs.every((t) => t.classList.contains("linked"))).toBe(true);
     });
 });
 
